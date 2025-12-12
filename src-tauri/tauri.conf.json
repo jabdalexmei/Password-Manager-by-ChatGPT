@@ -1,0 +1,20 @@
+{
+  "productName": "NewAppTest",
+  "version": "0.1.0",
+  "identifier": "com.example.newapptest",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "NewAppTest",
+        "width": 1200,
+        "height": 900
+      }
+    ]
+  }
+}
