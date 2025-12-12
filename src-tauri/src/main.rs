@@ -29,6 +29,7 @@ use std::sync::Arc;
 use app_state::AppState;
 use commands::{profiles::*, security::*};
 use data::storage_paths::initialize_storage_paths;
+use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 fn main() {
@@ -37,7 +38,8 @@ fn main() {
         .setup(|app| {
             if let Err(err) = initialize_storage_paths() {
                 app.dialog()
-                    .message("Password Manager", err.message())
+                    .message(err.message())
+                    .title("Password Manager")
                     .kind(MessageDialogKind::Error)
                     .blocking_show();
                 std::process::exit(1);
