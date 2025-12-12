@@ -19,7 +19,7 @@ impl StoragePaths {
         let data_root = app_dir.join("Data");
         let profiles_root = data_root.join("Profiles");
 
-        std::fs::create_dir_all(&profiles_root).map_err(StoragePathsError::CreateProfilesDir)?;
+        std::fs::create_dir_all(&profiles_root).map_err(|_| StoragePathsError::CreateProfilesDir)?;
 
         Ok(StoragePaths {
             app_dir,
@@ -63,7 +63,12 @@ impl StoragePathsError {
 static PATHS: OnceLock<StoragePaths> = OnceLock::new();
 
 pub fn initialize_storage_paths() -> Result<&'static StoragePaths, StoragePathsError> {
-    PATHS.get_or_try_init(StoragePaths::initialize)
+    if let Some(paths) = PATHS.get() {
+        return Ok(paths);
+    }
+
+    let initialized = StoragePaths::initialize()?;
+    Ok(PATHS.get_or_init(|| initialized))
 }
 
 pub fn storage_paths() -> &'static StoragePaths {

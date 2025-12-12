@@ -32,8 +32,8 @@ use data::storage_paths::initialize_storage_paths;
 
 fn main() {
     if let Err(err) = initialize_storage_paths() {
-        tauri::api::dialog::blocking::MessageDialogBuilder::new("Password Manager", err.message())
-            .kind(tauri::api::dialog::MessageDialogKind::Error)
+        tauri::dialog::blocking::MessageDialogBuilder::new("Password Manager", err.message())
+            .kind(tauri::dialog::MessageDialogKind::Error)
             .show(|_| {});
         std::process::exit(1);
     }
