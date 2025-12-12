@@ -3,6 +3,7 @@
 mod app_state;
 mod commands;
 mod data {
+    pub mod storage_paths;
     pub mod crypto {
         pub mod cipher;
         pub mod kdf;
@@ -27,8 +28,16 @@ use std::sync::Arc;
 
 use app_state::AppState;
 use commands::{profiles::*, security::*};
+use data::storage_paths::initialize_storage_paths;
 
 fn main() {
+    if let Err(err) = initialize_storage_paths() {
+        tauri::api::dialog::blocking::MessageDialogBuilder::new("Password Manager", err.message())
+            .kind(tauri::api::dialog::MessageDialogKind::Error)
+            .show(|_| {});
+        std::process::exit(1);
+    }
+
     tauri::Builder::default()
         .manage(Arc::new(AppState::new()))
         .invoke_handler(tauri::generate_handler![
