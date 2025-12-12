@@ -29,19 +29,23 @@ use std::sync::Arc;
 use app_state::AppState;
 use commands::{profiles::*, security::*};
 use data::storage_paths::initialize_storage_paths;
-use tauri_plugin_dialog::blocking::{MessageDialogBuilder, MessageDialogKind};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 fn main() {
-    if let Err(err) = initialize_storage_paths() {
-        MessageDialogBuilder::new("Password Manager", err.message())
-            .kind(MessageDialogKind::Error)
-            .show(|_| {});
-        std::process::exit(1);
-    }
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(Arc::new(AppState::new()))
+        .setup(|app| {
+            if let Err(err) = initialize_storage_paths() {
+                app.dialog()
+                    .message("Password Manager", err.message())
+                    .kind(MessageDialogKind::Error)
+                    .blocking_show();
+                std::process::exit(1);
+            }
+
+            app.manage(Arc::new(AppState::new()));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             profiles_list,
             profile_create,
