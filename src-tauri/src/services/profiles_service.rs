@@ -1,5 +1,8 @@
 use crate::data::profiles::registry;
 use crate::data::settings::config;
+use crate::data::sqlite::init::init_database;
+use crate::data::profiles::paths::ensure_profile_dirs;
+use crate::services::settings_service::get_settings;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::{ProfileMeta, ProfilesList};
 
@@ -12,7 +15,11 @@ pub fn create_profile(name: &str, password: Option<String>) -> Result<ProfileMet
     if name.trim().is_empty() {
         return Err(ErrorCodeString::new("PROFILE_NAME_REQUIRED"));
     }
-    registry::create_profile(name, password)
+    let profile = registry::create_profile(name, password)?;
+    ensure_profile_dirs(&profile.id).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    init_database(&profile.id)?;
+    let _ = get_settings(&profile.id)?;
+    Ok(profile)
 }
 
 pub fn delete_profile(id: &str) -> Result<bool> {

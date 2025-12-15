@@ -16,18 +16,26 @@ mod data {
     pub mod settings {
         pub mod config;
     }
+    pub mod sqlite {
+        pub mod init;
+        pub mod migrations;
+        pub mod repo_impl;
+    }
 }
 mod error;
 mod services {
+    pub mod datacards_service;
+    pub mod folders_service;
     pub mod profiles_service;
     pub mod security_service;
+    pub mod settings_service;
 }
 mod types;
 
 use std::sync::Arc;
 
 use app_state::AppState;
-use commands::{profiles::*, security::*};
+use commands::{datacards::*, folders::*, profiles::*, security::*, settings::*};
 use data::storage_paths::initialize_storage_paths;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -58,7 +66,26 @@ fn main() {
             lock_vault,
             is_logged_in,
             auto_lock_cleanup,
-            health_check
+            health_check,
+            list_folders,
+            create_folder,
+            rename_folder,
+            move_folder,
+            delete_folder,
+            list_deleted_folders,
+            restore_folder,
+            purge_folder,
+            list_datacards,
+            get_datacard,
+            create_datacard,
+            update_datacard,
+            move_datacard_to_folder,
+            delete_datacard,
+            list_deleted_datacards,
+            restore_datacard,
+            purge_datacard,
+            get_settings,
+            update_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
