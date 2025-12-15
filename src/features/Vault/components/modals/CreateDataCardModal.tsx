@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Folder, CreateDataCardInput } from '../../types/ui';
+import { useTranslation } from '../../../../lib/i18n';
 
 type Props = {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export function CreateDataCardModal({ isOpen, folders, defaultFolderId, onClose,
     tags: [],
     mobilePhone: '',
   });
+  const { t } = useTranslation('Vault');
 
   const tagsText = useMemo(() => (form.tags || []).join(', '), [form.tags]);
 
@@ -32,15 +34,15 @@ export function CreateDataCardModal({ isOpen, folders, defaultFolderId, onClose,
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h3>Create Data Card</h3>
+        <h3>{t('createDataCardTitle')}</h3>
         <label>
-          Title*
+          {t('titleLabel')}*
           <input value={form.title} onChange={(e) => setField('title', e.target.value)} />
         </label>
         <label>
-          Folder
+          {t('folderLabel')}
           <select value={form.folderId ?? ''} onChange={(e) => setField('folderId', e.target.value || null)}>
-            <option value="">No folder</option>
+            <option value="">{t('noFolderOption')}</option>
             {folders.map((folder) => (
               <option key={folder.id} value={folder.id}>
                 {folder.name}
@@ -49,31 +51,31 @@ export function CreateDataCardModal({ isOpen, folders, defaultFolderId, onClose,
           </select>
         </label>
         <label>
-          Username
+          {t('username')}
           <input value={form.username || ''} onChange={(e) => setField('username', e.target.value)} />
         </label>
         <label>
-          Email
+          {t('email')}
           <input value={form.email || ''} onChange={(e) => setField('email', e.target.value)} />
         </label>
         <label>
-          URL
+          {t('url')}
           <input value={form.url || ''} onChange={(e) => setField('url', e.target.value)} />
         </label>
         <label>
-          Password
+          {t('password')}
           <input value={form.password || ''} onChange={(e) => setField('password', e.target.value)} />
         </label>
         <label>
-          Mobile
+          {t('mobile')}
           <input value={form.mobilePhone || ''} onChange={(e) => setField('mobilePhone', e.target.value)} />
         </label>
         <label>
-          Note
+          {t('note')}
           <textarea value={form.note || ''} onChange={(e) => setField('note', e.target.value)} />
         </label>
         <label>
-          Tags (comma separated)
+          {t('tagsPlaceholder')}
           <input
             value={tagsText}
             onChange={(e) => setField('tags', e.target.value.split(',').map((t) => t.trim()).filter(Boolean))}
@@ -90,10 +92,10 @@ export function CreateDataCardModal({ isOpen, folders, defaultFolderId, onClose,
               setForm({ ...form, title: '', tags: [] });
             }}
           >
-            Create
+            {t('create')}
           </button>
           <button className="btn" type="button" onClick={onClose}>
-            Cancel
+            {t('cancel')}
           </button>
         </div>
       </div>

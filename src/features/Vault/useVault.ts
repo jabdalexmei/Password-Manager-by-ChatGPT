@@ -5,13 +5,11 @@ import {
   deleteDataCard,
   deleteFolder,
   getDataCard,
-  getSettings,
   listDataCards,
   listDeletedDataCards,
   listDeletedFolders,
   listFolders,
   moveDataCardToFolder,
-  moveFolder,
   purgeDataCard,
   purgeFolder,
   renameFolder,
@@ -25,7 +23,6 @@ import {
   mapCreateCardToBackend,
   mapFolderFromBackend,
   mapUpdateCardToBackend,
-  BackendUserSettings,
 } from './types/mappers';
 import { CreateDataCardInput, DataCard, Folder, UpdateDataCardInput } from './types/ui';
 
@@ -40,7 +37,6 @@ export function useVault(profileId: string, onLocked: () => void) {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isTrashMode, setIsTrashMode] = useState(false);
-  const [settings, setSettings] = useState<BackendUserSettings | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<VaultError>(null);
 
@@ -64,14 +60,9 @@ export function useVault(profileId: string, onLocked: () => void) {
     setLoading(true);
     setError(null);
     try {
-      const [fetchedFolders, fetchedCards, fetchedSettings] = await Promise.all([
-        listFolders(),
-        listDataCards(),
-        getSettings(),
-      ]);
+      const [fetchedFolders, fetchedCards] = await Promise.all([listFolders(), listDataCards()]);
       setFolders(fetchedFolders.map(mapFolderFromBackend));
       setCards(fetchedCards.map(mapCardFromBackend));
-      setSettings(fetchedSettings);
     } catch (err) {
       handleError(err);
     } finally {
@@ -321,7 +312,6 @@ export function useVault(profileId: string, onLocked: () => void) {
     searchQuery,
     setSearchQuery,
     isTrashMode,
-    settings,
     loading,
     error,
     visibleCards,

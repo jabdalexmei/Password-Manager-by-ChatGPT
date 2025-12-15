@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from '../../../../lib/i18n';
 
 type Props = {
   query: string;
@@ -6,11 +7,13 @@ type Props = {
 };
 
 export function Search({ query, onChange }: Props) {
+  const { t } = useTranslation('Vault');
+
   return (
     <input
       type="search"
       className="vault-search"
-      placeholder="Search vault"
+      placeholder={t('searchPlaceholder')}
       value={query}
       onChange={(e) => onChange(e.target.value)}
     />

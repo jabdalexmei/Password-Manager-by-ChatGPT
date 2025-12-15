@@ -1,9 +1,10 @@
 import {
+  BackendCreateDataCardInput,
   BackendDataCard,
   BackendFolder,
-  BackendUserSettings,
-} from "./backend";
-import { DataCard, Folder, CreateDataCardInput, UpdateDataCardInput } from "./ui";
+  BackendUpdateDataCardInput,
+} from './backend';
+import { DataCard, Folder, CreateDataCardInput, UpdateDataCardInput } from './ui';
 
 export function mapFolderFromBackend(folder: BackendFolder): Folder {
   return {
@@ -49,7 +50,7 @@ export function mapCardFromBackend(card: BackendDataCard): DataCard {
   };
 }
 
-export function mapCreateCardToBackend(input: CreateDataCardInput) {
+export function mapCreateCardToBackend(input: CreateDataCardInput): BackendCreateDataCardInput {
   return {
     folder_id: input.folderId,
     title: input.title,
@@ -65,11 +66,9 @@ export function mapCreateCardToBackend(input: CreateDataCardInput) {
   };
 }
 
-export function mapUpdateCardToBackend(input: UpdateDataCardInput) {
+export function mapUpdateCardToBackend(input: UpdateDataCardInput): BackendUpdateDataCardInput {
   return {
     id: input.id,
     ...mapCreateCardToBackend(input),
   };
 }
-
-export type { BackendUserSettings };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from '../../../../lib/i18n';
 
 type Props = {
   isOpen: boolean;
@@ -8,15 +9,16 @@ type Props = {
 
 export function CreateFolderModal({ isOpen, onClose, onSubmit }: Props) {
   const [name, setName] = useState('');
+  const { t } = useTranslation('Vault');
 
   if (!isOpen) return null;
 
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h3>Create Folder</h3>
+        <h3>{t('createFolderTitle')}</h3>
         <label>
-          Name
+          {t('nameLabel')}
           <input value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <div className="modal-actions">
@@ -30,10 +32,10 @@ export function CreateFolderModal({ isOpen, onClose, onSubmit }: Props) {
               onClose();
             }}
           >
-            Create
+            {t('create')}
           </button>
           <button className="btn" type="button" onClick={onClose}>
-            Cancel
+            {t('cancel')}
           </button>
         </div>
       </div>

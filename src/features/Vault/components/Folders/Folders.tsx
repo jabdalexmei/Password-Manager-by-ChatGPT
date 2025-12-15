@@ -1,5 +1,6 @@
 import React from 'react';
 import { Folder } from '../../types/ui';
+import { useTranslation } from '../../../../lib/i18n';
 
 export type FolderListProps = {
   folders: Folder[];
@@ -24,22 +25,23 @@ export function Folders({
   onRestoreFolder,
   onPurgeFolder,
 }: FolderListProps) {
+  const { t } = useTranslation('Vault');
   const list = isTrashMode ? deletedFolders : folders;
 
   return (
     <div className="vault-panel">
       <div className="vault-panel-header">
-        <span>Folders</span>
+        <span>{t('foldersTitle')}</span>
         {!isTrashMode && (
           <button type="button" className="btn btn-primary" onClick={onAddFolder}>
-            Add Folder
+            {t('addFolder')}
           </button>
         )}
       </div>
       <ul className="vault-folder-list">
         <li className={!selectedFolderId ? 'active' : ''}>
           <button type="button" className="vault-folder" onClick={() => onSelectFolder(null)}>
-            <span className="folder-name">All</span>
+            <span className="folder-name">{t('all')}</span>
           </button>
         </li>
         {list.map((folder) => (
@@ -50,16 +52,16 @@ export function Folders({
               </button>
               {!isTrashMode && !folder.isSystem && (
                 <button className="btn btn-danger" type="button" onClick={() => onDeleteFolder(folder.id)}>
-                  Delete
+                  {t('delete')}
                 </button>
               )}
               {isTrashMode && (
                 <div className="vault-folder-actions">
                   <button className="btn btn-secondary" type="button" onClick={() => onRestoreFolder(folder.id)}>
-                    Restore
+                    {t('restore')}
                   </button>
                   <button className="btn btn-danger" type="button" onClick={() => onPurgeFolder(folder.id)}>
-                    Purge
+                    {t('purge')}
                   </button>
                 </div>
               )}

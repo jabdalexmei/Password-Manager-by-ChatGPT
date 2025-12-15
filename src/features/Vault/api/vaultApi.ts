@@ -1,5 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
-import { BackendDataCard, BackendFolder, BackendUserSettings } from '../types/backend';
+import {
+  BackendCreateDataCardInput,
+  BackendDataCard,
+  BackendFolder,
+  BackendUpdateDataCardInput,
+} from '../types/backend';
 
 export async function listFolders(): Promise<BackendFolder[]> {
   return invoke('list_folders');
@@ -15,10 +20,6 @@ export async function createFolder(input: { name: string; parent_id: string | nu
 
 export async function renameFolder(input: { id: string; name: string }): Promise<boolean> {
   return invoke('rename_folder', { input });
-}
-
-export async function moveFolder(input: { id: string; parent_id: string | null }): Promise<boolean> {
-  return invoke('move_folder', { input });
 }
 
 export async function deleteFolder(id: string): Promise<boolean> {
@@ -45,11 +46,11 @@ export async function getDataCard(id: string): Promise<BackendDataCard> {
   return invoke('get_datacard', { id });
 }
 
-export async function createDataCard(input: any): Promise<BackendDataCard> {
+export async function createDataCard(input: BackendCreateDataCardInput): Promise<BackendDataCard> {
   return invoke('create_datacard', { input });
 }
 
-export async function updateDataCard(input: any): Promise<boolean> {
+export async function updateDataCard(input: BackendUpdateDataCardInput): Promise<boolean> {
   return invoke('update_datacard', { input });
 }
 
@@ -67,12 +68,4 @@ export async function restoreDataCard(id: string): Promise<boolean> {
 
 export async function purgeDataCard(id: string): Promise<boolean> {
   return invoke('purge_datacard', { id });
-}
-
-export async function getSettings(): Promise<BackendUserSettings> {
-  return invoke('get_settings');
-}
-
-export async function updateSettings(settings: BackendUserSettings): Promise<BackendUserSettings | boolean> {
-  return invoke('update_settings', { settings });
 }

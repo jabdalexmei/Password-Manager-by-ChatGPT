@@ -42,6 +42,24 @@ export type BackendDataCard = {
   custom_fields: BackendCustomField[];
 };
 
+export type BackendCreateDataCardInput = {
+  folder_id: string | null;
+  title: string;
+  url: string | null;
+  email: string | null;
+  username: string | null;
+  mobile_phone: string | null;
+  note: string | null;
+  tags: string[];
+  password: string | null;
+  bank_card: BackendBankCard | null;
+  custom_fields: BackendCustomField[];
+};
+
+export type BackendUpdateDataCardInput = BackendCreateDataCardInput & {
+  id: string;
+};
+
 export type BackendUserSettings = {
   auto_hide_secret_timeout_seconds: number;
   auto_lock_enabled: boolean;
