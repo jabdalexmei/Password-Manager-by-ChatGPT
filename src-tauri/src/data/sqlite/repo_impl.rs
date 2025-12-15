@@ -76,14 +76,26 @@ fn map_constraint_error(err: rusqlite::Error) -> ErrorCodeString {
     ErrorCodeString::new("DB_QUERY_FAILED")
 }
 
-pub fn list_folders(profile_id: &str, include_deleted: bool) -> Result<Vec<Folder>> {
+pub fn list_folders(profile_id: &str) -> Result<Vec<Folder>> {
     let conn = open_connection(profile_id)?;
-    let mut stmt = if include_deleted {
-        conn.prepare("SELECT * FROM folders")
-    } else {
-        conn.prepare("SELECT * FROM folders WHERE deleted_at IS NULL")
-    }
-    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    let mut stmt = conn
+        .prepare("SELECT * FROM folders WHERE deleted_at IS NULL ORDER BY name ASC")
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let folders = stmt
+        .query_map([], map_folder)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(folders)
+}
+
+pub fn list_deleted_folders(profile_id: &str) -> Result<Vec<Folder>> {
+    let conn = open_connection(profile_id)?;
+    let mut stmt = conn
+        .prepare("SELECT * FROM folders WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
     let folders = stmt
         .query_map([], map_folder)
@@ -147,10 +159,11 @@ pub fn move_folder(profile_id: &str, id: &str, parent_id: &Option<String>) -> Re
 
 pub fn soft_delete_folder(profile_id: &str, id: &str) -> Result<bool> {
     let conn = open_connection(profile_id)?;
+    let now = Utc::now().to_rfc3339();
     let rows = conn
         .execute(
-            "UPDATE folders SET deleted_at = ?1 WHERE id = ?2",
-            params![Utc::now().to_rfc3339(), id],
+            "UPDATE folders SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
+            params![now.clone(), now, id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     if rows == 0 {
@@ -163,8 +176,8 @@ pub fn restore_folder(profile_id: &str, id: &str) -> Result<bool> {
     let conn = open_connection(profile_id)?;
     let rows = conn
         .execute(
-            "UPDATE folders SET deleted_at = NULL WHERE id = ?1",
-            params![id],
+            "UPDATE folders SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
+            params![Utc::now().to_rfc3339(), id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     if rows == 0 {
@@ -208,6 +221,21 @@ pub fn list_datacards(
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    Ok(cards)
+}
+
+pub fn list_deleted_datacards(profile_id: &str) -> Result<Vec<DataCard>> {
+    let conn = open_connection(profile_id)?;
+    let mut stmt = conn
+        .prepare("SELECT * FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let cards = stmt
+        .query_map([], map_datacard)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
     Ok(cards)
 }
 
@@ -310,10 +338,11 @@ pub fn move_datacard(profile_id: &str, id: &str, folder_id: &Option<String>) -> 
 
 pub fn soft_delete_datacard(profile_id: &str, id: &str) -> Result<bool> {
     let conn = open_connection(profile_id)?;
+    let now = Utc::now().to_rfc3339();
     let rows = conn
         .execute(
-            "UPDATE datacards SET deleted_at = ?1 WHERE id = ?2",
-            params![Utc::now().to_rfc3339(), id],
+            "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
+            params![now.clone(), now, id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     if rows == 0 {
@@ -326,8 +355,8 @@ pub fn restore_datacard(profile_id: &str, id: &str) -> Result<bool> {
     let conn = open_connection(profile_id)?;
     let rows = conn
         .execute(
-            "UPDATE datacards SET deleted_at = NULL WHERE id = ?1",
-            params![id],
+            "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
+            params![Utc::now().to_rfc3339(), id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     if rows == 0 {
@@ -349,9 +378,10 @@ pub fn purge_datacard(profile_id: &str, id: &str) -> Result<bool> {
 
 pub fn soft_delete_datacards_in_folder(profile_id: &str, folder_id: &str) -> Result<bool> {
     let conn = open_connection(profile_id)?;
+    let now = Utc::now().to_rfc3339();
     conn.execute(
-        "UPDATE datacards SET deleted_at = ?1 WHERE folder_id = ?2",
-        params![Utc::now().to_rfc3339(), folder_id],
+        "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3",
+        params![now.clone(), now, folder_id],
     )
     .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     Ok(true)
@@ -360,8 +390,8 @@ pub fn soft_delete_datacards_in_folder(profile_id: &str, folder_id: &str) -> Res
 pub fn restore_datacards_in_folder(profile_id: &str, folder_id: &str) -> Result<bool> {
     let conn = open_connection(profile_id)?;
     conn.execute(
-        "UPDATE datacards SET deleted_at = NULL WHERE folder_id = ?1",
-        params![folder_id],
+        "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE folder_id = ?2",
+        params![Utc::now().to_rfc3339(), folder_id],
     )
     .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     Ok(true)

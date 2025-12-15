@@ -27,7 +27,7 @@ fn require_logged_in(state: &State<Arc<AppState>>) -> Result<String> {
 
 pub fn list_folders(state: &State<Arc<AppState>>) -> Result<Vec<Folder>> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::list_folders(&profile_id, false)
+    repo_impl::list_folders(&profile_id)
 }
 
 pub fn create_folder(input: CreateFolderInput, state: &State<Arc<AppState>>) -> Result<Folder> {
@@ -65,10 +65,7 @@ pub fn delete_folder(id: String, state: &State<Arc<AppState>>) -> Result<bool> {
 
 pub fn list_deleted_folders(state: &State<Arc<AppState>>) -> Result<Vec<Folder>> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::list_folders(&profile_id, true).map(|mut folders| {
-        folders.retain(|f| f.deleted_at.is_some());
-        folders
-    })
+    repo_impl::list_deleted_folders(&profile_id)
 }
 
 pub fn restore_folder(id: String, state: &State<Arc<AppState>>) -> Result<bool> {

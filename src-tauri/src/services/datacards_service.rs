@@ -107,15 +107,7 @@ pub fn delete_datacard(id: String, state: &State<Arc<AppState>>) -> Result<bool>
 
 pub fn list_deleted_datacards(state: &State<Arc<AppState>>) -> Result<Vec<DataCard>> {
     let profile_id = require_logged_in(state)?;
-    let settings = get_settings(&profile_id)?;
-    let mut cards = repo_impl::list_datacards(
-        &profile_id,
-        true,
-        &settings.default_sort_field,
-        &settings.default_sort_direction,
-    )?;
-    cards.retain(|c| c.deleted_at.is_some());
-    Ok(cards)
+    repo_impl::list_deleted_datacards(&profile_id)
 }
 
 pub fn restore_datacard(id: String, state: &State<Arc<AppState>>) -> Result<bool> {

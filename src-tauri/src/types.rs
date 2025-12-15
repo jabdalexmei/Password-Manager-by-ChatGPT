@@ -25,27 +25,29 @@ pub struct Folder {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BankCard {
-    pub cardholder_name: Option<String>,
-    pub number: Option<String>,
-    pub exp_month: Option<i64>,
-    pub exp_year: Option<i64>,
-    pub security_code: Option<String>,
+    pub holder: String,
+    pub number: String,
+    pub expiry_mm_yy: String,
+    pub cvc: String,
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "lowercase")]
 pub enum CustomFieldType {
     Text,
     Secret,
+    Url,
     Number,
     Date,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CustomField {
-    pub name: String,
+    pub key: String,
+    pub value: String,
+    #[serde(rename = "type")]
     pub field_type: CustomFieldType,
-    pub value: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
