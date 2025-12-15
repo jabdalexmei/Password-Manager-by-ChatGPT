@@ -26,22 +26,20 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
 
   return (
     <div className="vault-shell">
-      <VaultHeader
-        profileName={profileName}
-        isTrashMode={vault.isTrashMode}
-        onToggleTrash={(on) => vault.toggleTrashMode(on)}
-        onLock={vault.lock}
-      />
+      <VaultHeader profileName={profileName} onLock={vault.lock} />
 
       <div className="vault-body">
         <aside className="vault-sidebar">
-          <Search query={vault.searchQuery} onChange={vault.setSearchQuery} />
+          <div className="vault-sidebar-controls">
+            <Search query={vault.searchQuery} onChange={vault.setSearchQuery} />
+          </div>
           <Folders
             folders={vault.folders}
             deletedFolders={vault.deletedFolders}
-            isTrashMode={vault.isTrashMode}
+            counts={vault.counts}
+            selectedNav={vault.selectedNav}
             selectedFolderId={vault.selectedFolderId}
-            onSelectFolder={vault.selectFolder}
+            onSelectNav={vault.selectNav}
             onAddFolder={() => setCreateFolderOpen(true)}
             onDeleteFolder={vault.deleteFolder}
             onRestoreFolder={vault.restoreFolder}
@@ -49,16 +47,16 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
           />
         </aside>
 
-        <section className="vault-content">
+        <section className="vault-datacards">
           <DataCards
             cards={vault.visibleCards}
             isTrashMode={vault.isTrashMode}
             selectedCardId={vault.selectedCardId}
             onSelectCard={vault.selectCard}
             onAddCard={() => setCreateCardOpen(true)}
-            onDeleteCard={vault.deleteCard}
             onRestoreCard={vault.restoreCard}
             onPurgeCard={vault.purgeCard}
+            onDeleteCard={vault.deleteCard}
           />
         </section>
 
@@ -68,6 +66,7 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
             folders={foldersForCards}
             onEdit={(card) => setEditingCard(card)}
             onDelete={vault.deleteCard}
+            onToggleFavorite={vault.toggleFavorite}
           />
         </section>
       </div>

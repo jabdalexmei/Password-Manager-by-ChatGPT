@@ -26,6 +26,8 @@ import {
 } from './types/mappers';
 import { CreateDataCardInput, DataCard, Folder, UpdateDataCardInput } from './types/ui';
 
+export type SelectedNav = 'all' | 'favorites' | 'archive' | 'deleted' | { folderId: string };
+
 export type VaultError = { code: string; message?: string } | null;
 
 export function useVault(profileId: string, onLocked: () => void) {
@@ -33,12 +35,14 @@ export function useVault(profileId: string, onLocked: () => void) {
   const [cards, setCards] = useState<DataCard[]>([]);
   const [deletedFolders, setDeletedFolders] = useState<Folder[]>([]);
   const [deletedCards, setDeletedCards] = useState<DataCard[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedNav, setSelectedNav] = useState<SelectedNav>('all');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isTrashMode, setIsTrashMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<VaultError>(null);
+
+  const isTrashMode = selectedNav === 'deleted';
+  const selectedFolderId = typeof selectedNav === 'object' ? selectedNav.folderId : null;
 
   const handleError = useCallback(
     (err: any) => {
@@ -84,21 +88,17 @@ export function useVault(profileId: string, onLocked: () => void) {
     refreshActive();
   }, [refreshActive, profileId]);
 
-  const toggleTrashMode = useCallback(
-    async (on: boolean) => {
-      setIsTrashMode(on);
-      if (on && (deletedFolders.length === 0 || deletedCards.length === 0)) {
+  const selectNav = useCallback(
+    async (nav: SelectedNav) => {
+      setSelectedNav(nav);
+      setSelectedCardId(null);
+
+      if (nav === 'deleted' && (deletedFolders.length === 0 || deletedCards.length === 0)) {
         await refreshTrash();
       }
-      setSelectedCardId(null);
     },
     [deletedCards.length, deletedFolders.length, refreshTrash]
   );
-
-  const selectFolder = useCallback((id: string | null) => {
-    setSelectedFolderId(id);
-    setSelectedCardId(null);
-  }, []);
 
   const selectCard = useCallback((id: string | null) => {
     setSelectedCardId(id);
@@ -121,12 +121,17 @@ export function useVault(profileId: string, onLocked: () => void) {
       try {
         await renameFolder({ id, name });
         await refreshActive();
-        if (isTrashMode) await refreshTrash();
+        setSelectedNav((prev) => {
+          if (typeof prev === 'object' && prev.folderId === id) {
+            return { folderId: id };
+          }
+          return prev;
+        });
       } catch (err) {
         handleError(err);
       }
     },
-    [handleError, isTrashMode, refreshActive, refreshTrash]
+    [handleError, refreshActive]
   );
 
   const deleteFolderAction = useCallback(
@@ -134,6 +139,10 @@ export function useVault(profileId: string, onLocked: () => void) {
       try {
         await deleteFolder(id);
         await refreshActive();
+        setSelectedNav((prev) => {
+          if (typeof prev === 'object' && prev.folderId === id) return 'all';
+          return prev;
+        });
         if (isTrashMode) await refreshTrash();
       } catch (err) {
         handleError(err);
@@ -257,21 +266,35 @@ export function useVault(profileId: string, onLocked: () => void) {
     setDeletedCards([]);
     setDeletedFolders([]);
     setSelectedCardId(null);
-    setSelectedFolderId(null);
+    setSelectedNav('all');
     onLocked();
   }, [onLocked]);
 
   const visibleCards = useMemo(() => {
-    const list = isTrashMode ? deletedCards : cards;
-    const folderFiltered = selectedFolderId ? list.filter((c) => c.folderId === selectedFolderId) : list;
-    if (!searchQuery.trim()) return folderFiltered;
+    const activeCards = cards.filter((card) => !card.deletedAt);
+    const isArchived = (card: DataCard) => card.tags?.includes('archived');
+    let pool: DataCard[];
+
+    if (selectedNav === 'all') {
+      pool = activeCards.filter((card) => !isArchived(card));
+    } else if (selectedNav === 'favorites') {
+      pool = activeCards.filter((card) => card.tags?.includes('favorite') && !isArchived(card));
+    } else if (selectedNav === 'archive') {
+      pool = activeCards.filter((card) => isArchived(card));
+    } else if (selectedNav === 'deleted') {
+      pool = deletedCards;
+    } else {
+      pool = activeCards.filter((card) => card.folderId === selectedNav.folderId && !isArchived(card));
+    }
+
+    if (!searchQuery.trim()) return pool;
 
     const query = searchQuery.toLowerCase();
-    return folderFiltered.filter((card) => {
+    return pool.filter((card) => {
       const fields = [card.title, card.username, card.email, card.url, ...(card.tags || [])];
       return fields.some((field) => field && field.toLowerCase().includes(query));
     });
-  }, [cards, deletedCards, isTrashMode, searchQuery, selectedFolderId]);
+  }, [cards, deletedCards, searchQuery, selectedNav]);
 
   const selectedCard = useMemo(() => {
     const pool = isTrashMode ? deletedCards : cards;
@@ -301,24 +324,74 @@ export function useVault(profileId: string, onLocked: () => void) {
     [handleError]
   );
 
+  const toggleFavorite = useCallback(
+    async (id: string) => {
+      const current = cards.find((card) => card.id === id);
+      if (!current) return;
+
+      const tagSet = new Set(current.tags || []);
+      if (tagSet.has('favorite')) {
+        tagSet.delete('favorite');
+      } else {
+        tagSet.add('favorite');
+      }
+
+      await updateCardAction({
+        id: current.id,
+        folderId: current.folderId,
+        title: current.title,
+        url: current.url,
+        email: current.email,
+        username: current.username,
+        mobilePhone: current.mobilePhone,
+        note: current.note,
+        tags: Array.from(tagSet),
+        password: current.password,
+      });
+    },
+    [cards, updateCardAction]
+  );
+
+  const counts = useMemo(
+    () => {
+      const activeCards = cards.filter((card) => !card.deletedAt);
+      const isArchived = (card: DataCard) => card.tags?.includes('archived');
+
+      return {
+        all: activeCards.filter((card) => !isArchived(card)).length,
+        favorites: activeCards.filter((card) => card.tags?.includes('favorite') && !isArchived(card)).length,
+        archive: activeCards.filter((card) => isArchived(card)).length,
+        deleted: deletedCards.length,
+        folders: activeCards.reduce<Record<string, number>>((acc, card) => {
+          if (card.folderId && !isArchived(card)) {
+            acc[card.folderId] = (acc[card.folderId] || 0) + 1;
+          }
+          return acc;
+        }, {}),
+      };
+    },
+    [cards, deletedCards]
+  );
+
   return {
     folders,
     cards,
     deletedFolders,
     deletedCards,
-    selectedFolderId,
+    selectedNav,
     selectedCardId,
     selectedCard,
+    isTrashMode,
+    counts,
+    selectedFolderId,
     searchQuery,
     setSearchQuery,
-    isTrashMode,
     loading,
     error,
     visibleCards,
     refreshActive,
     refreshTrash,
-    toggleTrashMode,
-    selectFolder,
+    selectNav,
     selectCard,
     createFolder: createFolderAction,
     renameFolder: renameFolderAction,
@@ -333,5 +406,6 @@ export function useVault(profileId: string, onLocked: () => void) {
     moveCardToFolder: moveCardAction,
     lock,
     loadCard,
+    toggleFavorite,
   };
 }

@@ -26,46 +26,57 @@ export function DataCards({
   const { t } = useTranslation('Vault');
 
   return (
-    <div className="vault-panel">
-      <div className="vault-panel-header">
-        <span>{t('dataCardsTitle')}</span>
+    <div className="vault-panel-wrapper">
+      <div className="datacards-header">
+        <div className="vault-section-header">{t('entriesTitle')}</div>
         {!isTrashMode && (
           <button className="btn btn-primary" type="button" onClick={onAddCard}>
-            {t('addDataCard')}
+            {t('addEntry')}
           </button>
         )}
       </div>
+
       {cards.length === 0 ? (
         <div className="vault-empty">{t('emptyState')}</div>
       ) : (
-        <ul className="vault-card-list">
-          {cards.map((card) => (
-            <li key={card.id} className={selectedCardId === card.id ? 'active' : ''}>
-              <div className="vault-card" onClick={() => onSelectCard(card.id)} role="button" tabIndex={0}>
-                <div className="vault-card-title">{card.title}</div>
-                <div className="vault-card-meta">
-                  <span>{card.username || card.email || card.url || t('noMeta')}</span>
-                  <span className="muted">{t('updated', { value: new Date(card.updatedAt).toLocaleString() })}</span>
-                </div>
-              </div>
-              {!isTrashMode && (
-                <button className="btn btn-danger" type="button" onClick={() => onDeleteCard(card.id)}>
-                  {t('delete')}
+        <div className="vault-datacard-list">
+          {cards.map((card) => {
+            const isActive = selectedCardId === card.id;
+            const isFavorite = card.tags?.includes('favorite');
+            const meta = card.username || card.email || card.url || t('noMeta');
+
+            return (
+              <div key={card.id} className={isActive ? 'active' : ''}>
+                <button className={`vault-datacard ${isActive ? 'active' : ''}`} type="button" onClick={() => onSelectCard(card.id)}>
+                  <div className="datacard-title">{card.title}</div>
+                  <div className="datacard-meta">
+                    <span>{meta}</span>
+                    <div>
+                      {isFavorite && <span className="pill">{t('favorite')}</span>}
+                      <span className="muted">{t('updated', { value: new Date(card.updatedAt).toLocaleString() })}</span>
+                    </div>
+                  </div>
                 </button>
-              )}
-              {isTrashMode && (
-                <div className="vault-card-actions">
-                  <button className="btn btn-secondary" type="button" onClick={() => onRestoreCard(card.id)}>
-                    {t('restore')}
-                  </button>
-                  <button className="btn btn-danger" type="button" onClick={() => onPurgeCard(card.id)}>
-                    {t('purge')}
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+                {isTrashMode ? (
+                  <div className="vault-card-actions">
+                    <button className="btn btn-secondary" type="button" onClick={() => onRestoreCard(card.id)}>
+                      {t('restore')}
+                    </button>
+                    <button className="btn btn-danger" type="button" onClick={() => onPurgeCard(card.id)}>
+                      {t('purge')}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="vault-card-actions">
+                    <button className="btn btn-danger" type="button" onClick={() => onDeleteCard(card.id)}>
+                      {t('delete')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
