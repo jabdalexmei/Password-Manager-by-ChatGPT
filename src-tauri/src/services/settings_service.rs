@@ -9,35 +9,47 @@ use crate::error::{ErrorCodeString, Result};
 use crate::types::UserSettings;
 
 fn require_logged_in(state: &State<Arc<AppState>>) -> Result<String> {
-    state
+    let active_profile = state
+        .active_profile
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+        .clone();
+    let logged_in_profile = state
         .logged_in_profile
         .lock()
         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone()
-        .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))
+        .clone();
+
+    match (active_profile, logged_in_profile) {
+        (Some(active), Some(logged)) if active == logged => Ok(active),
+        _ => Err(ErrorCodeString::new("VAULT_LOCKED")),
+    }
 }
 
 fn validate_settings(settings: &UserSettings) -> Result<()> {
-    let in_range = |value: u32, min: u32, max: u32| value >= min && value <= max;
+    let in_range = |value: i64, min: i64, max: i64| (min..=max).contains(&value);
 
-    if !in_range(settings.auto_hide_secret_timeout_seconds, 1, 600)
-        || !in_range(settings.clipboard_clear_timeout_seconds, 1, 600)
-        || !in_range(settings.auto_lock_timeout, 30, 86_400)
-        || !in_range(settings.trash_retention_days, 1, 3650)
-        || !in_range(settings.backup_retention_days, 1, 3650)
-    {
-        return Err(ErrorCodeString::new("SETTINGS_VALIDATION_FAILED"));
-    }
+    let valid_values = [
+        in_range(settings.auto_hide_secret_timeout_seconds, 1, 600),
+        in_range(settings.clipboard_clear_timeout_seconds, 1, 600),
+        in_range(settings.auto_lock_timeout, 30, 86_400),
+        in_range(settings.trash_retention_days, 1, 3_650),
+        in_range(settings.backup_retention_days, 1, 3_650),
+    ]
+    .into_iter()
+    .all(|v| v);
 
-    let valid_frequency = ["daily", "weekly", "monthly"].contains(&settings.backup_frequency.as_str());
-    let valid_sort_field = ["created_at", "updated_at", "title"].contains(&settings.default_sort_field.as_str());
+    let valid_frequency =
+        ["daily", "weekly", "monthly"].contains(&settings.backup_frequency.as_str());
+    let valid_sort_field =
+        ["created_at", "updated_at", "title"].contains(&settings.default_sort_field.as_str());
     let valid_sort_direction = ["ASC", "DESC"].contains(&settings.default_sort_direction.as_str());
 
-    if !valid_frequency || !valid_sort_field || !valid_sort_direction {
-        return Err(ErrorCodeString::new("SETTINGS_VALIDATION_FAILED"));
+    if valid_values && valid_frequency && valid_sort_field && valid_sort_direction {
+        Ok(())
+    } else {
+        Err(ErrorCodeString::new("SETTINGS_VALIDATION_FAILED"))
     }
-
-    Ok(())
 }
 
 pub fn get_settings(profile_id: &str) -> Result<UserSettings> {
@@ -63,7 +75,10 @@ pub fn update_settings(new_settings: UserSettings, profile_id: &str) -> Result<b
     Ok(true)
 }
 
-pub fn update_settings_command(state: &State<Arc<AppState>>, settings: UserSettings) -> Result<bool> {
+pub fn update_settings_command(
+    state: &State<Arc<AppState>>,
+    settings: UserSettings,
+) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     update_settings(settings, &profile_id)
 }

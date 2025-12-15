@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProfileMeta {
@@ -18,23 +17,57 @@ pub struct Folder {
     pub id: String,
     pub name: String,
     pub parent_id: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub deleted_at: Option<DateTime<Utc>>,
+    pub is_system: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BankCard {
+    pub cardholder_name: Option<String>,
+    pub number: Option<String>,
+    pub exp_month: Option<i64>,
+    pub exp_year: Option<i64>,
+    pub security_code: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum CustomFieldType {
+    Text,
+    Secret,
+    Number,
+    Date,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CustomField {
+    pub name: String,
+    pub field_type: CustomFieldType,
+    pub value: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DataCard {
     pub id: String,
-    pub title: String,
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub url: Option<String>,
-    pub notes: Option<String>,
     pub folder_id: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub deleted_at: Option<DateTime<Utc>>,
+
+    pub title: String,
+    pub url: Option<String>,
+    pub email: Option<String>,
+    pub username: Option<String>,
+    pub mobile_phone: Option<String>,
+    pub note: Option<String>,
+    pub tags: Vec<String>,
+
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+
+    pub password: Option<String>,
+    pub bank_card: Option<BankCard>,
+    pub custom_fields: Vec<CustomField>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -58,10 +91,15 @@ pub struct MoveFolderInput {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreateDataCardInput {
     pub title: String,
-    pub username: Option<String>,
-    pub password: Option<String>,
     pub url: Option<String>,
-    pub notes: Option<String>,
+    pub email: Option<String>,
+    pub username: Option<String>,
+    pub mobile_phone: Option<String>,
+    pub note: Option<String>,
+    pub tags: Vec<String>,
+    pub password: Option<String>,
+    pub bank_card: Option<BankCard>,
+    pub custom_fields: Vec<CustomField>,
     pub folder_id: Option<String>,
 }
 
@@ -69,10 +107,15 @@ pub struct CreateDataCardInput {
 pub struct UpdateDataCardInput {
     pub id: String,
     pub title: String,
-    pub username: Option<String>,
-    pub password: Option<String>,
     pub url: Option<String>,
-    pub notes: Option<String>,
+    pub email: Option<String>,
+    pub username: Option<String>,
+    pub mobile_phone: Option<String>,
+    pub note: Option<String>,
+    pub tags: Vec<String>,
+    pub password: Option<String>,
+    pub bank_card: Option<BankCard>,
+    pub custom_fields: Vec<CustomField>,
     pub folder_id: Option<String>,
 }
 
@@ -84,29 +127,42 @@ pub struct MoveDataCardInput {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserSettings {
-    pub auto_hide_secret_timeout_seconds: u32,
-    pub clipboard_clear_timeout_seconds: u32,
-    pub auto_lock_timeout: u32,
-    pub trash_retention_days: u32,
-    pub backup_retention_days: u32,
+    pub auto_hide_secret_timeout_seconds: i64,
+    pub auto_lock_enabled: bool,
+    pub auto_lock_timeout: i64,
+    pub reveal_requires_confirmation: bool,
+
+    pub clipboard_clear_timeout_seconds: i64,
+
+    pub soft_delete_enabled: bool,
+    pub trash_retention_days: i64,
+
+    pub backups_enabled: bool,
     pub backup_frequency: String,
+    pub backup_retention_days: i64,
+
     pub default_sort_field: String,
     pub default_sort_direction: String,
-    pub soft_delete_enabled: bool,
+
+    pub mask_password_by_default: bool,
 }
 
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
-            auto_hide_secret_timeout_seconds: 30,
-            clipboard_clear_timeout_seconds: 30,
+            auto_hide_secret_timeout_seconds: 15,
+            auto_lock_enabled: true,
             auto_lock_timeout: 300,
-            trash_retention_days: 30,
-            backup_retention_days: 30,
-            backup_frequency: "weekly".to_string(),
-            default_sort_field: "created_at".to_string(),
-            default_sort_direction: "DESC".to_string(),
+            reveal_requires_confirmation: false,
+            clipboard_clear_timeout_seconds: 30,
             soft_delete_enabled: true,
+            trash_retention_days: 30,
+            backups_enabled: false,
+            backup_frequency: "weekly".to_string(),
+            backup_retention_days: 30,
+            default_sort_field: "updated_at".to_string(),
+            default_sort_direction: "DESC".to_string(),
+            mask_password_by_default: true,
         }
     }
 }

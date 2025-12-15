@@ -5,9 +5,7 @@ use tauri::State;
 use crate::app_state::AppState;
 use crate::error::Result;
 use crate::services::datacards_service;
-use crate::types::{
-    CreateDataCardInput, DataCard, MoveDataCardInput, UpdateDataCardInput,
-};
+use crate::types::{CreateDataCardInput, DataCard, MoveDataCardInput, UpdateDataCardInput};
 
 #[tauri::command]
 pub fn list_datacards(state: State<Arc<AppState>>) -> Result<Vec<DataCard>> {
@@ -28,16 +26,16 @@ pub fn create_datacard(
 }
 
 #[tauri::command]
-pub fn update_datacard(
-    input: UpdateDataCardInput,
-    state: State<Arc<AppState>>,
-) -> Result<bool> {
+pub fn update_datacard(input: UpdateDataCardInput, state: State<Arc<AppState>>) -> Result<bool> {
     datacards_service::update_datacard(input, &state)
 }
 
 #[tauri::command]
-pub fn move_datacard(input: MoveDataCardInput, state: State<Arc<AppState>>) -> Result<bool> {
-    datacards_service::move_datacard(input, &state)
+pub fn move_datacard_to_folder(
+    input: MoveDataCardInput,
+    state: State<Arc<AppState>>,
+) -> Result<bool> {
+    datacards_service::move_datacard_to_folder(input, &state)
 }
 
 #[tauri::command]
