@@ -60,9 +60,7 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
             selectedNav={vault.selectedNav}
             selectedFolderId={vault.selectedFolderId}
             onSelectNav={vault.selectNav}
-            onDeleteFolder={vault.deleteFolder}
-            onRestoreFolder={vault.restoreFolder}
-            onPurgeFolder={vault.purgeFolder}
+            dialogState={folderDialogs}
           />
         </aside>
 
@@ -81,7 +79,6 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
         </section>
       </div>
 
-      {folderDialogs.dialogs}
     </div>
   );
 }

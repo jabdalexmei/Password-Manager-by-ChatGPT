@@ -239,6 +239,31 @@
   padding: 20px;
 }
 
+.dialog-wide {
+  width: min(640px, 100%);
+}
+
+.dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialog-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.dialog-close:hover {
+  border-color: var(--color-primary);
+}
+
 .dialog-title {
   margin: 0;
   font-size: 18px;

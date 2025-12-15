@@ -25,6 +25,7 @@
   "action.edit": "Edit",
   "action.markFavorite": "Mark favorite",
   "action.unmarkFavorite": "Unmark favorite",
+  "action.generate": "Generate",
   "action.copy": "Copy",
   "action.reveal": "Reveal",
   "action.hide": "Hide",
@@ -33,5 +34,6 @@
   "action.save": "Save",
   "dialog.createTitle": "Create data card",
   "dialog.editTitle": "Edit data card",
+  "label.markFavorite": "Mark as favorite",
   "validation.titleRequired": "Title is required"
 }

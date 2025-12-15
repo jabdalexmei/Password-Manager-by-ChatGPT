@@ -2,6 +2,7 @@ import React from 'react';
 import { Folder } from '../../types/ui';
 import { SelectedNav } from '../../useVault';
 import { useTranslation } from '../../../../lib/i18n';
+import { FolderDialogState } from './useFolders';
 
 type Counts = {
   all: number;
@@ -18,9 +19,7 @@ export type FolderListProps = {
   selectedNav: SelectedNav;
   selectedFolderId: string | null;
   onSelectNav: (nav: SelectedNav) => void;
-  onDeleteFolder: (id: string) => void;
-  onRestoreFolder: (id: string) => void;
-  onPurgeFolder: (id: string) => void;
+  dialogState: FolderDialogState;
 };
 
 export function Folders({
@@ -30,9 +29,60 @@ export function Folders({
   selectedNav,
   selectedFolderId,
   onSelectNav,
+  dialogState,
 }: FolderListProps) {
   const { t } = useTranslation('Folders');
+  const { t: tCommon } = useTranslation('Common');
   const isTrashMode = selectedNav === 'deleted';
+
+  const renderCreateDialog = () => {
+    if (!dialogState.isCreateOpen) return null;
+
+    return (
+      <div className="dialog-backdrop">
+        <div className="dialog">
+          <div className="dialog-header">
+            <div>
+              <h3 className="dialog-title">{t('dialog.newFolder.title')}</h3>
+              <p className="dialog-description">{t('dialog.newFolder.description')}</p>
+            </div>
+            <button
+              className="dialog-close"
+              aria-label={tCommon('action.close')}
+              type="button"
+              onClick={dialogState.closeCreateFolder}
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-field">
+              <label className="form-label" htmlFor="folder-name">
+                {t('dialog.newFolder.label')}
+              </label>
+              <input
+                id="folder-name"
+                value={dialogState.name}
+                onChange={(e) => dialogState.setName(e.target.value)}
+                placeholder={t('dialog.newFolder.placeholder')}
+              />
+              {dialogState.error && <div className="form-error">{dialogState.error}</div>}
+            </div>
+          </div>
+
+          <div className="dialog-actions">
+            <button className="btn btn-outline" type="button" onClick={dialogState.closeCreateFolder}>
+              {tCommon('action.cancel')}
+            </button>
+            <button className="btn btn-primary" type="button" onClick={dialogState.submitCreate}>
+              {tCommon('action.ok')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderSystemItem = (
     key: SelectedNav,
@@ -83,6 +133,7 @@ export function Folders({
         {!isTrashMode && folders.filter((folder) => !folder.isSystem).map(renderFolder)}
         {isTrashMode && deletedFolders.map(renderFolder)}
       </ul>
+      {renderCreateDialog()}
     </div>
   );
 }
