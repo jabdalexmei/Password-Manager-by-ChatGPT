@@ -17,8 +17,8 @@ type VaultProps = {
 
 export default function Vault({ profileId, profileName, onLocked }: VaultProps) {
   const vault = useVault(profileId, onLocked);
-  const { t: tVault } = useTranslation('Vault');
   const { t: tDataCards } = useTranslation('DataCards');
+  const { t: tFolders } = useTranslation('Folders');
   const dataCardsViewModel = useDataCards({
     cards: vault.visibleCards,
     selectedCardId: vault.selectedCardId,
@@ -47,7 +47,7 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
               {tDataCards('label.addDataCard')}
             </button>
             <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
-              {tVault('addFolder')}
+              {tFolders('action.addFolder')}
             </button>
           </div>
           <div className="vault-sidebar-controls">

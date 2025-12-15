@@ -12,7 +12,7 @@ export type DetailsProps = {
 };
 
 export function Details({ card, folders, onEdit, onDelete, onToggleFavorite }: DetailsProps) {
-  const { t } = useTranslation('DataCards');
+  const { t } = useTranslation('Details');
   const detailActions = useDetails({ card, onDelete, onEdit, onToggleFavorite });
 
   const folderName = useMemo(() => {
@@ -21,7 +21,7 @@ export function Details({ card, folders, onEdit, onDelete, onToggleFavorite }: D
   }, [card, folders, t]);
 
   if (!card) {
-    return <div className="vault-empty">{t('label.selectPrompt')}</div>;
+    return <div className="vault-empty">{t('empty.selectPrompt')}</div>;
   }
 
   const isFavorite = card.tags?.includes('favorite');

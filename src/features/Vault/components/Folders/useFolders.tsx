@@ -12,7 +12,8 @@ type FolderDialogs = {
 };
 
 export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogs {
-  const { t } = useTranslation('Vault');
+  const { t } = useTranslation('Folders');
+  const { t: tCommon } = useTranslation('Common');
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -43,18 +44,23 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogs 
         {isCreateOpen && (
           <div className="modal-backdrop">
             <div className="modal">
-              <h3>{t('createFolderTitle')}</h3>
+              <h3>{t('dialog.newFolder.title')}</h3>
+              <p className="modal-description">{t('dialog.newFolder.description')}</p>
               <label>
-                {t('nameLabel')}
-                <input value={name} onChange={(e) => setName(e.target.value)} />
+                {t('dialog.newFolder.label')}
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={t('dialog.newFolder.placeholder')}
+                />
               </label>
               {error && <div className="form-error">{error}</div>}
               <div className="modal-actions">
                 <button className="btn btn-primary" type="button" onClick={submitCreate}>
-                  {t('create')}
+                  {tCommon('action.ok')}
                 </button>
                 <button className="btn" type="button" onClick={closeCreateFolder}>
-                  {t('cancel')}
+                  {tCommon('action.cancel')}
                 </button>
               </div>
             </div>
@@ -62,7 +68,7 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogs 
         )}
       </>
     ),
-    [closeCreateFolder, error, isCreateOpen, name, submitCreate, t]
+    [closeCreateFolder, error, isCreateOpen, name, submitCreate, t, tCommon]
   );
 
   return { openCreateFolder, dialogs };

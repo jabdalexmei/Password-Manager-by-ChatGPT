@@ -34,7 +34,7 @@ export function Folders({
   onRestoreFolder,
   onPurgeFolder,
 }: FolderListProps) {
-  const { t } = useTranslation('Vault');
+  const { t } = useTranslation('Folders');
   const isTrashMode = selectedNav === 'deleted';
 
   const renderSystemItem = (
@@ -62,10 +62,10 @@ export function Folders({
             <span className="folder-name">{folder.name}</span>
             <div className="vault-sidebar-actions">
               <button className="btn btn-secondary" type="button" onClick={() => onRestoreFolder(folder.id)}>
-                {t('restore')}
+                {t('action.restore')}
               </button>
               <button className="btn btn-danger" type="button" onClick={() => onPurgeFolder(folder.id)}>
-                {t('purge')}
+                {t('action.purge')}
               </button>
             </div>
           </div>
@@ -82,7 +82,7 @@ export function Folders({
         {!folder.isSystem && (
           <div className="vault-sidebar-actions">
             <button className="btn btn-danger" type="button" onClick={() => onDeleteFolder(folder.id)}>
-              {t('delete')}
+              {t('action.deleteFolder')}
             </button>
           </div>
         )}
@@ -92,12 +92,12 @@ export function Folders({
 
   return (
     <div>
-      <div className="vault-sidebar-title">{t('foldersTitle')}</div>
+      <div className="vault-sidebar-title">{t('title')}</div>
       <ul className="vault-folder-list">
-        {renderSystemItem('all', t('allItems'), counts.all, selectedNav === 'all')}
-        {renderSystemItem('favorites', t('favorites'), counts.favorites, selectedNav === 'favorites')}
-        {renderSystemItem('archive', t('archive'), counts.archive, selectedNav === 'archive')}
-        {renderSystemItem('deleted', t('deleted'), counts.deleted, selectedNav === 'deleted')}
+        {renderSystemItem('all', t('nav.allItems'), counts.all, selectedNav === 'all')}
+        {renderSystemItem('favorites', t('nav.favorites'), counts.favorites, selectedNav === 'favorites')}
+        {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
+        {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
         {!isTrashMode && folders.filter((folder) => !folder.isSystem).map(renderFolder)}
         {isTrashMode && deletedFolders.map(renderFolder)}
       </ul>
