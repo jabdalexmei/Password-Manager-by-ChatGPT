@@ -30,9 +30,6 @@ export function Folders({
   selectedNav,
   selectedFolderId,
   onSelectNav,
-  onDeleteFolder,
-  onRestoreFolder,
-  onPurgeFolder,
 }: FolderListProps) {
   const { t } = useTranslation('Folders');
   const isTrashMode = selectedNav === 'deleted';
@@ -60,14 +57,6 @@ export function Folders({
         <li key={folder.id}>
           <div className="vault-folder" aria-label={folder.name}>
             <span className="folder-name">{folder.name}</span>
-            <div className="vault-sidebar-actions">
-              <button className="btn btn-secondary" type="button" onClick={() => onRestoreFolder(folder.id)}>
-                {t('action.restore')}
-              </button>
-              <button className="btn btn-danger" type="button" onClick={() => onPurgeFolder(folder.id)}>
-                {t('action.purge')}
-              </button>
-            </div>
           </div>
         </li>
       );
@@ -79,13 +68,6 @@ export function Folders({
           <span className="folder-name">{folder.name}</span>
           <span className="folder-count">{count}</span>
         </button>
-        {!folder.isSystem && (
-          <div className="vault-sidebar-actions">
-            <button className="btn btn-danger" type="button" onClick={() => onDeleteFolder(folder.id)}>
-              {t('action.deleteFolder')}
-            </button>
-          </div>
-        )}
       </li>
     );
   };

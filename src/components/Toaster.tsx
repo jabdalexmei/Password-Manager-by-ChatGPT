@@ -26,11 +26,15 @@ export const ToasterProvider: React.FC<{ children: React.ReactNode }> = ({ child
   return (
     <ToasterContext.Provider value={value}>
       {children}
-      <div className="toast-container">
+      <div className="toast-host">
         {toasts.map((toast) => (
           <div className="toast" key={toast.id}>
             <span>{toast.message}</span>
-            <button onClick={() => dismiss(toast.id)} aria-label={tCommon('aria.dismissToast')}>
+            <button
+              className="icon-button"
+              onClick={() => dismiss(toast.id)}
+              aria-label={tCommon('aria.dismissToast')}
+            >
               ×
             </button>
           </div>

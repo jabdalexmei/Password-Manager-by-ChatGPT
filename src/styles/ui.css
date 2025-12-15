@@ -171,6 +171,16 @@
   background: var(--color-primary-strong);
 }
 
+.btn-secondary {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.btn-secondary:not(:disabled):hover {
+  border-color: var(--color-primary);
+}
+
 .btn-danger {
   background: var(--color-danger);
   color: #fff;
