@@ -10,14 +10,14 @@ pub struct UserSettings {
     pub active_profile: Option<String>,
 }
 
-fn settings_path() -> PathBuf {
+fn settings_path() -> Result<PathBuf> {
     ensure_profiles_dir()
-        .unwrap_or_else(|_| std::env::temp_dir())
-        .join("user_settings.json")
+        .map(|dir| dir.join("user_settings.json"))
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))
 }
 
 pub fn load_settings() -> Result<UserSettings> {
-    let path = settings_path();
+    let path = settings_path()?;
     if !path.exists() {
         return Ok(UserSettings::default());
     }
@@ -28,5 +28,5 @@ pub fn load_settings() -> Result<UserSettings> {
 pub fn save_settings(settings: &UserSettings) -> Result<()> {
     let serialized = serde_json::to_string_pretty(settings)
         .map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
-    fs::write(settings_path(), serialized).map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))
+    fs::write(settings_path()?, serialized).map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))
 }

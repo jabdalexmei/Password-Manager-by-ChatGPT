@@ -45,7 +45,7 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
     <div className="vault-shell">
       <header className="vault-appbar">
         <div className="vault-profile">
-          <div className="vault-title">Vault</div>
+          <div className="vault-title">Password Manager</div>
           <div className="vault-subtitle">Active profile: {profileName}</div>
         </div>
 

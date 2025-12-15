@@ -1,10 +1,17 @@
 use std::path::{Path, PathBuf};
 
+use crate::data::storage_paths::storage_paths;
+
+pub fn app_dir() -> PathBuf {
+    storage_paths().app_dir().to_path_buf()
+}
+
+pub fn data_root() -> PathBuf {
+    storage_paths().data_root().to_path_buf()
+}
+
 pub fn profiles_root() -> PathBuf {
-    dirs::data_local_dir()
-        .unwrap_or(std::env::temp_dir())
-        .join("NewAppTest")
-        .join("profiles")
+    storage_paths().profiles_root().to_path_buf()
 }
 
 pub fn ensure_profiles_dir() -> std::io::Result<PathBuf> {
