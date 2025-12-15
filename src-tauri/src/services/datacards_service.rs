@@ -61,13 +61,11 @@ pub fn create_datacard(
     state: &State<Arc<AppState>>,
 ) -> Result<DataCard> {
     let profile_id = require_logged_in(state)?;
-    let title = input.title.trim();
-    if title.is_empty() {
+    let mut sanitized = input;
+    sanitized.title = sanitized.title.trim().to_string();
+    if sanitized.title.is_empty() {
         return Err(ErrorCodeString::new("DATACARD_TITLE_REQUIRED"));
     }
-
-    let mut sanitized = input;
-    sanitized.title = title.to_string();
     sanitized.tags = normalize_tags(sanitized.tags);
 
     repo_impl::create_datacard(&profile_id, &sanitized)
@@ -75,13 +73,11 @@ pub fn create_datacard(
 
 pub fn update_datacard(input: UpdateDataCardInput, state: &State<Arc<AppState>>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    let title = input.title.trim();
-    if title.is_empty() {
+    let mut sanitized = input;
+    sanitized.title = sanitized.title.trim().to_string();
+    if sanitized.title.is_empty() {
         return Err(ErrorCodeString::new("DATACARD_TITLE_REQUIRED"));
     }
-
-    let mut sanitized = input;
-    sanitized.title = title.to_string();
     sanitized.tags = normalize_tags(sanitized.tags);
 
     repo_impl::update_datacard(&profile_id, &sanitized)

@@ -84,8 +84,8 @@ fn main() {
             list_deleted_datacards,
             restore_datacard,
             purge_datacard,
-            get_settings_command,
-            update_settings_command
+            get_settings,
+            update_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
