@@ -18,7 +18,6 @@ export type FolderListProps = {
   selectedNav: SelectedNav;
   selectedFolderId: string | null;
   onSelectNav: (nav: SelectedNav) => void;
-  onAddFolder: () => void;
   onDeleteFolder: (id: string) => void;
   onRestoreFolder: (id: string) => void;
   onPurgeFolder: (id: string) => void;
@@ -31,7 +30,6 @@ export function Folders({
   selectedNav,
   selectedFolderId,
   onSelectNav,
-  onAddFolder,
   onDeleteFolder,
   onRestoreFolder,
   onPurgeFolder,
@@ -95,11 +93,6 @@ export function Folders({
   return (
     <div>
       <div className="vault-sidebar-title">{t('foldersTitle')}</div>
-      {!isTrashMode && (
-        <button className="btn btn-primary" type="button" onClick={onAddFolder}>
-          {t('addFolder')}
-        </button>
-      )}
       <ul className="vault-folder-list">
         {renderSystemItem('all', t('allItems'), counts.all, selectedNav === 'all')}
         {renderSystemItem('favorites', t('favorites'), counts.favorites, selectedNav === 'favorites')}

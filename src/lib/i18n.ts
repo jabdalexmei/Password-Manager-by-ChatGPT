@@ -3,12 +3,14 @@ import startup from '../i18n/English/Startup.json';
 import profileCreate from '../i18n/English/ProfileCreate.json';
 import login from '../i18n/English/LogIn.json';
 import vault from '../i18n/English/Vault.json';
+import dataCards from '../i18n/English/DataCards.json';
 
 type Dictionaries = {
   Startup: typeof startup;
   ProfileCreate: typeof profileCreate;
   LogIn: typeof login;
   Vault: typeof vault;
+  DataCards: typeof dataCards;
 };
 
 const dictionaries: Dictionaries = {
@@ -16,6 +18,7 @@ const dictionaries: Dictionaries = {
   ProfileCreate: profileCreate,
   LogIn: login,
   Vault: vault,
+  DataCards: dataCards,
 };
 
 export type Namespace = keyof Dictionaries;

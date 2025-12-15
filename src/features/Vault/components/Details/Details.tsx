@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
+import { useDetails } from './useDetails';
 
 export type DetailsProps = {
   card: DataCard | null;
@@ -11,69 +12,82 @@ export type DetailsProps = {
 };
 
 export function Details({ card, folders, onEdit, onDelete, onToggleFavorite }: DetailsProps) {
-  const { t } = useTranslation('Vault');
+  const { t } = useTranslation('DataCards');
+  const detailActions = useDetails({ card, onDelete, onEdit, onToggleFavorite });
+
+  const folderName = useMemo(() => {
+    if (!card) return '';
+    return card.folderId ? folders.find((f) => f.id === card.folderId)?.name ?? t('label.noFolder') : t('label.noFolder');
+  }, [card, folders, t]);
 
   if (!card) {
-    return <div className="vault-empty">{t('selectPrompt')}</div>;
+    return <div className="vault-empty">{t('label.selectPrompt')}</div>;
   }
 
-  const folderName = card.folderId ? folders.find((f) => f.id === card.folderId)?.name : t('noFolder');
   const isFavorite = card.tags?.includes('favorite');
+  const createdText = `${t('label.created')}: ${new Date(card.createdAt).toLocaleString()}`;
+  const updatedText = `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}`;
+  const passwordDisplay = card.password ? (detailActions.showPassword ? card.password : '••••••••') : t('label.noValue');
 
   return (
     <div className="vault-detail-card">
       <div className="detail-row">
         <div className="detail-dates">
-          <div className="muted">{t('created', { value: new Date(card.createdAt).toLocaleString() })}</div>
-          <div className="muted">{t('updated', { value: new Date(card.updatedAt).toLocaleString() })}</div>
+          <div className="muted">{createdText}</div>
+          <div className="muted">{updatedText}</div>
         </div>
         <div className="detail-actions">
-          <button className="btn btn-secondary" type="button" onClick={() => onToggleFavorite(card.id)}>
-            {isFavorite ? t('unmarkFavorite') : t('markFavorite')}
+          <button className="btn btn-secondary" type="button" onClick={detailActions.toggleFavorite}>
+            {isFavorite ? t('action.unmarkFavorite') : t('action.markFavorite')}
           </button>
-          <button className="btn btn-secondary" type="button" onClick={() => onEdit(card)}>
-            {t('edit')}
+          <button className="btn btn-secondary" type="button" onClick={detailActions.editCard}>
+            {t('action.edit')}
           </button>
-          <button className="btn btn-danger" type="button" onClick={() => onDelete(card.id)}>
-            {t('delete')}
+          <button className="btn btn-danger" type="button" onClick={detailActions.deleteCard}>
+            {t('action.delete')}
           </button>
         </div>
       </div>
 
       <div className="detail-field">
-        <div className="detail-label">{t('titleLabel')}</div>
+        <div className="detail-label">{t('label.title')}</div>
         <div className="detail-value-box">
           <div className="detail-value-text">{card.title}</div>
         </div>
       </div>
 
       <div className="detail-field">
-        <div className="detail-label">{t('folderLabel')}</div>
+        <div className="detail-label">{t('label.folder')}</div>
         <div className="detail-value-box">
           <div className="detail-value-text">{folderName}</div>
         </div>
       </div>
 
       <div className="detail-field">
-        <div className="detail-label">{t('username')}</div>
+        <div className="detail-label">{t('label.username')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.username || t('notAvailable')}</div>
+          <div className="detail-value-text">{card.username || t('label.noValue')}</div>
         </div>
       </div>
 
       <div className="detail-field">
-        <div className="detail-label">{t('email')}</div>
+        <div className="detail-label">{t('label.email')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.email || t('notAvailable')}</div>
+          <div className="detail-value-text">{card.email || t('label.noValue')}</div>
         </div>
       </div>
 
       <div className="detail-field">
-        <div className="detail-label">{t('url')}</div>
+        <div className="detail-label">{t('label.url')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.url || t('notAvailable')}</div>
+          <div className="detail-value-text">{card.url || t('label.noValue')}</div>
           <div className="detail-value-actions">
-            <button className="icon-button" type="button" aria-label={t('copy')}>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label={t('action.copy')}
+              onClick={() => detailActions.copyToClipboard(card.url)}
+            >
               ⧉
             </button>
           </div>
@@ -81,21 +95,31 @@ export function Details({ card, folders, onEdit, onDelete, onToggleFavorite }: D
       </div>
 
       <div className="detail-field">
-        <div className="detail-label">{t('mobile')}</div>
+        <div className="detail-label">{t('label.mobile')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.mobilePhone || t('notAvailable')}</div>
+          <div className="detail-value-text">{card.mobilePhone || t('label.noValue')}</div>
         </div>
       </div>
 
       <div className="detail-field">
-        <div className="detail-label">{t('password')}</div>
+        <div className="detail-label">{t('label.password')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.password || t('notAvailable')}</div>
+          <div className="detail-value-text">{passwordDisplay}</div>
           <div className="detail-value-actions">
-            <button className="icon-button" type="button" aria-label={t('copy')}>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label={t('action.copy')}
+              onClick={() => detailActions.copyToClipboard(card.password, true)}
+            >
               ⧉
             </button>
-            <button className="icon-button" type="button" aria-label={t('reveal')}>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label={detailActions.showPassword ? t('action.hide') : t('action.reveal')}
+              onClick={detailActions.togglePasswordVisibility}
+            >
               👁
             </button>
           </div>
@@ -103,16 +127,16 @@ export function Details({ card, folders, onEdit, onDelete, onToggleFavorite }: D
       </div>
 
       <div className="detail-field">
-        <div className="detail-label">{t('note')}</div>
+        <div className="detail-label">{t('label.note')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.note || t('notAvailable')}</div>
+          <div className="detail-value-text">{card.note || t('label.noValue')}</div>
         </div>
       </div>
 
       <div className="detail-field">
-        <div className="detail-label">{t('tags')}</div>
+        <div className="detail-label">{t('label.tags')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.tags && card.tags.length > 0 ? card.tags.join(', ') : t('notAvailable')}</div>
+          <div className="detail-value-text">{card.tags && card.tags.length > 0 ? card.tags.join(', ') : t('label.noValue')}</div>
         </div>
       </div>
     </div>

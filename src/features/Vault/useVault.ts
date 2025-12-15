@@ -107,10 +107,14 @@ export function useVault(profileId: string, onLocked: () => void) {
   const createFolderAction = useCallback(
     async (name: string, parentId: string | null) => {
       try {
-        await createFolder({ name, parent_id: parentId });
+        const created = await createFolder({ name, parent_id: parentId });
+        const mapped = mapFolderFromBackend(created);
         await refreshActive();
+        setSelectedNav((prev) => (prev === 'deleted' ? { folderId: mapped.id } : prev));
+        return mapped;
       } catch (err) {
         handleError(err);
+        return null;
       }
     },
     [handleError, refreshActive]
@@ -180,10 +184,15 @@ export function useVault(profileId: string, onLocked: () => void) {
   const createCardAction = useCallback(
     async (input: CreateDataCardInput) => {
       try {
-        await createDataCard(mapCreateCardToBackend(input));
+        const created = await createDataCard(mapCreateCardToBackend(input));
+        const mapped = mapCardFromBackend(created);
         await refreshActive();
+        setSelectedNav((prev) => (prev === 'deleted' ? 'all' : prev));
+        setSelectedCardId(mapped.id);
+        return mapped;
       } catch (err) {
         handleError(err);
+        return null;
       }
     },
     [handleError, refreshActive]
