@@ -10,6 +10,7 @@ export type FolderDialogState = {
   isCreateOpen: boolean;
   name: string;
   error: string | null;
+  isSubmitting: boolean;
   openCreateFolder: () => void;
   closeCreateFolder: () => void;
   setName: (value: string) => void;
@@ -21,26 +22,37 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogSt
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const openCreateFolder = useCallback(() => {
     setName('');
     setError(null);
+    setIsSubmitting(false);
     setCreateOpen(true);
   }, []);
 
-  const closeCreateFolder = useCallback(() => setCreateOpen(false), []);
+  const closeCreateFolder = useCallback(() => {
+    setIsSubmitting(false);
+    setCreateOpen(false);
+  }, []);
 
   const submitCreate = useCallback(async () => {
+    if (isSubmitting) return;
     const trimmed = name.trim();
     if (!trimmed) {
       setError(t('validation.folderNameRequired'));
       return;
     }
 
-    await onCreateFolder(trimmed);
-    setCreateOpen(false);
-    setName('');
-  }, [name, onCreateFolder, t]);
+    setIsSubmitting(true);
+    try {
+      await onCreateFolder(trimmed);
+      setCreateOpen(false);
+      setName('');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [isSubmitting, name, onCreateFolder, t]);
 
-  return { isCreateOpen, name, error, openCreateFolder, closeCreateFolder, setName, submitCreate };
+  return { isCreateOpen, name, error, isSubmitting, openCreateFolder, closeCreateFolder, setName, submitCreate };
 }

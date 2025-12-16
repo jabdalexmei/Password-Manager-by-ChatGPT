@@ -9,16 +9,18 @@ export type DataCardsProps = {
 export function DataCards({ viewModel }: DataCardsProps) {
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
-  const {
-    cards,
-    selectedCardId,
-    showPassword,
-    isCreateOpen,
-    isEditOpen,
-    closeCreateModal,
-    closeEditModal,
-    togglePasswordVisibility,
-  } = viewModel;
+    const {
+      cards,
+      selectedCardId,
+      showPassword,
+      isCreateOpen,
+      isEditOpen,
+      isCreateSubmitting,
+      isEditSubmitting,
+      closeCreateModal,
+      closeEditModal,
+      togglePasswordVisibility,
+    } = viewModel;
   const createTitleRef = useRef<HTMLInputElement | null>(null);
   const editTitleRef = useRef<HTMLInputElement | null>(null);
 
@@ -53,12 +55,15 @@ export function DataCards({ viewModel }: DataCardsProps) {
     onSubmit: () => Promise<void>,
     onFieldChange: (field: keyof DataCardFormState, value: string | boolean | null) => void,
     submitLabel: string,
-    titleRef: React.RefObject<HTMLInputElement>
+    titleRef: React.RefObject<HTMLInputElement>,
+    dialogId: string,
+    isSubmitting: boolean
   ) => {
     if (!form) return null;
 
-    const handleFolderChange = (value: string) => {
-      onFieldChange('folderId', value || null);
+    const handleSubmit = async (event: React.FormEvent) => {
+      event.preventDefault();
+      await onSubmit();
     };
 
     const generatePassword = () => {
@@ -66,25 +71,25 @@ export function DataCards({ viewModel }: DataCardsProps) {
       onFieldChange('password', generated);
     };
 
+    const titleElementId = 'dialog-title';
+
     return (
       <div className="dialog-backdrop">
-        <div className="dialog dialog-wide">
+        <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleElementId}>
           <div className="dialog-header">
-            <div>
-              <h3 className="dialog-title">{title}</h3>
-            </div>
-            <button className="dialog-close" aria-label={tCommon('action.close')} onClick={onClose} type="button">
-              ×
-            </button>
+            <h2 id={titleElementId} className="dialog-title">
+              {title}
+            </h2>
           </div>
 
-          <div className="form-stack">
+          <form className="dialog-body" onSubmit={handleSubmit}>
             <div className="form-field">
-              <label className="form-label" htmlFor="datacard-title">
+              <label className="form-label" htmlFor={`${dialogId}-title`}>
                 {t('label.title')}*
               </label>
               <input
-                id="datacard-title"
+                id={`${dialogId}-title`}
+                className="input"
                 ref={titleRef}
                 value={form.title}
                 onChange={(e) => onFieldChange('title', e.target.value)}
@@ -93,131 +98,122 @@ export function DataCards({ viewModel }: DataCardsProps) {
             </div>
 
             <div className="form-field">
-              <label className="form-label" htmlFor="datacard-folder">
-                {t('label.folder')}
+              <label className="form-label" htmlFor={`${dialogId}-url`}>
+                {t('label.url')}
               </label>
-              <select
-                id="datacard-folder"
-                value={form.folderId ?? ''}
-                onChange={(e) => handleFolderChange(e.target.value)}
-              >
-                <option value="">{t('label.noFolder')}</option>
-                {viewModel.folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
-              </select>
+              <input
+                id={`${dialogId}-url`}
+                className="input"
+                type="url"
+                value={form.url}
+                onChange={(e) => onFieldChange('url', e.target.value)}
+              />
             </div>
 
             <div className="form-field">
-              <label className="form-label" htmlFor="datacard-username">
+              <label className="form-label" htmlFor={`${dialogId}-username`}>
                 {t('label.username')}
               </label>
               <input
-                id="datacard-username"
+                id={`${dialogId}-username`}
+                className="input"
                 value={form.username}
                 onChange={(e) => onFieldChange('username', e.target.value)}
               />
             </div>
 
             <div className="form-field">
-              <label className="form-label" htmlFor="datacard-email">
+              <label className="form-label" htmlFor={`${dialogId}-email`}>
                 {t('label.email')}
               </label>
-              <input id="datacard-email" value={form.email} onChange={(e) => onFieldChange('email', e.target.value)} />
+              <input
+                id={`${dialogId}-email`}
+                className="input"
+                type="email"
+                value={form.email}
+                onChange={(e) => onFieldChange('email', e.target.value)}
+              />
             </div>
 
             <div className="form-field">
-              <label className="form-label" htmlFor="datacard-url">
-                {t('label.url')}
+              <label className="form-label" htmlFor={`${dialogId}-password`}>
+                {t('label.password')}
               </label>
-              <input id="datacard-url" value={form.url} onChange={(e) => onFieldChange('url', e.target.value)} />
-            </div>
-
-            <div className="form-field">
-              <div className="form-label">{t('label.password')}</div>
-              <div className="button-row">
+              <div className="input-with-actions">
                 <input
+                  id={`${dialogId}-password`}
+                  className="input"
                   type={showPassword ? 'text' : 'password'}
                   value={form.password}
                   onChange={(e) => onFieldChange('password', e.target.value)}
                 />
-                <button className="btn btn-icon" type="button" onClick={generatePassword} aria-label={t('action.generate')}>
-                  {t('action.generate')}
-                </button>
-                <button
-                  className="btn btn-icon"
-                  type="button"
-                  onClick={togglePasswordVisibility}
-                  aria-label={t('action.togglePasswordVisibility')}
-                >
-                  {showPassword ? t('action.hide') : t('action.reveal')}
-                </button>
+                <div className="input-actions">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={generatePassword}
+                    aria-label={t('action.generate')}
+                  >
+                    {t('action.generate')}
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={togglePasswordVisibility}
+                    aria-label={t('action.togglePasswordVisibility')}
+                  >
+                    {showPassword ? t('action.hide') : t('action.reveal')}
+                  </button>
+                </div>
               </div>
             </div>
 
             <div className="form-field">
-              <label className="form-label" htmlFor="datacard-mobile">
+              <label className="form-label" htmlFor={`${dialogId}-mobile`}>
                 {t('label.mobile')}
               </label>
               <input
-                id="datacard-mobile"
+                id={`${dialogId}-mobile`}
+                className="input"
                 value={form.mobilePhone}
                 onChange={(e) => onFieldChange('mobilePhone', e.target.value)}
               />
             </div>
 
             <div className="form-field">
-              <label className="form-label" htmlFor="datacard-note">
+              <label className="form-label" htmlFor={`${dialogId}-note`}>
                 {t('label.note')}
               </label>
               <textarea
-                id="datacard-note"
-                className="textarea-notes"
+                id={`${dialogId}-note`}
+                className="textarea"
                 value={form.note}
                 onChange={(e) => onFieldChange('note', e.target.value)}
               />
             </div>
 
             <div className="form-field">
-              <label className="form-label" htmlFor="datacard-tags">
+              <label className="form-label" htmlFor={`${dialogId}-tags`}>
                 {t('label.tags')}
               </label>
               <input
-                id="datacard-tags"
+                id={`${dialogId}-tags`}
+                className="input"
                 value={form.tagsText}
                 placeholder={t('label.tagsPlaceholder')}
                 onChange={(e) => onFieldChange('tagsText', e.target.value)}
               />
             </div>
 
-            <div className="form-field">
-              <label className="form-label" htmlFor="datacard-favorite">
-                <input
-                  id="datacard-favorite"
-                  type="checkbox"
-                  checked={form.isFavorite}
-                  onChange={(e) => onFieldChange('isFavorite', e.target.checked)}
-                />
-                {t('label.markFavorite')}
-              </label>
+            <div className="dialog-footer">
+              <button className="btn btn-secondary" type="button" onClick={onClose}>
+                {tCommon('action.cancel')}
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+                {submitLabel}
+              </button>
             </div>
-          </div>
-
-          <div className="dialog-actions">
-            <button className="btn btn-secondary" type="button" onClick={onClose}>
-              {tCommon('action.cancel')}
-            </button>
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={onSubmit}
-              disabled={!form.title.trim()}
-            >
-              {submitLabel}
-            </button>
-          </div>
+          </form>
         </div>
       </div>
     );
@@ -269,7 +265,9 @@ export function DataCards({ viewModel }: DataCardsProps) {
           viewModel.submitCreate,
           viewModel.updateCreateField,
           t('action.create'),
-          createTitleRef
+          createTitleRef,
+          'datacard-create-dialog',
+          isCreateSubmitting
         )}
 
       {viewModel.isEditOpen &&
@@ -281,7 +279,9 @@ export function DataCards({ viewModel }: DataCardsProps) {
           viewModel.submitEdit,
           viewModel.updateEditField,
           t('action.save'),
-          editTitleRef
+          editTitleRef,
+          'datacard-edit-dialog',
+          isEditSubmitting
         )}
     </div>
   );

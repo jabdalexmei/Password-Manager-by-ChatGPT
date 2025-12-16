@@ -47,6 +47,8 @@ export type DataCardsViewModel = {
   editForm: DataCardFormState | null;
   createError: string | null;
   editError: string | null;
+  isCreateSubmitting: boolean;
+  isEditSubmitting: boolean;
   updateCreateField: (field: keyof DataCardFormState, value: string | boolean | null) => void;
   updateEditField: (field: keyof DataCardFormState, value: string | boolean | null) => void;
   submitCreate: () => Promise<void>;
@@ -128,6 +130,8 @@ export function useDataCards({
   const [isEditOpen, setEditOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const resetCreateForm = useCallback(() => {
@@ -136,17 +140,20 @@ export function useDataCards({
 
   const openCreateModal = useCallback(() => {
     setCreateError(null);
+    setIsCreateSubmitting(false);
     resetCreateForm();
     setCreateOpen(true);
     setShowPassword(false);
   }, [resetCreateForm]);
 
   const closeCreateModal = useCallback(() => {
+    setIsCreateSubmitting(false);
     setCreateOpen(false);
   }, []);
 
   const openEditModal = useCallback((card: DataCard) => {
     setEditError(null);
+    setIsEditSubmitting(false);
     setEditCardId(card.id);
     setEditForm({
       title: card.title,
@@ -165,6 +172,7 @@ export function useDataCards({
   }, []);
 
   const closeEditModal = useCallback(() => {
+    setIsEditSubmitting(false);
     setEditOpen(false);
     setEditForm(null);
     setEditCardId(null);
@@ -181,6 +189,9 @@ export function useDataCards({
   }, [isCreateOpen, isEditOpen]);
 
   const updateCreateField = useCallback((field: keyof DataCardFormState, value: string | boolean | null) => {
+    if (field === 'title') {
+      setCreateError(null);
+    }
     setCreateForm((prev) => {
       if (field === 'isFavorite') {
         return { ...prev, isFavorite: Boolean(value) };
@@ -198,23 +209,34 @@ export function useDataCards({
         return { ...prev, isFavorite: Boolean(value) };
       }
 
+      if (field === 'title') {
+        setEditError(null);
+      }
+
       return { ...prev, [field]: (value ?? '') as string };
     });
   }, []);
 
   const submitCreate = useCallback(async () => {
+    if (isCreateSubmitting) return;
     const trimmedTitle = createForm.title.trim();
     if (!trimmedTitle) {
       setCreateError(t('validation.titleRequired'));
       return;
     }
 
-    await onCreateCard(buildCreateInput(createForm));
-    setCreateOpen(false);
-    resetCreateForm();
-  }, [createForm, onCreateCard, resetCreateForm, t]);
+    setIsCreateSubmitting(true);
+    try {
+      await onCreateCard(buildCreateInput(createForm));
+      setCreateOpen(false);
+      resetCreateForm();
+    } finally {
+      setIsCreateSubmitting(false);
+    }
+  }, [createForm, isCreateSubmitting, onCreateCard, resetCreateForm, t]);
 
   const submitEdit = useCallback(async () => {
+    if (isEditSubmitting) return;
     if (!editForm) return;
     const trimmedTitle = editForm.title.trim();
     if (!trimmedTitle) {
@@ -224,11 +246,16 @@ export function useDataCards({
 
     if (!editCardId) return;
 
-    await onUpdateCard(buildUpdateInput(editForm, editCardId));
-    setEditOpen(false);
-    setEditForm(null);
-    setEditCardId(null);
-  }, [editCardId, editForm, onUpdateCard, t]);
+    setIsEditSubmitting(true);
+    try {
+      await onUpdateCard(buildUpdateInput(editForm, editCardId));
+      setEditOpen(false);
+      setEditForm(null);
+      setEditCardId(null);
+    } finally {
+      setIsEditSubmitting(false);
+    }
+  }, [editCardId, editForm, isEditSubmitting, onUpdateCard, t]);
 
   return {
     cards,
@@ -248,6 +275,8 @@ export function useDataCards({
     editForm,
     createError,
     editError,
+    isCreateSubmitting,
+    isEditSubmitting,
     updateCreateField,
     updateEditField,
     submitCreate,

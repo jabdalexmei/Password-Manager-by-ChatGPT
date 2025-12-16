@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Folder } from '../../types/ui';
 import { SelectedNav } from '../../useVault';
 import { useTranslation } from '../../../../lib/i18n';
@@ -34,51 +34,56 @@ export function Folders({
   const { t } = useTranslation('Folders');
   const { t: tCommon } = useTranslation('Common');
   const isTrashMode = selectedNav === 'deleted';
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (dialogState.isCreateOpen && nameInputRef.current) {
+      nameInputRef.current.focus();
+    }
+  }, [dialogState.isCreateOpen]);
 
   const renderCreateDialog = () => {
     if (!dialogState.isCreateOpen) return null;
 
+    const handleSubmit = (event: React.FormEvent) => {
+      event.preventDefault();
+      void dialogState.submitCreate();
+    };
+
     return (
       <div className="dialog-backdrop">
-        <div className="dialog">
+        <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
           <div className="dialog-header">
-            <div>
-              <h3 className="dialog-title">{t('dialog.newFolder.title')}</h3>
-              <p className="dialog-description">{t('dialog.newFolder.description')}</p>
-            </div>
-            <button
-              className="dialog-close"
-              aria-label={tCommon('action.close')}
-              type="button"
-              onClick={dialogState.closeCreateFolder}
-            >
-              ×
-            </button>
+            <h2 id="dialog-title" className="dialog-title">
+              {t('dialog.newFolder.title')}
+            </h2>
           </div>
 
-          <div className="form-grid">
+          <form className="dialog-body" onSubmit={handleSubmit}>
             <div className="form-field">
               <label className="form-label" htmlFor="folder-name">
                 {t('dialog.newFolder.label')}
               </label>
               <input
                 id="folder-name"
+                className="input"
+                ref={nameInputRef}
                 value={dialogState.name}
                 onChange={(e) => dialogState.setName(e.target.value)}
                 placeholder={t('dialog.newFolder.placeholder')}
               />
               {dialogState.error && <div className="form-error">{dialogState.error}</div>}
             </div>
-          </div>
 
-          <div className="dialog-actions">
-            <button className="btn btn-outline" type="button" onClick={dialogState.closeCreateFolder}>
-              {tCommon('action.cancel')}
-            </button>
-            <button className="btn btn-primary" type="button" onClick={dialogState.submitCreate}>
-              {tCommon('action.ok')}
-            </button>
-          </div>
+            <div className="dialog-footer">
+              <button className="btn btn-secondary" type="button" onClick={dialogState.closeCreateFolder}>
+                {tCommon('action.cancel')}
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={dialogState.isSubmitting}>
+                {t('action.create')}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     );

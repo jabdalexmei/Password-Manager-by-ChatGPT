@@ -8,9 +8,10 @@
   "action.deleteFolder": "Delete folder",
   "action.restore": "Restore",
   "action.purge": "Purge",
-  "dialog.newFolder.title": "New folder",
+  "action.create": "Create",
+  "dialog.newFolder.title": "Create folder",
   "dialog.newFolder.description": "Organize your vault with folders.",
-  "dialog.newFolder.label": "Folder name",
-  "dialog.newFolder.placeholder": "Work, Projects, Personal",
+  "dialog.newFolder.label": "Name",
+  "dialog.newFolder.placeholder": "Folder name",
   "validation.folderNameRequired": "Folder name is required"
 }
