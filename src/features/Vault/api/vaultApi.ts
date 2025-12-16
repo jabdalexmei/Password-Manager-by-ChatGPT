@@ -4,6 +4,7 @@ import {
   BackendDataCard,
   BackendFolder,
   BackendUpdateDataCardInput,
+  BackendUserSettings,
 } from '../types/backend';
 
 export async function listFolders(): Promise<BackendFolder[]> {
@@ -68,4 +69,8 @@ export async function restoreDataCard(id: string): Promise<boolean> {
 
 export async function purgeDataCard(id: string): Promise<boolean> {
   return invoke('purge_datacard', { id });
+}
+
+export async function getSettings(): Promise<BackendUserSettings> {
+  return invoke('get_settings');
 }

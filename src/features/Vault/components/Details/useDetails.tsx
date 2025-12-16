@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DataCard } from '../../types/ui';
+import { useTranslation } from '../../../../lib/i18n';
+import { useToaster } from '../../../../components/Toaster';
 
 const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 30;
 
@@ -17,7 +19,7 @@ type UseDetailsParams = {
 type UseDetailsResult = {
   showPassword: boolean;
   togglePasswordVisibility: () => void;
-  copyToClipboard: (value: string | null | undefined, isSecret?: boolean) => Promise<void>;
+  copyToClipboard: (value: string | null | undefined, opts?: { isSecret?: boolean }) => Promise<void>;
   deleteCard: () => void;
   editCard: () => void;
   toggleFavorite: () => void;
@@ -37,6 +39,8 @@ export function useDetails({
 }: UseDetailsParams): UseDetailsResult {
   const [showPassword, setShowPassword] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { show: showToast } = useToaster();
+  const { t } = useTranslation('Details');
 
   const clearPendingTimeout = useCallback(() => {
     if (timeoutRef.current) {
@@ -52,12 +56,13 @@ export function useDetails({
   }, [card?.id, clearPendingTimeout]);
 
   const copyToClipboard = useCallback(
-    async (value: string | null | undefined, isSecret = false) => {
-      if (!value) return;
+    async (value: string | null | undefined, opts: { isSecret?: boolean } = {}) => {
+      if (!value || !value.trim()) return;
       clearPendingTimeout();
       try {
         await navigator.clipboard.writeText(value);
-        if (isSecret) {
+        showToast(t('toast.copySuccess'));
+        if (opts.isSecret) {
           const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
           timeoutRef.current = window.setTimeout(async () => {
             try {
@@ -70,9 +75,10 @@ export function useDetails({
         }
       } catch (err) {
         console.error(err);
+        showToast(t('toast.copyError'));
       }
     },
-    [clearPendingTimeout, clipboardClearTimeoutSeconds]
+    [clearPendingTimeout, clipboardClearTimeoutSeconds, showToast, t]
   );
 
   const deleteCard = useCallback(() => {

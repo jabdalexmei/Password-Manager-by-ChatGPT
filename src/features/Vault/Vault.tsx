@@ -78,6 +78,7 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
             onPurge={vault.purgeCard}
             onToggleFavorite={vault.toggleFavorite}
             isTrashMode={vault.isTrashMode}
+            clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
           />
         </section>
       </div>

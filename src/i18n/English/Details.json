@@ -21,5 +21,7 @@
   "action.restore": "Restore",
   "action.purge": "Purge",
   "action.markFavorite": "Mark favorite",
-  "action.unmarkFavorite": "Unmark favorite"
+  "action.unmarkFavorite": "Unmark favorite",
+  "toast.copySuccess": "Copied",
+  "toast.copyError": "Unable to copy"
 }

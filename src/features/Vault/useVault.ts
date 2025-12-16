@@ -5,6 +5,7 @@ import {
   deleteDataCard,
   deleteFolder,
   getDataCard,
+  getSettings,
   listDataCards,
   listDeletedDataCards,
   listDeletedFolders,
@@ -25,6 +26,7 @@ import {
   mapUpdateCardToBackend,
 } from './types/mappers';
 import { CreateDataCardInput, DataCard, Folder, UpdateDataCardInput } from './types/ui';
+import { BackendUserSettings } from './types/backend';
 import { useToaster } from '../../components/Toaster';
 import { useTranslation } from '../../lib/i18n';
 
@@ -39,6 +41,7 @@ export function useVault(profileId: string, onLocked: () => void) {
   const [cards, setCards] = useState<DataCard[]>([]);
   const [deletedFolders, setDeletedFolders] = useState<Folder[]>([]);
   const [deletedCards, setDeletedCards] = useState<DataCard[]>([]);
+  const [settings, setSettings] = useState<BackendUserSettings | null>(null);
   const [selectedNav, setSelectedNav] = useState<SelectedNav>('all');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,7 +109,10 @@ export function useVault(profileId: string, onLocked: () => void) {
 
   useEffect(() => {
     refreshActive();
-  }, [refreshActive, profileId]);
+    getSettings()
+      .then(setSettings)
+      .catch(handleError);
+  }, [handleError, profileId, refreshActive]);
 
   const selectNav = useCallback(
     async (nav: SelectedNav) => {
@@ -439,5 +445,6 @@ export function useVault(profileId: string, onLocked: () => void) {
     lock,
     loadCard,
     toggleFavorite,
+    settings,
   };
 }
