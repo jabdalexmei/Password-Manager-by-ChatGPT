@@ -235,9 +235,9 @@ export function DataCards({ viewModel }: DataCardsProps) {
         <div className="vault-datacard-list">
           {cards.map((card) => {
             const isActive = selectedCardId === card.id;
-            const isFavorite = card.tags?.includes('favorite');
-            const meta = card.username || card.email || card.url || t('label.noMeta');
-            const updatedText = `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}`;
+            const isFavorite = card.isFavorite || card.tags?.includes('favorite');
+            const meta = card.metaLine || t('label.noMeta');
+            const updatedText = `${t('label.updated')}: ${card.updatedAtLabel}`;
 
             return (
               <button

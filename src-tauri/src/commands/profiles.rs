@@ -31,9 +31,8 @@ pub fn profile_delete(id: String, state: State<Arc<AppState>>) -> Result<bool> {
 pub fn get_active_profile(state: State<Arc<AppState>>) -> Result<Option<ProfileMeta>> {
     if let Ok(active) = state.active_profile.lock() {
         if let Some(id) = &*active {
-            return profiles_service::get_active_profile().map(|opt| {
-                opt.and_then(|p| if p.id == *id { Some(p) } else { None })
-            });
+            return profiles_service::get_active_profile()
+                .map(|opt| opt.and_then(|p| if p.id == *id { Some(p) } else { None }));
         }
     }
     profiles_service::get_active_profile()
@@ -41,7 +40,11 @@ pub fn get_active_profile(state: State<Arc<AppState>>) -> Result<Option<ProfileM
 
 #[tauri::command]
 pub fn set_active_profile(id: String, state: State<Arc<AppState>>) -> Result<bool> {
-    if !profiles_service::list_profiles()?.profiles.iter().any(|p| p.id == id) {
+    if !profiles_service::list_profiles()?
+        .profiles
+        .iter()
+        .any(|p| p.id == id)
+    {
         return Err(ErrorCodeString::new("PROFILE_NOT_FOUND"));
     }
     if let Ok(mut active) = state.active_profile.lock() {

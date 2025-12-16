@@ -7,7 +7,11 @@ use crate::error::Result;
 use crate::services::security_service;
 
 #[tauri::command]
-pub fn login_vault(id: String, password: Option<String>, state: State<Arc<AppState>>) -> Result<bool> {
+pub fn login_vault(
+    id: String,
+    password: Option<String>,
+    state: State<Arc<AppState>>,
+) -> Result<bool> {
     security_service::login_vault(&id, password, &state)
 }
 

@@ -1,10 +1,11 @@
 import {
   BackendCreateDataCardInput,
   BackendDataCard,
+  BackendDataCardSummary,
   BackendFolder,
   BackendUpdateDataCardInput,
 } from './backend';
-import { DataCard, Folder, CreateDataCardInput, UpdateDataCardInput } from './ui';
+import { DataCard, Folder, CreateDataCardInput, UpdateDataCardInput, DataCardSummary } from './ui';
 
 export function mapFolderFromBackend(folder: BackendFolder): Folder {
   return {
@@ -47,6 +48,53 @@ export function mapCardFromBackend(card: BackendDataCard): DataCard {
       value: field.value,
       type: field.type,
     })),
+  };
+}
+
+const metaFromCard = (card: { username: string | null; email: string | null; url: string | null }, fallback: string) =>
+  card.username || card.email || card.url || fallback;
+
+export function mapCardSummaryFromBackend(
+  card: BackendDataCardSummary,
+  formatter: Intl.DateTimeFormat
+): DataCardSummary {
+  const updatedAtLabel = formatter.format(new Date(card.updated_at));
+  const createdAtLabel = formatter.format(new Date(card.created_at));
+
+  return {
+    id: card.id,
+    folderId: card.folder_id,
+    title: card.title,
+    url: card.url,
+    email: card.email,
+    username: card.username,
+    mobilePhone: null,
+    note: null,
+    tags: card.tags ?? [],
+    createdAt: card.created_at,
+    updatedAt: card.updated_at,
+    deletedAt: card.deleted_at,
+    password: null,
+    bankCard: null,
+    customFields: [],
+    isFavorite: card.is_favorite || (card.tags ?? []).includes('favorite'),
+    updatedAtLabel,
+    createdAtLabel,
+    metaLine: metaFromCard(card, ''),
+  };
+}
+
+export function mapCardToSummary(card: DataCard, formatter: Intl.DateTimeFormat): DataCardSummary {
+  const updatedAtLabel = formatter.format(new Date(card.updatedAt));
+  const createdAtLabel = formatter.format(new Date(card.createdAt));
+  const isFavorite = (card.tags || []).includes('favorite');
+
+  return {
+    ...card,
+    isFavorite,
+    updatedAtLabel,
+    createdAtLabel,
+    metaLine: metaFromCard(card, ''),
   };
 }
 

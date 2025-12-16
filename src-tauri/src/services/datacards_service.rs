@@ -6,7 +6,9 @@ use crate::app_state::AppState;
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::settings_service::get_settings;
-use crate::types::{CreateDataCardInput, DataCard, MoveDataCardInput, UpdateDataCardInput};
+use crate::types::{
+    CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, UpdateDataCardInput,
+};
 
 fn require_logged_in(state: &State<Arc<AppState>>) -> Result<String> {
     let active_profile = state
@@ -46,6 +48,16 @@ pub fn list_datacards(state: &State<Arc<AppState>>) -> Result<Vec<DataCard>> {
     repo_impl::list_datacards(
         &profile_id,
         false,
+        &settings.default_sort_field,
+        &settings.default_sort_direction,
+    )
+}
+
+pub fn list_datacards_summary(state: &State<Arc<AppState>>) -> Result<Vec<DataCardSummary>> {
+    let profile_id = require_logged_in(state)?;
+    let settings = get_settings(&profile_id)?;
+    repo_impl::list_datacards_summary(
+        &profile_id,
         &settings.default_sort_field,
         &settings.default_sort_direction,
     )
@@ -104,6 +116,13 @@ pub fn delete_datacard(id: String, state: &State<Arc<AppState>>) -> Result<bool>
 pub fn list_deleted_datacards(state: &State<Arc<AppState>>) -> Result<Vec<DataCard>> {
     let profile_id = require_logged_in(state)?;
     repo_impl::list_deleted_datacards(&profile_id)
+}
+
+pub fn list_deleted_datacards_summary(
+    state: &State<Arc<AppState>>,
+) -> Result<Vec<DataCardSummary>> {
+    let profile_id = require_logged_in(state)?;
+    repo_impl::list_deleted_datacards_summary(&profile_id)
 }
 
 pub fn restore_datacard(id: String, state: &State<Arc<AppState>>) -> Result<bool> {

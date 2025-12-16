@@ -1,14 +1,18 @@
 use chrono::Utc;
+use r2d2::PooledConnection;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::params;
 use rusqlite::types::Type;
-use rusqlite::{params, Connection};
 use uuid::Uuid;
 
-use crate::data::profiles::paths::vault_db_path;
+use super::pool;
 use crate::error::{ErrorCodeString, Result};
-use crate::types::{BankCard, CreateDataCardInput, DataCard, Folder, UpdateDataCardInput};
+use crate::types::{
+    BankCard, CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput,
+};
 
-fn open_connection(profile_id: &str) -> Result<Connection> {
-    Connection::open(vault_db_path(profile_id)).map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))
+fn open_connection(profile_id: &str) -> Result<PooledConnection<SqliteConnectionManager>> {
+    pool::get_conn(profile_id)
 }
 
 fn deserialize_json<T: serde::de::DeserializeOwned>(value: String) -> rusqlite::Result<T> {
@@ -52,6 +56,25 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
             None => None,
         },
         custom_fields: deserialize_json(row.get::<_, String>("custom_fields_json")?)?,
+    })
+}
+
+fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary> {
+    let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
+    let is_favorite = tags.iter().any(|tag| tag == "favorite");
+
+    Ok(DataCardSummary {
+        id: row.get("id")?,
+        folder_id: row.get("folder_id")?,
+        title: row.get("title")?,
+        url: row.get("url")?,
+        email: row.get("email")?,
+        username: row.get("username")?,
+        tags,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        deleted_at: row.get("deleted_at")?,
+        is_favorite,
     })
 }
 
@@ -224,6 +247,30 @@ pub fn list_datacards(
     Ok(cards)
 }
 
+pub fn list_datacards_summary(
+    profile_id: &str,
+    sort_field: &str,
+    sort_dir: &str,
+) -> Result<Vec<DataCardSummary>> {
+    let conn = open_connection(profile_id)?;
+    let clause = order_clause(sort_field, sort_dir)
+        .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    let query = format!(
+        "SELECT id, folder_id, title, url, email, username, tags_json, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NULL {clause}"
+    );
+    let mut stmt = conn
+        .prepare(&query)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let cards = stmt
+        .query_map([], map_datacard_summary)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(cards)
+}
+
 pub fn list_deleted_datacards(profile_id: &str) -> Result<Vec<DataCard>> {
     let conn = open_connection(profile_id)?;
     let mut stmt = conn
@@ -232,6 +279,23 @@ pub fn list_deleted_datacards(profile_id: &str) -> Result<Vec<DataCard>> {
 
     let cards = stmt
         .query_map([], map_datacard)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(cards)
+}
+
+pub fn list_deleted_datacards_summary(profile_id: &str) -> Result<Vec<DataCardSummary>> {
+    let conn = open_connection(profile_id)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, folder_id, title, url, email, username, tags_json, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let cards = stmt
+        .query_map([], map_datacard_summary)
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;

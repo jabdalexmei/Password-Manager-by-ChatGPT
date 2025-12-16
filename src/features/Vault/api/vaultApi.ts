@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   BackendCreateDataCardInput,
   BackendDataCard,
+  BackendDataCardSummary,
   BackendFolder,
   BackendUpdateDataCardInput,
   BackendUserSettings,
@@ -35,12 +36,12 @@ export async function purgeFolder(id: string): Promise<boolean> {
   return invoke('purge_folder', { id });
 }
 
-export async function listDataCards(): Promise<BackendDataCard[]> {
-  return invoke('list_datacards');
+export async function listDataCardSummaries(): Promise<BackendDataCardSummary[]> {
+  return invoke('list_datacards_summary_command');
 }
 
-export async function listDeletedDataCards(): Promise<BackendDataCard[]> {
-  return invoke('list_deleted_datacards');
+export async function listDeletedDataCardSummaries(): Promise<BackendDataCardSummary[]> {
+  return invoke('list_deleted_datacards_summary_command');
 }
 
 export async function getDataCard(id: string): Promise<BackendDataCard> {

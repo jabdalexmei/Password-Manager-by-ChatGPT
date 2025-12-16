@@ -42,6 +42,13 @@ export type DataCard = {
   customFields: CustomField[];
 };
 
+export type DataCardSummary = DataCard & {
+  isFavorite: boolean;
+  updatedAtLabel: string;
+  createdAtLabel: string;
+  metaLine: string;
+};
+
 export type CreateDataCardInput = {
   folderId: string | null;
   title: string;

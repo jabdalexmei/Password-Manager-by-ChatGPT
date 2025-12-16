@@ -42,6 +42,20 @@ export type BackendDataCard = {
   custom_fields: BackendCustomField[];
 };
 
+export type BackendDataCardSummary = {
+  id: string;
+  folder_id: string | null;
+  title: string;
+  url: string | null;
+  email: string | null;
+  username: string | null;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  is_favorite: boolean;
+};
+
 export type BackendCreateDataCardInput = {
   folder_id: string | null;
   title: string;

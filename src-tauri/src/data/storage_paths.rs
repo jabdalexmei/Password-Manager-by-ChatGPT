@@ -19,7 +19,8 @@ impl StoragePaths {
         let data_root = app_dir.join("Data");
         let profiles_root = data_root.join("Profiles");
 
-        std::fs::create_dir_all(&profiles_root).map_err(|_| StoragePathsError::CreateProfilesDir)?;
+        std::fs::create_dir_all(&profiles_root)
+            .map_err(|_| StoragePathsError::CreateProfilesDir)?;
 
         Ok(StoragePaths {
             app_dir,

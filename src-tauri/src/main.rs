@@ -19,6 +19,7 @@ mod data {
     pub mod sqlite {
         pub mod init;
         pub mod migrations;
+        pub mod pool;
         pub mod repo_impl;
     }
 }
@@ -76,12 +77,14 @@ fn main() {
             restore_folder,
             purge_folder,
             list_datacards,
+            list_datacards_summary_command,
             get_datacard,
             create_datacard,
             update_datacard,
             move_datacard_to_folder,
             delete_datacard,
             list_deleted_datacards,
+            list_deleted_datacards_summary_command,
             restore_datacard,
             purge_datacard,
             get_settings,

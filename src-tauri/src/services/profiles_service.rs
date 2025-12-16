@@ -1,9 +1,9 @@
+use crate::data::profiles::paths::ensure_profile_dirs;
 use crate::data::profiles::registry;
 use crate::data::settings::config;
 use crate::data::sqlite::init::init_database;
-use crate::data::profiles::paths::ensure_profile_dirs;
-use crate::services::settings_service::get_settings;
 use crate::error::{ErrorCodeString, Result};
+use crate::services::settings_service::get_settings;
 use crate::types::{ProfileMeta, ProfilesList};
 
 pub fn list_profiles() -> Result<ProfilesList> {

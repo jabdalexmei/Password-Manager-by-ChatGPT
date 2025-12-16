@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
-import { CreateDataCardInput, DataCard, Folder, UpdateDataCardInput } from '../../types/ui';
+import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput } from '../../types/ui';
 
 export type DataCardFormState = {
   title: string;
@@ -16,7 +16,7 @@ export type DataCardFormState = {
 };
 
 type UseDataCardsParams = {
-  cards: DataCard[];
+  cards: DataCardSummary[];
   selectedCardId: string | null;
   isTrashMode: boolean;
   folders: Folder[];
@@ -30,7 +30,7 @@ type UseDataCardsParams = {
 };
 
 export type DataCardsViewModel = {
-  cards: DataCard[];
+  cards: DataCardSummary[];
   selectedCardId: string | null;
   isTrashMode: boolean;
   selectCard: (id: string) => void;

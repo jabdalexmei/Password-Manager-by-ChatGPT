@@ -36,7 +36,8 @@ fn load_registry() -> Result<ProfileRegistry> {
     if !path.exists() {
         return Ok(ProfileRegistry::default());
     }
-    let content = fs::read_to_string(path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+    let content =
+        fs::read_to_string(path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
     serde_json::from_str(&content).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_PARSE"))
 }
 
@@ -50,7 +51,11 @@ fn save_registry(registry: &ProfileRegistry) -> Result<()> {
 
 pub fn list_profiles() -> Result<Vec<ProfileMeta>> {
     let registry = load_registry()?;
-    Ok(registry.profiles.into_iter().map(ProfileMeta::from).collect())
+    Ok(registry
+        .profiles
+        .into_iter()
+        .map(ProfileMeta::from)
+        .collect())
 }
 
 pub fn create_profile(name: &str, password: Option<String>) -> Result<ProfileMeta> {
@@ -58,7 +63,9 @@ pub fn create_profile(name: &str, password: Option<String>) -> Result<ProfileMet
     let mut registry = load_registry()?;
     let id = Uuid::new_v4().to_string();
     let password_hash = match password {
-        Some(pwd) if !pwd.is_empty() => Some(hash_password(&pwd).map_err(|_| ErrorCodeString::new("PASSWORD_HASH"))?),
+        Some(pwd) if !pwd.is_empty() => {
+            Some(hash_password(&pwd).map_err(|_| ErrorCodeString::new("PASSWORD_HASH"))?)
+        }
         _ => None,
     };
 

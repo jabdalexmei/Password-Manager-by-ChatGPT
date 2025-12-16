@@ -73,6 +73,21 @@ pub struct DataCard {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DataCardSummary {
+    pub id: String,
+    pub folder_id: Option<String>,
+    pub title: String,
+    pub url: Option<String>,
+    pub email: Option<String>,
+    pub username: Option<String>,
+    pub tags: Vec<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+    pub is_favorite: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreateFolderInput {
     pub name: String,
     pub parent_id: Option<String>,
