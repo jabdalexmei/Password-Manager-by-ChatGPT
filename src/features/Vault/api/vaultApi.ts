@@ -12,10 +12,6 @@ export async function listFolders(): Promise<BackendFolder[]> {
   return invoke('list_folders');
 }
 
-export async function listDeletedFolders(): Promise<BackendFolder[]> {
-  return invoke('list_deleted_folders');
-}
-
 export async function createFolder(input: { name: string; parent_id: string | null }): Promise<BackendFolder> {
   return invoke('create_folder', { input });
 }
@@ -24,16 +20,12 @@ export async function renameFolder(input: { id: string; name: string }): Promise
   return invoke('rename_folder', { input });
 }
 
-export async function deleteFolder(id: string): Promise<boolean> {
-  return invoke('delete_folder', { id });
+export async function deleteFolderOnly(id: string): Promise<boolean> {
+  return invoke('delete_folder_only', { id });
 }
 
-export async function restoreFolder(id: string): Promise<boolean> {
-  return invoke('restore_folder', { id });
-}
-
-export async function purgeFolder(id: string): Promise<boolean> {
-  return invoke('purge_folder', { id });
+export async function deleteFolderAndCards(id: string): Promise<boolean> {
+  return invoke('delete_folder_and_cards', { id });
 }
 
 export async function listDataCardSummaries(): Promise<BackendDataCardSummary[]> {

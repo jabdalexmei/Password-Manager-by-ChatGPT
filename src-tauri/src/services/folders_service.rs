@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::app_state::AppState;
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
+use crate::services::settings_service::get_settings;
 use crate::types::{CreateFolderInput, Folder, MoveFolderInput, RenameFolderInput};
 
 fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
@@ -51,29 +52,31 @@ pub fn move_folder(input: MoveFolderInput, state: &Arc<AppState>) -> Result<bool
     repo_impl::move_folder(&state.storage_paths, &profile_id, &input.id, &input.parent_id)
 }
 
-pub fn delete_folder(id: String, state: &Arc<AppState>) -> Result<bool> {
+pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     let folder = repo_impl::get_folder(&state.storage_paths, &profile_id, &id)?;
     if folder.is_system {
         return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
     }
-    repo_impl::soft_delete_folder(&state.storage_paths, &profile_id, &id)?;
-    repo_impl::soft_delete_datacards_in_folder(&state.storage_paths, &profile_id, &id)
+
+    repo_impl::move_datacards_to_root(&state.storage_paths, &profile_id, &id)?;
+    repo_impl::purge_folder(&state.storage_paths, &profile_id, &id)
 }
 
-pub fn list_deleted_folders(state: &Arc<AppState>) -> Result<Vec<Folder>> {
+pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::list_deleted_folders(&state.storage_paths, &profile_id)
-}
+    let folder = repo_impl::get_folder(&state.storage_paths, &profile_id, &id)?;
+    if folder.is_system {
+        return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
+    }
 
-pub fn restore_folder(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
-    repo_impl::restore_folder(&state.storage_paths, &profile_id, &id)?;
-    repo_impl::restore_datacards_in_folder(&state.storage_paths, &profile_id, &id)
-}
+    let settings = get_settings(&state.storage_paths, &profile_id)?;
 
-pub fn purge_folder(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
-    repo_impl::purge_datacards_in_folder(&state.storage_paths, &profile_id, &id)?;
+    if settings.soft_delete_enabled {
+        repo_impl::soft_delete_datacards_in_folder(&state.storage_paths, &profile_id, &id)?;
+    } else {
+        repo_impl::purge_datacards_in_folder(&state.storage_paths, &profile_id, &id)?;
+    }
+
     repo_impl::purge_folder(&state.storage_paths, &profile_id, &id)
 }

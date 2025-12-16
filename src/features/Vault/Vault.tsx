@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useVault } from './useVault';
 import { VaultHeader } from './components/Header/VaultHeader';
 import { Search } from './components/Search/Search';
@@ -8,6 +8,7 @@ import { Details } from './components/Details/Details';
 import { useDataCards } from './components/DataCards/useDataCards';
 import { useFolders } from './components/Folders/useFolders';
 import { useTranslation } from '../../lib/i18n';
+import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
 
 type VaultProps = {
   profileId: string;
@@ -19,6 +20,11 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
   const vault = useVault(profileId, onLocked);
   const { t: tDataCards } = useTranslation('DataCards');
   const { t: tFolders } = useTranslation('Folders');
+  const [pendingFolderDelete, setPendingFolderDelete] = useState<{
+    id: string;
+    name: string;
+    cardsCount: number;
+  } | null>(null);
   const dataCardsViewModel = useDataCards({
     cards: vault.visibleCards,
     selectedCardId: vault.selectedCardId,
@@ -35,6 +41,33 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
   const folderDialogs = useFolders({ onCreateFolder: (name) => vault.createFolder(name, null) });
 
   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
+
+  const handleDeleteFolder = (folderId: string) => {
+    const target = vault.folders.find((folder) => folder.id === folderId);
+    if (!target) return;
+
+    const cardsCount = vault.counts.folders[folderId] ?? 0;
+    if (cardsCount === 0) {
+      void vault.deleteFolderOnly(folderId);
+      return;
+    }
+
+    setPendingFolderDelete({ id: folderId, name: target.name, cardsCount });
+  };
+
+  const closeDeleteModal = () => setPendingFolderDelete(null);
+
+  const handleDeleteFolderOnly = async () => {
+    if (!pendingFolderDelete) return;
+    await vault.deleteFolderOnly(pendingFolderDelete.id);
+    setPendingFolderDelete(null);
+  };
+
+  const handleDeleteFolderAndCards = async () => {
+    if (!pendingFolderDelete) return;
+    await vault.deleteFolderAndCards(pendingFolderDelete.id);
+    setPendingFolderDelete(null);
+  };
 
   return (
     <div className="vault-shell">
@@ -55,12 +88,12 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
           </div>
           <Folders
             folders={vault.folders}
-            deletedFolders={vault.deletedFolders}
             counts={vault.counts}
             selectedNav={vault.selectedNav}
             selectedFolderId={vault.selectedFolderId}
             onSelectNav={vault.selectNav}
             dialogState={folderDialogs}
+            onDeleteFolder={handleDeleteFolder}
           />
         </aside>
 
@@ -82,6 +115,15 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
           />
         </section>
       </div>
+
+      <DeleteFolderModal
+        open={!!pendingFolderDelete}
+        folderName={pendingFolderDelete?.name ?? ''}
+        cardsCount={pendingFolderDelete?.cardsCount ?? 0}
+        onCancel={closeDeleteModal}
+        onDeleteFolderOnly={handleDeleteFolderOnly}
+        onDeleteFolderAndCards={handleDeleteFolderAndCards}
+      />
 
     </div>
   );

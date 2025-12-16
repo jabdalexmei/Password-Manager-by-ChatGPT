@@ -14,22 +14,22 @@ type Counts = {
 
 export type FolderListProps = {
   folders: Folder[];
-  deletedFolders: Folder[];
   counts: Counts;
   selectedNav: SelectedNav;
   selectedFolderId: string | null;
   onSelectNav: (nav: SelectedNav) => void;
   dialogState: FolderDialogState;
+  onDeleteFolder: (id: string) => void;
 };
 
 export function Folders({
   folders,
-  deletedFolders,
   counts,
   selectedNav,
   selectedFolderId,
   onSelectNav,
   dialogState,
+  onDeleteFolder,
 }: FolderListProps) {
   const { t } = useTranslation('Folders');
   const { t: tCommon } = useTranslation('Common');
@@ -127,6 +127,20 @@ export function Folders({
     );
   };
 
+  const renderDeleteAction = () => {
+    if (!selectedFolderId || isTrashMode) return null;
+    const folder = folders.find((item) => item.id === selectedFolderId);
+    if (!folder || folder.isSystem) return null;
+
+    return (
+      <div className="vault-sidebar-controls">
+        <button className="btn btn-secondary" type="button" onClick={() => onDeleteFolder(folder.id)}>
+          {t('action.deleteFolder')}
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div>
       <div className="vault-sidebar-title">{t('title')}</div>
@@ -136,8 +150,8 @@ export function Folders({
         {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
         {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
         {!isTrashMode && folders.filter((folder) => !folder.isSystem).map(renderFolder)}
-        {isTrashMode && deletedFolders.map(renderFolder)}
       </ul>
+      {renderDeleteAction()}
       {renderCreateDialog()}
     </div>
   );

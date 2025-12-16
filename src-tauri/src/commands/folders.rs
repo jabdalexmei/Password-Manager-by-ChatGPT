@@ -43,33 +43,17 @@ pub async fn move_folder(input: MoveFolderInput, state: State<'_, Arc<AppState>>
 }
 
 #[tauri::command]
-pub async fn delete_folder(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
+pub async fn delete_folder_only(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let app = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || folders_service::delete_folder(id, &app))
+    tauri::async_runtime::spawn_blocking(move || folders_service::delete_folder_only(id, &app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
 
 #[tauri::command]
-pub async fn list_deleted_folders(state: State<'_, Arc<AppState>>) -> Result<Vec<Folder>> {
+pub async fn delete_folder_and_cards(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let app = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || folders_service::list_deleted_folders(&app))
-        .await
-        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-}
-
-#[tauri::command]
-pub async fn restore_folder(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
-    let app = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || folders_service::restore_folder(id, &app))
-        .await
-        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-}
-
-#[tauri::command]
-pub async fn purge_folder(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
-    let app = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || folders_service::purge_folder(id, &app))
+    tauri::async_runtime::spawn_blocking(move || folders_service::delete_folder_and_cards(id, &app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }

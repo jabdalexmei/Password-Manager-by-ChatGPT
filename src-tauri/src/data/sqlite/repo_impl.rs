@@ -118,21 +118,6 @@ pub fn list_folders(sp: &StoragePaths, profile_id: &str) -> Result<Vec<Folder>> 
     Ok(folders)
 }
 
-pub fn list_deleted_folders(sp: &StoragePaths, profile_id: &str) -> Result<Vec<Folder>> {
-    let conn = open_connection(sp, profile_id)?;
-    let mut stmt = conn
-        .prepare("SELECT * FROM folders WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-    let folders = stmt
-        .query_map([], map_folder)
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-    Ok(folders)
-}
-
 pub fn get_folder(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<Folder> {
     let conn = open_connection(sp, profile_id)?;
     let mut stmt = conn
@@ -194,45 +179,25 @@ pub fn move_folder(
     Ok(true)
 }
 
-pub fn soft_delete_folder(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<bool> {
-    let conn = open_connection(sp, profile_id)?;
-    let now = Utc::now().to_rfc3339();
-    let rows = conn
-        .execute(
-            "UPDATE folders SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
-            params![now.clone(), now, id],
-        )
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-    if rows == 0 {
-        return Err(ErrorCodeString::new("FOLDER_NOT_FOUND"));
-    }
-    Ok(true)
-}
-
-pub fn restore_folder(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<bool> {
-    let conn = open_connection(sp, profile_id)?;
-    let rows = conn
-        .execute(
-            "UPDATE folders SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
-            params![Utc::now().to_rfc3339(), id],
-        )
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-    if rows == 0 {
-        return Err(ErrorCodeString::new("FOLDER_NOT_FOUND"));
-    }
-    Ok(true)
-}
-
 pub fn purge_folder(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<bool> {
     let conn = open_connection(sp, profile_id)?;
-    conn.execute("DELETE FROM datacards WHERE folder_id = ?1", params![id])
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     let rows = conn
         .execute("DELETE FROM folders WHERE id = ?1", params![id])
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     if rows == 0 {
         return Err(ErrorCodeString::new("FOLDER_NOT_FOUND"));
     }
+    Ok(true)
+}
+
+pub fn move_datacards_to_root(sp: &StoragePaths, profile_id: &str, folder_id: &str) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE datacards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2",
+        params![now, folder_id],
+    )
+    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     Ok(true)
 }
 
