@@ -216,7 +216,10 @@ export function useVault(profileId: string, onLocked: () => void) {
     async (id: string, name: string) => {
       try {
         await renameFolder({ id, name });
-        await refreshActive();
+        setFolders((prev) => prev.map((folder) => (folder.id === id ? { ...folder, name } : folder)));
+        setDeletedFolders((prev) =>
+          prev.map((folder) => (folder.id === id ? { ...folder, name } : folder))
+        );
         setSelectedNav((prev) => {
           if (typeof prev === 'object' && prev.folderId === id) {
             return { folderId: id };
@@ -227,50 +230,66 @@ export function useVault(profileId: string, onLocked: () => void) {
         handleError(err);
       }
     },
-    [handleError, refreshActive]
+    [handleError]
   );
 
   const deleteFolderAction = useCallback(
     async (id: string) => {
       try {
+        const targetFolder = folders.find((folder) => folder.id === id);
         await deleteFolder(id);
-        await refreshActive();
+        setFolders((prev) => prev.filter((folder) => folder.id !== id));
         setSelectedNav((prev) => {
           if (typeof prev === 'object' && prev.folderId === id) return 'all';
           return prev;
         });
-        if (isTrashMode) await refreshTrash();
+
+        const softDeleteEnabled = settings?.soft_delete_enabled ?? true;
+        if (softDeleteEnabled && targetFolder && trashLoaded) {
+          const deletedAt = new Date().toISOString();
+          setDeletedFolders((prev) => {
+            const filtered = prev.filter((folder) => folder.id !== id);
+            return [...filtered, { ...targetFolder, deletedAt }];
+          });
+        } else {
+          setDeletedFolders((prev) => prev.filter((folder) => folder.id !== id));
+        }
       } catch (err) {
         handleError(err);
       }
     },
-    [handleError, isTrashMode, refreshActive, refreshTrash]
+    [folders, handleError, settings, trashLoaded]
   );
 
   const restoreFolderAction = useCallback(
     async (id: string) => {
       try {
         await restoreFolder(id);
-        await refreshActive();
-        await refreshTrash();
+        const restoredFolder = deletedFolders.find((folder) => folder.id === id);
+        setDeletedFolders((prev) => prev.filter((folder) => folder.id !== id));
+        if (restoredFolder) {
+          const cleaned = { ...restoredFolder, deletedAt: null };
+          setFolders((prev) => [...prev.filter((folder) => folder.id !== id), cleaned]);
+          setSelectedNav({ folderId: id });
+        }
       } catch (err) {
         handleError(err);
       }
     },
-    [handleError, refreshActive, refreshTrash]
+    [deletedFolders, handleError]
   );
 
   const purgeFolderAction = useCallback(
     async (id: string) => {
       try {
         await purgeFolder(id);
-        await refreshActive();
-        await refreshTrash();
+        setDeletedFolders((prev) => prev.filter((folder) => folder.id !== id));
+        setSelectedNav((prev) => (typeof prev === 'object' && prev.folderId === id ? 'all' : prev));
       } catch (err) {
         handleError(err);
       }
     },
-    [handleError, refreshActive, refreshTrash]
+    [handleError]
   );
 
   const createCardAction = useCallback(

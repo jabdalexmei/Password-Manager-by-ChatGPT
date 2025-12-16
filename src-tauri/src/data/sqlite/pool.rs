@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use once_cell::sync::Lazy;
 use r2d2::PooledConnection;
@@ -19,6 +20,7 @@ impl r2d2::CustomizeConnection<rusqlite::Connection, rusqlite::Error> for Pragma
         &self,
         conn: &mut rusqlite::Connection,
     ) -> std::result::Result<(), rusqlite::Error> {
+        conn.busy_timeout(Duration::from_secs(5))?;
         conn.execute_batch(
             r#"
             PRAGMA foreign_keys = ON;
@@ -42,6 +44,7 @@ fn get_or_create_pool(profile_id: &str) -> Result<r2d2::Pool<SqliteConnectionMan
     let pool = r2d2::Pool::builder()
         .max_size(8)
         .min_idle(Some(4))
+        .connection_timeout(Duration::from_secs(5))
         .connection_customizer(Box::new(Pragmas))
         .build(manager)
         .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
