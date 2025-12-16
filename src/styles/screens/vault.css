@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #0b1222;
-  color: #e5e7eb;
+  background: var(--color-surface-1);
+  color: var(--color-text);
 }
 
 .vault-appbar {
@@ -11,8 +11,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: rgba(17, 24, 39, 0.9);
-  border-bottom: 1px solid #1f2937;
+  background: var(--color-surface-3);
+  border-bottom: 1px solid var(--color-border);
   gap: 12px;
 }
 
@@ -25,11 +25,11 @@
 .vault-title {
   font-size: 22px;
   font-weight: 700;
-  color: #f9fafb;
+  color: var(--color-text);
 }
 
 .vault-subtitle {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 14px;
 }
 
@@ -47,17 +47,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  border: 1px solid #1f2937;
-  background: #0f172a;
-  color: #f3f4f6;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-1);
+  color: var(--color-text);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .vault-action-button:hover {
-  background: linear-gradient(135deg, #111827, #0b1222);
-  border-color: #2563eb;
+  background: var(--color-surface-2);
+  border-color: var(--color-primary);
   transform: translateY(-1px);
 }
 
@@ -89,8 +89,8 @@
    ======================================================================= */
 
 .vault-sidebar {
-  background: #0f172a;
-  border-right: 1px solid #1f2937;
+  background: var(--color-surface-2);
+  border-right: 1px solid var(--color-border);
   padding: 16px;
   overflow: auto;
 }
@@ -103,32 +103,30 @@
 }
 
 .vault-search {
-  background: #111827;
-  color: #e5e7eb;
-  border: 1px solid #1f2937;
-  border-radius: 8px;
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   width: 100%;
 }
 
 .vault-search:focus {
-  outline: 2px solid #2563eb;
+  outline: 2px solid var(--color-primary);
 }
 
 .vault-sidebar-actions {
   display: flex;
   gap: 10px;
 }
-
-/* ВАЖНО: не используем var(--color-...) чтобы не зависеть от глобальной темы */
 .vault-sidebar-actions .btn,
 .vault-sidebar-actions button {
   height: 40px;
   padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid #1f2937;
-  background: #0b1222;
-  color: #e5e7eb;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-1);
+  color: var(--color-text);
   font-weight: 700;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -136,12 +134,13 @@
 
 .vault-sidebar-actions .btn:hover:not(:disabled),
 .vault-sidebar-actions button:hover:not(:disabled) {
-  border-color: #2563eb;
-  background: #111827;
+  border-color: var(--color-primary);
+  background: var(--color-surface-2);
 }
 
 .vault-sidebar-title {
   font-weight: 700;
+  color: var(--color-text);
   margin-bottom: 8px;
 }
 
@@ -164,29 +163,30 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: #0b1222;
-  border: 1px solid #1f2937;
-  border-radius: 10px;
-  color: #e5e7eb;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
   cursor: pointer;
 }
 
 .vault-folder-list li.active .vault-folder {
-  background: linear-gradient(90deg, #1f2937 0%, #111827 100%);
-  border-color: #2563eb;
+  background: linear-gradient(90deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
+  border-color: var(--color-primary);
 }
 
 .folder-name {
   font-weight: 600;
+  color: var(--color-text);
 }
 
 .folder-badge {
-  color: #f59e0b;
+  color: var(--color-primary);
   margin-left: 6px;
 }
 
 .folder-count {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 13px;
 }
 
@@ -196,7 +196,7 @@
 
 .vault-datacards,
 .vault-details {
-  background: radial-gradient(circle at top, rgba(17, 24, 39, 0.7), #0b1222 60%);
+  background: radial-gradient(circle at top, var(--color-surface-3), var(--color-surface-1) 60%);
   padding: 16px 20px;
   overflow: hidden;
   display: flex;
@@ -210,7 +210,7 @@
   gap: 8px;
   font-weight: 700;
   letter-spacing: 0.2px;
-  color: #f3f4f6;
+  color: var(--color-text);
 }
 
 .datacards-header {
@@ -229,9 +229,9 @@
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  background: #0f172a;
-  border: 1px solid #1f2937;
-  border-radius: 10px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
   min-width: 200px;
@@ -243,31 +243,31 @@
   padding: 10px 12px;
   text-align: left;
   background: transparent;
-  color: #e5e7eb;
+  color: var(--color-text);
   border: none;
   width: 100%;
   cursor: pointer;
 }
 
 .datacards-menu-item:hover {
-  background: #1f2937;
+  background: var(--color-surface-3);
 }
 
 .datacards-menu-item:disabled {
-  color: #6b7280;
+  color: var(--color-text-muted);
   cursor: not-allowed;
   background: transparent;
 }
 
 .datacards-menu-danger {
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 /* Cards list */
 .vault-datacard-list {
-  background: #0f172a;
-  border: 1px solid #1f2937;
-  border-radius: 12px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 10px;
   overflow: auto;
   flex: 1;
@@ -280,10 +280,10 @@
   width: 100%;
   text-align: left;
   padding: 10px 12px;
-  background: #0b1222;
-  border: 1px solid #1f2937;
-  border-radius: 10px;
-  color: #e5e7eb;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -291,13 +291,13 @@
 }
 
 .vault-datacard.active {
-  border-color: #2563eb;
-  background: linear-gradient(90deg, #111827 0%, #0b1222 70%);
+  border-color: var(--color-primary);
+  background: linear-gradient(90deg, var(--color-surface-3) 0%, var(--color-surface-1) 70%);
 }
 
 .datacard-title {
   font-weight: 700;
-  color: #f9fafb;
+  color: var(--color-text);
 }
 
 .datacard-meta {
@@ -305,7 +305,7 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 13px;
 }
 
@@ -313,26 +313,26 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  border-radius: 999px;
-  background: #111827;
-  border: 1px solid #1f2937;
-  color: #f9fafb;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   font-size: 12px;
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 /* Details */
 .vault-details {
-  border-left: 1px solid #1f2937;
+  border-left: 1px solid var(--color-border);
 }
 
 .vault-detail-card {
-  background: #0f172a;
-  border: 1px solid #1f2937;
-  border-radius: 12px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 14px 16px;
   overflow: auto;
   flex: 1;
@@ -357,7 +357,7 @@
 }
 
 .detail-label {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 13px;
 }
 
@@ -381,11 +381,11 @@
 }
 
 .detail-value-box {
-  background: #0b1222;
-  border: 1px solid #1f2937;
-  border-radius: 10px;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
-  color: #e5e7eb;
+  color: var(--color-text);
   min-height: 44px;
   display: flex;
   align-items: center;
@@ -394,7 +394,7 @@
 }
 
 .detail-value-text {
-  color: #f9fafb;
+  color: var(--color-text);
   font-weight: 600;
   word-break: break-word;
   flex: 1;
@@ -431,21 +431,21 @@
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 8px;
-  border: 1px solid #1f2937;
-  background: #111827;
-  color: #e5e7eb;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-3);
+  color: var(--color-text);
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .icon-button:hover {
-  background: #1f2937;
-  border-color: #2563eb;
+  background: var(--color-surface-2);
+  border-color: var(--color-primary);
 }
 
 .vault-empty {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   text-align: center;
   padding: 24px;
 }
