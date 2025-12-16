@@ -1,14 +1,12 @@
 use std::fs;
 use std::sync::Arc;
 
-use tauri::State;
-
 use crate::app_state::AppState;
 use crate::data::profiles::paths::user_settings_path;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::UserSettings;
 
-fn require_logged_in(state: &State<Arc<AppState>>) -> Result<String> {
+fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
     let active_profile = state
         .active_profile
         .lock()
@@ -75,15 +73,12 @@ pub fn update_settings(new_settings: UserSettings, profile_id: &str) -> Result<b
     Ok(true)
 }
 
-pub fn update_settings_command(
-    state: &State<Arc<AppState>>,
-    settings: UserSettings,
-) -> Result<bool> {
+pub fn update_settings_command(state: &Arc<AppState>, settings: UserSettings) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     update_settings(settings, &profile_id)
 }
 
-pub fn get_settings_command(state: &State<Arc<AppState>>) -> Result<UserSettings> {
+pub fn get_settings_command(state: &Arc<AppState>) -> Result<UserSettings> {
     let profile_id = require_logged_in(state)?;
     get_settings(&profile_id)
 }

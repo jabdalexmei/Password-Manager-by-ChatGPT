@@ -11,16 +11,16 @@ use crate::types::{
 
 #[tauri::command]
 pub async fn list_datacards(state: State<'_, Arc<AppState>>) -> Result<Vec<DataCard>> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || datacards_service::list_datacards(&state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::list_datacards(&app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
 
 #[tauri::command]
 pub async fn get_datacard(id: String, state: State<'_, Arc<AppState>>) -> Result<DataCard> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || datacards_service::get_datacard(id, &state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::get_datacard(id, &app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
@@ -30,8 +30,8 @@ pub async fn create_datacard(
     input: CreateDataCardInput,
     state: State<'_, Arc<AppState>>,
 ) -> Result<DataCard> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || datacards_service::create_datacard(input, &state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::create_datacard(input, &app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
@@ -41,8 +41,8 @@ pub async fn update_datacard(
     input: UpdateDataCardInput,
     state: State<'_, Arc<AppState>>,
 ) -> Result<bool> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || datacards_service::update_datacard(input, &state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::update_datacard(input, &app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
@@ -52,9 +52,9 @@ pub async fn move_datacard_to_folder(
     input: MoveDataCardInput,
     state: State<'_, Arc<AppState>>,
 ) -> Result<bool> {
-    let state = state.clone();
+    let app = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        datacards_service::move_datacard_to_folder(input, &state)
+        datacards_service::move_datacard_to_folder(input, &app)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
@@ -62,32 +62,32 @@ pub async fn move_datacard_to_folder(
 
 #[tauri::command]
 pub async fn delete_datacard(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || datacards_service::delete_datacard(id, &state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::delete_datacard(id, &app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
 
 #[tauri::command]
 pub async fn list_deleted_datacards(state: State<'_, Arc<AppState>>) -> Result<Vec<DataCard>> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || datacards_service::list_deleted_datacards(&state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::list_deleted_datacards(&app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
 
 #[tauri::command]
 pub async fn restore_datacard(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || datacards_service::restore_datacard(id, &state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::restore_datacard(id, &app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
 
 #[tauri::command]
 pub async fn purge_datacard(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || datacards_service::purge_datacard(id, &state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::purge_datacard(id, &app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
@@ -96,8 +96,8 @@ pub async fn purge_datacard(id: String, state: State<'_, Arc<AppState>>) -> Resu
 pub async fn list_datacards_summary_command(
     state: State<'_, Arc<AppState>>,
 ) -> Result<Vec<DataCardSummary>> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || datacards_service::list_datacards_summary(&state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::list_datacards_summary(&app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
@@ -106,9 +106,9 @@ pub async fn list_datacards_summary_command(
 pub async fn list_deleted_datacards_summary_command(
     state: State<'_, Arc<AppState>>,
 ) -> Result<Vec<DataCardSummary>> {
-    let state = state.clone();
+    let app = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        datacards_service::list_deleted_datacards_summary(&state)
+        datacards_service::list_deleted_datacards_summary(&app)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?

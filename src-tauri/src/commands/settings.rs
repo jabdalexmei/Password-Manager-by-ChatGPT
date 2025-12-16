@@ -9,16 +9,16 @@ use crate::types::UserSettings;
 
 #[tauri::command]
 pub async fn get_settings(state: State<'_, Arc<AppState>>) -> Result<UserSettings> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || get_settings_command(&state))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || get_settings_command(&app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
 
 #[tauri::command]
 pub async fn update_settings(settings: UserSettings, state: State<'_, Arc<AppState>>) -> Result<bool> {
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || update_settings_command(&state, settings))
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || update_settings_command(&app, settings))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }

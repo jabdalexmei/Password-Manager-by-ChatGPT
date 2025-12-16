@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use tauri::State;
-
 use crate::app_state::AppState;
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
@@ -10,7 +8,7 @@ use crate::types::{
     CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, UpdateDataCardInput,
 };
 
-fn require_logged_in(state: &State<Arc<AppState>>) -> Result<String> {
+fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
     let active_profile = state
         .active_profile
         .lock()
@@ -42,7 +40,7 @@ fn normalize_tags(tags: Vec<String>) -> Vec<String> {
     result
 }
 
-pub fn list_datacards(state: &State<Arc<AppState>>) -> Result<Vec<DataCard>> {
+pub fn list_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
     let profile_id = require_logged_in(state)?;
     let settings = get_settings(&profile_id)?;
     repo_impl::list_datacards(
@@ -53,7 +51,7 @@ pub fn list_datacards(state: &State<Arc<AppState>>) -> Result<Vec<DataCard>> {
     )
 }
 
-pub fn list_datacards_summary(state: &State<Arc<AppState>>) -> Result<Vec<DataCardSummary>> {
+pub fn list_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataCardSummary>> {
     let profile_id = require_logged_in(state)?;
     let settings = get_settings(&profile_id)?;
     repo_impl::list_datacards_summary(
@@ -63,14 +61,14 @@ pub fn list_datacards_summary(state: &State<Arc<AppState>>) -> Result<Vec<DataCa
     )
 }
 
-pub fn get_datacard(id: String, state: &State<Arc<AppState>>) -> Result<DataCard> {
+pub fn get_datacard(id: String, state: &Arc<AppState>) -> Result<DataCard> {
     let profile_id = require_logged_in(state)?;
     repo_impl::get_datacard(&profile_id, &id)
 }
 
 pub fn create_datacard(
     input: CreateDataCardInput,
-    state: &State<Arc<AppState>>,
+    state: &Arc<AppState>,
 ) -> Result<DataCard> {
     let profile_id = require_logged_in(state)?;
     let mut sanitized = input;
@@ -83,7 +81,7 @@ pub fn create_datacard(
     repo_impl::create_datacard(&profile_id, &sanitized)
 }
 
-pub fn update_datacard(input: UpdateDataCardInput, state: &State<Arc<AppState>>) -> Result<bool> {
+pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
@@ -97,13 +95,13 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &State<Arc<AppState>>)
 
 pub fn move_datacard_to_folder(
     input: MoveDataCardInput,
-    state: &State<Arc<AppState>>,
+    state: &Arc<AppState>,
 ) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     repo_impl::move_datacard(&profile_id, &input.id, &input.folder_id)
 }
 
-pub fn delete_datacard(id: String, state: &State<Arc<AppState>>) -> Result<bool> {
+pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     let settings = get_settings(&profile_id)?;
     if settings.soft_delete_enabled {
@@ -113,24 +111,24 @@ pub fn delete_datacard(id: String, state: &State<Arc<AppState>>) -> Result<bool>
     }
 }
 
-pub fn list_deleted_datacards(state: &State<Arc<AppState>>) -> Result<Vec<DataCard>> {
+pub fn list_deleted_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
     let profile_id = require_logged_in(state)?;
     repo_impl::list_deleted_datacards(&profile_id)
 }
 
 pub fn list_deleted_datacards_summary(
-    state: &State<Arc<AppState>>,
+    state: &Arc<AppState>,
 ) -> Result<Vec<DataCardSummary>> {
     let profile_id = require_logged_in(state)?;
     repo_impl::list_deleted_datacards_summary(&profile_id)
 }
 
-pub fn restore_datacard(id: String, state: &State<Arc<AppState>>) -> Result<bool> {
+pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     repo_impl::restore_datacard(&profile_id, &id)
 }
 
-pub fn purge_datacard(id: String, state: &State<Arc<AppState>>) -> Result<bool> {
+pub fn purge_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     repo_impl::purge_datacard(&profile_id, &id)
 }
