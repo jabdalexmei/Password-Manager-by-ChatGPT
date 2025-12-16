@@ -42,18 +42,18 @@ const Startup: React.FC<StartupProps> = ({ onCreate, onOpen }) => {
     return (
       <div className="profiles-list">
         {profiles.map((profile, index) => (
-          <div className="profile-card" key={profile.id}>
-            <div className="profile-meta">
-              <p className="profile-name">
-                {profile.name || index + 1}
-              </p>
-              <p className="profile-id">
-                ID: {profile.id}
-              </p>
-              <span className="badge">
-                {profile.has_password ? t('requiresPassword') : t('passwordless')}
-              </span>
-            </div>
+            <div className="profile-card" key={profile.id}>
+              <div className="profile-meta">
+                <p className="profile-name">
+                  {profile.name || index + 1}
+                </p>
+                <p className="profile-id">
+                  {t('label.profileId', { id: profile.id })}
+                </p>
+                <span className="badge">
+                  {profile.has_password ? t('requiresPassword') : t('passwordless')}
+                </span>
+              </div>
             <div className="button-row">
               <button
                 type="button"

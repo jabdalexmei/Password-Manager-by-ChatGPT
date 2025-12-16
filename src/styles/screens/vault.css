@@ -119,24 +119,6 @@
   display: flex;
   gap: 10px;
 }
-.vault-sidebar-actions .btn,
-.vault-sidebar-actions button {
-  height: 40px;
-  padding: 0 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-1);
-  color: var(--color-text);
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.vault-sidebar-actions .btn:hover:not(:disabled),
-.vault-sidebar-actions button:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  background: var(--color-surface-2);
-}
 
 .vault-sidebar-title {
   font-weight: 700;

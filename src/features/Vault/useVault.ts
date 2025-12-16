@@ -42,6 +42,7 @@ export function useVault(profileId: string, onLocked: () => void) {
   const [deletedFolders, setDeletedFolders] = useState<Folder[]>([]);
   const [deletedCards, setDeletedCards] = useState<DataCard[]>([]);
   const [settings, setSettings] = useState<BackendUserSettings | null>(null);
+  const [trashLoaded, setTrashLoaded] = useState(false);
   const [selectedNav, setSelectedNav] = useState<SelectedNav>('all');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,8 +103,10 @@ export function useVault(profileId: string, onLocked: () => void) {
       const [trashFolders, trashCards] = await Promise.all([listDeletedFolders(), listDeletedDataCards()]);
       setDeletedFolders(trashFolders.map(mapFolderFromBackend));
       setDeletedCards(trashCards.map(mapCardFromBackend));
+      setTrashLoaded(true);
     } catch (err) {
       handleError(err);
+      setTrashLoaded(false);
     }
   }, [handleError]);
 
@@ -119,11 +122,11 @@ export function useVault(profileId: string, onLocked: () => void) {
       setSelectedNav(nav);
       setSelectedCardId(null);
 
-      if (nav === 'deleted' && (deletedFolders.length === 0 || deletedCards.length === 0)) {
+      if (nav === 'deleted' && !trashLoaded) {
         await refreshTrash();
       }
     },
-    [deletedCards.length, deletedFolders.length, refreshTrash]
+    [refreshTrash, trashLoaded]
   );
 
   const selectCard = useCallback((id: string | null) => {
@@ -303,10 +306,11 @@ export function useVault(profileId: string, onLocked: () => void) {
     setCards([]);
     setDeletedCards([]);
     setDeletedFolders([]);
+    setTrashLoaded(false);
     setSelectedCardId(null);
     setSelectedNav('all');
     onLocked();
-    }, [mapErrorMessage, onLocked, showToast]);
+  }, [mapErrorMessage, onLocked, showToast]);
 
   const visibleCards = useMemo(() => {
     const activeCards = cards.filter((card) => !card.deletedAt);
@@ -329,7 +333,15 @@ export function useVault(profileId: string, onLocked: () => void) {
 
     const query = searchQuery.toLowerCase();
     return pool.filter((card) => {
-      const fields = [card.title, card.username, card.email, card.url, ...(card.tags || [])];
+      const fields = [
+        card.title,
+        card.username,
+        card.email,
+        card.url,
+        card.mobilePhone,
+        card.note,
+        ...(card.tags || []),
+      ];
       return fields.some((field) => field && field.toLowerCase().includes(query));
     });
   }, [cards, deletedCards, searchQuery, selectedNav]);

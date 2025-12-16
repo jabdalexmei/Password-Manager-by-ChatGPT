@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { CreateDataCardInput, DataCard, Folder, UpdateDataCardInput } from '../../types/ui';
 
@@ -52,6 +52,8 @@ export type DataCardsViewModel = {
   submitCreate: () => Promise<void>;
   submitEdit: () => Promise<void>;
   folders: Folder[];
+  showPassword: boolean;
+  togglePasswordVisibility: () => void;
 };
 
 const normalizeOptional = (value: string) => {
@@ -126,6 +128,7 @@ export function useDataCards({
   const [isEditOpen, setEditOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const resetCreateForm = useCallback(() => {
     setCreateForm(buildInitialForm(defaultFolderId));
@@ -135,6 +138,7 @@ export function useDataCards({
     setCreateError(null);
     resetCreateForm();
     setCreateOpen(true);
+    setShowPassword(false);
   }, [resetCreateForm]);
 
   const closeCreateModal = useCallback(() => {
@@ -157,6 +161,7 @@ export function useDataCards({
       isFavorite: (card.tags || []).includes('favorite'),
     });
     setEditOpen(true);
+    setShowPassword(false);
   }, []);
 
   const closeEditModal = useCallback(() => {
@@ -164,6 +169,16 @@ export function useDataCards({
     setEditForm(null);
     setEditCardId(null);
   }, []);
+
+  const togglePasswordVisibility = useCallback(() => {
+    setShowPassword((prev) => !prev);
+  }, []);
+
+  useEffect(() => {
+    if (!isCreateOpen && !isEditOpen) {
+      setShowPassword(false);
+    }
+  }, [isCreateOpen, isEditOpen]);
 
   const updateCreateField = useCallback((field: keyof DataCardFormState, value: string | boolean | null) => {
     setCreateForm((prev) => {
@@ -238,5 +253,7 @@ export function useDataCards({
     submitCreate,
     submitEdit,
     folders,
+    showPassword,
+    togglePasswordVisibility,
   };
 }

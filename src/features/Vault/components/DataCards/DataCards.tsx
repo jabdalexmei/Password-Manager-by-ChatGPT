@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 
@@ -9,7 +9,41 @@ export type DataCardsProps = {
 export function DataCards({ viewModel }: DataCardsProps) {
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
-  const { cards, selectedCardId } = viewModel;
+  const {
+    cards,
+    selectedCardId,
+    showPassword,
+    isCreateOpen,
+    isEditOpen,
+    closeCreateModal,
+    closeEditModal,
+    togglePasswordVisibility,
+  } = viewModel;
+  const createTitleRef = useRef<HTMLInputElement | null>(null);
+  const editTitleRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (isCreateOpen && createTitleRef.current) {
+      createTitleRef.current.focus();
+    }
+    if (isEditOpen && editTitleRef.current) {
+      editTitleRef.current.focus();
+    }
+  }, [isCreateOpen, isEditOpen]);
+
+  useEffect(() => {
+    if (!isCreateOpen && !isEditOpen) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (isEditOpen) closeEditModal();
+        if (isCreateOpen) closeCreateModal();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [closeCreateModal, closeEditModal, isCreateOpen, isEditOpen]);
 
   const renderDialog = (
     title: string,
@@ -18,7 +52,8 @@ export function DataCards({ viewModel }: DataCardsProps) {
     onClose: () => void,
     onSubmit: () => Promise<void>,
     onFieldChange: (field: keyof DataCardFormState, value: string | boolean | null) => void,
-    submitLabel: string
+    submitLabel: string,
+    titleRef: React.RefObject<HTMLInputElement>
   ) => {
     if (!form) return null;
 
@@ -43,13 +78,14 @@ export function DataCards({ viewModel }: DataCardsProps) {
             </button>
           </div>
 
-          <div className="form-grid">
+          <div className="form-stack">
             <div className="form-field">
               <label className="form-label" htmlFor="datacard-title">
                 {t('label.title')}*
               </label>
               <input
                 id="datacard-title"
+                ref={titleRef}
                 value={form.title}
                 onChange={(e) => onFieldChange('title', e.target.value)}
               />
@@ -102,9 +138,21 @@ export function DataCards({ viewModel }: DataCardsProps) {
             <div className="form-field">
               <div className="form-label">{t('label.password')}</div>
               <div className="button-row">
-                <input value={form.password} onChange={(e) => onFieldChange('password', e.target.value)} />
-                <button className="icon-button" type="button" onClick={generatePassword} aria-label={t('action.generate')}>
-                  ⇢
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={(e) => onFieldChange('password', e.target.value)}
+                />
+                <button className="btn btn-icon" type="button" onClick={generatePassword} aria-label={t('action.generate')}>
+                  {t('action.generate')}
+                </button>
+                <button
+                  className="btn btn-icon"
+                  type="button"
+                  onClick={togglePasswordVisibility}
+                  aria-label={t('action.togglePasswordVisibility')}
+                >
+                  {showPassword ? t('action.hide') : t('action.reveal')}
                 </button>
               </div>
             </div>
@@ -126,6 +174,7 @@ export function DataCards({ viewModel }: DataCardsProps) {
               </label>
               <textarea
                 id="datacard-note"
+                className="textarea-notes"
                 value={form.note}
                 onChange={(e) => onFieldChange('note', e.target.value)}
               />
@@ -157,10 +206,15 @@ export function DataCards({ viewModel }: DataCardsProps) {
           </div>
 
           <div className="dialog-actions">
-            <button className="btn btn-outline" type="button" onClick={onClose}>
-              {t('action.cancel')}
+            <button className="btn btn-secondary" type="button" onClick={onClose}>
+              {tCommon('action.cancel')}
             </button>
-            <button className="btn btn-primary" type="button" onClick={onSubmit}>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={onSubmit}
+              disabled={!form.title.trim()}
+            >
               {submitLabel}
             </button>
           </div>
@@ -214,7 +268,8 @@ export function DataCards({ viewModel }: DataCardsProps) {
           viewModel.closeCreateModal,
           viewModel.submitCreate,
           viewModel.updateCreateField,
-          t('action.create')
+          t('action.create'),
+          createTitleRef
         )}
 
       {viewModel.isEditOpen &&
@@ -225,7 +280,8 @@ export function DataCards({ viewModel }: DataCardsProps) {
           viewModel.closeEditModal,
           viewModel.submitEdit,
           viewModel.updateEditField,
-          t('action.save')
+          t('action.save'),
+          editTitleRef
         )}
     </div>
   );

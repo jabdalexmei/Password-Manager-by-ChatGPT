@@ -26,6 +26,7 @@
   "action.markFavorite": "Mark favorite",
   "action.unmarkFavorite": "Unmark favorite",
   "action.generate": "Generate",
+  "action.togglePasswordVisibility": "Toggle password visibility",
   "action.copy": "Copy",
   "action.reveal": "Reveal",
   "action.hide": "Hide",

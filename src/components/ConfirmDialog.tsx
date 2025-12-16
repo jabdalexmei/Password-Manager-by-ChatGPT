@@ -24,14 +24,14 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     <div className="dialog-backdrop">
       <div className="dialog">
         <div className="dialog-header">
-          <h3>{title}</h3>
+          <h3 className="dialog-title">{title}</h3>
         </div>
-        <p>{description}</p>
+        <p className="dialog-description">{description}</p>
         <div className="dialog-actions">
-          <button className="secondary" onClick={onCancel}>
+          <button type="button" className="btn btn-secondary" onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button className="primary primary-danger" onClick={onConfirm}>
+          <button type="button" className="btn btn-danger" onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>
