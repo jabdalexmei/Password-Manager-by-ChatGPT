@@ -29,6 +29,7 @@ export function Details({
   clipboardClearTimeoutSeconds,
 }: DetailsProps) {
   const { t } = useTranslation('Details');
+  const { t: tVault } = useTranslation('Vault');
   const detailActions = useDetails({
     card,
     onDelete,
@@ -45,8 +46,17 @@ export function Details({
     return card.folderId ? folders.find((f) => f.id === card.folderId)?.name ?? t('label.noFolder') : t('label.noFolder');
   }, [card, folders, t]);
 
+  const informationTitle = (
+    <div className="vault-section-header">{tVault('information.title')}</div>
+  );
+
   if (!card) {
-    return <div className="vault-empty">{t('empty.selectPrompt')}</div>;
+    return (
+      <div className="vault-panel-wrapper">
+        {informationTitle}
+        <div className="vault-empty">{t('empty.selectPrompt')}</div>
+      </div>
+    );
   }
 
   const isFavorite = card.tags?.includes('favorite');
@@ -70,38 +80,40 @@ export function Details({
     : t('label.noValue');
 
   return (
-    <div className="vault-detail-card">
-      <div className="detail-row">
-        <div className="detail-dates">
-          <div className="muted">{createdText}</div>
-          <div className="muted">{updatedText}</div>
+    <div className="vault-panel-wrapper">
+      {informationTitle}
+      <div className="vault-detail-card">
+        <div className="detail-row">
+          <div className="detail-dates">
+            <div className="muted">{createdText}</div>
+            <div className="muted">{updatedText}</div>
+          </div>
+          <div className="detail-actions">
+            {!isTrashMode && (
+              <>
+                <button className="btn btn-secondary" type="button" onClick={detailActions.toggleFavorite}>
+                  {isFavorite ? t('action.unmarkFavorite') : t('action.markFavorite')}
+                </button>
+                <button className="btn btn-secondary" type="button" onClick={detailActions.editCard}>
+                  {t('action.edit')}
+                </button>
+                <button className="btn btn-danger" type="button" onClick={detailActions.deleteCard}>
+                  {t('action.delete')}
+                </button>
+              </>
+            )}
+            {isTrashMode && (
+              <>
+                <button className="btn btn-secondary" type="button" onClick={detailActions.restoreCard}>
+                  {t('action.restore')}
+                </button>
+                <button className="btn btn-danger" type="button" onClick={detailActions.purgeCard}>
+                  {t('action.purge')}
+                </button>
+              </>
+            )}
+          </div>
         </div>
-        <div className="detail-actions">
-          {!isTrashMode && (
-            <>
-              <button className="btn btn-secondary" type="button" onClick={detailActions.toggleFavorite}>
-                {isFavorite ? t('action.unmarkFavorite') : t('action.markFavorite')}
-              </button>
-              <button className="btn btn-secondary" type="button" onClick={detailActions.editCard}>
-                {t('action.edit')}
-              </button>
-              <button className="btn btn-danger" type="button" onClick={detailActions.deleteCard}>
-                {t('action.delete')}
-              </button>
-            </>
-          )}
-          {isTrashMode && (
-            <>
-              <button className="btn btn-secondary" type="button" onClick={detailActions.restoreCard}>
-                {t('action.restore')}
-              </button>
-              <button className="btn btn-danger" type="button" onClick={detailActions.purgeCard}>
-                {t('action.purge')}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
 
       <div className="detail-field">
         <div className="detail-label">{t('label.title')}</div>
@@ -244,6 +256,7 @@ export function Details({
         <div className="detail-value-box">
           <div className="detail-value-text">{card.tags && card.tags.length > 0 ? card.tags.join(', ') : t('label.noValue')}</div>
         </div>
+      </div>
       </div>
     </div>
   );

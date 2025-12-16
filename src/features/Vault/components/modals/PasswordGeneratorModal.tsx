@@ -16,14 +16,21 @@ type PasswordGeneratorModalProps = {
   onCopy: () => Promise<void>;
 };
 
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
+
 const StrengthBar: React.FC<{ bits: number }> = ({ bits }) => {
-  const clamped = Math.min(bits, 128);
-  const percentage = (clamped / 128) * 100;
+  const maxBits = 128;
+  const t = clamp(bits / maxBits, 0, 1);
+  const hue = 120 * t;
+  const percentage = t * 100;
+  const color = `hsl(${hue}, 80%, 45%)`;
 
   return (
     <div className="generator-strength">
       <div className="generator-strength-bar">
-        <div className="generator-strength-fill" style={{ width: `${percentage}%` }} />
+        <div className="generator-strength-fill" style={{ width: `${percentage}%`, backgroundColor: color }} />
       </div>
       <span className="generator-strength-label">{bits} bits</span>
     </div>
@@ -72,7 +79,7 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
                   <CopyIcon />
                 </button>
                 <button className="icon-button" type="button" aria-label={t('generator.regenerate')} onClick={onRegenerate}>
-                  <GenerateIcon />
+                  <GenerateIcon width={20} height={20} />
                 </button>
               </div>
             </div>

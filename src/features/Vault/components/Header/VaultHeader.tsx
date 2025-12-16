@@ -3,19 +3,20 @@ import { useTranslation } from '../../../../lib/i18n';
 
 type Props = {
   profileName: string;
+  profileId: string;
   onLock: () => void;
 };
 
 const IconButton = ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
-export function VaultHeader({ profileName, onLock }: Props) {
+export function VaultHeader({ profileName, profileId, onLock }: Props) {
   const { t } = useTranslation('Vault');
 
   return (
     <header className="vault-appbar">
       <div className="vault-profile">
         <div className="vault-title">{t('title')}</div>
-        <div className="vault-subtitle">{t('activeProfile', { profileName })}</div>
+        <div className="vault-subtitle">{t('active_profile', { name: profileName, id: profileId })}</div>
       </div>
 
       <div className="vault-actions">

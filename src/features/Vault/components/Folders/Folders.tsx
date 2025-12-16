@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Folder } from '../../types/ui';
 import { SelectedNav } from '../../useVault';
 import { useTranslation } from '../../../../lib/i18n';
@@ -20,6 +20,7 @@ export type FolderListProps = {
   onSelectNav: (nav: SelectedNav) => void;
   dialogState: FolderDialogState;
   onDeleteFolder: (id: string) => void;
+  onRenameFolder: (id: string, name: string) => void | Promise<void>;
 };
 
 export function Folders({
@@ -30,16 +31,42 @@ export function Folders({
   onSelectNav,
   dialogState,
   onDeleteFolder,
+  onRenameFolder,
 }: FolderListProps) {
   const { t } = useTranslation('Folders');
   const { t: tCommon } = useTranslation('Common');
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ folderId: string; x: number; y: number } | null>(null);
+  const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
 
   useEffect(() => {
     if (dialogState.isCreateOpen && nameInputRef.current) {
       nameInputRef.current.focus();
     }
   }, [dialogState.isCreateOpen]);
+
+  useEffect(() => {
+    if (renameTargetId && renameInputRef.current) {
+      renameInputRef.current.focus();
+    }
+  }, [renameTargetId]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setContextMenu(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [contextMenu]);
 
   const renderCreateDialog = () => {
     if (!dialogState.isCreateOpen) return null;
@@ -108,7 +135,15 @@ export function Folders({
 
     return (
       <li key={folder.id} className={isActive ? 'active' : ''}>
-        <button className="vault-folder" type="button" onClick={() => onSelectNav({ folderId: folder.id })}>
+        <button
+          className="vault-folder"
+          type="button"
+          onClick={() => onSelectNav({ folderId: folder.id })}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            setContextMenu({ folderId: folder.id, x: event.clientX, y: event.clientY });
+          }}
+        >
           <span className="folder-name">{folder.name}</span>
           <span className="folder-count">{count}</span>
         </button>
@@ -116,18 +151,92 @@ export function Folders({
     );
   };
 
-  const renderDeleteAction = () => {
-    if (!selectedFolderId) return null;
-    const folder = folders.find((item) => item.id === selectedFolderId);
-    if (!folder || folder.isSystem) return null;
+  const closeContextMenu = () => setContextMenu(null);
+
+  const openRenameDialog = (folderId: string) => {
+    const folder = folders.find((item) => item.id === folderId);
+    if (!folder) return;
+    setContextMenu(null);
+    setRenameTargetId(folder.id);
+    setRenameName(folder.name);
+    setRenameError(null);
+    setIsRenaming(false);
+  };
+
+  const closeRenameDialog = () => {
+    setRenameTargetId(null);
+    setRenameName('');
+    setRenameError(null);
+    setIsRenaming(false);
+  };
+
+  const submitRename = async () => {
+    if (!renameTargetId || isRenaming) return;
+    const trimmed = renameName.trim();
+    if (!trimmed) {
+      setRenameError(t('validation.folderNameRequired'));
+      return;
+    }
+
+    setIsRenaming(true);
+    try {
+      await onRenameFolder(renameTargetId, trimmed);
+      closeRenameDialog();
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
+  const renderRenameDialog = () => {
+    if (!renameTargetId) return null;
+
+    const handleSubmit = (event: React.FormEvent) => {
+      event.preventDefault();
+      void submitRename();
+    };
 
     return (
-      <div className="vault-sidebar-controls">
-        <button className="btn btn-secondary" type="button" onClick={() => onDeleteFolder(folder.id)}>
-          {t('action.deleteFolder')}
-        </button>
+      <div className="dialog-backdrop">
+        <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-folder-title">
+          <div className="dialog-header">
+            <h2 id="rename-folder-title" className="dialog-title">
+              {t('dialog.renameFolder.title')}
+            </h2>
+          </div>
+
+          <form className="dialog-body" onSubmit={handleSubmit}>
+            <div className="form-field">
+              <label className="form-label" htmlFor="rename-folder-name">
+                {t('dialog.renameFolder.label')}
+              </label>
+              <input
+                id="rename-folder-name"
+                className="input"
+                ref={renameInputRef}
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+                placeholder={t('dialog.renameFolder.placeholder')}
+              />
+              {renameError && <div className="form-error">{renameError}</div>}
+            </div>
+
+            <div className="dialog-footer">
+              <button className="btn btn-secondary" type="button" onClick={closeRenameDialog}>
+                {tCommon('action.cancel')}
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={isRenaming}>
+                {t('action.rename')}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     );
+  };
+
+  const handleDeleteFromMenu = (folderId: string) => {
+    closeContextMenu();
+    onDeleteFolder(folderId);
   };
 
   return (
@@ -141,8 +250,26 @@ export function Folders({
       </ul>
       <div className="vault-sidebar-title">{t('title')}</div>
       <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
-      {renderDeleteAction()}
       {renderCreateDialog()}
+      {renderRenameDialog()}
+
+      {contextMenu && (
+        <div className="vault-context-backdrop" onClick={closeContextMenu} onContextMenu={(event) => event.preventDefault()}>
+          <div
+            className="vault-context-menu"
+            role="menu"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button type="button" className="vault-context-item" onClick={() => openRenameDialog(contextMenu.folderId)}>
+              {t('action.renameFolder')}
+            </button>
+            <button type="button" className="vault-context-item" onClick={() => handleDeleteFromMenu(contextMenu.folderId)}>
+              {t('action.deleteFolder')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

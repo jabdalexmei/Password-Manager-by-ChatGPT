@@ -8,9 +8,10 @@ import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 
 export type DataCardsProps = {
   viewModel: DataCardsViewModel;
+  sectionTitle: string;
 };
 
-export function DataCards({ viewModel }: DataCardsProps) {
+export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
   const {
@@ -208,7 +209,7 @@ export function DataCards({ viewModel }: DataCardsProps) {
                     onClick={openGenerator}
                     aria-label={t('action.openGenerator')}
                   >
-                    <GenerateIcon />
+                    <GenerateIcon width={20} height={20} />
                   </button>
                   <button
                     className="icon-button"
@@ -276,7 +277,7 @@ export function DataCards({ viewModel }: DataCardsProps) {
   return (
     <div className="vault-panel-wrapper">
       <div className="datacards-header">
-        <div className="vault-section-header">{t('label.dataCardsTitle')}</div>
+        <div className="vault-section-header">{sectionTitle}</div>
       </div>
 
       {cards.length === 0 ? (

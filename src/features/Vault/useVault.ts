@@ -39,6 +39,7 @@ export type VaultError = { code: string; message?: string } | null;
 export function useVault(profileId: string, onLocked: () => void) {
   const { show: showToast } = useToaster();
   const { t: tCommon } = useTranslation('Common');
+  const { t: tVault } = useTranslation('Vault');
   const initOnceRef = useRef(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [cards, setCards] = useState<DataCardSummary[]>([]);
@@ -436,7 +437,6 @@ export function useVault(profileId: string, onLocked: () => void) {
     setFolders([]);
     setCards([]);
     setDeletedCards([]);
-    setDeletedFolders([]);
     setTrashLoaded(false);
     setSelectedCardId(null);
     setSelectedNav('all');
@@ -476,6 +476,25 @@ export function useVault(profileId: string, onLocked: () => void) {
     const pool = isTrashMode ? deletedCards : cards;
     return pool.find((card) => card.id === selectedCardId) ?? null;
   }, [cardDetailsById, cards, deletedCards, isTrashMode, selectedCardId]);
+
+  const currentSectionTitle = useMemo(() => {
+    if (selectedFolderId) {
+      const folder = folders.find((item) => item.id === selectedFolderId);
+      if (folder) return folder.name;
+    }
+
+    switch (selectedNav) {
+      case 'favorites':
+        return tVault('nav.favorites');
+      case 'archive':
+        return tVault('nav.archive');
+      case 'deleted':
+        return tVault('nav.deleted');
+      case 'all':
+      default:
+        return tVault('nav.all_items');
+    }
+  }, [folders, selectedFolderId, selectedNav, tVault]);
 
   const toggleFavorite = useCallback(
     async (id: string) => {
@@ -536,6 +555,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     isTrashMode,
     counts,
     selectedFolderId,
+    currentSectionTitle,
     searchQuery: searchInput,
     setSearchQuery: setSearchInput,
     loading,

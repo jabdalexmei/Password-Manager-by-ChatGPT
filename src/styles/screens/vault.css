@@ -141,6 +141,40 @@
   gap: 6px;
 }
 
+.vault-context-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.vault-context-menu {
+  position: absolute;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  overflow: hidden;
+}
+
+.vault-context-item {
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.vault-context-item:hover,
+.vault-context-item:focus-visible {
+  background: var(--color-surface-3);
+  outline: none;
+}
+
 /* !!! КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: НЕ СБРАСЫВАЕМ СТИЛИ ДЛЯ li button !!!
    иначе .vault-folder становится прозрачным и “кривым”
 */

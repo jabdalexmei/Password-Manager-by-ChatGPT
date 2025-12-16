@@ -71,10 +71,13 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
 
   return (
     <div className="vault-shell">
-      <VaultHeader profileName={profileName} onLock={vault.lock} />
+      <VaultHeader profileName={profileName} profileId={profileId} onLock={vault.lock} />
 
       <div className="vault-body">
         <aside className="vault-sidebar">
+          <div className="vault-sidebar-controls">
+            <Search query={vault.searchQuery} onChange={vault.setSearchQuery} />
+          </div>
           <div className="vault-sidebar-actions">
             <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
               {tDataCards('label.addDataCard')}
@@ -82,9 +85,6 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
             <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
               {tFolders('action.addFolder')}
             </button>
-          </div>
-          <div className="vault-sidebar-controls">
-            <Search query={vault.searchQuery} onChange={vault.setSearchQuery} />
           </div>
           <Folders
             folders={vault.folders}
@@ -94,11 +94,12 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
             onSelectNav={vault.selectNav}
             dialogState={folderDialogs}
             onDeleteFolder={handleDeleteFolder}
+            onRenameFolder={vault.renameFolder}
           />
         </aside>
 
         <section className="vault-datacards">
-          <DataCards viewModel={dataCardsViewModel} />
+          <DataCards viewModel={dataCardsViewModel} sectionTitle={vault.currentSectionTitle} />
         </section>
 
         <section className="vault-details">

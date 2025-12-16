@@ -7,13 +7,13 @@ type Props = {
 };
 
 export function Search({ query, onChange }: Props) {
-  const { t } = useTranslation('Search');
+  const { t } = useTranslation('Vault');
 
   return (
     <input
       type="search"
       className="vault-search"
-      placeholder={t('placeholder.searchVault')}
+      placeholder={t('search.placeholder')}
       value={query}
       onChange={(e) => onChange(e.target.value)}
     />

@@ -7,6 +7,8 @@
   "nav.deleted": "Deleted",
   "action.addFolder": "Add folder",
   "action.deleteFolder": "Delete folder",
+  "action.renameFolder": "Rename folder",
+  "action.rename": "Rename",
   "action.restore": "Restore",
   "action.purge": "Purge",
   "action.create": "Create",
@@ -14,5 +16,8 @@
   "dialog.newFolder.description": "Organize your vault with folders.",
   "dialog.newFolder.label": "Name",
   "dialog.newFolder.placeholder": "Folder name",
+  "dialog.renameFolder.title": "Rename folder",
+  "dialog.renameFolder.label": "Name",
+  "dialog.renameFolder.placeholder": "Folder name",
   "validation.folderNameRequired": "Folder name is required"
 }
