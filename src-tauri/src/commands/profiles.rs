@@ -18,7 +18,7 @@ pub fn profile_create(name: String, password: Option<String>) -> Result<ProfileM
 }
 
 #[tauri::command]
-pub fn profile_delete(id: String, state: State<Arc<AppState>>) -> Result<bool> {
+pub fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     if let Ok(mut active) = state.active_profile.lock() {
         if active.as_deref() == Some(&id) {
             *active = None;
@@ -28,7 +28,7 @@ pub fn profile_delete(id: String, state: State<Arc<AppState>>) -> Result<bool> {
 }
 
 #[tauri::command]
-pub fn get_active_profile(state: State<Arc<AppState>>) -> Result<Option<ProfileMeta>> {
+pub fn get_active_profile(state: State<'_, Arc<AppState>>) -> Result<Option<ProfileMeta>> {
     if let Ok(active) = state.active_profile.lock() {
         if let Some(id) = &*active {
             return profiles_service::get_active_profile()
@@ -39,7 +39,7 @@ pub fn get_active_profile(state: State<Arc<AppState>>) -> Result<Option<ProfileM
 }
 
 #[tauri::command]
-pub fn set_active_profile(id: String, state: State<Arc<AppState>>) -> Result<bool> {
+pub fn set_active_profile(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     if !profiles_service::list_profiles()?
         .profiles
         .iter()

@@ -11,6 +11,7 @@ use crate::error::{ErrorCodeString, Result};
 static POOLS: Lazy<Mutex<HashMap<String, r2d2::Pool<SqliteConnectionManager>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
+#[derive(Debug)]
 struct Pragmas;
 
 impl r2d2::CustomizeConnection<rusqlite::Connection, rusqlite::Error> for Pragmas {

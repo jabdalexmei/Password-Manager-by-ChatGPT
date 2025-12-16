@@ -8,7 +8,7 @@ use crate::services::folders_service;
 use crate::types::{CreateFolderInput, Folder, MoveFolderInput, RenameFolderInput};
 
 #[tauri::command]
-pub async fn list_folders(state: State<Arc<AppState>>) -> Result<Vec<Folder>> {
+pub async fn list_folders(state: State<'_, Arc<AppState>>) -> Result<Vec<Folder>> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || folders_service::list_folders(&state))
         .await
@@ -18,7 +18,7 @@ pub async fn list_folders(state: State<Arc<AppState>>) -> Result<Vec<Folder>> {
 #[tauri::command]
 pub async fn create_folder(
     input: CreateFolderInput,
-    state: State<Arc<AppState>>,
+    state: State<'_, Arc<AppState>>,
 ) -> Result<Folder> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || folders_service::create_folder(input, &state))
@@ -27,7 +27,7 @@ pub async fn create_folder(
 }
 
 #[tauri::command]
-pub async fn rename_folder(input: RenameFolderInput, state: State<Arc<AppState>>) -> Result<bool> {
+pub async fn rename_folder(input: RenameFolderInput, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || folders_service::rename_folder(input, &state))
         .await
@@ -35,7 +35,7 @@ pub async fn rename_folder(input: RenameFolderInput, state: State<Arc<AppState>>
 }
 
 #[tauri::command]
-pub async fn move_folder(input: MoveFolderInput, state: State<Arc<AppState>>) -> Result<bool> {
+pub async fn move_folder(input: MoveFolderInput, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || folders_service::move_folder(input, &state))
         .await
@@ -43,7 +43,7 @@ pub async fn move_folder(input: MoveFolderInput, state: State<Arc<AppState>>) ->
 }
 
 #[tauri::command]
-pub async fn delete_folder(id: String, state: State<Arc<AppState>>) -> Result<bool> {
+pub async fn delete_folder(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || folders_service::delete_folder(id, &state))
         .await
@@ -51,7 +51,7 @@ pub async fn delete_folder(id: String, state: State<Arc<AppState>>) -> Result<bo
 }
 
 #[tauri::command]
-pub async fn list_deleted_folders(state: State<Arc<AppState>>) -> Result<Vec<Folder>> {
+pub async fn list_deleted_folders(state: State<'_, Arc<AppState>>) -> Result<Vec<Folder>> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || folders_service::list_deleted_folders(&state))
         .await
@@ -59,7 +59,7 @@ pub async fn list_deleted_folders(state: State<Arc<AppState>>) -> Result<Vec<Fol
 }
 
 #[tauri::command]
-pub async fn restore_folder(id: String, state: State<Arc<AppState>>) -> Result<bool> {
+pub async fn restore_folder(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || folders_service::restore_folder(id, &state))
         .await
@@ -67,7 +67,7 @@ pub async fn restore_folder(id: String, state: State<Arc<AppState>>) -> Result<b
 }
 
 #[tauri::command]
-pub async fn purge_folder(id: String, state: State<Arc<AppState>>) -> Result<bool> {
+pub async fn purge_folder(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || folders_service::purge_folder(id, &state))
         .await

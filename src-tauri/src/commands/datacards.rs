@@ -10,7 +10,7 @@ use crate::types::{
 };
 
 #[tauri::command]
-pub async fn list_datacards(state: State<Arc<AppState>>) -> Result<Vec<DataCard>> {
+pub async fn list_datacards(state: State<'_, Arc<AppState>>) -> Result<Vec<DataCard>> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || datacards_service::list_datacards(&state))
         .await
@@ -18,7 +18,7 @@ pub async fn list_datacards(state: State<Arc<AppState>>) -> Result<Vec<DataCard>
 }
 
 #[tauri::command]
-pub async fn get_datacard(id: String, state: State<Arc<AppState>>) -> Result<DataCard> {
+pub async fn get_datacard(id: String, state: State<'_, Arc<AppState>>) -> Result<DataCard> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || datacards_service::get_datacard(id, &state))
         .await
@@ -28,7 +28,7 @@ pub async fn get_datacard(id: String, state: State<Arc<AppState>>) -> Result<Dat
 #[tauri::command]
 pub async fn create_datacard(
     input: CreateDataCardInput,
-    state: State<Arc<AppState>>,
+    state: State<'_, Arc<AppState>>,
 ) -> Result<DataCard> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || datacards_service::create_datacard(input, &state))
@@ -39,7 +39,7 @@ pub async fn create_datacard(
 #[tauri::command]
 pub async fn update_datacard(
     input: UpdateDataCardInput,
-    state: State<Arc<AppState>>,
+    state: State<'_, Arc<AppState>>,
 ) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || datacards_service::update_datacard(input, &state))
@@ -50,7 +50,7 @@ pub async fn update_datacard(
 #[tauri::command]
 pub async fn move_datacard_to_folder(
     input: MoveDataCardInput,
-    state: State<Arc<AppState>>,
+    state: State<'_, Arc<AppState>>,
 ) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -61,7 +61,7 @@ pub async fn move_datacard_to_folder(
 }
 
 #[tauri::command]
-pub async fn delete_datacard(id: String, state: State<Arc<AppState>>) -> Result<bool> {
+pub async fn delete_datacard(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || datacards_service::delete_datacard(id, &state))
         .await
@@ -69,7 +69,7 @@ pub async fn delete_datacard(id: String, state: State<Arc<AppState>>) -> Result<
 }
 
 #[tauri::command]
-pub async fn list_deleted_datacards(state: State<Arc<AppState>>) -> Result<Vec<DataCard>> {
+pub async fn list_deleted_datacards(state: State<'_, Arc<AppState>>) -> Result<Vec<DataCard>> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || datacards_service::list_deleted_datacards(&state))
         .await
@@ -77,7 +77,7 @@ pub async fn list_deleted_datacards(state: State<Arc<AppState>>) -> Result<Vec<D
 }
 
 #[tauri::command]
-pub async fn restore_datacard(id: String, state: State<Arc<AppState>>) -> Result<bool> {
+pub async fn restore_datacard(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || datacards_service::restore_datacard(id, &state))
         .await
@@ -85,7 +85,7 @@ pub async fn restore_datacard(id: String, state: State<Arc<AppState>>) -> Result
 }
 
 #[tauri::command]
-pub async fn purge_datacard(id: String, state: State<Arc<AppState>>) -> Result<bool> {
+pub async fn purge_datacard(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || datacards_service::purge_datacard(id, &state))
         .await
@@ -94,7 +94,7 @@ pub async fn purge_datacard(id: String, state: State<Arc<AppState>>) -> Result<b
 
 #[tauri::command]
 pub async fn list_datacards_summary_command(
-    state: State<Arc<AppState>>,
+    state: State<'_, Arc<AppState>>,
 ) -> Result<Vec<DataCardSummary>> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || datacards_service::list_datacards_summary(&state))
@@ -104,7 +104,7 @@ pub async fn list_datacards_summary_command(
 
 #[tauri::command]
 pub async fn list_deleted_datacards_summary_command(
-    state: State<Arc<AppState>>,
+    state: State<'_, Arc<AppState>>,
 ) -> Result<Vec<DataCardSummary>> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
