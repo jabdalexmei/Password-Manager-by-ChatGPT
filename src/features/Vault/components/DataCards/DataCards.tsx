@@ -2,6 +2,34 @@ import React, { useEffect, useRef } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 
+const randomInt = (maxExclusive: number) => {
+  if (maxExclusive <= 0) return 0;
+
+  const maxUint32 = 0x100000000;
+  const limit = Math.floor(maxUint32 / maxExclusive) * maxExclusive;
+  const buffer = new Uint32Array(1);
+
+  while (true) {
+    crypto.getRandomValues(buffer);
+    const value = buffer[0];
+    if (value < limit) {
+      return value % maxExclusive;
+    }
+  }
+};
+
+const generateSecurePassword = (length: number) => {
+  const charset = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+
+  for (let i = 0; i < length; i += 1) {
+    const index = randomInt(charset.length);
+    result += charset[index] ?? '';
+  }
+
+  return result;
+};
+
 export type DataCardsProps = {
   viewModel: DataCardsViewModel;
 };
@@ -67,7 +95,7 @@ export function DataCards({ viewModel }: DataCardsProps) {
     };
 
     const generatePassword = () => {
-      const generated = Math.random().toString(36).slice(2, 12);
+      const generated = generateSecurePassword(10);
       onFieldChange('password', generated);
     };
 

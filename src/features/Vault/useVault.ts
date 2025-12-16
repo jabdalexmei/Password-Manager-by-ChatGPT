@@ -30,6 +30,7 @@ import { BackendUserSettings } from './types/backend';
 import { useToaster } from '../../components/Toaster';
 import { useTranslation } from '../../lib/i18n';
 import { useDebouncedValue } from './components/Search/useDebouncedValue';
+import { sortCards, sortFolders } from './types/sort';
 
 export type SelectedNav = 'all' | 'favorites' | 'archive' | 'deleted' | { folderId: string };
 
@@ -84,6 +85,20 @@ export function useVault(profileId: string, onLocked: () => void) {
     [tCommon]
   );
 
+  const sortCardsWithSettings = useCallback(
+    (list: DataCardSummary[]) => {
+      const field = settings?.default_sort_field ?? 'updated_at';
+      const direction = settings?.default_sort_direction ?? 'DESC';
+      return [...list].sort((a, b) => sortCards(a, b, field, direction));
+    },
+    [settings]
+  );
+
+  useEffect(() => {
+    setCards((prev) => sortCardsWithSettings(prev));
+    setDeletedCards((prev) => sortCardsWithSettings(prev));
+  }, [sortCardsWithSettings]);
+
   const handleError = useCallback(
     (err: any) => {
       const code = err?.code ?? err?.error ?? 'UNKNOWN';
@@ -107,25 +122,25 @@ export function useVault(profileId: string, onLocked: () => void) {
     setError(null);
     try {
       const [fetchedFolders, fetchedCards] = await Promise.all([listFolders(), listDataCardSummaries()]);
-      setFolders(fetchedFolders.map(mapFolderFromBackend));
-      setCards(fetchedCards.map((card) => mapCardSummaryFromBackend(card, dtf)));
+      setFolders(fetchedFolders.map(mapFolderFromBackend).sort(sortFolders));
+      setCards(sortCardsWithSettings(fetchedCards.map((card) => mapCardSummaryFromBackend(card, dtf))));
     } catch (err) {
       handleError(err);
     } finally {
       setLoading(false);
     }
-  }, [dtf, handleError]);
+  }, [dtf, handleError, sortCardsWithSettings]);
 
   const refreshTrash = useCallback(async () => {
     try {
       const trashCards = await listDeletedDataCardSummaries();
-      setDeletedCards(trashCards.map((card) => mapCardSummaryFromBackend(card, dtf)));
+      setDeletedCards(sortCardsWithSettings(trashCards.map((card) => mapCardSummaryFromBackend(card, dtf))));
       setTrashLoaded(true);
     } catch (err) {
       handleError(err);
       setTrashLoaded(false);
     }
-  }, [dtf, handleError]);
+  }, [dtf, handleError, sortCardsWithSettings]);
 
   const loadCard = useCallback(
     async (id: string) => {
@@ -139,13 +154,13 @@ export function useVault(profileId: string, onLocked: () => void) {
         if (mapped.deletedAt) {
           setDeletedCards((prev) => {
             const filtered = prev.filter((c) => c.id !== id);
-            return [...filtered, { ...summary, deletedAt: mapped.deletedAt }];
+            return sortCardsWithSettings([...filtered, { ...summary, deletedAt: mapped.deletedAt }]);
           });
           setCards((prev) => prev.filter((c) => c.id !== id));
         } else {
           setCards((prev) => {
             const filtered = prev.filter((c) => c.id !== id);
-            return [...filtered, summary];
+            return sortCardsWithSettings([...filtered, summary]);
           });
           setDeletedCards((prev) => prev.filter((c) => c.id !== id));
         }
@@ -153,7 +168,7 @@ export function useVault(profileId: string, onLocked: () => void) {
         handleError(err);
       }
     },
-    [dtf, handleError]
+    [dtf, handleError, sortCardsWithSettings]
   );
 
   useEffect(() => {
@@ -193,7 +208,7 @@ export function useVault(profileId: string, onLocked: () => void) {
       try {
         const created = await createFolder({ name, parent_id: parentId });
         const mapped = mapFolderFromBackend(created);
-        setFolders((prev) => [...prev, mapped]);
+        setFolders((prev) => [...prev, mapped].sort(sortFolders));
         setSelectedNav({ folderId: mapped.id });
         return mapped;
       } catch (err) {
@@ -201,14 +216,16 @@ export function useVault(profileId: string, onLocked: () => void) {
         return null;
       }
     },
-    [handleError]
+    [handleError, sortCardsWithSettings]
   );
 
   const renameFolderAction = useCallback(
     async (id: string, name: string) => {
       try {
         await renameFolder({ id, name });
-        setFolders((prev) => prev.map((folder) => (folder.id === id ? { ...folder, name } : folder)));
+        setFolders((prev) =>
+          [...prev.map((folder) => (folder.id === id ? { ...folder, name } : folder))].sort(sortFolders)
+        );
         setSelectedNav((prev) => {
           if (typeof prev === 'object' && prev.folderId === id) {
             return { folderId: id };
@@ -226,7 +243,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     async (id: string) => {
       try {
         await deleteFolderOnly(id);
-        setFolders((prev) => prev.filter((folder) => folder.id !== id));
+        setFolders((prev) => prev.filter((folder) => folder.id !== id).sort(sortFolders));
         setCards((prev) =>
           prev.map((card) => (card.folderId === id ? { ...card, folderId: null } : card))
         );
@@ -253,7 +270,7 @@ export function useVault(profileId: string, onLocked: () => void) {
         await deleteFolderAndCards(id);
         const softDeleteEnabled = settings?.soft_delete_enabled ?? true;
 
-        setFolders((prev) => prev.filter((folder) => folder.id !== id));
+        setFolders((prev) => prev.filter((folder) => folder.id !== id).sort(sortFolders));
         setCards((prev) => prev.filter((card) => card.folderId !== id));
         setCardDetailsById((prev) => {
           const next = { ...prev };
@@ -291,7 +308,7 @@ export function useVault(profileId: string, onLocked: () => void) {
         const mapped = mapCardFromBackend(created);
         const summary = mapCardToSummary(mapped, dtf);
 
-        setCards((prev) => [summary, ...prev]);
+        setCards((prev) => sortCardsWithSettings([summary, ...prev]));
         setCardDetailsById((prev) => ({ ...prev, [mapped.id]: mapped }));
         setSelectedNav((prev) => (prev === 'deleted' ? 'all' : prev));
         setSelectedCardId(mapped.id);
@@ -301,7 +318,7 @@ export function useVault(profileId: string, onLocked: () => void) {
         return null;
       }
     },
-    [dtf, handleError]
+    [dtf, handleError, sortCardsWithSettings]
   );
 
   const updateCardAction = useCallback(
@@ -334,7 +351,7 @@ export function useVault(profileId: string, onLocked: () => void) {
           if (trashLoaded && cachedSummary) {
             setDeletedCards((prev) => {
               const filtered = prev.filter((card) => card.id !== id);
-              return [...filtered, { ...cachedSummary, deletedAt }];
+              return sortCardsWithSettings([...filtered, { ...cachedSummary, deletedAt }]);
             });
           }
         } else {
@@ -348,7 +365,7 @@ export function useVault(profileId: string, onLocked: () => void) {
         handleError(err);
       }
     },
-    [cardDetailsById, cards, deletedCards, dtf, handleError, settings, trashLoaded]
+    [cardDetailsById, cards, deletedCards, dtf, handleError, settings, sortCardsWithSettings, trashLoaded]
   );
 
   const restoreCardAction = useCallback(
@@ -360,7 +377,7 @@ export function useVault(profileId: string, onLocked: () => void) {
           const restored = deletedCards.find((card) => card.id === id);
           if (!restored) return prev;
           const updated = { ...restored, deletedAt: null };
-          return [...prev.filter((card) => card.id !== id), updated];
+          return sortCardsWithSettings([...prev.filter((card) => card.id !== id), updated]);
         });
         setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
         setSelectedCardId(id);
@@ -369,7 +386,7 @@ export function useVault(profileId: string, onLocked: () => void) {
         handleError(err);
       }
     },
-    [deletedCards, handleError, loadCard]
+    [deletedCards, handleError, loadCard, sortCardsWithSettings]
   );
 
   const purgeCardAction = useCallback(
@@ -395,7 +412,7 @@ export function useVault(profileId: string, onLocked: () => void) {
       try {
         await moveDataCardToFolder({ id, folder_id: folderId });
         setCards((prev) =>
-          prev.map((card) => (card.id === id ? { ...card, folderId } : card))
+          sortCardsWithSettings(prev.map((card) => (card.id === id ? { ...card, folderId } : card)))
         );
         setCardDetailsById((prev) =>
           prev[id] ? { ...prev, [id]: { ...prev[id], folderId } } : prev

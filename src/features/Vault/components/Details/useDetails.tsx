@@ -39,6 +39,7 @@ export function useDetails({
 }: UseDetailsParams): UseDetailsResult {
   const [showPassword, setShowPassword] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCopiedValueRef = useRef<string | null>(null);
   const { show: showToast } = useToaster();
   const { t } = useTranslation('Details');
 
@@ -47,6 +48,7 @@ export function useDetails({
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    lastCopiedValueRef.current = null;
   }, []);
 
   useEffect(() => clearPendingTimeout, [clearPendingTimeout]);
@@ -63,19 +65,25 @@ export function useDetails({
         await navigator.clipboard.writeText(value);
         showToast(t('toast.copySuccess'));
         if (opts.isSecret) {
+          lastCopiedValueRef.current = value;
           const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
           timeoutRef.current = window.setTimeout(async () => {
             try {
-              await navigator.clipboard.writeText('');
+              const currentClipboard = await navigator.clipboard.readText();
+              if (currentClipboard === lastCopiedValueRef.current) {
+                await navigator.clipboard.writeText('');
+              }
             } catch (err) {
               console.error(err);
             }
             timeoutRef.current = null;
+            lastCopiedValueRef.current = null;
           }, timeoutMs);
         }
       } catch (err) {
         console.error(err);
         showToast(t('toast.copyError'));
+        lastCopiedValueRef.current = null;
       }
     },
     [clearPendingTimeout, clipboardClearTimeoutSeconds, showToast, t]
