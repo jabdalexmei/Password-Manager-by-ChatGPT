@@ -14,8 +14,8 @@
   --color-text: #e5e7eb;
   --color-text-muted: #9ca3c7;
 
-  --color-primary: #4f8bff;
-  --color-primary-strong: #3b82f6;
+  --color-primary: #2563eb;        /* blue-600 */
+  --color-primary-strong: #1d4ed8; /* blue-700 */
 
   --color-danger: #ef4444;
   --color-danger-strong: #dc2626;

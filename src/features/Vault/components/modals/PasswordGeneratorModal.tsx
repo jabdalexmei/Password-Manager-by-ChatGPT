@@ -16,27 +16,6 @@ type PasswordGeneratorModalProps = {
   onCopy: () => Promise<void>;
 };
 
-function clamp(v: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, v));
-}
-
-const StrengthBar: React.FC<{ bits: number }> = ({ bits }) => {
-  const maxBits = 128;
-  const t = clamp(bits / maxBits, 0, 1);
-  const hue = 120 * t;
-  const percentage = t * 100;
-  const color = `hsl(${hue}, 80%, 45%)`;
-
-  return (
-    <div className="generator-strength">
-      <div className="generator-strength-bar">
-        <div className="generator-strength-fill" style={{ width: `${percentage}%`, backgroundColor: color }} />
-      </div>
-      <span className="generator-strength-label">{bits} bits</span>
-    </div>
-  );
-};
-
 export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
   isOpen,
   options,
@@ -78,15 +57,31 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
                 <button className="icon-button" type="button" aria-label={t('action.copy')} onClick={() => void onCopy()}>
                   <CopyIcon />
                 </button>
-                <button className="icon-button" type="button" aria-label={t('generator.regenerate')} onClick={onRegenerate}>
+                <button
+                  className="icon-button icon-button-primary"
+                  type="button"
+                  aria-label={t('generator.regenerate')}
+                  onClick={onRegenerate}
+                >
                   <GenerateIcon width={20} height={20} />
                 </button>
               </div>
             </div>
           </div>
 
-          <StrengthBar bits={bits} />
-          <div className="generator-strength-text">{t('generator.strengthLabel', { bits })}</div>
+          <div className="generator-strength-block">
+            <div className="generator-strength-header">
+              <span className="generator-strength-title">{t('generator.passwordStrength')}</span>
+              <span className="generator-strength-value">{t('generator.strengthLabel', { bits })}</span>
+            </div>
+
+            <div className="generator-strength-bar">
+              <div
+                className="generator-strength-fill"
+                style={{ width: `${Math.min(100, (bits / 128) * 100)}%` }}
+              />
+            </div>
+          </div>
 
           <div className="generator-row">
             <label className="form-label" htmlFor="length-slider">

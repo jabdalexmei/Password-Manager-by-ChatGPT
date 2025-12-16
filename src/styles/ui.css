@@ -318,6 +318,17 @@
   width: 100%;
 }
 
+.generator-dialog .dialog-header {
+  border-bottom: none;
+  padding-bottom: 10px;
+}
+
+.generator-dialog .dialog-footer {
+  border-top: none;
+  justify-content: space-between;
+  padding-top: 10px;
+}
+
 .generator-body {
   gap: 16px;
 }
@@ -329,35 +340,44 @@
 }
 
 .generator-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px 12px;
-}
-
-.generator-strength {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
 }
 
+.generator-strength-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.generator-strength-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.generator-strength-title {
+  color: var(--color-text-muted);
+}
+
+.generator-strength-value {
+  color: var(--color-text-muted);
+}
+
 .generator-strength-bar {
-  flex: 1;
-  height: 8px;
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
+  height: 10px;
   border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
 
 .generator-strength-fill {
   height: 100%;
-  background: var(--color-danger);
-  transition: width 0.2s ease, background-color 0.2s ease;
-}
-
-.generator-strength-text {
-  font-size: 14px;
-  color: var(--color-text-muted);
+  background: var(--color-success);
+  transition: width 0.2s ease;
 }
 .toast-host {
   position: fixed;
