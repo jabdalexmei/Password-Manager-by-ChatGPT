@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::app_state::AppState;
 use crate::data::profiles::registry;
 use crate::data::sqlite::init::init_database;
+use crate::data::sqlite::pool::clear_pool;
 use crate::error::{ErrorCodeString, Result};
 
 pub fn login_vault(
@@ -10,16 +11,13 @@ pub fn login_vault(
     password: Option<String>,
     state: &Arc<AppState>,
 ) -> Result<bool> {
-    let record =
-        registry::get_profile(id)?.ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
-    if let Some(hash) = record.password_hash {
-        let pwd = password.unwrap_or_default();
-        let valid = crate::data::crypto::kdf::verify_password(&pwd, &hash);
-        if !valid {
-            return Err(ErrorCodeString::new("INVALID_PASSWORD"));
-        }
+    let pwd = password.unwrap_or_default();
+    let verified = registry::verify_profile_password(&state.storage_paths, id, &pwd)?;
+    if !verified {
+        return Err(ErrorCodeString::new("INVALID_PASSWORD"));
     }
-    init_database(id)?;
+
+    init_database(&state.storage_paths, id)?;
     if let Ok(mut active) = state.active_profile.lock() {
         *active = Some(id.to_string());
     }
@@ -30,6 +28,16 @@ pub fn login_vault(
 }
 
 pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
+    let profile_id = state
+        .logged_in_profile
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+        .clone();
+
+    if let Some(id) = profile_id {
+        clear_pool(&id);
+    }
+
     if let Ok(mut logged_in) = state.logged_in_profile.lock() {
         *logged_in = None;
     }

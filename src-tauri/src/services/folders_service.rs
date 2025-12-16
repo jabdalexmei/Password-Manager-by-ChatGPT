@@ -25,7 +25,7 @@ fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
 
 pub fn list_folders(state: &Arc<AppState>) -> Result<Vec<Folder>> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::list_folders(&profile_id)
+    repo_impl::list_folders(&state.storage_paths, &profile_id)
 }
 
 pub fn create_folder(input: CreateFolderInput, state: &Arc<AppState>) -> Result<Folder> {
@@ -34,7 +34,7 @@ pub fn create_folder(input: CreateFolderInput, state: &Arc<AppState>) -> Result<
     if name.is_empty() {
         return Err(ErrorCodeString::new("FOLDER_NAME_REQUIRED"));
     }
-    repo_impl::create_folder(&profile_id, name, &input.parent_id)
+    repo_impl::create_folder(&state.storage_paths, &profile_id, name, &input.parent_id)
 }
 
 pub fn rename_folder(input: RenameFolderInput, state: &Arc<AppState>) -> Result<bool> {
@@ -43,37 +43,37 @@ pub fn rename_folder(input: RenameFolderInput, state: &Arc<AppState>) -> Result<
     if name.is_empty() {
         return Err(ErrorCodeString::new("FOLDER_NAME_REQUIRED"));
     }
-    repo_impl::rename_folder(&profile_id, &input.id, name)
+    repo_impl::rename_folder(&state.storage_paths, &profile_id, &input.id, name)
 }
 
 pub fn move_folder(input: MoveFolderInput, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::move_folder(&profile_id, &input.id, &input.parent_id)
+    repo_impl::move_folder(&state.storage_paths, &profile_id, &input.id, &input.parent_id)
 }
 
 pub fn delete_folder(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    let folder = repo_impl::get_folder(&profile_id, &id)?;
+    let folder = repo_impl::get_folder(&state.storage_paths, &profile_id, &id)?;
     if folder.is_system {
         return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
     }
-    repo_impl::soft_delete_folder(&profile_id, &id)?;
-    repo_impl::soft_delete_datacards_in_folder(&profile_id, &id)
+    repo_impl::soft_delete_folder(&state.storage_paths, &profile_id, &id)?;
+    repo_impl::soft_delete_datacards_in_folder(&state.storage_paths, &profile_id, &id)
 }
 
 pub fn list_deleted_folders(state: &Arc<AppState>) -> Result<Vec<Folder>> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::list_deleted_folders(&profile_id)
+    repo_impl::list_deleted_folders(&state.storage_paths, &profile_id)
 }
 
 pub fn restore_folder(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::restore_folder(&profile_id, &id)?;
-    repo_impl::restore_datacards_in_folder(&profile_id, &id)
+    repo_impl::restore_folder(&state.storage_paths, &profile_id, &id)?;
+    repo_impl::restore_datacards_in_folder(&state.storage_paths, &profile_id, &id)
 }
 
 pub fn purge_folder(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::purge_datacards_in_folder(&profile_id, &id)?;
-    repo_impl::purge_folder(&profile_id, &id)
+    repo_impl::purge_datacards_in_folder(&state.storage_paths, &profile_id, &id)?;
+    repo_impl::purge_folder(&state.storage_paths, &profile_id, &id)
 }

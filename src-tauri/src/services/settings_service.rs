@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::app_state::AppState;
 use crate::data::profiles::paths::user_settings_path;
+use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::UserSettings;
 
@@ -50,8 +51,8 @@ fn validate_settings(settings: &UserSettings) -> Result<()> {
     }
 }
 
-pub fn get_settings(profile_id: &str) -> Result<UserSettings> {
-    let path = user_settings_path(profile_id);
+pub fn get_settings(sp: &StoragePaths, profile_id: &str) -> Result<UserSettings> {
+    let path = user_settings_path(sp, profile_id);
     if !path.exists() {
         let defaults = UserSettings::default();
         let serialized = serde_json::to_string_pretty(&defaults)
@@ -64,9 +65,9 @@ pub fn get_settings(profile_id: &str) -> Result<UserSettings> {
     serde_json::from_str(&content).map_err(|_| ErrorCodeString::new("SETTINGS_PARSE"))
 }
 
-pub fn update_settings(new_settings: UserSettings, profile_id: &str) -> Result<bool> {
+pub fn update_settings(sp: &StoragePaths, new_settings: UserSettings, profile_id: &str) -> Result<bool> {
     validate_settings(&new_settings)?;
-    let path = user_settings_path(profile_id);
+    let path = user_settings_path(sp, profile_id);
     let serialized = serde_json::to_string_pretty(&new_settings)
         .map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
     fs::write(path, serialized).map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
@@ -75,10 +76,10 @@ pub fn update_settings(new_settings: UserSettings, profile_id: &str) -> Result<b
 
 pub fn update_settings_command(state: &Arc<AppState>, settings: UserSettings) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    update_settings(settings, &profile_id)
+    update_settings(&state.storage_paths, settings, &profile_id)
 }
 
 pub fn get_settings_command(state: &Arc<AppState>) -> Result<UserSettings> {
     let profile_id = require_logged_in(state)?;
-    get_settings(&profile_id)
+    get_settings(&state.storage_paths, &profile_id)
 }

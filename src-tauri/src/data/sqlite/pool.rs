@@ -7,6 +7,7 @@ use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 
 use crate::data::profiles::paths::vault_db_path;
+use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 
 static POOLS: Lazy<Mutex<HashMap<String, r2d2::Pool<SqliteConnectionManager>>>> =
@@ -31,7 +32,10 @@ impl r2d2::CustomizeConnection<rusqlite::Connection, rusqlite::Error> for Pragma
     }
 }
 
-fn get_or_create_pool(profile_id: &str) -> Result<r2d2::Pool<SqliteConnectionManager>> {
+fn get_or_create_pool(
+    sp: &StoragePaths,
+    profile_id: &str,
+) -> Result<r2d2::Pool<SqliteConnectionManager>> {
     let mut pools = POOLS
         .lock()
         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
@@ -40,7 +44,7 @@ fn get_or_create_pool(profile_id: &str) -> Result<r2d2::Pool<SqliteConnectionMan
         return Ok(pool.clone());
     }
 
-    let manager = SqliteConnectionManager::file(vault_db_path(profile_id));
+    let manager = SqliteConnectionManager::file(vault_db_path(sp, profile_id));
     let pool = r2d2::Pool::builder()
         .max_size(8)
         .min_idle(Some(4))
@@ -53,8 +57,11 @@ fn get_or_create_pool(profile_id: &str) -> Result<r2d2::Pool<SqliteConnectionMan
     Ok(pool)
 }
 
-pub fn get_conn(profile_id: &str) -> Result<PooledConnection<SqliteConnectionManager>> {
-    let pool = get_or_create_pool(profile_id)?;
+pub fn get_conn(
+    sp: &StoragePaths,
+    profile_id: &str,
+) -> Result<PooledConnection<SqliteConnectionManager>> {
+    let pool = get_or_create_pool(sp, profile_id)?;
     pool.get()
         .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))
 }

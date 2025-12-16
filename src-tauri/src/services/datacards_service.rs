@@ -42,8 +42,9 @@ fn normalize_tags(tags: Vec<String>) -> Vec<String> {
 
 pub fn list_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
     let profile_id = require_logged_in(state)?;
-    let settings = get_settings(&profile_id)?;
+    let settings = get_settings(&state.storage_paths, &profile_id)?;
     repo_impl::list_datacards(
+        &state.storage_paths,
         &profile_id,
         false,
         &settings.default_sort_field,
@@ -53,8 +54,9 @@ pub fn list_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
 
 pub fn list_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataCardSummary>> {
     let profile_id = require_logged_in(state)?;
-    let settings = get_settings(&profile_id)?;
+    let settings = get_settings(&state.storage_paths, &profile_id)?;
     repo_impl::list_datacards_summary(
+        &state.storage_paths,
         &profile_id,
         &settings.default_sort_field,
         &settings.default_sort_direction,
@@ -63,7 +65,7 @@ pub fn list_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataCardSumma
 
 pub fn get_datacard(id: String, state: &Arc<AppState>) -> Result<DataCard> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::get_datacard(&profile_id, &id)
+    repo_impl::get_datacard(&state.storage_paths, &profile_id, &id)
 }
 
 pub fn create_datacard(
@@ -78,7 +80,7 @@ pub fn create_datacard(
     }
     sanitized.tags = normalize_tags(sanitized.tags);
 
-    repo_impl::create_datacard(&profile_id, &sanitized)
+    repo_impl::create_datacard(&state.storage_paths, &profile_id, &sanitized)
 }
 
 pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Result<bool> {
@@ -90,7 +92,7 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
     }
     sanitized.tags = normalize_tags(sanitized.tags);
 
-    repo_impl::update_datacard(&profile_id, &sanitized)
+    repo_impl::update_datacard(&state.storage_paths, &profile_id, &sanitized)
 }
 
 pub fn move_datacard_to_folder(
@@ -98,37 +100,37 @@ pub fn move_datacard_to_folder(
     state: &Arc<AppState>,
 ) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::move_datacard(&profile_id, &input.id, &input.folder_id)
+    repo_impl::move_datacard(&state.storage_paths, &profile_id, &input.id, &input.folder_id)
 }
 
 pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    let settings = get_settings(&profile_id)?;
+    let settings = get_settings(&state.storage_paths, &profile_id)?;
     if settings.soft_delete_enabled {
-        repo_impl::soft_delete_datacard(&profile_id, &id)
+        repo_impl::soft_delete_datacard(&state.storage_paths, &profile_id, &id)
     } else {
-        repo_impl::purge_datacard(&profile_id, &id)
+        repo_impl::purge_datacard(&state.storage_paths, &profile_id, &id)
     }
 }
 
 pub fn list_deleted_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::list_deleted_datacards(&profile_id)
+    repo_impl::list_deleted_datacards(&state.storage_paths, &profile_id)
 }
 
 pub fn list_deleted_datacards_summary(
     state: &Arc<AppState>,
 ) -> Result<Vec<DataCardSummary>> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::list_deleted_datacards_summary(&profile_id)
+    repo_impl::list_deleted_datacards_summary(&state.storage_paths, &profile_id)
 }
 
 pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::restore_datacard(&profile_id, &id)
+    repo_impl::restore_datacard(&state.storage_paths, &profile_id, &id)
 }
 
 pub fn purge_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::purge_datacard(&profile_id, &id)
+    repo_impl::purge_datacard(&state.storage_paths, &profile_id, &id)
 }

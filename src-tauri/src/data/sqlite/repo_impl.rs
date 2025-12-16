@@ -6,13 +6,17 @@ use rusqlite::types::Type;
 use uuid::Uuid;
 
 use super::pool;
+use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::{
     BankCard, CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput,
 };
 
-fn open_connection(profile_id: &str) -> Result<PooledConnection<SqliteConnectionManager>> {
-    pool::get_conn(profile_id)
+fn open_connection(
+    sp: &StoragePaths,
+    profile_id: &str,
+) -> Result<PooledConnection<SqliteConnectionManager>> {
+    pool::get_conn(sp, profile_id)
 }
 
 fn deserialize_json<T: serde::de::DeserializeOwned>(value: String) -> rusqlite::Result<T> {
@@ -99,8 +103,8 @@ fn map_constraint_error(err: rusqlite::Error) -> ErrorCodeString {
     ErrorCodeString::new("DB_QUERY_FAILED")
 }
 
-pub fn list_folders(profile_id: &str) -> Result<Vec<Folder>> {
-    let conn = open_connection(profile_id)?;
+pub fn list_folders(sp: &StoragePaths, profile_id: &str) -> Result<Vec<Folder>> {
+    let conn = open_connection(sp, profile_id)?;
     let mut stmt = conn
         .prepare("SELECT * FROM folders WHERE deleted_at IS NULL ORDER BY name ASC")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -114,8 +118,8 @@ pub fn list_folders(profile_id: &str) -> Result<Vec<Folder>> {
     Ok(folders)
 }
 
-pub fn list_deleted_folders(profile_id: &str) -> Result<Vec<Folder>> {
-    let conn = open_connection(profile_id)?;
+pub fn list_deleted_folders(sp: &StoragePaths, profile_id: &str) -> Result<Vec<Folder>> {
+    let conn = open_connection(sp, profile_id)?;
     let mut stmt = conn
         .prepare("SELECT * FROM folders WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -129,8 +133,8 @@ pub fn list_deleted_folders(profile_id: &str) -> Result<Vec<Folder>> {
     Ok(folders)
 }
 
-pub fn get_folder(profile_id: &str, id: &str) -> Result<Folder> {
-    let conn = open_connection(profile_id)?;
+pub fn get_folder(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<Folder> {
+    let conn = open_connection(sp, profile_id)?;
     let mut stmt = conn
         .prepare("SELECT * FROM folders WHERE id = ?1")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -139,8 +143,13 @@ pub fn get_folder(profile_id: &str, id: &str) -> Result<Folder> {
         .map_err(|_| ErrorCodeString::new("FOLDER_NOT_FOUND"))
 }
 
-pub fn create_folder(profile_id: &str, name: &str, parent_id: &Option<String>) -> Result<Folder> {
-    let conn = open_connection(profile_id)?;
+pub fn create_folder(
+    sp: &StoragePaths,
+    profile_id: &str,
+    name: &str,
+    parent_id: &Option<String>,
+) -> Result<Folder> {
+    let conn = open_connection(sp, profile_id)?;
     let now = Utc::now().to_rfc3339();
     let id = Uuid::new_v4().to_string();
     conn.execute(
@@ -149,11 +158,11 @@ pub fn create_folder(profile_id: &str, name: &str, parent_id: &Option<String>) -
     )
     .map_err(map_constraint_error)?;
 
-    get_folder(profile_id, &id)
+    get_folder(sp, profile_id, &id)
 }
 
-pub fn rename_folder(profile_id: &str, id: &str, name: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn rename_folder(sp: &StoragePaths, profile_id: &str, id: &str, name: &str) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let rows = conn
         .execute(
             "UPDATE folders SET name = ?1, updated_at = ?2 WHERE id = ?3",
@@ -166,8 +175,13 @@ pub fn rename_folder(profile_id: &str, id: &str, name: &str) -> Result<bool> {
     Ok(true)
 }
 
-pub fn move_folder(profile_id: &str, id: &str, parent_id: &Option<String>) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn move_folder(
+    sp: &StoragePaths,
+    profile_id: &str,
+    id: &str,
+    parent_id: &Option<String>,
+) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let rows = conn
         .execute(
             "UPDATE folders SET parent_id = ?1, updated_at = ?2 WHERE id = ?3",
@@ -180,8 +194,8 @@ pub fn move_folder(profile_id: &str, id: &str, parent_id: &Option<String>) -> Re
     Ok(true)
 }
 
-pub fn soft_delete_folder(profile_id: &str, id: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn soft_delete_folder(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let now = Utc::now().to_rfc3339();
     let rows = conn
         .execute(
@@ -195,8 +209,8 @@ pub fn soft_delete_folder(profile_id: &str, id: &str) -> Result<bool> {
     Ok(true)
 }
 
-pub fn restore_folder(profile_id: &str, id: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn restore_folder(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let rows = conn
         .execute(
             "UPDATE folders SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
@@ -209,8 +223,8 @@ pub fn restore_folder(profile_id: &str, id: &str) -> Result<bool> {
     Ok(true)
 }
 
-pub fn purge_folder(profile_id: &str, id: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn purge_folder(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     conn.execute("DELETE FROM datacards WHERE folder_id = ?1", params![id])
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     let rows = conn
@@ -223,12 +237,13 @@ pub fn purge_folder(profile_id: &str, id: &str) -> Result<bool> {
 }
 
 pub fn list_datacards(
+    sp: &StoragePaths,
     profile_id: &str,
     include_deleted: bool,
     sort_field: &str,
     sort_dir: &str,
 ) -> Result<Vec<DataCard>> {
-    let conn = open_connection(profile_id)?;
+    let conn = open_connection(sp, profile_id)?;
     let clause = order_clause(sort_field, sort_dir)
         .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     let base_query = if include_deleted {
@@ -248,11 +263,12 @@ pub fn list_datacards(
 }
 
 pub fn list_datacards_summary(
+    sp: &StoragePaths,
     profile_id: &str,
     sort_field: &str,
     sort_dir: &str,
 ) -> Result<Vec<DataCardSummary>> {
-    let conn = open_connection(profile_id)?;
+    let conn = open_connection(sp, profile_id)?;
     let clause = order_clause(sort_field, sort_dir)
         .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     let query = format!(
@@ -271,8 +287,8 @@ pub fn list_datacards_summary(
     Ok(cards)
 }
 
-pub fn list_deleted_datacards(profile_id: &str) -> Result<Vec<DataCard>> {
-    let conn = open_connection(profile_id)?;
+pub fn list_deleted_datacards(sp: &StoragePaths, profile_id: &str) -> Result<Vec<DataCard>> {
+    let conn = open_connection(sp, profile_id)?;
     let mut stmt = conn
         .prepare("SELECT * FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -286,8 +302,11 @@ pub fn list_deleted_datacards(profile_id: &str) -> Result<Vec<DataCard>> {
     Ok(cards)
 }
 
-pub fn list_deleted_datacards_summary(profile_id: &str) -> Result<Vec<DataCardSummary>> {
-    let conn = open_connection(profile_id)?;
+pub fn list_deleted_datacards_summary(
+    sp: &StoragePaths,
+    profile_id: &str,
+) -> Result<Vec<DataCardSummary>> {
+    let conn = open_connection(sp, profile_id)?;
     let mut stmt = conn
         .prepare(
             "SELECT id, folder_id, title, url, email, username, tags_json, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
@@ -303,8 +322,8 @@ pub fn list_deleted_datacards_summary(profile_id: &str) -> Result<Vec<DataCardSu
     Ok(cards)
 }
 
-pub fn get_datacard(profile_id: &str, id: &str) -> Result<DataCard> {
-    let conn = open_connection(profile_id)?;
+pub fn get_datacard(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<DataCard> {
+    let conn = open_connection(sp, profile_id)?;
     let mut stmt = conn
         .prepare("SELECT * FROM datacards WHERE id = ?1")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -323,8 +342,8 @@ fn serialize_card_fields(input: &CreateDataCardInput) -> Result<(String, String,
     Ok((tags_json, custom_fields_json, bank_card_json))
 }
 
-pub fn create_datacard(profile_id: &str, input: &CreateDataCardInput) -> Result<DataCard> {
-    let conn = open_connection(profile_id)?;
+pub fn create_datacard(sp: &StoragePaths, profile_id: &str, input: &CreateDataCardInput) -> Result<DataCard> {
+    let conn = open_connection(sp, profile_id)?;
     let (tags_json, custom_fields_json, bank_card_json) = serialize_card_fields(input)?;
     let now = Utc::now().to_rfc3339();
     let id = Uuid::new_v4().to_string();
@@ -349,11 +368,15 @@ pub fn create_datacard(profile_id: &str, input: &CreateDataCardInput) -> Result<
     )
     .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-    get_datacard(profile_id, &id)
+    get_datacard(sp, profile_id, &id)
 }
 
-pub fn update_datacard(profile_id: &str, input: &UpdateDataCardInput) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn update_datacard(
+    sp: &StoragePaths,
+    profile_id: &str,
+    input: &UpdateDataCardInput,
+) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let tags_json = serialize_json(&input.tags)?;
     let custom_fields_json = serialize_json(&input.custom_fields)?;
     let bank_card_json = match &input.bank_card {
@@ -386,8 +409,13 @@ pub fn update_datacard(profile_id: &str, input: &UpdateDataCardInput) -> Result<
     Ok(true)
 }
 
-pub fn move_datacard(profile_id: &str, id: &str, folder_id: &Option<String>) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn move_datacard(
+    sp: &StoragePaths,
+    profile_id: &str,
+    id: &str,
+    folder_id: &Option<String>,
+) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let rows = conn
         .execute(
             "UPDATE datacards SET folder_id = ?1, updated_at = ?2 WHERE id = ?3",
@@ -400,8 +428,8 @@ pub fn move_datacard(profile_id: &str, id: &str, folder_id: &Option<String>) -> 
     Ok(true)
 }
 
-pub fn soft_delete_datacard(profile_id: &str, id: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn soft_delete_datacard(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let now = Utc::now().to_rfc3339();
     let rows = conn
         .execute(
@@ -415,8 +443,8 @@ pub fn soft_delete_datacard(profile_id: &str, id: &str) -> Result<bool> {
     Ok(true)
 }
 
-pub fn restore_datacard(profile_id: &str, id: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn restore_datacard(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let rows = conn
         .execute(
             "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
@@ -429,8 +457,8 @@ pub fn restore_datacard(profile_id: &str, id: &str) -> Result<bool> {
     Ok(true)
 }
 
-pub fn purge_datacard(profile_id: &str, id: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn purge_datacard(sp: &StoragePaths, profile_id: &str, id: &str) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let rows = conn
         .execute("DELETE FROM datacards WHERE id = ?1", params![id])
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -440,8 +468,12 @@ pub fn purge_datacard(profile_id: &str, id: &str) -> Result<bool> {
     Ok(true)
 }
 
-pub fn soft_delete_datacards_in_folder(profile_id: &str, folder_id: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn soft_delete_datacards_in_folder(
+    sp: &StoragePaths,
+    profile_id: &str,
+    folder_id: &str,
+) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     let now = Utc::now().to_rfc3339();
     conn.execute(
         "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3",
@@ -451,8 +483,12 @@ pub fn soft_delete_datacards_in_folder(profile_id: &str, folder_id: &str) -> Res
     Ok(true)
 }
 
-pub fn restore_datacards_in_folder(profile_id: &str, folder_id: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn restore_datacards_in_folder(
+    sp: &StoragePaths,
+    profile_id: &str,
+    folder_id: &str,
+) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     conn.execute(
         "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE folder_id = ?2",
         params![Utc::now().to_rfc3339(), folder_id],
@@ -461,8 +497,12 @@ pub fn restore_datacards_in_folder(profile_id: &str, folder_id: &str) -> Result<
     Ok(true)
 }
 
-pub fn purge_datacards_in_folder(profile_id: &str, folder_id: &str) -> Result<bool> {
-    let conn = open_connection(profile_id)?;
+pub fn purge_datacards_in_folder(
+    sp: &StoragePaths,
+    profile_id: &str,
+    folder_id: &str,
+) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
     conn.execute(
         "DELETE FROM datacards WHERE folder_id = ?1",
         params![folder_id],

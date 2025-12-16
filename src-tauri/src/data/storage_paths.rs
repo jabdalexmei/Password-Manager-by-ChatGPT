@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::sync::OnceLock;
 
 #[derive(Debug, Clone)]
 pub struct StoragePaths {
@@ -9,7 +8,7 @@ pub struct StoragePaths {
 }
 
 impl StoragePaths {
-    fn initialize() -> Result<Self, StoragePathsError> {
+    pub fn new() -> Result<Self, StoragePathsError> {
         let exe_path = std::env::current_exe().map_err(|_| StoragePathsError::ExecutablePath)?;
         let app_dir = exe_path
             .parent()
@@ -59,21 +58,4 @@ impl StoragePathsError {
             }
         }
     }
-}
-
-static PATHS: OnceLock<StoragePaths> = OnceLock::new();
-
-pub fn initialize_storage_paths() -> Result<&'static StoragePaths, StoragePathsError> {
-    if let Some(paths) = PATHS.get() {
-        return Ok(paths);
-    }
-
-    let initialized = StoragePaths::initialize()?;
-    Ok(PATHS.get_or_init(|| initialized))
-}
-
-pub fn storage_paths() -> &'static StoragePaths {
-    PATHS
-        .get()
-        .expect("storage paths must be initialized before use")
 }
