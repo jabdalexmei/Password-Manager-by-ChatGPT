@@ -12,7 +12,7 @@ thiserror = "1.0"
 uuid = { version = "1.10", features = ["v4"] }
 argon2 = "0.5"
 rand = "0.8"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.25"
