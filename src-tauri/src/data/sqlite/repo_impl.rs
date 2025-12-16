@@ -9,7 +9,8 @@ use super::pool;
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::{
-    BankCard, CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput,
+    BankCard, CreateDataCardInput, DataCard, DataCardSummary, Folder, SetDataCardFavoriteInput,
+    UpdateDataCardInput,
 };
 
 fn open_connection(
@@ -50,6 +51,7 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
         username: row.get("username")?,
         mobile_phone: row.get("mobile_phone")?,
         note: row.get("note")?,
+        is_favorite: row.get::<_, i64>("is_favorite")? != 0,
         tags: deserialize_json(row.get::<_, String>("tags_json")?)?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
@@ -65,7 +67,7 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
 
 fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary> {
     let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
-    let is_favorite = tags.iter().any(|tag| tag == "favorite");
+    let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
 
     Ok(DataCardSummary {
         id: row.get("id")?,
@@ -237,7 +239,7 @@ pub fn list_datacards_summary(
     let clause = order_clause(sort_field, sort_dir)
         .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     let query = format!(
-        "SELECT id, folder_id, title, url, email, username, tags_json, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NULL {clause}"
+        "SELECT id, folder_id, title, url, email, username, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NULL {clause}"
     );
     let mut stmt = conn
         .prepare(&query)
@@ -274,7 +276,7 @@ pub fn list_deleted_datacards_summary(
     let conn = open_connection(sp, profile_id)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, folder_id, title, url, email, username, tags_json, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+            "SELECT id, folder_id, title, url, email, username, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -313,7 +315,7 @@ pub fn create_datacard(sp: &StoragePaths, profile_id: &str, input: &CreateDataCa
     let now = Utc::now().to_rfc3339();
     let id = Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, tags_json, password_value, bank_card_json, custom_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, NULL)",
+        "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, bank_card_json, custom_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, NULL)",
         params![
             id,
             input.folder_id,
@@ -371,6 +373,30 @@ pub fn update_datacard(
     if rows == 0 {
         return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
     }
+    Ok(true)
+}
+
+pub fn set_datacard_favorite(
+    sp: &StoragePaths,
+    profile_id: &str,
+    input: &SetDataCardFavoriteInput,
+) -> Result<bool> {
+    let conn = open_connection(sp, profile_id)?;
+    let rows = conn
+        .execute(
+            "UPDATE datacards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
+            params![
+                if input.is_favorite { 1 } else { 0 },
+                Utc::now().to_rfc3339(),
+                input.id
+            ],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    if rows == 0 {
+        return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
+    }
+
     Ok(true)
 }
 

@@ -33,6 +33,7 @@ export type BackendDataCard = {
   username: string | null;
   mobile_phone: string | null;
   note: string | null;
+  is_favorite: boolean;
   tags: string[];
   created_at: string;
   updated_at: string;

@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS datacards (
   mobile_phone TEXT NULL,
   note         TEXT NULL,
 
+  is_favorite  INTEGER NOT NULL DEFAULT 0,
+
   tags_json           TEXT NOT NULL DEFAULT '[]',
   password_value      TEXT NULL,
   bank_card_json      TEXT NULL,

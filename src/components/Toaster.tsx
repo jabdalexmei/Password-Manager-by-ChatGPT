@@ -1,10 +1,12 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../lib/i18n';
 
-type Toast = { id: number; message: string };
+type ToastVariant = 'success' | 'error';
+
+type Toast = { id: number; message: string; variant: ToastVariant };
 
 type ToasterContextValue = {
-  show: (message: string) => void;
+  show: (message: string, variant?: ToastVariant) => void;
 };
 
 const ToasterContext = createContext<ToasterContextValue | undefined>(undefined);
@@ -12,14 +14,20 @@ const ToasterContext = createContext<ToasterContextValue | undefined>(undefined)
 export const ToasterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t: tCommon } = useTranslation('Common');
   const [toasts, setToasts] = useState<Toast[]>([]);
-
-  const show = useCallback((message: string) => {
-    setToasts((prev) => [...prev, { id: Date.now(), message }]);
-  }, []);
+  const nextIdRef = useRef(0);
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
+
+  const show = useCallback(
+    (message: string, variant: ToastVariant = 'success') => {
+      const id = nextIdRef.current++;
+      setToasts((prev) => [...prev, { id, message, variant }]);
+      setTimeout(() => dismiss(id), 1000);
+    },
+    [dismiss]
+  );
 
   const value = useMemo(() => ({ show }), [show]);
 
@@ -28,7 +36,10 @@ export const ToasterProvider: React.FC<{ children: React.ReactNode }> = ({ child
       {children}
       <div className="toast-host">
         {toasts.map((toast) => (
-          <div className="toast" key={toast.id}>
+          <div
+            className={`toast ${toast.variant === 'success' ? 'toast-success' : 'toast-error'}`}
+            key={toast.id}
+          >
             <span>{toast.message}</span>
             <button
               className="icon-button"

@@ -29,6 +29,7 @@ export function mapCardFromBackend(card: BackendDataCard): DataCard {
     username: card.username,
     mobilePhone: card.mobile_phone,
     note: card.note,
+    isFavorite: card.is_favorite,
     tags: card.tags ?? [],
     createdAt: card.created_at,
     updatedAt: card.updated_at,
@@ -77,7 +78,7 @@ export function mapCardSummaryFromBackend(
     password: null,
     bankCard: null,
     customFields: [],
-    isFavorite: card.is_favorite || (card.tags ?? []).includes('favorite'),
+    isFavorite: card.is_favorite,
     updatedAtLabel,
     createdAtLabel,
     metaLine: metaFromCard(card, ''),
@@ -87,11 +88,9 @@ export function mapCardSummaryFromBackend(
 export function mapCardToSummary(card: DataCard, formatter: Intl.DateTimeFormat): DataCardSummary {
   const updatedAtLabel = formatter.format(new Date(card.updatedAt));
   const createdAtLabel = formatter.format(new Date(card.createdAt));
-  const isFavorite = (card.tags || []).includes('favorite');
 
   return {
     ...card,
-    isFavorite,
     updatedAtLabel,
     createdAtLabel,
     metaLine: metaFromCard(card, ''),

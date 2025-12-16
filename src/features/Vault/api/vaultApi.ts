@@ -48,6 +48,10 @@ export async function updateDataCard(input: BackendUpdateDataCardInput): Promise
   return invoke('update_datacard', { input });
 }
 
+export async function setDataCardFavorite(input: { id: string; is_favorite: boolean }): Promise<boolean> {
+  return invoke('set_datacard_favorite', { input });
+}
+
 export async function moveDataCardToFolder(input: { id: string; folder_id: string | null }): Promise<boolean> {
   return invoke('move_datacard_to_folder', { input });
 }

@@ -20,6 +20,10 @@ export function DeleteFolderModal({
 }: DeleteFolderModalProps) {
   const { t } = useTranslation('Vault');
   const { t: tCommon } = useTranslation('Common');
+  const isEmpty = cardsCount === 0;
+  const description = isEmpty
+    ? t('vault.delete_folder.empty', { name: folderName })
+    : t('vault.delete_folder.contains_cards', { count: cardsCount, name: folderName });
 
   if (!open) return null;
 
@@ -33,9 +37,7 @@ export function DeleteFolderModal({
         </div>
 
         <div className="dialog-body">
-          <p className="dialog-description">
-            {t('vault.delete_folder.contains_cards', { count: cardsCount, name: folderName })}
-          </p>
+          <p className="dialog-description">{description}</p>
         </div>
 
         <div className="dialog-footer">
@@ -45,9 +47,11 @@ export function DeleteFolderModal({
           <button className="btn btn-primary" type="button" onClick={onDeleteFolderOnly}>
             {t('vault.delete_folder.only')}
           </button>
-          <button className="btn btn-danger" type="button" onClick={onDeleteFolderAndCards}>
-            {t('vault.delete_folder.and_cards')}
-          </button>
+          {!isEmpty && (
+            <button className="btn btn-danger" type="button" onClick={onDeleteFolderAndCards}>
+              {t('vault.delete_folder.and_cards')}
+            </button>
+          )}
         </div>
       </div>
     </div>

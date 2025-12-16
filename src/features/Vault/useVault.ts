@@ -14,6 +14,7 @@ import {
   purgeDataCard,
   renameFolder,
   restoreDataCard,
+  setDataCardFavorite,
   updateDataCard,
 } from './api/vaultApi';
 import { lockVault } from '../../lib/tauri';
@@ -111,7 +112,7 @@ export function useVault(profileId: string, onLocked: () => void) {
       }
 
       const message = mapErrorMessage(code, rawMessage || undefined);
-      showToast(message);
+      showToast(message, 'error');
       setError({ code, message });
       console.error(err);
     },
@@ -431,7 +432,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     } catch (err) {
       const code = (err as any)?.code ?? 'UNKNOWN';
       const message = mapErrorMessage(code, (err as any)?.message ?? undefined);
-      showToast(message);
+      showToast(message, 'error');
       console.error(err);
     }
     setFolders([]);
@@ -451,7 +452,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     if (selectedNav === 'all') {
       pool = activeCards.filter((card) => !isArchived(card));
     } else if (selectedNav === 'favorites') {
-      pool = activeCards.filter((card) => card.tags?.includes('favorite') && !isArchived(card));
+      pool = activeCards.filter((card) => card.isFavorite && !isArchived(card));
     } else if (selectedNav === 'archive') {
       pool = activeCards.filter((card) => isArchived(card));
     } else if (selectedNav === 'deleted') {
@@ -501,27 +502,24 @@ export function useVault(profileId: string, onLocked: () => void) {
       const current = cards.find((card) => card.id === id);
       if (!current) return;
 
-      const tagSet = new Set(current.tags || []);
-      if (tagSet.has('favorite')) {
-        tagSet.delete('favorite');
-      } else {
-        tagSet.add('favorite');
-      }
+      const nextFavorite = !current.isFavorite;
 
-      await updateCardAction({
-        id: current.id,
-        folderId: current.folderId,
-        title: current.title,
-        url: current.url,
-        email: current.email,
-        username: current.username,
-        mobilePhone: current.mobilePhone,
-        note: current.note,
-        tags: Array.from(tagSet),
-        password: current.password,
-      });
+      try {
+        await setDataCardFavorite({ id: current.id, is_favorite: nextFavorite });
+
+        setCards((prev) =>
+          prev.map((card) => (card.id === current.id ? { ...card, isFavorite: nextFavorite } : card))
+        );
+        setCardDetailsById((prev) =>
+          prev[current.id]
+            ? { ...prev, [current.id]: { ...prev[current.id], isFavorite: nextFavorite } }
+            : prev
+        );
+      } catch (err) {
+        handleError(err);
+      }
     },
-    [cards, updateCardAction]
+    [cards, handleError]
   );
 
   const counts = useMemo(
@@ -531,7 +529,7 @@ export function useVault(profileId: string, onLocked: () => void) {
 
       return {
         all: activeCards.filter((card) => !isArchived(card)).length,
-        favorites: activeCards.filter((card) => card.tags?.includes('favorite') && !isArchived(card)).length,
+        favorites: activeCards.filter((card) => card.isFavorite && !isArchived(card)).length,
         archive: activeCards.filter((card) => isArchived(card)).length,
         deleted: deletedCards.length,
         folders: activeCards.reduce<Record<string, number>>((acc, card) => {

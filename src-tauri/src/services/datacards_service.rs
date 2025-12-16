@@ -5,7 +5,8 @@ use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::settings_service::get_settings;
 use crate::types::{
-    CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, UpdateDataCardInput,
+    CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, SetDataCardFavoriteInput,
+    UpdateDataCardInput,
 };
 
 fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
@@ -133,4 +134,9 @@ pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
 pub fn purge_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     repo_impl::purge_datacard(&state.storage_paths, &profile_id, &id)
+}
+
+pub fn set_datacard_favorite(input: SetDataCardFavoriteInput, state: &Arc<AppState>) -> Result<bool> {
+    let profile_id = require_logged_in(state)?;
+    repo_impl::set_datacard_favorite(&state.storage_paths, &profile_id, &input)
 }

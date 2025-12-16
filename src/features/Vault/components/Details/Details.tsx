@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useDetails } from './useDetails';
 import { EyeIcon, EyeOffIcon } from '../../../../components/icons/EyeIcons';
 import { CopyIcon } from '../../icons/CopyIcon';
+import ConfirmDialog from '../../../../components/ConfirmDialog';
 
 export type DetailsProps = {
   card: DataCard | null;
@@ -30,6 +31,7 @@ export function Details({
 }: DetailsProps) {
   const { t } = useTranslation('Details');
   const { t: tVault } = useTranslation('Vault');
+  const { t: tCommon } = useTranslation('Common');
   const detailActions = useDetails({
     card,
     onDelete,
@@ -43,8 +45,11 @@ export function Details({
 
   const folderName = useMemo(() => {
     if (!card) return '';
-    return card.folderId ? folders.find((f) => f.id === card.folderId)?.name ?? t('label.noFolder') : t('label.noFolder');
-  }, [card, folders, t]);
+    return card.folderId ? folders.find((f) => f.id === card.folderId)?.name ?? '' : '';
+  }, [card, folders]);
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
 
   const informationTitle = (
     <div className="vault-section-header">{tVault('information.title')}</div>
@@ -59,13 +64,12 @@ export function Details({
     );
   }
 
-  const isFavorite = card.tags?.includes('favorite');
+  const isFavorite = card.isFavorite;
   const createdText = `${t('label.created')}: ${new Date(card.createdAt).toLocaleString()}`;
   const updatedText = `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}`;
   const hasValue = (value?: string | null) => {
     const trimmed = value?.trim();
-    if (!trimmed) return false;
-    return trimmed !== t('label.noValue');
+    return Boolean(trimmed);
   };
   const hasUrl = hasValue(card.url);
   const hasUsername = hasValue(card.username);
@@ -77,7 +81,7 @@ export function Details({
     ? detailActions.showPassword
       ? card.password
       : '••••••••••••'
-    : t('label.noValue');
+    : '';
 
   return (
     <div className="vault-panel-wrapper">
@@ -97,7 +101,7 @@ export function Details({
                 <button className="btn btn-secondary" type="button" onClick={detailActions.editCard}>
                   {t('action.edit')}
                 </button>
-                <button className="btn btn-danger" type="button" onClick={detailActions.deleteCard}>
+                <button className="btn btn-danger" type="button" onClick={() => setDeleteConfirmOpen(true)}>
                   {t('action.delete')}
                 </button>
               </>
@@ -107,13 +111,38 @@ export function Details({
                 <button className="btn btn-secondary" type="button" onClick={detailActions.restoreCard}>
                   {t('action.restore')}
                 </button>
-                <button className="btn btn-danger" type="button" onClick={detailActions.purgeCard}>
+                <button className="btn btn-danger" type="button" onClick={() => setPurgeConfirmOpen(true)}>
                   {t('action.purge')}
                 </button>
               </>
             )}
           </div>
         </div>
+
+        <ConfirmDialog
+          open={deleteConfirmOpen}
+          title={t('dialog.delete.title')}
+          description={t('dialog.delete.message')}
+          confirmLabel={t('dialog.delete.confirm')}
+          cancelLabel={tCommon('action.cancel')}
+          onConfirm={() => {
+            detailActions.deleteCard();
+            setDeleteConfirmOpen(false);
+          }}
+          onCancel={() => setDeleteConfirmOpen(false)}
+        />
+        <ConfirmDialog
+          open={purgeConfirmOpen}
+          title={t('dialog.purge.title')}
+          description={t('dialog.purge.message')}
+          confirmLabel={t('dialog.purge.confirm')}
+          cancelLabel={tCommon('action.cancel')}
+          onConfirm={() => {
+            detailActions.purgeCard();
+            setPurgeConfirmOpen(false);
+          }}
+          onCancel={() => setPurgeConfirmOpen(false)}
+        />
 
       <div className="detail-field">
         <div className="detail-label">{t('label.title')}</div>
@@ -132,7 +161,7 @@ export function Details({
       <div className="detail-field">
         <div className="detail-label">{t('label.username')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.username || t('label.noValue')}</div>
+          <div className="detail-value-text">{card.username ?? ''}</div>
           {hasUsername && (
             <div className="detail-value-actions">
               <button
@@ -151,7 +180,7 @@ export function Details({
       <div className="detail-field">
         <div className="detail-label">{t('label.email')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.email || t('label.noValue')}</div>
+          <div className="detail-value-text">{card.email ?? ''}</div>
           {hasEmail && (
             <div className="detail-value-actions">
               <button
@@ -170,7 +199,7 @@ export function Details({
       <div className="detail-field">
         <div className="detail-label">{t('label.url')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.url || t('label.noValue')}</div>
+          <div className="detail-value-text">{card.url ?? ''}</div>
           {hasUrl && (
             <div className="detail-value-actions">
               <button
@@ -189,7 +218,7 @@ export function Details({
       <div className="detail-field">
         <div className="detail-label">{t('label.mobile')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.mobilePhone || t('label.noValue')}</div>
+          <div className="detail-value-text">{card.mobilePhone ?? ''}</div>
           {hasMobile && (
             <div className="detail-value-actions">
               <button
@@ -235,7 +264,7 @@ export function Details({
       <div className="detail-field">
         <div className="detail-label">{t('label.note')}</div>
         <div className="detail-value-box detail-value-multiline">
-          <div className="detail-value-text detail-value-text-multiline">{card.note || t('label.noValue')}</div>
+          <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
           {hasNote && (
             <div className="detail-value-actions">
               <button
@@ -254,7 +283,7 @@ export function Details({
       <div className="detail-field">
         <div className="detail-label">{t('label.tags')}</div>
         <div className="detail-value-box">
-          <div className="detail-value-text">{card.tags && card.tags.length > 0 ? card.tags.join(', ') : t('label.noValue')}</div>
+          <div className="detail-value-text">{card.tags && card.tags.length > 0 ? card.tags.join(', ') : ''}</div>
         </div>
       </div>
       </div>

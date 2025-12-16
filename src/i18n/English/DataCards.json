@@ -38,6 +38,7 @@
   "dialog.editTitle": "Edit data card",
   "label.markFavorite": "Mark as favorite",
   "validation.titleRequired": "Title is required",
+  "validation.folderNotFound": "Folder not found",
   "generator.title": "Password generator",
   "generator.generatedPassword": "Generated password",
   "generator.regenerate": "Regenerate",

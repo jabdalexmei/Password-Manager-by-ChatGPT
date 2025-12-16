@@ -80,6 +80,7 @@ fn main() {
             get_datacard,
             create_datacard,
             update_datacard,
+            set_datacard_favorite,
             move_datacard_to_folder,
             delete_datacard,
             list_deleted_datacards,

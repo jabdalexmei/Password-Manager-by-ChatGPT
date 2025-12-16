@@ -63,7 +63,7 @@ export function useDetails({
       clearPendingTimeout();
       try {
         await navigator.clipboard.writeText(value);
-        showToast(t('toast.copySuccess'));
+        showToast(t('toast.copySuccess'), 'success');
         if (opts.isSecret) {
           lastCopiedValueRef.current = value;
           const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
@@ -82,7 +82,7 @@ export function useDetails({
         }
       } catch (err) {
         console.error(err);
-        showToast(t('toast.copyError'));
+        showToast(t('toast.copyError'), 'error');
         lastCopiedValueRef.current = null;
       }
     },

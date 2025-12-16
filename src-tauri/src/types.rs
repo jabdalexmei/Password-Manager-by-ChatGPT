@@ -61,6 +61,7 @@ pub struct DataCard {
     pub username: Option<String>,
     pub mobile_phone: Option<String>,
     pub note: Option<String>,
+    pub is_favorite: bool,
     pub tags: Vec<String>,
 
     pub created_at: String,
@@ -140,6 +141,12 @@ pub struct UpdateDataCardInput {
 pub struct MoveDataCardInput {
     pub id: String,
     pub folder_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetDataCardFavoriteInput {
+    pub id: String,
+    pub is_favorite: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

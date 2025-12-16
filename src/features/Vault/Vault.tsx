@@ -47,11 +47,6 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
     if (!target) return;
 
     const cardsCount = vault.counts.folders[folderId] ?? 0;
-    if (cardsCount === 0) {
-      void vault.deleteFolderOnly(folderId);
-      return;
-    }
-
     setPendingFolderDelete({ id: folderId, name: target.name, cardsCount });
   };
 

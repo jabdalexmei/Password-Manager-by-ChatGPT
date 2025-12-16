@@ -5,6 +5,7 @@ import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardI
 export type DataCardFormState = {
   title: string;
   folderId: string | null;
+  folderName: string;
   url: string;
   email: string;
   username: string;
@@ -12,7 +13,6 @@ export type DataCardFormState = {
   mobilePhone: string;
   note: string;
   tagsText: string;
-  isFavorite: boolean;
 };
 
 type UseDataCardsParams = {
@@ -47,6 +47,8 @@ export type DataCardsViewModel = {
   editForm: DataCardFormState | null;
   createError: string | null;
   editError: string | null;
+  createFolderError: string | null;
+  editFolderError: string | null;
   isCreateSubmitting: boolean;
   isEditSubmitting: boolean;
   updateCreateField: (field: keyof DataCardFormState, value: string | boolean | null) => void;
@@ -63,18 +65,13 @@ const normalizeOptional = (value: string) => {
   return trimmed.length === 0 ? null : trimmed;
 };
 
-const normalizeTags = (value: string, isFavorite: boolean) => {
+const normalizeTags = (value: string) => {
   const tags = value
     .split(',')
     .map((tag) => tag.trim())
     .filter(Boolean);
 
   const tagSet = new Set(tags);
-  if (isFavorite) {
-    tagSet.add('favorite');
-  } else {
-    tagSet.delete('favorite');
-  }
 
   return Array.from(tagSet);
 };
@@ -88,7 +85,7 @@ const buildCreateInput = (form: DataCardFormState): CreateDataCardInput => ({
   password: normalizeOptional(form.password),
   mobilePhone: normalizeOptional(form.mobilePhone),
   note: normalizeOptional(form.note),
-  tags: normalizeTags(form.tagsText, form.isFavorite),
+  tags: normalizeTags(form.tagsText),
 });
 
 const buildUpdateInput = (form: DataCardFormState, id: string): UpdateDataCardInput => ({
@@ -96,9 +93,10 @@ const buildUpdateInput = (form: DataCardFormState, id: string): UpdateDataCardIn
   ...buildCreateInput(form),
 });
 
-const buildInitialForm = (defaultFolderId: string | null): DataCardFormState => ({
+const buildInitialForm = (defaultFolderId: string | null, folderName: string): DataCardFormState => ({
   title: '',
   folderId: defaultFolderId,
+  folderName,
   url: '',
   email: '',
   username: '',
@@ -106,8 +104,19 @@ const buildInitialForm = (defaultFolderId: string | null): DataCardFormState => 
   mobilePhone: '',
   note: '',
   tagsText: '',
-  isFavorite: false,
 });
+
+const findFolderName = (folderId: string | null, folderList: Folder[]) => {
+  if (!folderId) return '';
+  return folderList.find((folder) => folder.id === folderId)?.name ?? '';
+};
+
+const findFolderIdByName = (name: string, folderList: Folder[]) => {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return null;
+  const match = folderList.find((folder) => !folder.isSystem && folder.name.toLowerCase() === normalized);
+  return match ? match.id : null;
+};
 
 export function useDataCards({
   cards,
@@ -123,23 +132,29 @@ export function useDataCards({
   onPurgeCard,
 }: UseDataCardsParams): DataCardsViewModel {
   const { t } = useTranslation('DataCards');
-  const [createForm, setCreateForm] = useState<DataCardFormState>(() => buildInitialForm(defaultFolderId));
+  const [createForm, setCreateForm] = useState<DataCardFormState>(() =>
+    buildInitialForm(defaultFolderId, findFolderName(defaultFolderId, folders))
+  );
   const [editForm, setEditForm] = useState<DataCardFormState | null>(null);
   const [editCardId, setEditCardId] = useState<string | null>(null);
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [isEditOpen, setEditOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  const [createFolderError, setCreateFolderError] = useState<string | null>(null);
+  const [editFolderError, setEditFolderError] = useState<string | null>(null);
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const resetCreateForm = useCallback(() => {
-    setCreateForm(buildInitialForm(defaultFolderId));
-  }, [defaultFolderId]);
+    const folderName = findFolderName(defaultFolderId, folders);
+    setCreateForm(buildInitialForm(defaultFolderId, folderName));
+  }, [defaultFolderId, folders]);
 
   const openCreateModal = useCallback(() => {
     setCreateError(null);
+    setCreateFolderError(null);
     setIsCreateSubmitting(false);
     resetCreateForm();
     setCreateOpen(true);
@@ -153,23 +168,24 @@ export function useDataCards({
 
   const openEditModal = useCallback((card: DataCard) => {
     setEditError(null);
+    setEditFolderError(null);
     setIsEditSubmitting(false);
     setEditCardId(card.id);
     setEditForm({
       title: card.title,
       folderId: card.folderId,
+      folderName: findFolderName(card.folderId, folders),
       url: card.url || '',
       email: card.email || '',
       username: card.username || '',
       password: card.password || '',
       mobilePhone: card.mobilePhone || '',
       note: card.note || '',
-      tagsText: (card.tags || []).filter((tag) => tag !== 'favorite').join(', '),
-      isFavorite: (card.tags || []).includes('favorite'),
+      tagsText: (card.tags || []).join(', '),
     });
     setEditOpen(true);
     setShowPassword(false);
-  }, []);
+  }, [folders]);
 
   const closeEditModal = useCallback(() => {
     setIsEditSubmitting(false);
@@ -188,40 +204,71 @@ export function useDataCards({
     }
   }, [isCreateOpen, isEditOpen]);
 
-  const updateCreateField = useCallback((field: keyof DataCardFormState, value: string | boolean | null) => {
-    if (field === 'title') {
-      setCreateError(null);
-    }
-    setCreateForm((prev) => {
-      if (field === 'isFavorite') {
-        return { ...prev, isFavorite: Boolean(value) };
-      }
-
-      return { ...prev, [field]: (value ?? '') as string };
-    });
-  }, []);
-
-  const updateEditField = useCallback((field: keyof DataCardFormState, value: string | boolean | null) => {
-    setEditForm((prev) => {
-      if (!prev) return prev;
-
-      if (field === 'isFavorite') {
-        return { ...prev, isFavorite: Boolean(value) };
-      }
-
+  const updateCreateField = useCallback(
+    (field: keyof DataCardFormState, value: string | boolean | null) => {
       if (field === 'title') {
-        setEditError(null);
+        setCreateError(null);
       }
+      if (field === 'folderName') {
+        setCreateFolderError(null);
+      }
+      setCreateForm((prev) => {
+        if (field === 'folderId') {
+          return { ...prev, folderId: value === '' ? null : (value as string | null) };
+        }
 
-      return { ...prev, [field]: (value ?? '') as string };
-    });
-  }, []);
+        if (field === 'folderName') {
+          const name = (value ?? '') as string;
+          const matchedId = name.trim() ? findFolderIdByName(name, folders) : null;
+          return { ...prev, folderName: name, folderId: matchedId };
+        }
+
+        return { ...prev, [field]: (value ?? '') as string };
+      });
+    },
+    [folders]
+  );
+
+  const updateEditField = useCallback(
+    (field: keyof DataCardFormState, value: string | boolean | null) => {
+      setEditForm((prev) => {
+        if (!prev) return prev;
+
+        if (field === 'title') {
+          setEditError(null);
+        }
+        if (field === 'folderName') {
+          setEditFolderError(null);
+        }
+
+        if (field === 'folderId') {
+          return { ...prev, folderId: value === '' ? null : (value as string | null) };
+        }
+
+        if (field === 'folderName') {
+          const name = (value ?? '') as string;
+          const matchedId = name.trim() ? findFolderIdByName(name, folders) : null;
+          return { ...prev, folderName: name, folderId: matchedId };
+        }
+
+        return { ...prev, [field]: (value ?? '') as string };
+      });
+    },
+    [folders]
+  );
 
   const submitCreate = useCallback(async () => {
     if (isCreateSubmitting) return;
     const trimmedTitle = createForm.title.trim();
     if (!trimmedTitle) {
       setCreateError(t('validation.titleRequired'));
+      return;
+    }
+
+    setCreateFolderError(null);
+    const hasFolderName = createForm.folderName.trim() !== '';
+    if (hasFolderName && createForm.folderId === null) {
+      setCreateFolderError(t('validation.folderNotFound'));
       return;
     }
 
@@ -245,6 +292,13 @@ export function useDataCards({
     }
 
     if (!editCardId) return;
+
+    setEditFolderError(null);
+    const hasFolderName = editForm.folderName.trim() !== '';
+    if (hasFolderName && editForm.folderId === null) {
+      setEditFolderError(t('validation.folderNotFound'));
+      return;
+    }
 
     setIsEditSubmitting(true);
     try {
@@ -275,6 +329,8 @@ export function useDataCards({
     editForm,
     createError,
     editError,
+    createFolderError,
+    editFolderError,
     isCreateSubmitting,
     isEditSubmitting,
     updateCreateField,

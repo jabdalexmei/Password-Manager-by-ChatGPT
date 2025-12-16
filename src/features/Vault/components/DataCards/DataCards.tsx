@@ -111,6 +111,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     title: string,
     form: DataCardFormState | null,
     error: string | null,
+    folderError: string | null,
     onClose: () => void,
     onSubmit: () => Promise<void>,
     onFieldChange: (field: keyof DataCardFormState, value: string | boolean | null) => void,
@@ -248,6 +249,27 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
             </div>
 
             <div className="form-field">
+              <label className="form-label" htmlFor={`${dialogId}-folder`}>
+                {t('label.folder')}
+              </label>
+              <input
+                id={`${dialogId}-folder`}
+                className="input"
+                list="folder-options"
+                value={form.folderName}
+                onChange={(e) => onFieldChange('folderName', e.target.value)}
+              />
+              <datalist id="folder-options">
+                {viewModel.folders
+                  .filter((folder) => !folder.isSystem)
+                  .map((folder) => (
+                    <option key={folder.id} value={folder.name} />
+                  ))}
+              </datalist>
+              {folderError && <div className="form-error">{folderError}</div>}
+            </div>
+
+            <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-tags`}>
                 {t('label.tags')}
               </label>
@@ -286,7 +308,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
         <div className="vault-datacard-list">
           {cards.map((card) => {
             const isActive = selectedCardId === card.id;
-            const isFavorite = card.isFavorite || card.tags?.includes('favorite');
+            const isFavorite = card.isFavorite;
             const meta = card.metaLine || t('label.noMeta');
             const updatedText = `${t('label.updated')}: ${card.updatedAtLabel}`;
 
@@ -316,6 +338,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
           t('dialog.createTitle'),
           viewModel.createForm,
           viewModel.createError,
+          viewModel.createFolderError,
           viewModel.closeCreateModal,
           viewModel.submitCreate,
           viewModel.updateCreateField,
@@ -330,6 +353,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
           t('dialog.editTitle'),
           viewModel.editForm,
           viewModel.editError,
+          viewModel.editFolderError,
           viewModel.closeEditModal,
           viewModel.submitEdit,
           viewModel.updateEditField,

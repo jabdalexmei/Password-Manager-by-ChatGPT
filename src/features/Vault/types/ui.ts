@@ -33,6 +33,7 @@ export type DataCard = {
   username: string | null;
   mobilePhone: string | null;
   note: string | null;
+  isFavorite: boolean;
   tags: string[];
   createdAt: string;
   updatedAt: string;
@@ -43,7 +44,6 @@ export type DataCard = {
 };
 
 export type DataCardSummary = DataCard & {
-  isFavorite: boolean;
   updatedAtLabel: string;
   createdAtLabel: string;
   metaLine: string;
