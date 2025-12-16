@@ -1,34 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
+import { EyeIcon, EyeOffIcon } from '../../../../components/icons/EyeIcons';
+import { GenerateIcon } from '../../../../components/icons/GenerateIcon';
+import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
+import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
-
-const randomInt = (maxExclusive: number) => {
-  if (maxExclusive <= 0) return 0;
-
-  const maxUint32 = 0x100000000;
-  const limit = Math.floor(maxUint32 / maxExclusive) * maxExclusive;
-  const buffer = new Uint32Array(1);
-
-  while (true) {
-    crypto.getRandomValues(buffer);
-    const value = buffer[0];
-    if (value < limit) {
-      return value % maxExclusive;
-    }
-  }
-};
-
-const generateSecurePassword = (length: number) => {
-  const charset = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-
-  for (let i = 0; i < length; i += 1) {
-    const index = randomInt(charset.length);
-    result += charset[index] ?? '';
-  }
-
-  return result;
-};
 
 export type DataCardsProps = {
   viewModel: DataCardsViewModel;
@@ -37,20 +13,75 @@ export type DataCardsProps = {
 export function DataCards({ viewModel }: DataCardsProps) {
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
-    const {
-      cards,
-      selectedCardId,
-      showPassword,
-      isCreateOpen,
-      isEditOpen,
-      isCreateSubmitting,
-      isEditSubmitting,
-      closeCreateModal,
-      closeEditModal,
-      togglePasswordVisibility,
-    } = viewModel;
+  const {
+    cards,
+    selectedCardId,
+    showPassword,
+    isCreateOpen,
+    isEditOpen,
+    isCreateSubmitting,
+    isEditSubmitting,
+    closeCreateModal,
+    closeEditModal,
+    togglePasswordVisibility,
+  } = viewModel;
   const createTitleRef = useRef<HTMLInputElement | null>(null);
   const editTitleRef = useRef<HTMLInputElement | null>(null);
+  const [isGeneratorOpen, setGeneratorOpen] = useState(false);
+  const [generatorOptions, setGeneratorOptions] = useState<PasswordGeneratorOptions>({
+    length: 16,
+    lowercase: true,
+    uppercase: true,
+    numbers: true,
+    symbols: true,
+    excludeSimilar: false,
+  });
+  const [generatedPassword, setGeneratedPassword] = useState('');
+  const [charsetSize, setCharsetSize] = useState(0);
+
+  const regeneratePassword = useCallback((options: PasswordGeneratorOptions) => {
+    const { password, charsetSize: size } = generatePassword(options);
+    setGeneratedPassword(password);
+    setCharsetSize(size);
+  }, []);
+
+  useEffect(() => {
+    if (!isGeneratorOpen) return;
+    regeneratePassword(generatorOptions);
+  }, [generatorOptions, isGeneratorOpen, regeneratePassword]);
+
+  const openGenerator = () => {
+    setGeneratorOpen(true);
+    regeneratePassword(generatorOptions);
+  };
+
+  const closeGenerator = () => {
+    setGeneratorOpen(false);
+  };
+
+  const handleUseGeneratedPassword = () => {
+    if (generatedPassword) {
+      if (viewModel.isCreateOpen) {
+        viewModel.updateCreateField('password', generatedPassword);
+      }
+      if (viewModel.isEditOpen && viewModel.editForm) {
+        viewModel.updateEditField('password', generatedPassword);
+      }
+      if (!showPassword) {
+        togglePasswordVisibility();
+      }
+    }
+    closeGenerator();
+  };
+
+  const handleCopyGeneratedPassword = async () => {
+    if (!generatedPassword) return;
+    try {
+      await navigator.clipboard.writeText(generatedPassword);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   useEffect(() => {
     if (isCreateOpen && createTitleRef.current) {
@@ -92,11 +123,6 @@ export function DataCards({ viewModel }: DataCardsProps) {
     const handleSubmit = async (event: React.FormEvent) => {
       event.preventDefault();
       await onSubmit();
-    };
-
-    const generatePassword = () => {
-      const generated = generateSecurePassword(10);
-      onFieldChange('password', generated);
     };
 
     const titleElementId = 'dialog-title';
@@ -179,10 +205,10 @@ export function DataCards({ viewModel }: DataCardsProps) {
                   <button
                     className="icon-button"
                     type="button"
-                    onClick={generatePassword}
-                    aria-label={t('action.generate')}
+                    onClick={openGenerator}
+                    aria-label={t('action.openGenerator')}
                   >
-                    {t('action.generate')}
+                    <GenerateIcon />
                   </button>
                   <button
                     className="icon-button"
@@ -190,7 +216,7 @@ export function DataCards({ viewModel }: DataCardsProps) {
                     onClick={togglePasswordVisibility}
                     aria-label={t('action.togglePasswordVisibility')}
                   >
-                    {showPassword ? t('action.hide') : t('action.reveal')}
+                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
                 </div>
               </div>
@@ -311,6 +337,18 @@ export function DataCards({ viewModel }: DataCardsProps) {
           'datacard-edit-dialog',
           isEditSubmitting
         )}
+
+      <PasswordGeneratorModal
+        isOpen={isGeneratorOpen}
+        generatedPassword={generatedPassword}
+        charsetSize={charsetSize}
+        options={generatorOptions}
+        onChangeOptions={setGeneratorOptions}
+        onClose={closeGenerator}
+        onUse={handleUseGeneratedPassword}
+        onRegenerate={() => regeneratePassword(generatorOptions)}
+        onCopy={handleCopyGeneratedPassword}
+      />
     </div>
   );
 }

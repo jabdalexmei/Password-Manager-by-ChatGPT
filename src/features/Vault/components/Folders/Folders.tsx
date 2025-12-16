@@ -33,7 +33,6 @@ export function Folders({
 }: FolderListProps) {
   const { t } = useTranslation('Folders');
   const { t: tCommon } = useTranslation('Common');
-  const isTrashMode = selectedNav === 'deleted';
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -107,16 +106,6 @@ export function Folders({
     const isActive = selectedFolderId === folder.id;
     const count = counts.folders[folder.id] ?? 0;
 
-    if (isTrashMode) {
-      return (
-        <li key={folder.id}>
-          <div className="vault-folder" aria-label={folder.name}>
-            <span className="folder-name">{folder.name}</span>
-          </div>
-        </li>
-      );
-    }
-
     return (
       <li key={folder.id} className={isActive ? 'active' : ''}>
         <button className="vault-folder" type="button" onClick={() => onSelectNav({ folderId: folder.id })}>
@@ -128,7 +117,7 @@ export function Folders({
   };
 
   const renderDeleteAction = () => {
-    if (!selectedFolderId || isTrashMode) return null;
+    if (!selectedFolderId) return null;
     const folder = folders.find((item) => item.id === selectedFolderId);
     if (!folder || folder.isSystem) return null;
 
@@ -143,14 +132,15 @@ export function Folders({
 
   return (
     <div>
-      <div className="vault-sidebar-title">{t('title')}</div>
+      <div className="vault-sidebar-title">{t('nav.title')}</div>
       <ul className="vault-folder-list">
         {renderSystemItem('all', t('nav.allItems'), counts.all, selectedNav === 'all')}
         {renderSystemItem('favorites', t('nav.favorites'), counts.favorites, selectedNav === 'favorites')}
         {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
         {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
-        {!isTrashMode && folders.filter((folder) => !folder.isSystem).map(renderFolder)}
       </ul>
+      <div className="vault-sidebar-title">{t('title')}</div>
+      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
       {renderDeleteAction()}
       {renderCreateDialog()}
     </div>

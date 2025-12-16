@@ -143,7 +143,7 @@ export function useDataCards({
     setIsCreateSubmitting(false);
     resetCreateForm();
     setCreateOpen(true);
-    setShowPassword(false);
+    setShowPassword(true);
   }, [resetCreateForm]);
 
   const closeCreateModal = useCallback(() => {

@@ -26,6 +26,7 @@
   "action.markFavorite": "Mark favorite",
   "action.unmarkFavorite": "Unmark favorite",
   "action.generate": "Generate",
+  "action.openGenerator": "Open password generator",
   "action.togglePasswordVisibility": "Toggle password visibility",
   "action.copy": "Copy",
   "action.reveal": "Reveal",
@@ -36,5 +37,16 @@
   "dialog.createTitle": "Create data card",
   "dialog.editTitle": "Edit data card",
   "label.markFavorite": "Mark as favorite",
-  "validation.titleRequired": "Title is required"
+  "validation.titleRequired": "Title is required",
+  "generator.title": "Password generator",
+  "generator.generatedPassword": "Generated password",
+  "generator.regenerate": "Regenerate",
+  "generator.length": "Length",
+  "generator.lowercase": "Lowercase (a-z)",
+  "generator.uppercase": "Uppercase (A-Z)",
+  "generator.numbers": "Numbers (0-9)",
+  "generator.symbols": "Symbols (!@#$%...)",
+  "generator.excludeSimilar": "Exclude similar characters (O, 0, I, 1, l)",
+  "generator.use": "Use",
+  "generator.strengthLabel": "Strong ({bits} bits)"
 }
