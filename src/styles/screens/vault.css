@@ -103,21 +103,27 @@
 }
 
 .vault-search {
-  background: var(--color-surface-3);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
   width: 100%;
+  padding: 12px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-input-bg);
+  color: var(--color-text);
 }
 
-.vault-search:focus {
+.vault-search:focus-visible {
   outline: 2px solid var(--color-primary);
+  border-color: transparent;
 }
 
 .vault-sidebar-actions {
   display: flex;
   gap: 10px;
+  margin-bottom: 12px;
+}
+
+.vault-sidebar-actions .btn {
+  flex: 1;
 }
 
 .vault-sidebar-title {
@@ -150,6 +156,18 @@
   border-radius: var(--radius-sm);
   color: var(--color-text);
   cursor: pointer;
+}
+
+.vault-folder:hover {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: var(--color-surface-2);
+  transform: translateY(-1px);
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.vault-folder:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .vault-folder-list li.active .vault-folder {
@@ -272,12 +290,26 @@
   cursor: pointer;
 }
 
+.vault-datacard:hover {
+  border-color: rgba(59, 130, 246, 0.45); /* primary hint */
+  background: var(--color-surface-2);
+  transform: translateY(-1px);
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.vault-datacard:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .vault-datacard.active {
   border-color: var(--color-primary);
   background: linear-gradient(90deg, var(--color-surface-3) 0%, var(--color-surface-1) 70%);
 }
 
 .datacard-title {
+  font-size: 14px;
+  line-height: 18px;
   font-weight: 700;
   color: var(--color-text);
 }
@@ -288,7 +320,12 @@
   gap: 8px;
   align-items: center;
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.vault-datacard.active .datacard-title {
+  color: var(--color-text);
 }
 
 .pill {
@@ -435,12 +472,31 @@
 }
 
 .icon-button:hover {
-  background: var(--color-surface-2);
-  border-color: var(--color-primary);
+  border-color: rgba(59, 130, 246, 0.55);
+  background: var(--color-surface-3);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .vault-empty {
   color: var(--color-text-muted);
   text-align: center;
   padding: 24px;
+}
+
+/* Panel layout wrapper used by DataCards/Details panels */
+.vault-panel-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0; /* critical for proper inner scroll areas */
+}
+
+/* Make section headers look consistent */
+.vault-section-header {
+  font-size: 14px;
+  line-height: 18px;
 }
