@@ -74,7 +74,10 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
             folders={foldersForCards}
             onEdit={(card) => dataCardsViewModel.openEditModal(card)}
             onDelete={vault.deleteCard}
+            onRestore={vault.restoreCard}
+            onPurge={vault.purgeCard}
             onToggleFavorite={vault.toggleFavorite}
+            isTrashMode={vault.isTrashMode}
           />
         </section>
       </div>

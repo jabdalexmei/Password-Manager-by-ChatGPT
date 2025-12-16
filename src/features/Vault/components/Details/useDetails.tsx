@@ -8,6 +8,9 @@ type UseDetailsParams = {
   onEdit: (card: DataCard) => void;
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  onRestore: (id: string) => void;
+  onPurge: (id: string) => void;
+  isTrashMode: boolean;
   clipboardClearTimeoutSeconds?: number;
 };
 
@@ -18,6 +21,8 @@ type UseDetailsResult = {
   deleteCard: () => void;
   editCard: () => void;
   toggleFavorite: () => void;
+  restoreCard: () => void;
+  purgeCard: () => void;
 };
 
 export function useDetails({
@@ -25,6 +30,9 @@ export function useDetails({
   onEdit,
   onDelete,
   onToggleFavorite,
+  onRestore,
+  onPurge,
+  isTrashMode,
   clipboardClearTimeoutSeconds,
 }: UseDetailsParams): UseDetailsResult {
   const [showPassword, setShowPassword] = useState(false);
@@ -68,16 +76,27 @@ export function useDetails({
   );
 
   const deleteCard = useCallback(() => {
-    if (card) onDelete(card.id);
-  }, [card, onDelete]);
+    if (!card || isTrashMode) return;
+    onDelete(card.id);
+  }, [card, isTrashMode, onDelete]);
 
   const editCard = useCallback(() => {
-    if (card) onEdit(card);
-  }, [card, onEdit]);
+    if (!card || isTrashMode) return;
+    onEdit(card);
+  }, [card, isTrashMode, onEdit]);
 
   const toggleFavorite = useCallback(() => {
-    if (card) onToggleFavorite(card.id);
-  }, [card, onToggleFavorite]);
+    if (!card || isTrashMode) return;
+    onToggleFavorite(card.id);
+  }, [card, isTrashMode, onToggleFavorite]);
+
+  const restoreCard = useCallback(() => {
+    if (card) onRestore(card.id);
+  }, [card, onRestore]);
+
+  const purgeCard = useCallback(() => {
+    if (card) onPurge(card.id);
+  }, [card, onPurge]);
 
   const togglePasswordVisibility = useCallback(() => {
     setShowPassword((prev) => !prev);
@@ -90,5 +109,7 @@ export function useDetails({
     deleteCard,
     editCard,
     toggleFavorite,
+    restoreCard,
+    purgeCard,
   };
 }

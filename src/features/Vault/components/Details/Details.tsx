@@ -8,12 +8,23 @@ export type DetailsProps = {
   folders: Folder[];
   onEdit: (card: DataCard) => void;
   onDelete: (id: string) => void;
+  onRestore: (id: string) => void;
+  onPurge: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  isTrashMode: boolean;
 };
 
-export function Details({ card, folders, onEdit, onDelete, onToggleFavorite }: DetailsProps) {
+export function Details({ card, folders, onEdit, onDelete, onRestore, onPurge, onToggleFavorite, isTrashMode }: DetailsProps) {
   const { t } = useTranslation('Details');
-  const detailActions = useDetails({ card, onDelete, onEdit, onToggleFavorite });
+  const detailActions = useDetails({
+    card,
+    onDelete,
+    onEdit,
+    onRestore,
+    onPurge,
+    onToggleFavorite,
+    isTrashMode,
+  });
 
   const folderName = useMemo(() => {
     if (!card) return '';
@@ -37,15 +48,29 @@ export function Details({ card, folders, onEdit, onDelete, onToggleFavorite }: D
           <div className="muted">{updatedText}</div>
         </div>
         <div className="detail-actions">
-          <button className="btn btn-secondary" type="button" onClick={detailActions.toggleFavorite}>
-            {isFavorite ? t('action.unmarkFavorite') : t('action.markFavorite')}
-          </button>
-          <button className="btn btn-secondary" type="button" onClick={detailActions.editCard}>
-            {t('action.edit')}
-          </button>
-          <button className="btn btn-danger" type="button" onClick={detailActions.deleteCard}>
-            {t('action.delete')}
-          </button>
+          {!isTrashMode && (
+            <>
+              <button className="btn btn-secondary" type="button" onClick={detailActions.toggleFavorite}>
+                {isFavorite ? t('action.unmarkFavorite') : t('action.markFavorite')}
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={detailActions.editCard}>
+                {t('action.edit')}
+              </button>
+              <button className="btn btn-danger" type="button" onClick={detailActions.deleteCard}>
+                {t('action.delete')}
+              </button>
+            </>
+          )}
+          {isTrashMode && (
+            <>
+              <button className="btn btn-secondary" type="button" onClick={detailActions.restoreCard}>
+                {t('action.restore')}
+              </button>
+              <button className="btn btn-danger" type="button" onClick={detailActions.purgeCard}>
+                {t('action.purge')}
+              </button>
+            </>
+          )}
         </div>
       </div>
 

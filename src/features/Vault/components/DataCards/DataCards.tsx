@@ -173,9 +173,6 @@ export function DataCards({ viewModel }: DataCardsProps) {
     <div className="vault-panel-wrapper">
       <div className="datacards-header">
         <div className="vault-section-header">{t('label.dataCardsTitle')}</div>
-        <button className="btn btn-primary" type="button" onClick={viewModel.openCreateModal}>
-          {t('label.addDataCard')}
-        </button>
       </div>
 
       {cards.length === 0 ? (

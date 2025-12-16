@@ -25,12 +25,16 @@ import {
   mapUpdateCardToBackend,
 } from './types/mappers';
 import { CreateDataCardInput, DataCard, Folder, UpdateDataCardInput } from './types/ui';
+import { useToaster } from '../../components/Toaster';
+import { useTranslation } from '../../lib/i18n';
 
 export type SelectedNav = 'all' | 'favorites' | 'archive' | 'deleted' | { folderId: string };
 
 export type VaultError = { code: string; message?: string } | null;
 
 export function useVault(profileId: string, onLocked: () => void) {
+  const { show: showToast } = useToaster();
+  const { t: tCommon } = useTranslation('Common');
   const [folders, setFolders] = useState<Folder[]>([]);
   const [cards, setCards] = useState<DataCard[]>([]);
   const [deletedFolders, setDeletedFolders] = useState<Folder[]>([]);
@@ -44,20 +48,36 @@ export function useVault(profileId: string, onLocked: () => void) {
   const isTrashMode = selectedNav === 'deleted';
   const selectedFolderId = typeof selectedNav === 'object' ? selectedNav.folderId : null;
 
+  const mapErrorMessage = useCallback(
+    (code: string, fallback?: string) => {
+      switch (code) {
+        case 'NETWORK_ERROR':
+          return tCommon('error.network', { code });
+        case 'VALIDATION_ERROR':
+          return fallback ?? tCommon('error.operationFailed', { code });
+        default:
+          return fallback ?? tCommon('error.operationFailed', { code });
+      }
+    },
+    [tCommon]
+  );
+
   const handleError = useCallback(
     (err: any) => {
       const code = err?.code ?? err?.error ?? 'UNKNOWN';
-      const message = err?.message ?? String(err);
+      const rawMessage = err?.message ?? (typeof err === 'string' ? err : '');
 
       if (code === 'VAULT_LOCKED') {
         onLocked();
         return;
       }
 
+      const message = mapErrorMessage(code, rawMessage || undefined);
+      showToast(message);
       setError({ code, message });
       console.error(err);
     },
-    [onLocked]
+    [mapErrorMessage, onLocked, showToast]
   );
 
   const refreshActive = useCallback(async () => {
@@ -268,6 +288,9 @@ export function useVault(profileId: string, onLocked: () => void) {
     try {
       await lockVault();
     } catch (err) {
+      const code = (err as any)?.code ?? 'UNKNOWN';
+      const message = mapErrorMessage(code, (err as any)?.message ?? undefined);
+      showToast(message);
       console.error(err);
     }
     setFolders([]);
@@ -277,7 +300,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     setSelectedCardId(null);
     setSelectedNav('all');
     onLocked();
-  }, [onLocked]);
+    }, [mapErrorMessage, onLocked, showToast]);
 
   const visibleCards = useMemo(() => {
     const activeCards = cards.filter((card) => !card.deletedAt);
