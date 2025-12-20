@@ -3,6 +3,7 @@ import { useTranslation } from '../../../../lib/i18n';
 import { EyeIcon, EyeOffIcon } from '../../../../components/icons/EyeIcons';
 import { GenerateIcon } from '../../../../components/icons/GenerateIcon';
 import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
+import { useToaster } from '../../../../components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 
@@ -14,6 +15,7 @@ export type DataCardsProps = {
 export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
+  const { show: showToast } = useToaster();
   const {
     cards,
     selectedCardId,
@@ -76,11 +78,14 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   };
 
   const handleCopyGeneratedPassword = async () => {
-    if (!generatedPassword) return;
+    if (!generatedPassword || !generatedPassword.trim()) return;
+
     try {
       await navigator.clipboard.writeText(generatedPassword);
+      showToast(t('toast.copySuccess'), 'success');
     } catch (error) {
       console.error(error);
+      showToast(t('toast.copyError'), 'error');
     }
   };
 

@@ -50,5 +50,7 @@
   "generator.symbols": "Symbols (!@#$%...)",
   "generator.excludeSimilar": "Exclude similar characters (O, 0, I, 1, l)",
   "generator.use": "Use",
-  "generator.strengthLabel": "Strong ({{bits}} bits)"
+  "generator.strengthLabel": "Strong ({{bits}} bits)",
+  "toast.copySuccess": "Copied",
+  "toast.copyError": "Unable to copy"
 }
