@@ -5,9 +5,7 @@ mod commands;
 mod data {
     pub mod storage_paths;
     pub mod crypto {
-        pub mod cipher;
         pub mod kdf;
-        pub mod key_check;
     }
     pub mod profiles {
         pub mod paths;
@@ -19,6 +17,7 @@ mod data {
     pub mod sqlite {
         pub mod init;
         pub mod migrations;
+        pub mod pool;
         pub mod repo_impl;
     }
 }
@@ -36,7 +35,7 @@ use std::sync::Arc;
 
 use app_state::AppState;
 use commands::{datacards::*, folders::*, profiles::*, security::*, settings::*};
-use data::storage_paths::initialize_storage_paths;
+use data::storage_paths::StoragePaths;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
@@ -44,16 +43,19 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            if let Err(err) = initialize_storage_paths() {
-                app.dialog()
-                    .message(err.message())
-                    .title("Password Manager")
-                    .kind(MessageDialogKind::Error)
-                    .blocking_show();
-                std::process::exit(1);
-            }
+            let storage_paths = match StoragePaths::new() {
+                Ok(paths) => paths,
+                Err(err) => {
+                    app.dialog()
+                        .message(err.message())
+                        .title("Password Manager")
+                        .kind(MessageDialogKind::Error)
+                        .blocking_show();
+                    std::process::exit(1);
+                }
+            };
 
-            app.manage(Arc::new(AppState::new()));
+            app.manage(Arc::new(AppState::new(storage_paths)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -71,17 +73,18 @@ fn main() {
             create_folder,
             rename_folder,
             move_folder,
-            delete_folder,
-            list_deleted_folders,
-            restore_folder,
-            purge_folder,
+            delete_folder_only,
+            delete_folder_and_cards,
             list_datacards,
+            list_datacards_summary_command,
             get_datacard,
             create_datacard,
             update_datacard,
+            set_datacard_favorite,
             move_datacard_to_folder,
             delete_datacard,
             list_deleted_datacards,
+            list_deleted_datacards_summary_command,
             restore_datacard,
             purge_datacard,
             get_settings,

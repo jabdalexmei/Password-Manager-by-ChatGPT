@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::data::crypto::kdf::{hash_password, verify_password};
 use crate::data::profiles::paths::{ensure_profiles_dir, profile_config_path, registry_path};
+use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::ProfileMeta;
 
@@ -30,35 +31,42 @@ pub struct ProfileRegistry {
     pub profiles: Vec<ProfileRecord>,
 }
 
-fn load_registry() -> Result<ProfileRegistry> {
-    ensure_profiles_dir().map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
-    let path = registry_path();
+fn load_registry(sp: &StoragePaths) -> Result<ProfileRegistry> {
+    ensure_profiles_dir(sp).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
+    let path = registry_path(sp);
     if !path.exists() {
         return Ok(ProfileRegistry::default());
     }
-    let content = fs::read_to_string(path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+    let content =
+        fs::read_to_string(path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
     serde_json::from_str(&content).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_PARSE"))
 }
 
-fn save_registry(registry: &ProfileRegistry) -> Result<()> {
-    ensure_profiles_dir().map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
-    let path = registry_path();
+fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
+    ensure_profiles_dir(sp).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
+    let path = registry_path(sp);
     let serialized = serde_json::to_string_pretty(registry)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     fs::write(path, serialized).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
 }
 
-pub fn list_profiles() -> Result<Vec<ProfileMeta>> {
-    let registry = load_registry()?;
-    Ok(registry.profiles.into_iter().map(ProfileMeta::from).collect())
+pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
+    let registry = load_registry(sp)?;
+    Ok(registry
+        .profiles
+        .into_iter()
+        .map(ProfileMeta::from)
+        .collect())
 }
 
-pub fn create_profile(name: &str, password: Option<String>) -> Result<ProfileMeta> {
-    ensure_profiles_dir().map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
-    let mut registry = load_registry()?;
+pub fn create_profile(sp: &StoragePaths, name: &str, password: Option<String>) -> Result<ProfileMeta> {
+    ensure_profiles_dir(sp).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
+    let mut registry = load_registry(sp)?;
     let id = Uuid::new_v4().to_string();
     let password_hash = match password {
-        Some(pwd) if !pwd.is_empty() => Some(hash_password(&pwd).map_err(|_| ErrorCodeString::new("PASSWORD_HASH"))?),
+        Some(pwd) if !pwd.is_empty() => {
+            Some(hash_password(&pwd).map_err(|_| ErrorCodeString::new("PASSWORD_HASH"))?)
+        }
         _ => None,
     };
 
@@ -69,12 +77,12 @@ pub fn create_profile(name: &str, password: Option<String>) -> Result<ProfileMet
     };
 
     registry.profiles.push(record.clone());
-    save_registry(&registry)?;
+    save_registry(sp, &registry)?;
 
-    let profile_dir = crate::data::profiles::paths::profile_dir(&id);
+    let profile_dir = crate::data::profiles::paths::profile_dir(sp, &id);
     fs::create_dir_all(&profile_dir).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    let config_path: PathBuf = profile_config_path(&id);
+    let config_path: PathBuf = profile_config_path(sp, &id);
     let config = serde_json::json!({ "name": name });
     fs::write(config_path, serde_json::to_string_pretty(&config).unwrap())
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
@@ -82,25 +90,25 @@ pub fn create_profile(name: &str, password: Option<String>) -> Result<ProfileMet
     Ok(record.into())
 }
 
-pub fn delete_profile(id: &str) -> Result<bool> {
-    ensure_profiles_dir().map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
-    let mut registry = load_registry()?;
+pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
+    ensure_profiles_dir(sp).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
+    let mut registry = load_registry(sp)?;
     registry.profiles.retain(|p| p.id != id);
-    save_registry(&registry)?;
-    let dir = crate::data::profiles::paths::profile_dir(id);
+    save_registry(sp, &registry)?;
+    let dir = crate::data::profiles::paths::profile_dir(sp, id);
     if dir.exists() {
         let _ = fs::remove_dir_all(dir);
     }
     Ok(true)
 }
 
-pub fn get_profile(id: &str) -> Result<Option<ProfileRecord>> {
-    let registry = load_registry()?;
+pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>> {
+    let registry = load_registry(sp)?;
     Ok(registry.profiles.into_iter().find(|p| p.id == id))
 }
 
-pub fn verify_profile_password(id: &str, password: &str) -> Result<bool> {
-    let record = get_profile(id)?.ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+pub fn verify_profile_password(sp: &StoragePaths, id: &str, password: &str) -> Result<bool> {
+    let record = get_profile(sp, id)?.ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
     if let Some(hash) = record.password_hash {
         Ok(verify_password(password, &hash))
     } else {

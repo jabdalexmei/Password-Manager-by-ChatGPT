@@ -1,26 +1,29 @@
 :root {
   --font-body: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
 
-  --color-bg: #ffffff;
-  --color-surface: #111827;
-  --color-surface-2: #111827;
-  --color-border: rgba(148, 163, 184, 0.5);
+  --color-bg: #0b1222;
+  --color-surface-1: #0b1222;
+  --color-surface-2: #0f172a;
+  --color-surface-3: #111827;
+  --color-surface: var(--color-surface-3);
+  --color-border: #1f2937;
 
-  --color-input-bg: #242936;
+  --color-input-bg: var(--color-surface-2);
 
 
   --color-text: #e5e7eb;
   --color-text-muted: #9ca3c7;
 
-  --color-primary: #4f8bff;
-  --color-primary-strong: #3b82f6;
+  --color-primary: #2563eb;        /* blue-600 */
+  --color-primary-strong: #1d4ed8; /* blue-700 */
 
   --color-danger: #ef4444;
   --color-danger-strong: #dc2626;
 
   --color-success: #22c55e;
 
-  --radius-sm: 999px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
   --radius-md: 16px;
   --radius-lg: 24px;
 

@@ -43,7 +43,7 @@ const LogIn: React.FC<LogInProps> = ({
             <p className="profile-name">
               {profileName || t('unnamedProfile')}
             </p>
-            <p className="profile-id">ID: {profileId}</p>
+            <p className="profile-id">{t('label.profileId', { id: profileId })}</p>
           </div>
         </div>
 
