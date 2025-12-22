@@ -31,6 +31,7 @@
   "action.copy": "Copy",
   "action.reveal": "Reveal",
   "action.hide": "Hide",
+  "action.addFile": "Add file",
   "action.create": "Create",
   "action.cancel": "Cancel",
   "action.save": "Save",

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { EyeIcon, EyeOffIcon } from '../../../../components/icons/EyeIcons';
 import { GenerateIcon } from '../../../../components/icons/GenerateIcon';
+import { PaperclipIcon } from '../../icons/PaperclipIcon';
 import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
 import { useToaster } from '../../../../components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
@@ -287,13 +288,32 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
               />
             </div>
 
-            <div className="dialog-footer">
-              <button className="btn btn-secondary" type="button" onClick={onClose}>
-                {tCommon('action.cancel')}
+            <div className="dialog-attachments-row">
+              <button
+                className="btn btn-secondary btn-attach"
+                type="button"
+                onClick={() => {
+                  // UI-only requirement: for now just a stub handler if wiring is not ready.
+                  // If wiring exists: call your file picker + attachments flow.
+                }}
+              >
+                <PaperclipIcon />
+                {t('action.addFile')}
               </button>
-              <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
-                {submitLabel}
-              </button>
+            </div>
+
+            <div className="dialog-footer dialog-footer--split">
+              <div className="dialog-footer-left">
+                <button className="btn btn-secondary" type="button" onClick={onClose}>
+                  {tCommon('action.cancel')}
+                </button>
+              </div>
+
+              <div className="dialog-footer-right">
+                <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+                  {submitLabel}
+                </button>
+              </div>
             </div>
           </form>
         </div>

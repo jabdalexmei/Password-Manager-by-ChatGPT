@@ -313,6 +313,28 @@
   gap: 10px;
 }
 
+.dialog-footer--split {
+  justify-content: space-between;
+}
+
+.dialog-footer-left,
+.dialog-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dialog-attachments-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 4px;
+  margin-bottom: 10px;
+}
+
+.btn-attach {
+  padding: 10px 12px;
+}
+
 .generator-dialog {
   max-width: 640px;
   width: 100%;
