@@ -1,36 +1,17 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useDetails } from './useDetails';
-import { EyeIcon, EyeOffIcon } from '../../../../components/icons/EyeIcons';
-import { CopyIcon } from '../../icons/CopyIcon';
-import { PaperclipIcon } from '../../icons/PaperclipIcon';
+import {
+  IconAttachment,
+  IconCopy,
+  IconDelete,
+  IconDownload,
+  IconPreview,
+  IconPreviewOff,
+} from '@/components/lucide/icons';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import AttachmentPreviewModal from '../modals/AttachmentPreviewModal';
-
-const DownloadIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M12 3V15M12 15L7 10M12 15L17 10M5 21H19"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M3 6H21M9 6V4H15V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
 
 export type DetailsProps = {
   card: DataCard | null;
@@ -228,7 +209,7 @@ export function Details({
                 aria-label={t('action.copy')}
                 onClick={() => detailActions.copyToClipboard(card.username)}
               >
-                <CopyIcon />
+                <IconCopy />
               </button>
             </div>
           )}
@@ -247,7 +228,7 @@ export function Details({
                 aria-label={t('action.copy')}
                 onClick={() => detailActions.copyToClipboard(card.email)}
               >
-                <CopyIcon />
+                <IconCopy />
               </button>
             </div>
           )}
@@ -266,7 +247,7 @@ export function Details({
                 aria-label={t('action.copy')}
                 onClick={() => detailActions.copyToClipboard(card.url)}
               >
-                <CopyIcon />
+                <IconCopy />
               </button>
             </div>
           )}
@@ -285,7 +266,7 @@ export function Details({
                 aria-label={t('action.copy')}
                 onClick={() => detailActions.copyToClipboard(card.mobilePhone)}
               >
-                <CopyIcon />
+                <IconCopy />
               </button>
             </div>
           )}
@@ -304,7 +285,7 @@ export function Details({
                 aria-label={t('action.copy')}
                 onClick={() => detailActions.copyToClipboard(card.password, { isSecret: true })}
               >
-                <CopyIcon />
+                <IconCopy />
               </button>
               <button
                 className="icon-button"
@@ -312,7 +293,7 @@ export function Details({
                 aria-label={detailActions.showPassword ? t('action.hide') : t('action.reveal')}
                 onClick={detailActions.togglePasswordVisibility}
               >
-                {detailActions.showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                {detailActions.showPassword ? <IconPreviewOff /> : <IconPreview />}
               </button>
             </div>
           )}
@@ -331,7 +312,7 @@ export function Details({
                 aria-label={t('action.copy')}
                 onClick={() => detailActions.copyToClipboard(card.note)}
               >
-                <CopyIcon />
+                <IconCopy />
               </button>
             </div>
           )}
@@ -348,7 +329,7 @@ export function Details({
       <div className="detail-field attachments-panel">
         <div className="attachments-header">
           <div className="attachments-title">
-            <PaperclipIcon />
+            <IconAttachment />
             <span>{t('attachments.title')}</span>
           </div>
           {!isTrashMode && (
@@ -377,7 +358,7 @@ export function Details({
                     onClick={() => detailActions.onPreviewAttachment(attachment.id)}
                     aria-label={t('attachments.open')}
                   >
-                    <EyeIcon />
+                    <IconPreview />
                   </button>
                   <button
                     className="icon-button"
@@ -387,7 +368,7 @@ export function Details({
                     }
                     aria-label={t('attachments.download')}
                   >
-                    <DownloadIcon />
+                    <IconDownload />
                   </button>
                   <button
                     className="icon-button icon-button-danger"
@@ -395,7 +376,7 @@ export function Details({
                     onClick={() => setAttachmentToDelete(attachment.id)}
                     aria-label={t('attachments.delete')}
                   >
-                    <TrashIcon />
+                    <IconDelete />
                   </button>
                 </div>
               )}

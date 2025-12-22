@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
-import { EyeIcon, EyeOffIcon } from '../../../../components/icons/EyeIcons';
-import { GenerateIcon } from '../../../../components/icons/GenerateIcon';
-import { PaperclipIcon } from '../../icons/PaperclipIcon';
+import {
+  IconAttachment,
+  IconPreview,
+  IconPreviewOff,
+  IconRegenerate,
+} from '@/components/lucide/icons';
 import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
 import { useToaster } from '../../../../components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
@@ -224,7 +227,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                     onClick={openGenerator}
                     aria-label={t('action.openGenerator')}
                   >
-                    <GenerateIcon width={20} height={20} />
+                    <IconRegenerate />
                   </button>
                   <button
                     className="icon-button"
@@ -232,7 +235,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                     onClick={togglePasswordVisibility}
                     aria-label={t('action.togglePasswordVisibility')}
                   >
-                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    {showPassword ? <IconPreviewOff /> : <IconPreview />}
                   </button>
                 </div>
               </div>
@@ -300,7 +303,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
               <div className="dialog-attachments">
                 <div className="dialog-attachments-header">
                   <button className="btn btn-secondary btn-attach" type="button" onClick={handleAddAttachments}>
-                    <PaperclipIcon />
+                    <IconAttachment />
                     {t('attachments.add')}
                   </button>
                 </div>

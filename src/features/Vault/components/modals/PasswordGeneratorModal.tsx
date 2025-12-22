@@ -1,8 +1,7 @@
 import React from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { calculateStrengthBits, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
-import { CopyIcon } from '../../icons/CopyIcon';
-import { GenerateIcon } from '../../../../components/icons/GenerateIcon';
+import { IconCopy, IconRegenerate } from '@/components/lucide/icons';
 
 type PasswordGeneratorModalProps = {
   isOpen: boolean;
@@ -55,7 +54,7 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
               <input id="generated-password" className="input" value={generatedPassword} readOnly />
               <div className="input-actions">
                 <button className="icon-button" type="button" aria-label={t('action.copy')} onClick={() => void onCopy()}>
-                  <CopyIcon />
+                  <IconCopy />
                 </button>
                 <button
                   className="icon-button icon-button-primary"
@@ -63,7 +62,7 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
                   aria-label={t('generator.regenerate')}
                   onClick={onRegenerate}
                 >
-                  <GenerateIcon width={20} height={20} />
+                  <IconRegenerate />
                 </button>
               </div>
             </div>

@@ -8,11 +8,13 @@
     "build": "vite build",
     "tauri": "tauri dev",
     "tauri:dev": "tauri dev",
-    "theme:check": "node scripts/check-theme-colors.mjs"
+    "theme:check": "node scripts/check-theme-colors.mjs",
+    "icons:check": "node scripts/check-no-inline-svg.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
+    "lucide-react": "^0.562.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
