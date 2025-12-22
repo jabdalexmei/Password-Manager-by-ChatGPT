@@ -46,9 +46,9 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .on_window_event(|event| match event.event() {
+        .on_window_event(|window, event| match event {
             WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
-                let app_state = event.window().state::<Arc<AppState>>().inner().clone();
+                let app_state = window.state::<Arc<AppState>>().inner().clone();
                 let _ = security_service::auto_lock_cleanup(&app_state);
             }
             _ => {}

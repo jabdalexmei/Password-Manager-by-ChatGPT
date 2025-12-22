@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use rusqlite::{DatabaseName, OwnedData};
+use rusqlite::serialize::OwnedData;
+use rusqlite::DatabaseName;
 use zeroize::Zeroizing;
 
 use crate::app_state::AppState;
