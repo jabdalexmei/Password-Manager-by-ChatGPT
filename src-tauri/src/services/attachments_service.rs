@@ -235,8 +235,10 @@ pub fn open_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
         &output_bytes,
     )?;
 
+    let preview_path_str = preview_path.to_string_lossy().into_owned();
+
     app.opener()
-        .open_path(preview_path, None)
+        .open_path(preview_path_str, None)
         .map_err(|_| ErrorCodeString::new("ATTACHMENT_OPEN_FAILED"))
 }
 
