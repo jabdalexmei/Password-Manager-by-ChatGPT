@@ -1,213 +1,66 @@
+One TS (EN): Fix build error by removing anyhow usage in security_service.rs
+Goal
 
+Fix Rust compilation errors related to missing anyhow crate by aligning the helper function with the project’s existing error type crate::error::Result<T>.
 
-## 1) `cipher.rs`: Key без generic + nonce по ссылке/значению
+File
 
-### Файл: `src-tauri/src/data/crypto/cipher.rs`
+src-tauri/src/services/security_service.rs
 
-#### A) Исправь создание cipher/key (убери `Key::<XChaCha20Poly1305>`)
+Required change
+1) Replace helper signature and error construction
 
-**Было (как у тебя по ошибке):**
+Find and replace this function:
 
-```rust
-let key = Key::<XChaCha20Poly1305>::from_slice(key);
-let cipher = XChaCha20Poly1305::new(key);
-```
+Before
 
-**Стало (корректно для chacha20poly1305 0.10.x):**
+fn owned_data_from_bytes(bytes: Vec<u8>) -> anyhow::Result<OwnedData> {
+    if bytes.is_empty() {
+        return Err(anyhow::anyhow!("EMPTY_SERIALIZED_DB"));
+    }
 
-```rust
-use chacha20poly1305::aead::{Aead, KeyInit, Payload};
-use chacha20poly1305::{XChaCha20Poly1305, XNonce};
+    let sz = bytes.len();
+    let ptr = unsafe { ffi::sqlite3_malloc64(sz as u64) as *mut u8 };
 
-let cipher = XChaCha20Poly1305::new_from_slice(key)
-    .map_err(|_| anyhow::anyhow!("INVALID_KEY_LEN"))?;
-```
+    let nn = NonNull::new(ptr).ok_or_else(|| anyhow::anyhow!("SQLITE_OOM"))?;
 
-> `new_from_slice()` избавляет от проблемы с `Key`-type-alias (у него реально **нет** generic параметров в 0.10.x).
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), nn.as_ptr(), sz);
+        Ok(OwnedData::from_raw_nonnull(nn, sz))
+    }
+}
 
-#### B) Исправь split/pack nonce: `from_slice()` возвращает **ссылку**, а тебе нужно **значение**
 
-У тебя ошибка:
+After
 
-* expected `GenericArray...`, found `&GenericArray...`
+fn owned_data_from_bytes(bytes: Vec<u8>) -> Result<OwnedData> {
+    if bytes.is_empty() {
+        return Err(ErrorCodeString::new("EMPTY_SERIALIZED_DB"));
+    }
 
-Значит где-то примерно так:
+    let sz = bytes.len();
+    let ptr = unsafe { ffi::sqlite3_malloc64(sz as u64) as *mut u8 };
 
-```rust
-let nonce = XNonce::from_slice(&buf[start..end]);
-Ok((nonce, ciphertext)) // nonce = &XNonce
-```
+    let nn = NonNull::new(ptr).ok_or_else(|| ErrorCodeString::new("SQLITE_OOM"))?;
 
-**Исправление:**
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), nn.as_ptr(), sz);
+        Ok(OwnedData::from_raw_nonnull(nn, sz))
+    }
+}
 
-```rust
-let nonce = XNonce::from_slice(&buf[start..end]).clone();
-Ok((nonce, ciphertext))
-```
+2) Update the call site (optional simplification)
 
-(Если `clone()` вдруг не подходит — можно `let nonce = *XNonce::from_slice(...);` но `clone()` надёжнее.)
+You currently have:
 
-#### C) `decrypt()` ждёт `&nonce`, а ты передаёшь nonce по значению
+let owned =
+    owned_data_from_bytes(decrypted).map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
-Ошибка:
 
-* expected `&GenericArray...`, found `GenericArray...`
+This can stay as-is (it will compile), or be simplified to:
 
-**Было:**
+let owned = owned_data_from_bytes(decrypted)?;
 
-```rust
-cipher.decrypt(
-    nonce,
-    Payload { msg: &ciphertext, aad },
-)
-```
+Acceptance criteria
 
-**Стало:**
-
-```rust
-cipher.decrypt(
-    &nonce,
-    Payload { msg: &ciphertext, aad },
-)
-```
-
-То же самое правило для `encrypt()` — обычно туда тоже передают `&nonce`.
-
----
-
-## 2) `rusqlite`: `serialize/deserialize` больше не принимает `"main"` строкой
-
-### Файл: `src-tauri/src/data/sqlite/init.rs`
-
-Ошибка:
-
-* `.serialize("main")` ожидает `DatabaseName`
-
-**Было:**
-
-```rust
-.serialize("main")
-```
-
-**Стало:**
-
-```rust
-use rusqlite::DatabaseName;
-
-.serialize(DatabaseName::Main)
-```
-
----
-
-## 3) `r2d2_sqlite`: нет `new_with_flags`, нужно `file(...).with_flags(...)`
-
-### Файл: `src-tauri/src/data/sqlite/pool.rs`
-
-Ошибка:
-
-* `SqliteConnectionManager::new_with_flags` не существует
-
-**Было:**
-
-```rust
-let manager = SqliteConnectionManager::new_with_flags(uri, flags);
-```
-
-**Стало:**
-
-```rust
-let manager = SqliteConnectionManager::file(uri).with_flags(flags);
-```
-
-Да, даже если `uri` у тебя вида `file:...?...`, это ок **при условии**, что в `flags` включён `OpenFlags::SQLITE_OPEN_URI` (иначе SQLite не воспримет строку как URI).
-
----
-
-## 4) `AppHandle.state()` не виден: не импортирован `tauri::Manager`
-
-### Файл: `src-tauri/src/services/attachments_service.rs`
-
-Ошибка:
-
-* method `state` not found; “trait Manager is not in scope”
-
-**Добавь в начало файла:**
-
-```rust
-use tauri::Manager;
-```
-
-(Либо используй `try_state`, но правильнее просто импортировать `Manager`.)
-
----
-
-## 5) `rusqlite::deserialize`: теперь требует `DatabaseName`, `OwnedData`, `bool`
-
-### Файл: `src-tauri/src/services/security_service.rs`
-
-Ошибка:
-
-* `deserialize("main", &decrypted)` → неправильные аргументы
-* не хватает bool
-* ждёт `OwnedData`, а не `&Vec<u8>`
-
-**Было (как по ошибке):**
-
-```rust
-conn.deserialize("main", &decrypted)
-```
-
-**Стало:**
-
-```rust
-use rusqlite::{DatabaseName, OwnedData};
-
-let owned: OwnedData = decrypted.into(); // decrypted: Vec<u8>
-conn.deserialize(DatabaseName::Main, owned, false)?;
-```
-
-> Если `decrypted.into()` вдруг не скомпилится (редко, но бывает), замени строку на явный конструктор, который есть в твоей версии `rusqlite`:
-
-```rust
-let owned = OwnedData::new(decrypted);
-```
-
-(Выбираешь тот вариант, который компилируется — но **смысл один**: Vec<u8> → OwnedData.)
-
-### Там же: serialize на lock
-
-Ошибка:
-
-* `.serialize("main")`
-
-**Исправь аналогично:**
-
-```rust
-use rusqlite::DatabaseName;
-
-.serialize(DatabaseName::Main)
-```
-
----
-
-## 6) Warning: unused variable `key` (не критично, но лучше убрать)
-
-### Файл: `src-tauri/src/services/security_service.rs`
-
-**Было:**
-
-```rust
-let key = state.vault_key.lock().unwrap();
-```
-
-**Стало (если реально не используешь):**
-
-```rust
-let _key = state.vault_key.lock().unwrap();
-```
-
----
-
-После этих правок сборка должна пройти дальше, и если вылезут новые ошибки — они уже будут “следующего слоя” (диалоги файлов, пути, права, etc.), а не API-несовместимость.
-
-Дальше логично: раз ты сказал “совместимость не нужна со старыми профилями” — можно жёстко требовать наличие `kdf_salt.bin/key_check.bin` для protected и убрать `password_hash` (как мы обсуждали) — но это уже отдельный чёткий проход по моделям registry.
+cargo build succeeds in src-tauri without anyhow-related errors.
