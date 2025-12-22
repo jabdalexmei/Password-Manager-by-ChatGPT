@@ -1,5 +1,5 @@
 use chacha20poly1305::aead::{Aead, KeyInit};
-use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
+use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use zeroize::Zeroizing;
@@ -12,20 +12,19 @@ pub const PM_ENC_VERSION: u8 = 1;
 pub const KEY_LEN: usize = 32;
 pub const NONCE_LEN: usize = 24;
 
-fn new_cipher(key: &[u8; KEY_LEN]) -> XChaCha20Poly1305 {
-    let key = Key::<XChaCha20Poly1305>::from_slice(key);
-    XChaCha20Poly1305::new(key)
+fn new_cipher(key: &[u8; KEY_LEN]) -> Result<XChaCha20Poly1305> {
+    XChaCha20Poly1305::new_from_slice(key).map_err(|_| ErrorCodeString::new("INVALID_KEY_LEN"))
 }
 
 pub fn encrypt_bytes(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
-    let cipher = new_cipher(key);
+    let cipher = new_cipher(key)?;
     let mut nonce_bytes = [0u8; NONCE_LEN];
     OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = XNonce::from_slice(&nonce_bytes);
 
     let ciphertext = cipher
         .encrypt(
-            nonce,
+            &nonce,
             chacha20poly1305::aead::Payload {
                 aad,
                 msg: plaintext,
@@ -60,17 +59,17 @@ fn parse_blob(blob: &[u8]) -> Result<(XNonce, &[u8])> {
     }
 
     let (nonce_bytes, ciphertext) = rest.split_at(NONCE_LEN);
-    let nonce = XNonce::from_slice(nonce_bytes);
+    let nonce = XNonce::from_slice(nonce_bytes).clone();
     Ok((nonce, ciphertext))
 }
 
 pub fn decrypt_bytes(key: &[u8; KEY_LEN], aad: &[u8], blob: &[u8]) -> Result<Vec<u8>> {
-    let cipher = new_cipher(key);
+    let cipher = new_cipher(key)?;
     let (nonce, ciphertext) = parse_blob(blob)?;
 
     cipher
         .decrypt(
-            nonce,
+            &nonce,
             chacha20poly1305::aead::Payload {
                 aad,
                 msg: ciphertext,

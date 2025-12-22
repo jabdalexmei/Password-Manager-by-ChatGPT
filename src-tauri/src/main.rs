@@ -39,12 +39,20 @@ use std::sync::Arc;
 use app_state::AppState;
 use commands::{attachments::*, datacards::*, folders::*, profiles::*, security::*, settings::*};
 use data::storage_paths::StoragePaths;
-use tauri::Manager;
+use services::security_service;
+use tauri::{Manager, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .on_window_event(|event| match event.event() {
+            WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
+                let app_state = event.window().state::<Arc<AppState>>().inner().clone();
+                let _ = security_service::auto_lock_cleanup(&app_state);
+            }
+            _ => {}
+        })
         .setup(|app| {
             let storage_paths = match StoragePaths::new() {
                 Ok(paths) => paths,

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use rusqlite::{DatabaseName, OwnedData};
 use zeroize::Zeroizing;
 
 use crate::app_state::AppState;
@@ -43,7 +44,8 @@ fn open_protected_vault_session(
         | rusqlite::OpenFlags::SQLITE_OPEN_SHARED_CACHE;
     let conn = rusqlite::Connection::open_with_flags(&uri, flags)
         .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-    conn.deserialize("main", &decrypted)
+    let owned: OwnedData = decrypted.into();
+    conn.deserialize(DatabaseName::Main, owned, false)
         .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
     migrations::migrate_to_latest(&conn)?;
@@ -103,7 +105,7 @@ fn persist_active_vault(state: &Arc<AppState>) -> Result<()> {
 
         if let (Some(conn), Some(key_material)) = (keeper_guard.as_ref(), key_copy) {
             let bytes = conn
-                .serialize("main")
+                .serialize(DatabaseName::Main)
                 .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
             let encrypted = cipher::encrypt_vault_blob(&id, &key_material, &bytes)?;
             cipher::write_encrypted_file(&vault_db_path(&state.storage_paths, &id), &encrypted)?;
@@ -127,7 +129,7 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
             .vault_keeper_conn
             .lock()
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-        let key = state
+        let _key = state
             .vault_key
             .lock()
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?

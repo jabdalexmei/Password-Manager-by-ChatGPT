@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use tauri::AppHandle;
+use tauri::Manager;
 use uuid::Uuid;
 
 use crate::app_state::AppState;

@@ -88,7 +88,7 @@ fn get_or_create_pool(
                 | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
                 | rusqlite::OpenFlags::SQLITE_OPEN_URI
                 | rusqlite::OpenFlags::SQLITE_OPEN_SHARED_CACHE;
-            let manager = SqliteConnectionManager::new_with_flags(uri, flags);
+            let manager = SqliteConnectionManager::file(uri).with_flags(flags);
             r2d2::Pool::builder()
                 .max_size(8)
                 .min_idle(Some(4))
