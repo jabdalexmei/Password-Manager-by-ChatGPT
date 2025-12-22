@@ -63,7 +63,7 @@ fn open_protected_vault_session(
         | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
         | rusqlite::OpenFlags::SQLITE_OPEN_URI
         | rusqlite::OpenFlags::SQLITE_OPEN_SHARED_CACHE;
-    let conn = rusqlite::Connection::open_with_flags(&uri, flags)
+    let mut conn = rusqlite::Connection::open_with_flags(&uri, flags)
         .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
     let owned = owned_data_from_bytes(decrypted)?;
     conn.deserialize(DatabaseName::Main, owned, false)
