@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Attachment, DataCard } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useToaster } from '../../../../components/Toaster';
-import { open } from '@tauri-apps/api/dialog';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
   addAttachmentFromPath,
   listAttachments,
