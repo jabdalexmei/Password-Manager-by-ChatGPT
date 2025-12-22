@@ -29,6 +29,12 @@ pub fn key_check_path(sp: &StoragePaths, profile_id: &str) -> PathBuf {
     profile_dir(sp, profile_id).join("key_check.bin")
 }
 
+pub fn attachment_file_path(sp: &StoragePaths, profile_id: &str, attachment_id: &str) -> PathBuf {
+    profile_dir(sp, profile_id)
+        .join("attachments")
+        .join(format!("{attachment_id}.bin"))
+}
+
 pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> PathBuf {
     profile_dir(sp, profile_id).join("user_settings.json")
 }

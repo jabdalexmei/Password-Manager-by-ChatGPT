@@ -75,6 +75,17 @@ export type BackendUpdateDataCardInput = BackendCreateDataCardInput & {
   id: string;
 };
 
+export type BackendAttachmentMeta = {
+  id: string;
+  datacard_id: string;
+  file_name: string;
+  mime_type: string | null;
+  byte_size: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
 export type BackendUserSettings = {
   auto_hide_secret_timeout_seconds: number;
   auto_lock_enabled: boolean;

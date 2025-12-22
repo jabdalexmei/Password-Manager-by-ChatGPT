@@ -7,6 +7,7 @@ use crate::data::crypto::{cipher, kdf, key_check};
 use crate::data::profiles::paths::{kdf_salt_path, vault_db_path};
 use crate::data::profiles::registry;
 use crate::data::sqlite::init::init_database_passwordless;
+use crate::data::sqlite::migrations;
 use crate::data::sqlite::pool::clear_pool;
 use crate::error::{ErrorCodeString, Result};
 
@@ -45,6 +46,8 @@ fn open_protected_vault_session(
     conn.deserialize("main", &decrypted)
         .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
+    migrations::migrate_to_latest(&conn)?;
+
     if let Ok(mut keeper) = state.vault_keeper_conn.lock() {
         *keeper = Some(conn);
     }
@@ -62,7 +65,7 @@ pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) ->
     let profile = registry::get_profile(&state.storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
     let pwd = password.unwrap_or_default();
-    let is_passwordless = profile.password_hash.is_none();
+    let is_passwordless = !profile.has_password;
 
     if is_passwordless {
         init_database_passwordless(&state.storage_paths, id)?;
@@ -79,6 +82,37 @@ pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) ->
     Ok(true)
 }
 
+fn persist_active_vault(state: &Arc<AppState>) -> Result<()> {
+    let profile_id = state
+        .logged_in_profile
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+        .clone();
+
+    if let Some(id) = profile_id {
+        let keeper_guard = state
+            .vault_keeper_conn
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        let key_copy = state
+            .vault_key
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+            .as_ref()
+            .map(|k| **k);
+
+        if let (Some(conn), Some(key_material)) = (keeper_guard.as_ref(), key_copy) {
+            let bytes = conn
+                .serialize("main")
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            let encrypted = cipher::encrypt_vault_blob(&id, &key_material, &bytes)?;
+            cipher::write_encrypted_file(&vault_db_path(&state.storage_paths, &id), &encrypted)?;
+        }
+    }
+
+    Ok(())
+}
+
 pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
     let profile_id = state
         .logged_in_profile
@@ -87,6 +121,8 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
         .clone();
 
     if let Some(id) = profile_id {
+        persist_active_vault(state)?;
+
         let mut keeper = state
             .vault_keeper_conn
             .lock()
@@ -97,12 +133,8 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
             .take();
 
-        if let (Some(conn), Some(key_material)) = (keeper.take(), key) {
-            let bytes = conn
-                .serialize("main")
-                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-            let encrypted = cipher::encrypt_vault_blob(&id, &key_material, &bytes)?;
-            cipher::write_encrypted_file(&vault_db_path(&state.storage_paths, &id), &encrypted)?;
+        if let Some(conn) = keeper.take() {
+            drop(conn);
         }
 
         clear_pool(&id);
@@ -130,7 +162,7 @@ pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
 }
 
 pub fn auto_lock_cleanup(state: &Arc<AppState>) -> Result<bool> {
-    // For step 1, reuse is_logged_in flag. Real auto-lock timer can be added later.
+    persist_active_vault(state)?;
     is_logged_in(state)
 }
 

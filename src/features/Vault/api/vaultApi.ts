@@ -4,6 +4,7 @@ import {
   BackendDataCard,
   BackendDataCardSummary,
   BackendFolder,
+  BackendAttachmentMeta,
   BackendUpdateDataCardInput,
   BackendUserSettings,
 } from '../types/backend';
@@ -70,4 +71,30 @@ export async function purgeDataCard(id: string): Promise<boolean> {
 
 export async function getSettings(): Promise<BackendUserSettings> {
   return invoke('get_settings');
+}
+
+export async function listAttachments(datacardId: string): Promise<BackendAttachmentMeta[]> {
+  return invoke('list_attachments', { datacardId });
+}
+
+export async function addAttachmentFromPath(
+  datacardId: string,
+  sourcePath: string
+): Promise<BackendAttachmentMeta> {
+  return invoke('add_attachment_from_path', { datacardId, sourcePath });
+}
+
+export async function removeAttachment(attachmentId: string): Promise<void> {
+  return invoke('remove_attachment', { attachmentId });
+}
+
+export async function purgeAttachment(attachmentId: string): Promise<void> {
+  return invoke('purge_attachment', { attachmentId });
+}
+
+export async function saveAttachmentToPath(
+  attachmentId: string,
+  targetPath: string
+): Promise<void> {
+  return invoke('save_attachment_to_path', { attachmentId, targetPath });
 }

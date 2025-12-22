@@ -83,6 +83,12 @@ export function Details({
       : '••••••••••••'
     : '';
 
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <div className="vault-panel-wrapper">
       {informationTitle}
@@ -284,6 +290,38 @@ export function Details({
         <div className="detail-label">{t('label.tags')}</div>
         <div className="detail-value-box">
           <div className="detail-value-text">{card.tags && card.tags.length > 0 ? card.tags.join(', ') : ''}</div>
+        </div>
+      </div>
+
+      <div className="detail-field">
+        <div className="detail-label">{t('attachments.title')}</div>
+        <div className="detail-value-box detail-value-multiline">
+          <div className="detail-value-text detail-value-text-multiline">
+            {detailActions.attachments.length === 0 && <div className="muted">{t('attachments.empty')}</div>}
+            {detailActions.attachments.map((attachment) => (
+              <div key={attachment.id} className="attachment-row">
+                <span>
+                  {attachment.fileName} ({formatSize(attachment.byteSize)})
+                </span>
+                {!isTrashMode && (
+                  <button
+                    className="btn btn-link"
+                    type="button"
+                    onClick={() => detailActions.onRemoveAttachment(attachment.id)}
+                  >
+                    {t('attachments.remove')}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          {!isTrashMode && (
+            <div className="detail-value-actions">
+              <button className="btn btn-secondary" type="button" onClick={detailActions.onAddAttachment}>
+                {t('attachments.add')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
       </div>

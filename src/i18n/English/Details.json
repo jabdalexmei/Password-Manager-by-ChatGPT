@@ -29,5 +29,13 @@
   "dialog.delete.confirm": "Delete",
   "dialog.purge.title": "Purge card",
   "dialog.purge.message": "This will permanently delete the card. Continue?",
-  "dialog.purge.confirm": "Purge"
+  "dialog.purge.confirm": "Purge",
+  "attachments.title": "Attachments",
+  "attachments.empty": "No attachments",
+  "attachments.add": "Add file",
+  "attachments.remove": "Remove",
+  "toast.attachmentAddSuccess": "Attachment added",
+  "toast.attachmentAddError": "Unable to add attachment",
+  "toast.attachmentRemoveError": "Unable to remove attachment",
+  "toast.attachmentLoadError": "Unable to load attachments"
 }

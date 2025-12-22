@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::data::crypto::kdf::{derive_master_key, hash_password};
+use crate::data::crypto::kdf::derive_master_key;
 use crate::data::crypto::key_check;
 use crate::data::profiles::paths::{
     ensure_profiles_dir, kdf_salt_path, profile_config_path, registry_path,
@@ -17,7 +17,7 @@ use zeroize::Zeroizing;
 pub struct ProfileRecord {
     pub id: String,
     pub name: String,
-    pub password_hash: Option<String>,
+    pub has_password: bool,
 }
 
 impl From<ProfileRecord> for ProfileMeta {
@@ -25,7 +25,7 @@ impl From<ProfileRecord> for ProfileMeta {
         ProfileMeta {
             id: value.id,
             name: value.name,
-            has_password: value.password_hash.is_some(),
+            has_password: value.has_password,
         }
     }
 }
@@ -71,15 +71,12 @@ pub fn create_profile(
     ensure_profiles_dir(sp).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
     let mut registry = load_registry(sp)?;
     let id = Uuid::new_v4().to_string();
-    let password_hash = match password {
-        Some(pwd) if !pwd.is_empty() => Some(hash_password(&pwd)?),
-        _ => None,
-    };
+    let has_password = password.as_ref().map(|p| !p.is_empty()).unwrap_or(false);
 
     let record = ProfileRecord {
         id: id.clone(),
         name: name.to_string(),
-        password_hash,
+        has_password,
     };
 
     registry.profiles.push(record.clone());
@@ -115,7 +112,7 @@ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>>
 
 pub fn verify_profile_password(sp: &StoragePaths, id: &str, password: &str) -> Result<bool> {
     let record = get_profile(sp, id)?.ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
-    if record.password_hash.is_none() {
+    if !record.has_password {
         return Ok(true);
     }
 

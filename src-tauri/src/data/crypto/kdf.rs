@@ -1,4 +1,3 @@
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::{Algorithm, Argon2, Params, Version};
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -36,20 +35,4 @@ pub fn derive_master_key(password: &str, salt: &[u8]) -> Result<[u8; DERIVED_KEY
         .hash_password_into(password.as_bytes(), salt, &mut output[..])
         .map_err(|_| ErrorCodeString::new("PASSWORD_HASH"))?;
     Ok(*output)
-}
-
-pub fn hash_password(password: &str) -> Result<String> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = argon2_instance()?;
-    let password_hash = argon2
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|_| ErrorCodeString::new("PASSWORD_HASH"))?
-        .to_string();
-    Ok(password_hash)
-}
-
-pub fn verify_password(password: &str, hash: &str) -> Result<bool> {
-    let parsed = PasswordHash::new(hash).map_err(|_| ErrorCodeString::new("PASSWORD_VERIFY"))?;
-    let argon2 = argon2_instance()?;
-    Ok(argon2.verify_password(password.as_bytes(), &parsed).is_ok())
 }

@@ -1,6 +1,9 @@
+use chrono::Utc;
+use std::fs;
 use std::sync::Arc;
 
 use crate::app_state::AppState;
+use crate::data::profiles::paths::attachment_file_path;
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::settings_service::get_settings;
@@ -102,9 +105,12 @@ pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     let settings = get_settings(&state.storage_paths, &profile_id)?;
     if settings.soft_delete_enabled {
-        repo_impl::soft_delete_datacard(state, &profile_id, &id)
+        let now = Utc::now().to_rfc3339();
+        repo_impl::soft_delete_datacard(state, &profile_id, &id)?;
+        repo_impl::soft_delete_attachments_by_datacard(state, &profile_id, &id, &now)?;
+        Ok(true)
     } else {
-        repo_impl::purge_datacard(state, &profile_id, &id)
+        purge_datacard_with_attachments(state, &profile_id, &id)
     }
 }
 
@@ -120,12 +126,34 @@ pub fn list_deleted_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataC
 
 pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::restore_datacard(state, &profile_id, &id)
+    repo_impl::restore_datacard(state, &profile_id, &id)?;
+    repo_impl::restore_attachments_by_datacard(state, &profile_id, &id)?;
+    Ok(true)
 }
 
 pub fn purge_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::purge_datacard(state, &profile_id, &id)
+    purge_datacard_with_attachments(state, &profile_id, &id)
+}
+
+fn purge_datacard_with_attachments(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    id: &str,
+) -> Result<bool> {
+    let attachments = repo_impl::list_all_attachments_by_datacard(state, profile_id, id)?;
+    for attachment in attachments {
+        let file_path = attachment_file_path(&state.storage_paths, profile_id, &attachment.id);
+        let _ = fs::remove_file(file_path);
+        if let Err(err) = repo_impl::purge_attachment(state, profile_id, &attachment.id) {
+            if err.code == "ATTACHMENT_NOT_FOUND" {
+                continue;
+            }
+            return Err(err);
+        }
+    }
+
+    repo_impl::purge_datacard(state, profile_id, id)
 }
 
 pub fn set_datacard_favorite(

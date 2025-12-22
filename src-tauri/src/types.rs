@@ -7,6 +7,18 @@ pub struct ProfileMeta {
     pub has_password: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AttachmentMeta {
+    pub id: String,
+    pub datacard_id: String,
+    pub file_name: String,
+    pub mime_type: Option<String>,
+    pub byte_size: i64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProfilesList {
     pub profiles: Vec<ProfileMeta>,

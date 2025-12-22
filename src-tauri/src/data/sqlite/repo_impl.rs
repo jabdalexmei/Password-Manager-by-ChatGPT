@@ -3,6 +3,7 @@ use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::params;
 use rusqlite::types::Type;
+use rusqlite::OptionalExtension;
 use uuid::Uuid;
 
 use super::pool::{self, DbTarget};
@@ -10,8 +11,8 @@ use crate::app_state::AppState;
 use crate::data::profiles::paths::vault_db_path;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::{
-    BankCard, CreateDataCardInput, DataCard, DataCardSummary, Folder, SetDataCardFavoriteInput,
-    UpdateDataCardInput,
+    AttachmentMeta, BankCard, CreateDataCardInput, DataCard, DataCardSummary, Folder,
+    SetDataCardFavoriteInput, UpdateDataCardInput,
 };
 
 use std::sync::Arc;
@@ -99,6 +100,19 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
         is_favorite,
+    })
+}
+
+fn map_attachment(row: &rusqlite::Row) -> rusqlite::Result<AttachmentMeta> {
+    Ok(AttachmentMeta {
+        id: row.get("id")?,
+        datacard_id: row.get("datacard_id")?,
+        file_name: row.get("file_name")?,
+        mime_type: row.get("mime_type")?,
+        byte_size: row.get("byte_size")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        deleted_at: row.get("deleted_at")?,
     })
 }
 
@@ -531,4 +545,157 @@ pub fn purge_datacards_in_folder(
     )
     .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     Ok(true)
+}
+
+pub fn insert_attachment(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    meta: &AttachmentMeta,
+) -> Result<()> {
+    let conn = open_connection(state, profile_id)?;
+    conn.execute(
+        "INSERT INTO attachments (id, datacard_id, file_name, mime_type, byte_size, created_at, updated_at, deleted_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            meta.id,
+            meta.datacard_id,
+            meta.file_name,
+            meta.mime_type,
+            meta.byte_size,
+            meta.created_at,
+            meta.updated_at,
+            meta.deleted_at
+        ],
+    )
+    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(())
+}
+
+pub fn list_attachments_by_datacard(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    datacard_id: &str,
+) -> Result<Vec<AttachmentMeta>> {
+    let conn = open_connection(state, profile_id)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT * FROM attachments WHERE datacard_id = ?1 AND deleted_at IS NULL ORDER BY created_at DESC",
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let rows = stmt
+        .query_map(params![datacard_id], map_attachment)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(rows)
+}
+
+pub fn list_all_attachments_by_datacard(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    datacard_id: &str,
+) -> Result<Vec<AttachmentMeta>> {
+    let conn = open_connection(state, profile_id)?;
+    let mut stmt = conn
+        .prepare("SELECT * FROM attachments WHERE datacard_id = ?1")
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let rows = stmt
+        .query_map(params![datacard_id], map_attachment)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(rows)
+}
+
+pub fn soft_delete_attachments_by_datacard(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    datacard_id: &str,
+    deleted_at: &str,
+) -> Result<()> {
+    let conn = open_connection(state, profile_id)?;
+    conn.execute(
+        "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE datacard_id = ?3",
+        params![deleted_at, deleted_at, datacard_id],
+    )
+    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    Ok(())
+}
+
+pub fn restore_attachments_by_datacard(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    datacard_id: &str,
+) -> Result<()> {
+    let conn = open_connection(state, profile_id)?;
+    conn.execute(
+        "UPDATE attachments SET deleted_at = NULL, updated_at = ?1 WHERE datacard_id = ?2",
+        params![Utc::now().to_rfc3339(), datacard_id],
+    )
+    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    Ok(())
+}
+
+pub fn get_attachment(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    attachment_id: &str,
+) -> Result<Option<AttachmentMeta>> {
+    let conn = open_connection(state, profile_id)?;
+    let mut stmt = conn
+        .prepare("SELECT * FROM attachments WHERE id = ?1")
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let meta = stmt
+        .query_row(params![attachment_id], map_attachment)
+        .optional()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(meta)
+}
+
+pub fn soft_delete_attachment(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    attachment_id: &str,
+    deleted_at: &str,
+) -> Result<()> {
+    let conn = open_connection(state, profile_id)?;
+    let updated = conn
+        .execute(
+            "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
+            params![deleted_at, deleted_at, attachment_id],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    if updated == 0 {
+        return Err(ErrorCodeString::new("ATTACHMENT_NOT_FOUND"));
+    }
+
+    Ok(())
+}
+
+pub fn purge_attachment(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    attachment_id: &str,
+) -> Result<()> {
+    let conn = open_connection(state, profile_id)?;
+    let updated = conn
+        .execute(
+            "DELETE FROM attachments WHERE id = ?1",
+            params![attachment_id],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    if updated == 0 {
+        return Err(ErrorCodeString::new("ATTACHMENT_NOT_FOUND"));
+    }
+
+    Ok(())
 }

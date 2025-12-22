@@ -25,6 +25,7 @@ mod data {
 }
 mod error;
 mod services {
+    pub mod attachments_service;
     pub mod datacards_service;
     pub mod folders_service;
     pub mod profiles_service;
@@ -36,7 +37,7 @@ mod types;
 use std::sync::Arc;
 
 use app_state::AppState;
-use commands::{datacards::*, folders::*, profiles::*, security::*, settings::*};
+use commands::{attachments::*, datacards::*, folders::*, profiles::*, security::*, settings::*};
 use data::storage_paths::StoragePaths;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -71,6 +72,11 @@ fn main() {
             is_logged_in,
             auto_lock_cleanup,
             health_check,
+            list_attachments,
+            add_attachment_from_path,
+            remove_attachment,
+            purge_attachment,
+            save_attachment_to_path,
             list_folders,
             create_folder,
             rename_folder,

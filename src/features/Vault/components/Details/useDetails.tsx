@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DataCard } from '../../types/ui';
+import { Attachment, DataCard } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useToaster } from '../../../../components/Toaster';
+import { open } from '@tauri-apps/api/dialog';
+import {
+  addAttachmentFromPath,
+  listAttachments,
+  removeAttachment,
+} from '../../api/vaultApi';
+import { mapAttachmentFromBackend } from '../../types/mappers';
 
 const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 30;
 
@@ -25,6 +32,9 @@ type UseDetailsResult = {
   toggleFavorite: () => void;
   restoreCard: () => void;
   purgeCard: () => void;
+  attachments: Attachment[];
+  onAddAttachment: () => Promise<void>;
+  onRemoveAttachment: (attachmentId: string) => Promise<void>;
 };
 
 export function useDetails({
@@ -42,6 +52,7 @@ export function useDetails({
   const lastCopiedValueRef = useRef<string | null>(null);
   const { show: showToast } = useToaster();
   const { t } = useTranslation('Details');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const clearPendingTimeout = useCallback(() => {
     if (timeoutRef.current) {
@@ -55,7 +66,22 @@ export function useDetails({
   useEffect(() => {
     setShowPassword(false);
     clearPendingTimeout();
-  }, [card?.id, clearPendingTimeout]);
+    const refresh = async () => {
+      if (!card?.id) {
+        setAttachments([]);
+        return;
+      }
+      try {
+        const items = await listAttachments(card.id);
+        setAttachments(items.map(mapAttachmentFromBackend));
+      } catch (err) {
+        console.error(err);
+        setAttachments([]);
+        showToast(t('toast.attachmentLoadError'), 'error');
+      }
+    };
+    refresh();
+  }, [card?.id, clearPendingTimeout, showToast, t]);
 
   const copyToClipboard = useCallback(
     async (value: string | null | undefined, opts: { isSecret?: boolean } = {}) => {
@@ -116,6 +142,37 @@ export function useDetails({
     setShowPassword((prev) => !prev);
   }, []);
 
+  const onAddAttachment = useCallback(async () => {
+    if (!card || isTrashMode) return;
+    try {
+      const selection = await open({ multiple: false });
+      const path = Array.isArray(selection) ? selection[0] : selection;
+      if (!path || typeof path !== 'string') return;
+      await addAttachmentFromPath(card.id, path);
+      const items = await listAttachments(card.id);
+      setAttachments(items.map(mapAttachmentFromBackend));
+      showToast(t('toast.attachmentAddSuccess'), 'success');
+    } catch (err) {
+      console.error(err);
+      showToast(t('toast.attachmentAddError'), 'error');
+    }
+  }, [card, isTrashMode, showToast, t]);
+
+  const onRemoveAttachment = useCallback(
+    async (attachmentId: string) => {
+      if (!card) return;
+      try {
+        await removeAttachment(attachmentId);
+        const items = await listAttachments(card.id);
+        setAttachments(items.map(mapAttachmentFromBackend));
+      } catch (err) {
+        console.error(err);
+        showToast(t('toast.attachmentRemoveError'), 'error');
+      }
+    },
+    [card, showToast, t]
+  );
+
   return {
     showPassword,
     togglePasswordVisibility,
@@ -125,5 +182,8 @@ export function useDetails({
     toggleFavorite,
     restoreCard,
     purgeCard,
+    attachments,
+    onAddAttachment,
+    onRemoveAttachment,
   };
 }
