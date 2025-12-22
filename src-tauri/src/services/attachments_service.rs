@@ -5,6 +5,7 @@ use std::sync::Arc;
 use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::Utc;
+use mime_guess;
 use tauri::AppHandle;
 use tauri::Manager;
 use uuid::Uuid;
@@ -94,17 +95,17 @@ pub fn add_attachment_from_path(
     let bytes = read_source_file(source)?;
     let attachment_id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
-    let file_name = source
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or_default()
+    let file_name = source.file_name().unwrap().to_string_lossy().to_string();
+    let mime = mime_guess::from_path(&file_name)
+        .first_or_octet_stream()
+        .essence_str()
         .to_string();
 
     let meta = AttachmentMeta {
         id: attachment_id.clone(),
         datacard_id,
         file_name,
-        mime_type: None,
+        mime_type: Some(mime),
         byte_size: bytes.len() as i64,
         created_at: now.clone(),
         updated_at: now,
