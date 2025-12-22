@@ -34,8 +34,10 @@
   "attachments.empty": "No attachments",
   "attachments.add": "Add file",
   "attachments.remove": "Remove",
+  "attachments.open": "Open",
   "toast.attachmentAddSuccess": "Attachment added",
   "toast.attachmentAddError": "Unable to add attachment",
   "toast.attachmentRemoveError": "Unable to remove attachment",
-  "toast.attachmentLoadError": "Unable to load attachments"
+  "toast.attachmentLoadError": "Unable to load attachments",
+  "toast.attachmentOpenError": "Unable to open attachment"
 }

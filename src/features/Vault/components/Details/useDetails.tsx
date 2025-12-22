@@ -6,6 +6,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import {
   addAttachmentFromPath,
   listAttachments,
+  openAttachment,
   removeAttachment,
 } from '../../api/vaultApi';
 import { mapAttachmentFromBackend } from '../../types/mappers';
@@ -35,6 +36,7 @@ type UseDetailsResult = {
   attachments: Attachment[];
   onAddAttachment: () => Promise<void>;
   onRemoveAttachment: (attachmentId: string) => Promise<void>;
+  onOpenAttachment: (attachmentId: string) => Promise<void>;
 };
 
 export function useDetails({
@@ -173,6 +175,19 @@ export function useDetails({
     [card, showToast, t]
   );
 
+  const onOpenAttachment = useCallback(
+    async (attachmentId: string) => {
+      if (!card) return;
+      try {
+        await openAttachment(attachmentId);
+      } catch (err) {
+        console.error(err);
+        showToast(t('toast.attachmentOpenError'), 'error');
+      }
+    },
+    [card, showToast, t]
+  );
+
   return {
     showPassword,
     togglePasswordVisibility,
@@ -185,5 +200,6 @@ export function useDetails({
     attachments,
     onAddAttachment,
     onRemoveAttachment,
+    onOpenAttachment,
   };
 }

@@ -98,3 +98,7 @@ export async function saveAttachmentToPath(
 ): Promise<void> {
   return invoke('save_attachment_to_path', { attachmentId, targetPath });
 }
+
+export async function openAttachment(attachmentId: string): Promise<void> {
+  return invoke('open_attachment', { attachmentId });
+}

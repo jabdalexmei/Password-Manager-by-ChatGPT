@@ -46,6 +46,7 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .on_window_event(|window, event| match event {
             WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
                 let app_state = window.state::<Arc<AppState>>().inner().clone();
@@ -84,6 +85,7 @@ fn main() {
             add_attachment_from_path,
             remove_attachment,
             purge_attachment,
+            open_attachment,
             save_attachment_to_path,
             list_folders,
             create_folder,

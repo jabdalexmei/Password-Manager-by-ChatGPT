@@ -304,13 +304,22 @@ export function Details({
                   {attachment.fileName} ({formatSize(attachment.byteSize)})
                 </span>
                 {!isTrashMode && (
-                  <button
-                    className="btn btn-link"
-                    type="button"
-                    onClick={() => detailActions.onRemoveAttachment(attachment.id)}
-                  >
-                    {t('attachments.remove')}
-                  </button>
+                  <div className="attachment-actions">
+                    <button
+                      className="btn btn-link"
+                      type="button"
+                      onClick={() => detailActions.onOpenAttachment(attachment.id)}
+                    >
+                      {t('attachments.open')}
+                    </button>
+                    <button
+                      className="btn btn-link"
+                      type="button"
+                      onClick={() => detailActions.onRemoveAttachment(attachment.id)}
+                    >
+                      {t('attachments.remove')}
+                    </button>
+                  </div>
                 )}
               </div>
             ))}

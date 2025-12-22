@@ -324,15 +324,49 @@
   gap: 10px;
 }
 
-.dialog-attachments-row {
+.dialog-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dialog-attachments-header {
   display: flex;
   justify-content: flex-start;
-  margin-top: 4px;
-  margin-bottom: 10px;
+}
+
+.dialog-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+
+.dialog-attachments-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.dialog-attachments-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .btn-attach {
   padding: 10px 12px;
+}
+
+.attachment-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .generator-dialog {

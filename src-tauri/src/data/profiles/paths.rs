@@ -35,6 +35,21 @@ pub fn attachment_file_path(sp: &StoragePaths, profile_id: &str, attachment_id: 
         .join(format!("{attachment_id}.bin"))
 }
 
+pub fn attachments_preview_root(sp: &StoragePaths, profile_id: &str) -> PathBuf {
+    profile_dir(sp, profile_id).join("tmp").join("attachments")
+}
+
+pub fn attachment_preview_path(
+    sp: &StoragePaths,
+    profile_id: &str,
+    attachment_id: &str,
+    file_name: &str,
+) -> PathBuf {
+    attachments_preview_root(sp, profile_id)
+        .join(attachment_id)
+        .join(file_name)
+}
+
 pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> PathBuf {
     profile_dir(sp, profile_id).join("user_settings.json")
 }
@@ -51,5 +66,6 @@ pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str) -> std::io::Resu
     let root = profile_dir(sp, profile_id);
     fs::create_dir_all(root.join("attachments"))?;
     fs::create_dir_all(root.join("backups"))?;
+    fs::create_dir_all(root.join("tmp").join("attachments"))?;
     Ok(())
 }

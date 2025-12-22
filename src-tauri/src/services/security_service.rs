@@ -14,6 +14,7 @@ use crate::data::sqlite::init::init_database_passwordless;
 use crate::data::sqlite::migrations;
 use crate::data::sqlite::pool::clear_pool;
 use crate::error::{ErrorCodeString, Result};
+use crate::services::attachments_service;
 
 fn owned_data_from_bytes(bytes: Vec<u8>) -> Result<OwnedData> {
     if bytes.is_empty() {
@@ -105,14 +106,14 @@ pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) ->
     Ok(true)
 }
 
-fn persist_active_vault(state: &Arc<AppState>) -> Result<()> {
+fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
     let profile_id = state
         .logged_in_profile
         .lock()
         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
         .clone();
 
-    if let Some(id) = profile_id {
+    if let Some(id) = profile_id.clone() {
         let keeper_guard = state
             .vault_keeper_conn
             .lock()
@@ -133,18 +134,12 @@ fn persist_active_vault(state: &Arc<AppState>) -> Result<()> {
         }
     }
 
-    Ok(())
+    Ok(profile_id)
 }
 
 pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = state
-        .logged_in_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-
-    if let Some(id) = profile_id {
-        persist_active_vault(state)?;
+    if let Some(id) = persist_active_vault(state)? {
+        attachments_service::clear_previews_for_profile(state, &id)?;
 
         let mut keeper = state
             .vault_keeper_conn
@@ -185,7 +180,9 @@ pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
 }
 
 pub fn auto_lock_cleanup(state: &Arc<AppState>) -> Result<bool> {
-    persist_active_vault(state)?;
+    if let Some(id) = persist_active_vault(state)? {
+        attachments_service::clear_previews_for_profile(state, &id)?;
+    }
     is_logged_in(state)
 }
 

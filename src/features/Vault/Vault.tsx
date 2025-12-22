@@ -33,6 +33,7 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
     defaultFolderId: vault.selectedFolderId,
     onSelectCard: vault.selectCard,
     onCreateCard: vault.createCard,
+    onUploadAttachments: vault.uploadAttachments,
     onUpdateCard: vault.updateCard,
     onDeleteCard: vault.deleteCard,
     onRestoreCard: vault.restoreCard,

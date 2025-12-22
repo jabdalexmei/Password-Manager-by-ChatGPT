@@ -1,15 +1,18 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::Utc;
 use tauri::AppHandle;
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::data::crypto::cipher;
-use crate::data::profiles::paths::attachment_file_path;
+use crate::data::profiles::paths::{
+    attachment_file_path, attachment_preview_path, attachments_preview_root,
+};
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::AttachmentMeta;
@@ -72,6 +75,36 @@ fn ensure_target_dir(path: &Path) -> Result<()> {
         fs::create_dir_all(parent).map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
     }
     Ok(())
+}
+
+fn sanitized_file_name(name: &str) -> String {
+    Path::new(name)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
+        .unwrap_or("attachment")
+        .to_string()
+}
+
+fn write_preview_file(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    attachment_id: &str,
+    file_name: &str,
+    bytes: &[u8],
+) -> Result<PathBuf> {
+    let safe_name = sanitized_file_name(file_name);
+    let preview_path =
+        attachment_preview_path(&state.storage_paths, profile_id, attachment_id, &safe_name);
+
+    if let Some(parent) = preview_path.parent() {
+        let _ = fs::remove_dir_all(parent);
+    }
+
+    ensure_target_dir(&preview_path)?;
+    fs::write(&preview_path, bytes).map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
+
+    Ok(preview_path)
 }
 
 pub fn add_attachment_from_path(
@@ -174,4 +207,43 @@ pub fn save_attachment_to_path(
     let target = Path::new(&target_path);
     ensure_target_dir(target)?;
     fs::write(target, &output_bytes).map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))
+}
+
+pub fn open_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
+    let session = require_logged_in(app)?;
+    let meta = repo_impl::get_attachment(&session.state, &session.profile_id, &attachment_id)?
+        .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_NOT_FOUND"))?;
+    if meta.deleted_at.is_some() {
+        return Err(ErrorCodeString::new("ATTACHMENT_NOT_FOUND"));
+    }
+
+    let stored_path =
+        attachment_file_path(&session.state.storage_paths, &session.profile_id, &meta.id);
+    let bytes =
+        fs::read(&stored_path).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
+    let output_bytes = if let Some(key) = session.vault_key {
+        cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &key, &bytes)?
+    } else {
+        bytes
+    };
+
+    let preview_path = write_preview_file(
+        &session.state,
+        &session.profile_id,
+        &meta.id,
+        meta.file_name.as_str(),
+        &output_bytes,
+    )?;
+
+    app.opener()
+        .open_path(preview_path, None)
+        .map_err(|_| ErrorCodeString::new("ATTACHMENT_OPEN_FAILED"))
+}
+
+pub fn clear_previews_for_profile(state: &Arc<AppState>, profile_id: &str) -> Result<()> {
+    let preview_root = attachments_preview_root(&state.storage_paths, profile_id);
+    if preview_root.exists() {
+        let _ = fs::remove_dir_all(&preview_root);
+    }
+    Ok(())
 }

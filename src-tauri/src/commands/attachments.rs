@@ -56,3 +56,12 @@ pub async fn save_attachment_to_path(
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
+
+#[tauri::command]
+pub async fn open_attachment(app: AppHandle, attachment_id: String) -> Result<()> {
+    tauri::async_runtime::spawn_blocking(move || {
+        attachments_service::open_attachment(&app, attachment_id)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
