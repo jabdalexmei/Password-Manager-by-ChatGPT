@@ -84,6 +84,7 @@ fn main() {
             add_attachment_from_path,
             remove_attachment,
             purge_attachment,
+            get_attachment_bytes_base64,
             get_attachment_preview,
             save_attachment_to_path,
             list_folders,

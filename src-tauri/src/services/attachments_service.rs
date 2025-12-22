@@ -225,6 +225,13 @@ pub fn get_attachment_preview(
     })
 }
 
+pub fn get_attachment_bytes_base64(
+    app: &AppHandle,
+    attachment_id: String,
+) -> Result<AttachmentPreviewPayload> {
+    get_attachment_preview(app, attachment_id)
+}
+
 pub fn clear_previews_for_profile(state: &Arc<AppState>, profile_id: &str) -> Result<()> {
     let preview_root = attachments_preview_root(&state.storage_paths, profile_id);
     if preview_root.exists() {

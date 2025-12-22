@@ -5,9 +5,9 @@ import { useToaster } from '../../../../components/Toaster';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import {
   addAttachmentFromPath,
-  getAttachmentPreview,
+  getAttachmentBytesBase64,
   listAttachments,
-  purgeAttachment,
+  removeAttachment,
   saveAttachmentToPath,
 } from '../../api/vaultApi';
 import { mapAttachmentFromBackend } from '../../types/mappers';
@@ -49,7 +49,7 @@ type AttachmentPreviewState = {
   attachmentId: string;
   fileName: string;
   mimeType: string;
-  base64Data: string;
+  objectUrl: string;
 } | null;
 
 export function useDetails({
@@ -71,6 +71,7 @@ export function useDetails({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState<AttachmentPreviewState>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const previewUrlRef = useRef<string | null>(null);
 
   const clearPendingTimeout = useCallback(() => {
     if (timeoutRef.current) {
@@ -81,6 +82,22 @@ export function useDetails({
   }, []);
 
   useEffect(() => clearPendingTimeout, [clearPendingTimeout]);
+
+  const base64ToBytes = useCallback((base64Data: string) => {
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i += 1) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  }, []);
+
+  const revokePreviewUrl = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }, []);
   const refreshAttachments = useCallback(async () => {
     if (!card?.id) {
       setAttachments([]);
@@ -102,7 +119,10 @@ export function useDetails({
     refreshAttachments();
     setPreviewOpen(false);
     setPreviewPayload(null);
-  }, [card?.id, clearPendingTimeout, refreshAttachments]);
+    revokePreviewUrl();
+  }, [card?.id, clearPendingTimeout, refreshAttachments, revokePreviewUrl]);
+
+  useEffect(() => revokePreviewUrl, [revokePreviewUrl]);
 
   const copyToClipboard = useCallback(
     async (value: string | null | undefined, opts: { isSecret?: boolean } = {}) => {
@@ -166,10 +186,17 @@ export function useDetails({
   const onAddAttachment = useCallback(async () => {
     if (!card || isTrashMode) return;
     try {
-      const selection = await open({ multiple: false });
-      const path = Array.isArray(selection) ? selection[0] : selection;
-      if (!path || typeof path !== 'string') return;
-      await addAttachmentFromPath(card.id, path);
+      const selection = await open({ multiple: true });
+      const paths = Array.isArray(selection)
+        ? selection.filter((p): p is string => typeof p === 'string')
+        : selection && typeof selection === 'string'
+          ? [selection]
+          : [];
+      if (!paths.length) return;
+
+      for (const path of paths) {
+        await addAttachmentFromPath(card.id, path);
+      }
       await refreshAttachments();
       showToast(t('toast.attachmentAddSuccess'), 'success');
     } catch (err) {
@@ -182,7 +209,7 @@ export function useDetails({
     async (attachmentId: string) => {
       if (!card) return;
       try {
-        await purgeAttachment(attachmentId);
+        await removeAttachment(attachmentId);
         await refreshAttachments();
       } catch (err) {
         console.error(err);
@@ -198,13 +225,18 @@ export function useDetails({
       setIsPreviewLoading(true);
       setPreviewOpen(true);
       setPreviewPayload(null);
+      revokePreviewUrl();
       try {
-        const payload = await getAttachmentPreview(attachmentId);
+        const payload = await getAttachmentBytesBase64(attachmentId);
+        const bytes = base64ToBytes(payload.bytesBase64);
+        const mimeType = payload.mimeType || 'application/octet-stream';
+        const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+        previewUrlRef.current = objectUrl;
         setPreviewPayload({
-          attachmentId: payload.attachment_id,
-          fileName: payload.file_name,
-          mimeType: payload.mime_type,
-          base64Data: payload.base64_data,
+          attachmentId,
+          fileName: payload.fileName,
+          mimeType,
+          objectUrl,
         });
       } catch (err: any) {
         console.error(err);
@@ -217,7 +249,7 @@ export function useDetails({
         setIsPreviewLoading(false);
       }
     },
-    [card, showToast, t]
+    [base64ToBytes, card, revokePreviewUrl, showToast, t]
   );
 
   const onDownloadAttachment = useCallback(
@@ -240,7 +272,8 @@ export function useDetails({
   const closePreview = useCallback(() => {
     setPreviewOpen(false);
     setPreviewPayload(null);
-  }, []);
+    revokePreviewUrl();
+  }, [revokePreviewUrl]);
 
   return {
     showPassword,

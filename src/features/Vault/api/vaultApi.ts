@@ -5,9 +5,9 @@ import {
   BackendDataCardSummary,
   BackendFolder,
   BackendAttachmentMeta,
-  BackendAttachmentPreviewPayload,
   BackendUpdateDataCardInput,
   BackendUserSettings,
+  BackendAttachmentPreviewPayload,
 } from '../types/backend';
 
 export async function listFolders(): Promise<BackendFolder[]> {
@@ -100,8 +100,26 @@ export async function saveAttachmentToPath(
   return invoke('save_attachment_to_path', { attachmentId, targetPath });
 }
 
-export async function getAttachmentPreview(
+export type AttachmentPreviewDto = {
+  attachmentId: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+  bytesBase64: string;
+};
+
+export async function getAttachmentBytesBase64(
   attachmentId: string
-): Promise<BackendAttachmentPreviewPayload> {
-  return invoke('get_attachment_preview', { attachmentId });
+): Promise<AttachmentPreviewDto> {
+  const payload = await invoke<BackendAttachmentPreviewPayload>('get_attachment_bytes_base64', {
+    attachmentId,
+  });
+
+  return {
+    attachmentId: payload.attachment_id,
+    fileName: payload.file_name,
+    mimeType: payload.mime_type,
+    byteSize: payload.byte_size,
+    bytesBase64: payload.base64_data,
+  };
 }

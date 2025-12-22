@@ -68,3 +68,15 @@ pub async fn get_attachment_preview(
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
+
+#[tauri::command]
+pub async fn get_attachment_bytes_base64(
+    app: AppHandle,
+    attachment_id: String,
+) -> Result<AttachmentPreviewPayload> {
+    tauri::async_runtime::spawn_blocking(move || {
+        attachments_service::get_attachment_bytes_base64(&app, attachment_id)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}

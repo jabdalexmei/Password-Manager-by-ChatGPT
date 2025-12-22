@@ -1,10 +1,36 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useDetails } from './useDetails';
 import { EyeIcon, EyeOffIcon } from '../../../../components/icons/EyeIcons';
 import { CopyIcon } from '../../icons/CopyIcon';
+import { PaperclipIcon } from '../../icons/PaperclipIcon';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
+import AttachmentPreviewModal from '../modals/AttachmentPreviewModal';
+
+const DownloadIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M12 3V15M12 15L7 10M12 15L17 10M5 21H19"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M3 6H21M9 6V4H15V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 export type DetailsProps = {
   card: DataCard | null;
@@ -51,7 +77,6 @@ export function Details({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const [attachmentToDelete, setAttachmentToDelete] = useState<string | null>(null);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
   const informationTitle = (
     <div className="vault-section-header">{tVault('information.title')}</div>
@@ -91,48 +116,15 @@ export function Details({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const convertBase64ToBytes = useCallback((base64Data: string) => {
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i += 1) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-  }, []);
-
   const previewMimeType = detailActions.previewPayload?.mimeType ?? '';
-  const previewData = detailActions.previewPayload?.base64Data ?? '';
   const previewTitle = detailActions.previewPayload?.fileName ?? '';
-  const isImagePreview = previewMimeType.startsWith('image/');
-  const isTextPreview = previewMimeType.startsWith('text/');
-  const isPdfPreview = previewMimeType === 'application/pdf';
-  const decodedText = useMemo(() => {
-    if (!isTextPreview || !previewData) return null;
-    try {
-      const bytes = convertBase64ToBytes(previewData);
-      const decoder = new TextDecoder();
-      return decoder.decode(bytes);
-    } catch (err) {
-      console.error(err);
-      return null;
-    }
-  }, [convertBase64ToBytes, isTextPreview, previewData]);
-
-  useEffect(() => {
-    if (detailActions.previewOpen && isPdfPreview && previewData) {
-      const blob = new Blob([convertBase64ToBytes(previewData)], {
-        type: previewMimeType || 'application/pdf',
-      });
-      const url = URL.createObjectURL(blob);
-      setPdfPreviewUrl(url);
-      return () => {
-        URL.revokeObjectURL(url);
-        setPdfPreviewUrl(null);
-      };
-    }
-    setPdfPreviewUrl(null);
-    return undefined;
-  }, [convertBase64ToBytes, detailActions.previewOpen, isPdfPreview, previewData, previewMimeType]);
+  const previewObjectUrl = detailActions.previewPayload?.objectUrl ?? '';
+  const previewDownloadHandler = detailActions.previewPayload
+    ? () => detailActions.onDownloadAttachment(
+        detailActions.previewPayload.attachmentId,
+        detailActions.previewPayload.fileName
+      )
+    : undefined;
 
   return (
     <>
@@ -355,7 +347,10 @@ export function Details({
 
       <div className="detail-field attachments-panel">
         <div className="attachments-header">
-          <div className="detail-label">{t('attachments.title')}</div>
+          <div className="attachments-title">
+            <PaperclipIcon />
+            <span>{t('attachments.title')}</span>
+          </div>
           {!isTrashMode && (
             <button className="btn btn-secondary" type="button" onClick={detailActions.onAddAttachment}>
               {t('attachments.addFile')}
@@ -377,27 +372,30 @@ export function Details({
               {!isTrashMode && (
                 <div className="attachment-actions">
                   <button
-                    className="btn btn-link"
+                    className="icon-button"
                     type="button"
                     onClick={() => detailActions.onPreviewAttachment(attachment.id)}
+                    aria-label={t('attachments.open')}
                   >
-                    {t('attachments.open')}
+                    <EyeIcon />
                   </button>
                   <button
-                    className="btn btn-link"
+                    className="icon-button"
                     type="button"
                     onClick={() =>
                       detailActions.onDownloadAttachment(attachment.id, attachment.fileName)
                     }
+                    aria-label={t('attachments.download')}
                   >
-                    {t('attachments.download')}
+                    <DownloadIcon />
                   </button>
                   <button
-                    className="btn btn-link text-danger"
+                    className="icon-button icon-button-danger"
                     type="button"
                     onClick={() => setAttachmentToDelete(attachment.id)}
+                    aria-label={t('attachments.delete')}
                   >
-                    {t('attachments.delete')}
+                    <TrashIcon />
                   </button>
                 </div>
               )}
@@ -408,53 +406,15 @@ export function Details({
       </div>
     </div>
 
-      {detailActions.previewOpen && (
-        <div className="dialog-backdrop">
-          <div className="dialog preview-dialog" role="dialog" aria-modal="true">
-            <div className="dialog-header">
-              <h3 className="dialog-title">{previewTitle || t('attachments.title')}</h3>
-            </div>
-            <div className="dialog-body attachment-preview-body">
-              {detailActions.isPreviewLoading && <div className="muted">{t('attachments.loadingPreview')}</div>}
-              {!detailActions.isPreviewLoading && detailActions.previewPayload && (
-                <>
-                  {isImagePreview && (
-                    <img
-                      className="attachment-preview-image"
-                      src={`data:${previewMimeType};base64,${previewData}`}
-                      alt={previewTitle}
-                    />
-                  )}
-                  {isTextPreview && (
-                    <pre className="attachment-preview-text">
-                      {decodedText ?? t('attachments.previewError')}
-                    </pre>
-                  )}
-                  {isPdfPreview && (
-                    pdfPreviewUrl ? (
-                      <iframe
-                        className="attachment-preview-pdf"
-                        src={pdfPreviewUrl}
-                        title={previewTitle || 'PDF Preview'}
-                      />
-                    ) : (
-                      <div className="muted">{t('attachments.previewUnsupported')}</div>
-                    )
-                  )}
-                  {!isImagePreview && !isTextPreview && !isPdfPreview && (
-                    <div className="muted">{t('attachments.previewUnsupported')}</div>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="dialog-footer">
-              <button className="btn btn-secondary" type="button" onClick={detailActions.closePreview}>
-                {tCommon('action.close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AttachmentPreviewModal
+        open={detailActions.previewOpen}
+        fileName={previewTitle}
+        mime={previewMimeType}
+        objectUrl={previewObjectUrl}
+        onClose={detailActions.closePreview}
+        onDownload={previewDownloadHandler}
+        loading={detailActions.isPreviewLoading}
+      />
     </>
   );
 }
