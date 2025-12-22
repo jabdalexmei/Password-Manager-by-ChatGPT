@@ -1,11 +1,5 @@
-:root {
-  /* цвет текста и фон по умолчанию берём из темы */
-  color: var(--color-text);
-  background-color: var(--color-bg);
-  font-family: var(--font-body);
-}
+/* Base/reset only. No theme colors here. */
 
-/* нормальный box-sizing для всего */
 * {
   box-sizing: border-box;
 }
@@ -16,15 +10,4 @@ body,
   margin: 0;
   padding: 0;
   min-height: 100vh;
-}
-
-/* общий фон приложения */
-body {
-  background: linear-gradient(
-    135deg,
-    #0b1222 0%,
-    #0f172a 60%,
-    #0f172a 100%
-  );
-  color: var(--color-text);
 }

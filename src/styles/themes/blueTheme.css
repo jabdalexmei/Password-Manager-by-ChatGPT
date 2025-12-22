@@ -1,31 +1,81 @@
 :root {
   --font-body: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
 
-  --color-bg: #0b1222;
-  --color-surface-1: #0b1222;
-  --color-surface-2: #0f172a;
-  --color-surface-3: #111827;
-  --color-surface: var(--color-surface-3);
-  --color-border: #1f2937;
+  /* ===== Legacy dark gray stack (Tailwind-like) ===== */
+  --color-bg: #111827;         /* gray-900 */
+  --color-surface-1: #1f2937;  /* gray-800 */
+  --color-surface-2: #374151;  /* gray-700 */
+  --color-surface-3: #4b5563;  /* gray-600 */
+  --color-surface: var(--color-surface-1);
+
+  --color-border: #374151;         /* border-gray-700 */
+  --color-border-strong: #4b5563;  /* border-gray-600 */
 
   --color-input-bg: var(--color-surface-2);
 
+  /* Text */
+  --color-text: #e5e7eb;       /* gray-200 */
+  --color-text-soft: #d1d5db;  /* gray-300 */
+  --color-text-muted: #9ca3af; /* gray-400 */
+  --color-text-faint: #6b7280; /* gray-500 */
 
-  --color-text: #e5e7eb;
-  --color-text-muted: #9ca3c7;
+  /* ===== Primary (Blue) ===== */
+  --color-primary: #3b82f6;          /* blue-500 */
+  --color-primary-strong: #2563eb;   /* blue-600 */
+  --color-primary-stronger: #1d4ed8; /* blue-700 */
 
-  --color-primary: #2563eb;        /* blue-600 */
-  --color-primary-strong: #1d4ed8; /* blue-700 */
+  /* alpha variants used in CSS */
+  --color-primary-bg-08: rgba(37, 99, 235, 0.08);   /* blue-600/8% */
+  --color-primary-bg-20: rgba(37, 99, 235, 0.20);   /* blue-600/20% */
+  --color-primary-border-45: rgba(59, 130, 246, 0.45); /* blue-500/45% */
+  --color-primary-border-55: rgba(59, 130, 246, 0.55); /* blue-500/55% */
+  --color-ring: rgba(59, 130, 246, 0.40);           /* ring-blue-500/40 */
 
-  --color-danger: #ef4444;
-  --color-danger-strong: #dc2626;
+  /* ===== Danger (Red) ===== */
+  --color-danger: #ef4444;         /* red-500 */
+  --color-danger-strong: #dc2626;  /* red-600 */
 
-  --color-success: #22c55e;
+  --color-danger-bg-08: rgba(239, 68, 68, 0.08);  /* red-500/8% */
+  --color-danger-bg-12: rgba(239, 68, 68, 0.12);  /* red-500/12% */
+  --color-danger-border-40: rgba(239, 68, 68, 0.40); /* red-500/40% */
+  --color-danger-border-800: #991b1b; /* red-800 (for legacy borders if needed) */
 
+  /* ===== Success (Green) ===== */
+  --color-success: #22c55e;          /* green-500 */
+  --color-success-bg-12: rgba(34, 197, 94, 0.12);  /* green-500/12% */
+
+  /* ===== Warning (Yellow/Amber) ===== */
+  --color-warning: #eab308;          /* yellow-500 */
+  --color-warning-border: #b45309;   /* amber-700 */
+  --color-warning-bg-60: rgba(146, 64, 14, 0.60);  /* amber-800/60 */
+
+  /* ===== Overlays ===== */
+  --color-overlay-02: rgba(255, 255, 255, 0.02);
+  --color-overlay-08: rgba(255, 255, 255, 0.08);
+
+  --color-backdrop-45: rgba(0, 0, 0, 0.45);
+  --color-backdrop-50: rgba(0, 0, 0, 0.50);
+  --color-backdrop-60: rgba(0, 0, 0, 0.60);
+  --color-backdrop-70: rgba(0, 0, 0, 0.70);
+
+  /* Geometry */
   --radius-sm: 10px;
   --radius-pill: 999px;
   --radius-md: 16px;
   --radius-lg: 24px;
 
-  --shadow-card: 0 18px 45px rgba(15, 23, 42, 0.8);
+  /* Shadows */
+  --shadow-card: 0 18px 45px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 18px 45px rgba(0, 0, 0, 0.45);
+  --shadow-popover: 0 12px 30px rgba(0, 0, 0, 0.45);
+
+  /* Make theme control defaults */
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  font-family: var(--font-body);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
 }

@@ -193,7 +193,7 @@
 }
 
 .vault-folder:hover {
-  border-color: rgba(59, 130, 246, 0.45);
+  border-color: var(--color-primary-border-45);
   background: var(--color-surface-2);
   transform: translateY(-1px);
   transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
@@ -269,7 +269,7 @@
   display: flex;
   flex-direction: column;
   min-width: 200px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-popover);
   z-index: 15;
 }
 
@@ -325,7 +325,7 @@
 }
 
 .vault-datacard:hover {
-  border-color: rgba(59, 130, 246, 0.45); /* primary hint */
+  border-color: var(--color-primary-border-45); /* primary hint */
   background: var(--color-surface-2);
   transform: translateY(-1px);
   transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
@@ -517,18 +517,18 @@
 }
 
 .icon-button:hover {
-  border-color: rgba(59, 130, 246, 0.55);
+  border-color: var(--color-primary-border-55);
   background: var(--color-surface-3);
 }
 
 .icon-button-danger {
   color: var(--color-danger);
-  border-color: rgba(239, 68, 68, 0.4);
+  border-color: var(--color-danger-border-40);
 }
 
 .icon-button-danger:hover {
   border-color: var(--color-danger);
-  background: rgba(239, 68, 68, 0.08);
+  background: var(--color-danger-bg-08);
 }
 
 .attachments-panel {
