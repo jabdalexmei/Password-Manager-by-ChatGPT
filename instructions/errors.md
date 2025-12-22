@@ -1,66 +1,50 @@
-One TS (EN): Fix build error by removing anyhow usage in security_service.rs
-Goal
-
-Fix Rust compilation errors related to missing anyhow crate by aligning the helper function with the project’s existing error type crate::error::Result<T>.
-
-File
-
-src-tauri/src/services/security_service.rs
-
-Required change
-1) Replace helper signature and error construction
-
-Find and replace this function:
-
-Before
-
-fn owned_data_from_bytes(bytes: Vec<u8>) -> anyhow::Result<OwnedData> {
-    if bytes.is_empty() {
-        return Err(anyhow::anyhow!("EMPTY_SERIALIZED_DB"));
-    }
-
-    let sz = bytes.len();
-    let ptr = unsafe { ffi::sqlite3_malloc64(sz as u64) as *mut u8 };
-
-    let nn = NonNull::new(ptr).ok_or_else(|| anyhow::anyhow!("SQLITE_OOM"))?;
-
-    unsafe {
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), nn.as_ptr(), sz);
-        Ok(OwnedData::from_raw_nonnull(nn, sz))
-    }
-}
 
 
-After
+# Technical Specification: Fix `rusqlite::Connection::deserialize` mutability error (E0596)
 
-fn owned_data_from_bytes(bytes: Vec<u8>) -> Result<OwnedData> {
-    if bytes.is_empty() {
-        return Err(ErrorCodeString::new("EMPTY_SERIALIZED_DB"));
-    }
+## Goal
 
-    let sz = bytes.len();
-    let ptr = unsafe { ffi::sqlite3_malloc64(sz as u64) as *mut u8 };
+Fix compilation error:
+`error[E0596]: cannot borrow conn as mutable, as it is not declared as mutable`
+at the call to `conn.deserialize(...)`.
 
-    let nn = NonNull::new(ptr).ok_or_else(|| ErrorCodeString::new("SQLITE_OOM"))?;
+## Scope
 
-    unsafe {
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), nn.as_ptr(), sz);
-        Ok(OwnedData::from_raw_nonnull(nn, sz))
-    }
-}
+Backend only. Single-file change.
 
-2) Update the call site (optional simplification)
+---
 
-You currently have:
+## Change
 
-let owned =
-    owned_data_from_bytes(decrypted).map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+### File
 
+`src-tauri/src/services/security_service.rs`
 
-This can stay as-is (it will compile), or be simplified to:
+### Location
 
-let owned = owned_data_from_bytes(decrypted)?;
+The function where you open a SQLite connection and then call:
 
-Acceptance criteria
+```rust
+conn.deserialize(DatabaseName::Main, owned, false)
+```
 
-cargo build succeeds in src-tauri without anyhow-related errors.
+### Required modification
+
+Make the `conn` binding mutable.
+
+#### Before
+
+```rust
+let conn = rusqlite::Connection::open_with_flags(&uri, flags)?;
+conn.deserialize(DatabaseName::Main, owned, false)
+```
+
+#### After
+
+```rust
+let mut conn = rusqlite::Connection::open_with_flags(&uri, flags)?;
+conn.deserialize(DatabaseName::Main, owned, false)
+```
+
+*(If your code uses `.map_err(...)` for project error type, keep that wrapping exactly as-is; only add `mut`.)*
+
