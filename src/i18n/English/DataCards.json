@@ -31,6 +31,7 @@
   "action.copy": "Copy",
   "action.reveal": "Reveal",
   "action.hide": "Hide",
+  "action.addFile": "Add file",
   "action.create": "Create",
   "action.cancel": "Cancel",
   "action.save": "Save",
@@ -52,5 +53,9 @@
   "generator.use": "Use",
   "generator.strengthLabel": "Strong ({{bits}} bits)",
   "toast.copySuccess": "Copied",
-  "toast.copyError": "Unable to copy"
+  "toast.copyError": "Unable to copy",
+  "attachments.add": "Add file",
+  "attachments.selected": "Selected files",
+  "attachments.remove": "Remove",
+  "toast.attachmentUploadError": "Some files failed to upload"
 }

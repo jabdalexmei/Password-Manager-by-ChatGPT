@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { EyeIcon, EyeOffIcon } from '../../../../components/icons/EyeIcons';
 import { GenerateIcon } from '../../../../components/icons/GenerateIcon';
+import { PaperclipIcon } from '../../icons/PaperclipIcon';
 import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
 import { useToaster } from '../../../../components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
+import { open } from '@tauri-apps/plugin-dialog';
 
 export type DataCardsProps = {
   viewModel: DataCardsViewModel;
@@ -132,7 +134,14 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
       await onSubmit();
     };
 
+    const handleAddAttachments = async () => {
+      const selection = await open({ multiple: true });
+      const paths = Array.isArray(selection) ? selection : selection ? [selection] : [];
+      viewModel.addCreateAttachments(paths.filter((p): p is string => typeof p === 'string'));
+    };
+
     const titleElementId = 'dialog-title';
+    const isCreateDialog = dialogId === 'datacard-create-dialog';
 
     return (
       <div className="dialog-backdrop">
@@ -287,13 +296,47 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
               />
             </div>
 
-            <div className="dialog-footer">
-              <button className="btn btn-secondary" type="button" onClick={onClose}>
-                {tCommon('action.cancel')}
-              </button>
-              <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
-                {submitLabel}
-              </button>
+            {isCreateDialog && (
+              <div className="dialog-attachments">
+                <div className="dialog-attachments-header">
+                  <button className="btn btn-secondary btn-attach" type="button" onClick={handleAddAttachments}>
+                    <PaperclipIcon />
+                    {t('attachments.add')}
+                  </button>
+                </div>
+
+                {viewModel.createAttachments.length > 0 && (
+                  <div className="dialog-attachments-list">
+                    <div className="muted">{t('attachments.selected')}</div>
+                    {viewModel.createAttachments.map((attachment) => (
+                      <div key={attachment.path} className="dialog-attachments-item">
+                        <span className="dialog-attachments-name">{attachment.name}</span>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => viewModel.removeCreateAttachment(attachment.path)}
+                        >
+                          {t('attachments.remove')}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="dialog-footer dialog-footer--split">
+              <div className="dialog-footer-left">
+                <button className="btn btn-secondary" type="button" onClick={onClose}>
+                  {tCommon('action.cancel')}
+                </button>
+              </div>
+
+              <div className="dialog-footer-right">
+                <button className="btn btn-primary" type="submit" disabled={isSubmitting}>
+                  {submitLabel}
+                </button>
+              </div>
             </div>
           </form>
         </div>

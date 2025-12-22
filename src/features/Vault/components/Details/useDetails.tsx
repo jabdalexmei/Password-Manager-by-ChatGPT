@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DataCard } from '../../types/ui';
+import { Attachment, DataCard } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useToaster } from '../../../../components/Toaster';
+import { open, save } from '@tauri-apps/plugin-dialog';
+import {
+  addAttachmentFromPath,
+  getAttachmentBytesBase64,
+  listAttachments,
+  removeAttachment,
+  saveAttachmentToPath,
+} from '../../api/vaultApi';
+import { mapAttachmentFromBackend } from '../../types/mappers';
 
 const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 30;
 
@@ -25,7 +34,23 @@ type UseDetailsResult = {
   toggleFavorite: () => void;
   restoreCard: () => void;
   purgeCard: () => void;
+  attachments: Attachment[];
+  onAddAttachment: () => Promise<void>;
+  onDeleteAttachment: (attachmentId: string) => Promise<void>;
+  onPreviewAttachment: (attachmentId: string) => Promise<void>;
+  onDownloadAttachment: (attachmentId: string, defaultName: string) => Promise<void>;
+  previewOpen: boolean;
+  closePreview: () => void;
+  previewPayload: AttachmentPreviewState;
+  isPreviewLoading: boolean;
 };
+
+type AttachmentPreviewState = {
+  attachmentId: string;
+  fileName: string;
+  mimeType: string;
+  objectUrl: string;
+} | null;
 
 export function useDetails({
   card,
@@ -42,6 +67,11 @@ export function useDetails({
   const lastCopiedValueRef = useRef<string | null>(null);
   const { show: showToast } = useToaster();
   const { t } = useTranslation('Details');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPayload, setPreviewPayload] = useState<AttachmentPreviewState>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const previewUrlRef = useRef<string | null>(null);
 
   const clearPendingTimeout = useCallback(() => {
     if (timeoutRef.current) {
@@ -52,10 +82,47 @@ export function useDetails({
   }, []);
 
   useEffect(() => clearPendingTimeout, [clearPendingTimeout]);
+
+  const base64ToBytes = useCallback((base64Data: string) => {
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i += 1) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  }, []);
+
+  const revokePreviewUrl = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }, []);
+  const refreshAttachments = useCallback(async () => {
+    if (!card?.id) {
+      setAttachments([]);
+      return;
+    }
+    try {
+      const items = await listAttachments(card.id);
+      setAttachments(items.map(mapAttachmentFromBackend));
+    } catch (err) {
+      console.error(err);
+      setAttachments([]);
+      showToast(t('toast.attachmentLoadError'), 'error');
+    }
+  }, [card?.id, showToast, t]);
+
   useEffect(() => {
     setShowPassword(false);
     clearPendingTimeout();
-  }, [card?.id, clearPendingTimeout]);
+    refreshAttachments();
+    setPreviewOpen(false);
+    setPreviewPayload(null);
+    revokePreviewUrl();
+  }, [card?.id, clearPendingTimeout, refreshAttachments, revokePreviewUrl]);
+
+  useEffect(() => revokePreviewUrl, [revokePreviewUrl]);
 
   const copyToClipboard = useCallback(
     async (value: string | null | undefined, opts: { isSecret?: boolean } = {}) => {
@@ -116,6 +183,98 @@ export function useDetails({
     setShowPassword((prev) => !prev);
   }, []);
 
+  const onAddAttachment = useCallback(async () => {
+    if (!card || isTrashMode) return;
+    try {
+      const selection = await open({ multiple: true });
+      const paths = Array.isArray(selection)
+        ? selection.filter((p): p is string => typeof p === 'string')
+        : selection && typeof selection === 'string'
+          ? [selection]
+          : [];
+      if (!paths.length) return;
+
+      for (const path of paths) {
+        await addAttachmentFromPath(card.id, path);
+      }
+      await refreshAttachments();
+      showToast(t('toast.attachmentAddSuccess'), 'success');
+    } catch (err) {
+      console.error(err);
+      showToast(t('toast.attachmentAddError'), 'error');
+    }
+  }, [card, isTrashMode, refreshAttachments, showToast, t]);
+
+  const onDeleteAttachment = useCallback(
+    async (attachmentId: string) => {
+      if (!card) return;
+      try {
+        await removeAttachment(attachmentId);
+        await refreshAttachments();
+      } catch (err) {
+        console.error(err);
+        showToast(t('toast.attachmentRemoveError'), 'error');
+      }
+    },
+    [card, refreshAttachments, showToast, t]
+  );
+
+  const onPreviewAttachment = useCallback(
+    async (attachmentId: string) => {
+      if (!card) return;
+      setIsPreviewLoading(true);
+      setPreviewOpen(true);
+      setPreviewPayload(null);
+      revokePreviewUrl();
+      try {
+        const payload = await getAttachmentBytesBase64(attachmentId);
+        const bytes = base64ToBytes(payload.bytesBase64);
+        const mimeType = payload.mimeType || 'application/octet-stream';
+        const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+        previewUrlRef.current = objectUrl;
+        setPreviewPayload({
+          attachmentId,
+          fileName: payload.fileName,
+          mimeType,
+          objectUrl,
+        });
+      } catch (err: any) {
+        console.error(err);
+        const errorMessage = err?.code === 'ATTACHMENT_TOO_LARGE_FOR_PREVIEW'
+          ? t('attachments.previewTooLarge')
+          : t('attachments.previewError');
+        showToast(errorMessage, 'error');
+        setPreviewOpen(false);
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    },
+    [base64ToBytes, card, revokePreviewUrl, showToast, t]
+  );
+
+  const onDownloadAttachment = useCallback(
+    async (attachmentId: string, defaultName: string) => {
+      if (!card) return;
+      try {
+        const selection = await save({ defaultPath: defaultName });
+        const targetPath = Array.isArray(selection) ? selection[0] : selection;
+        if (!targetPath || typeof targetPath !== 'string') return;
+        await saveAttachmentToPath(attachmentId, targetPath);
+        showToast(t('attachments.downloadSuccess'), 'success');
+      } catch (err) {
+        console.error(err);
+        showToast(t('attachments.downloadError'), 'error');
+      }
+    },
+    [card, showToast, t]
+  );
+
+  const closePreview = useCallback(() => {
+    setPreviewOpen(false);
+    setPreviewPayload(null);
+    revokePreviewUrl();
+  }, [revokePreviewUrl]);
+
   return {
     showPassword,
     togglePasswordVisibility,
@@ -125,5 +284,14 @@ export function useDetails({
     toggleFavorite,
     restoreCard,
     purgeCard,
+    attachments,
+    onAddAttachment,
+    onDeleteAttachment,
+    onPreviewAttachment,
+    onDownloadAttachment,
+    previewOpen,
+    closePreview,
+    previewPayload,
+    isPreviewLoading,
   };
 }

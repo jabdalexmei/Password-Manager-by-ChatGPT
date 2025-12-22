@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
+import { useToaster } from '../../../../components/Toaster';
 import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput } from '../../types/ui';
 
 export type DataCardFormState = {
@@ -23,6 +24,7 @@ type UseDataCardsParams = {
   defaultFolderId: string | null;
   onSelectCard: (id: string) => void;
   onCreateCard: (input: CreateDataCardInput) => Promise<DataCard | void | null>;
+  onUploadAttachments: (cardId: string, paths: string[]) => Promise<string[]>;
   onUpdateCard: (input: UpdateDataCardInput) => Promise<void>;
   onDeleteCard: (id: string) => Promise<void> | void;
   onRestoreCard: (id: string) => Promise<void> | void;
@@ -58,6 +60,14 @@ export type DataCardsViewModel = {
   folders: Folder[];
   showPassword: boolean;
   togglePasswordVisibility: () => void;
+  createAttachments: PendingAttachment[];
+  addCreateAttachments: (paths: string[]) => void;
+  removeCreateAttachment: (path: string) => void;
+};
+
+type PendingAttachment = {
+  path: string;
+  name: string;
 };
 
 const normalizeOptional = (value: string) => {
@@ -126,12 +136,14 @@ export function useDataCards({
   defaultFolderId,
   onSelectCard,
   onCreateCard,
+  onUploadAttachments,
   onUpdateCard,
   onDeleteCard,
   onRestoreCard,
   onPurgeCard,
 }: UseDataCardsParams): DataCardsViewModel {
   const { t } = useTranslation('DataCards');
+  const { show: showToast } = useToaster();
   const [createForm, setCreateForm] = useState<DataCardFormState>(() =>
     buildInitialForm(defaultFolderId, findFolderName(defaultFolderId, folders))
   );
@@ -146,6 +158,7 @@ export function useDataCards({
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [createAttachments, setCreateAttachments] = useState<PendingAttachment[]>([]);
 
   const resetCreateForm = useCallback(() => {
     const folderName = findFolderName(defaultFolderId, folders);
@@ -157,6 +170,7 @@ export function useDataCards({
     setCreateFolderError(null);
     setIsCreateSubmitting(false);
     resetCreateForm();
+    setCreateAttachments([]);
     setCreateOpen(true);
     setShowPassword(true);
   }, [resetCreateForm]);
@@ -164,6 +178,7 @@ export function useDataCards({
   const closeCreateModal = useCallback(() => {
     setIsCreateSubmitting(false);
     setCreateOpen(false);
+    setCreateAttachments([]);
   }, []);
 
   const openEditModal = useCallback((card: DataCard) => {
@@ -203,6 +218,25 @@ export function useDataCards({
       setShowPassword(false);
     }
   }, [isCreateOpen, isEditOpen]);
+
+  const addCreateAttachments = useCallback((paths: string[]) => {
+    if (paths.length === 0) return;
+    setCreateAttachments((prev) => {
+      const existing = new Set(prev.map((p) => p.path));
+      const next = [...prev];
+      paths.forEach((path) => {
+        if (existing.has(path)) return;
+        const parts = path.split(/[/\\]/);
+        const name = parts[parts.length - 1] || path;
+        next.push({ path, name });
+      });
+      return next;
+    });
+  }, []);
+
+  const removeCreateAttachment = useCallback((path: string) => {
+    setCreateAttachments((prev) => prev.filter((item) => item.path !== path));
+  }, []);
 
   const updateCreateField = useCallback(
     (field: keyof DataCardFormState, value: string | boolean | null) => {
@@ -274,13 +308,36 @@ export function useDataCards({
 
     setIsCreateSubmitting(true);
     try {
-      await onCreateCard(buildCreateInput(createForm));
-      setCreateOpen(false);
-      resetCreateForm();
+      const created = await onCreateCard(buildCreateInput(createForm));
+
+      if (created && createAttachments.length > 0) {
+        const failed = await onUploadAttachments(
+          created.id,
+          createAttachments.map((item) => item.path)
+        );
+        if (failed.length > 0) {
+          showToast(t('toast.attachmentUploadError'), 'error');
+        }
+      }
+
+      if (created) {
+        setCreateOpen(false);
+        resetCreateForm();
+        setCreateAttachments([]);
+      }
     } finally {
       setIsCreateSubmitting(false);
     }
-  }, [createForm, isCreateSubmitting, onCreateCard, resetCreateForm, t]);
+  }, [
+    createAttachments,
+    createForm,
+    isCreateSubmitting,
+    onCreateCard,
+    onUploadAttachments,
+    resetCreateForm,
+    showToast,
+    t,
+  ]);
 
   const submitEdit = useCallback(async () => {
     if (isEditSubmitting) return;
@@ -340,5 +397,8 @@ export function useDataCards({
     folders,
     showPassword,
     togglePasswordVisibility,
+    createAttachments,
+    addCreateAttachments,
+    removeCreateAttachment,
   };
 }

@@ -4,8 +4,10 @@ import {
   BackendDataCard,
   BackendDataCardSummary,
   BackendFolder,
+  BackendAttachmentMeta,
   BackendUpdateDataCardInput,
   BackendUserSettings,
+  BackendAttachmentPreviewPayload,
 } from '../types/backend';
 
 export async function listFolders(): Promise<BackendFolder[]> {
@@ -70,4 +72,54 @@ export async function purgeDataCard(id: string): Promise<boolean> {
 
 export async function getSettings(): Promise<BackendUserSettings> {
   return invoke('get_settings');
+}
+
+export async function listAttachments(datacardId: string): Promise<BackendAttachmentMeta[]> {
+  return invoke('list_attachments', { datacardId });
+}
+
+export async function addAttachmentFromPath(
+  datacardId: string,
+  sourcePath: string
+): Promise<BackendAttachmentMeta> {
+  return invoke('add_attachment_from_path', { datacardId, sourcePath });
+}
+
+export async function removeAttachment(attachmentId: string): Promise<void> {
+  return invoke('remove_attachment', { attachmentId });
+}
+
+export async function purgeAttachment(attachmentId: string): Promise<void> {
+  return invoke('purge_attachment', { attachmentId });
+}
+
+export async function saveAttachmentToPath(
+  attachmentId: string,
+  targetPath: string
+): Promise<void> {
+  return invoke('save_attachment_to_path', { attachmentId, targetPath });
+}
+
+export type AttachmentPreviewDto = {
+  attachmentId: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+  bytesBase64: string;
+};
+
+export async function getAttachmentBytesBase64(
+  attachmentId: string
+): Promise<AttachmentPreviewDto> {
+  const payload = await invoke<BackendAttachmentPreviewPayload>('get_attachment_bytes_base64', {
+    attachmentId,
+  });
+
+  return {
+    attachmentId: payload.attachment_id,
+    fileName: payload.file_name,
+    mimeType: payload.mime_type,
+    byteSize: payload.byte_size,
+    bytesBase64: payload.base64_data,
+  };
 }

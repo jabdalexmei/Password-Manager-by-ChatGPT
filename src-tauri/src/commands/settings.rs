@@ -16,7 +16,10 @@ pub async fn get_settings(state: State<'_, Arc<AppState>>) -> Result<UserSetting
 }
 
 #[tauri::command]
-pub async fn update_settings(settings: UserSettings, state: State<'_, Arc<AppState>>) -> Result<bool> {
+pub async fn update_settings(
+    settings: UserSettings,
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool> {
     let app = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || update_settings_command(&app, settings))
         .await

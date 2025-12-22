@@ -3,9 +3,17 @@ import {
   BackendDataCard,
   BackendDataCardSummary,
   BackendFolder,
+  BackendAttachmentMeta,
   BackendUpdateDataCardInput,
 } from './backend';
-import { DataCard, Folder, CreateDataCardInput, UpdateDataCardInput, DataCardSummary } from './ui';
+import {
+  DataCard,
+  Folder,
+  CreateDataCardInput,
+  UpdateDataCardInput,
+  DataCardSummary,
+  Attachment,
+} from './ui';
 
 export function mapFolderFromBackend(folder: BackendFolder): Folder {
   return {
@@ -94,6 +102,19 @@ export function mapCardToSummary(card: DataCard, formatter: Intl.DateTimeFormat)
     updatedAtLabel,
     createdAtLabel,
     metaLine: metaFromCard(card, ''),
+  };
+}
+
+export function mapAttachmentFromBackend(attachment: BackendAttachmentMeta): Attachment {
+  return {
+    id: attachment.id,
+    datacardId: attachment.datacard_id,
+    fileName: attachment.file_name,
+    mimeType: attachment.mime_type,
+    byteSize: attachment.byte_size,
+    createdAt: attachment.created_at,
+    updatedAt: attachment.updated_at,
+    deletedAt: attachment.deleted_at,
   };
 }
 

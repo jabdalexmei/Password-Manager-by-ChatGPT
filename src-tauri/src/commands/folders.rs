@@ -27,7 +27,10 @@ pub async fn create_folder(
 }
 
 #[tauri::command]
-pub async fn rename_folder(input: RenameFolderInput, state: State<'_, Arc<AppState>>) -> Result<bool> {
+pub async fn rename_folder(
+    input: RenameFolderInput,
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool> {
     let app = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || folders_service::rename_folder(input, &app))
         .await

@@ -46,3 +46,24 @@ ON datacards(folder_id);
 
 CREATE INDEX IF NOT EXISTS idx_datacards_deleted
 ON datacards(deleted_at);
+
+CREATE TABLE IF NOT EXISTS attachments (
+  id          TEXT PRIMARY KEY,
+  datacard_id TEXT NOT NULL,
+
+  file_name   TEXT NOT NULL,
+  mime_type   TEXT NULL,
+  byte_size   INTEGER NOT NULL,
+
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  deleted_at  TEXT NULL,
+
+  FOREIGN KEY(datacard_id) REFERENCES datacards(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_datacard
+ON attachments(datacard_id);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_deleted
+ON attachments(deleted_at);

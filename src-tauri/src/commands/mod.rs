@@ -1,3 +1,4 @@
+pub mod attachments;
 pub mod datacards;
 pub mod folders;
 pub mod profiles;

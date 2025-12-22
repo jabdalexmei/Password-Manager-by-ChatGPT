@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 2;
+const CURRENT_SCHEMA_VERSION: i32 = 3;
 
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
@@ -17,11 +17,12 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
         0 => {
             conn.execute_batch(include_str!("schema.sql"))
                 .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-            conn.execute_batch("PRAGMA user_version = 2;")
+            conn.execute_batch("PRAGMA user_version = 3;")
                 .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
             Ok(())
         }
         1 => migrate_from_v1_to_v2(conn),
+        2 => migrate_from_v2_to_v3(conn),
         CURRENT_SCHEMA_VERSION => Ok(()),
         _ => Err(ErrorCodeString::new("DB_MIGRATION_FAILED")),
     }
@@ -75,6 +76,36 @@ fn migrate_from_v1_to_v2(conn: &Connection) -> Result<()> {
 
     conn.execute_batch("PRAGMA user_version = 2;")
         .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+    Ok(())
+}
+
+fn migrate_from_v2_to_v3(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS attachments (
+  id          TEXT PRIMARY KEY,
+  datacard_id TEXT NOT NULL,
+
+  file_name   TEXT NOT NULL,
+  mime_type   TEXT NULL,
+  byte_size   INTEGER NOT NULL,
+
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  deleted_at  TEXT NULL,
+
+  FOREIGN KEY(datacard_id) REFERENCES datacards(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_datacard
+ON attachments(datacard_id);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_deleted
+ON attachments(deleted_at);
+
+PRAGMA user_version = 3;",
+    )
+    .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
 
     Ok(())
 }

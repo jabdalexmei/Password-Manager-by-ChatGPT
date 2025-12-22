@@ -43,6 +43,17 @@ export type DataCard = {
   customFields: CustomField[];
 };
 
+export type Attachment = {
+  id: string;
+  datacardId: string;
+  fileName: string;
+  mimeType: string | null;
+  byteSize: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
 export type DataCardSummary = DataCard & {
   updatedAtLabel: string;
   createdAtLabel: string;

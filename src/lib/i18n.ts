@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import startup from '../i18n/English/Startup.json';
 import profileCreate from '../i18n/English/ProfileCreate.json';
 import login from '../i18n/English/LogIn.json';
@@ -37,22 +37,26 @@ export type Namespace = keyof Dictionaries;
 
 export const useTranslation = (namespace?: Namespace) => {
   const dict = useMemo(() => (namespace ? dictionaries[namespace] : undefined), [namespace]);
-  const t = (key: string, params?: Record<string, string | number>): string => {
-    if (!dict || !(key in dict)) return key;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let result = (dict as any)[key] as string;
-    if (params) {
-      Object.entries(params).forEach(([paramKey, value]) => {
-        const pattern = new RegExp(`{{${paramKey}}}`, 'g');
-        result = result.replace(pattern, String(value));
-      });
-    }
+  const t = useCallback(
+    (key: string, params?: Record<string, string | number>): string => {
+      if (!dict || !(key in dict)) return key;
 
-    return result;
-  };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let result = (dict as any)[key] as string;
+      if (params) {
+        Object.entries(params).forEach(([paramKey, value]) => {
+          const pattern = new RegExp(`{{${paramKey}}}`, 'g');
+          result = result.replace(pattern, String(value));
+        });
+      }
 
-  return { t };
+      return result;
+    },
+    [dict]
+  );
+
+  return useMemo(() => ({ t }), [t]);
 };
 
 export const tGlobal = (
