@@ -5,7 +5,9 @@ mod commands;
 mod data {
     pub mod storage_paths;
     pub mod crypto {
+        pub mod cipher;
         pub mod kdf;
+        pub mod key_check;
     }
     pub mod profiles {
         pub mod paths;

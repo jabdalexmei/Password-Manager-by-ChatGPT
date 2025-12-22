@@ -65,7 +65,11 @@ pub fn get_settings(sp: &StoragePaths, profile_id: &str) -> Result<UserSettings>
     serde_json::from_str(&content).map_err(|_| ErrorCodeString::new("SETTINGS_PARSE"))
 }
 
-pub fn update_settings(sp: &StoragePaths, new_settings: UserSettings, profile_id: &str) -> Result<bool> {
+pub fn update_settings(
+    sp: &StoragePaths,
+    new_settings: UserSettings,
+    profile_id: &str,
+) -> Result<bool> {
     validate_settings(&new_settings)?;
     let path = user_settings_path(sp, profile_id);
     let serialized = serde_json::to_string_pretty(&new_settings)

@@ -21,6 +21,14 @@ pub fn vault_db_path(sp: &StoragePaths, profile_id: &str) -> PathBuf {
     profile_dir(sp, profile_id).join("vault.db")
 }
 
+pub fn kdf_salt_path(sp: &StoragePaths, profile_id: &str) -> PathBuf {
+    profile_dir(sp, profile_id).join("kdf_salt.bin")
+}
+
+pub fn key_check_path(sp: &StoragePaths, profile_id: &str) -> PathBuf {
+    profile_dir(sp, profile_id).join("key_check.bin")
+}
+
 pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> PathBuf {
     profile_dir(sp, profile_id).join("user_settings.json")
 }
