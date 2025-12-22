@@ -15,16 +15,16 @@ use crate::data::sqlite::migrations;
 use crate::data::sqlite::pool::clear_pool;
 use crate::error::{ErrorCodeString, Result};
 
-fn owned_data_from_bytes(bytes: Vec<u8>) -> anyhow::Result<OwnedData> {
+fn owned_data_from_bytes(bytes: Vec<u8>) -> Result<OwnedData> {
     if bytes.is_empty() {
-        return Err(anyhow::anyhow!("EMPTY_SERIALIZED_DB"));
+        return Err(ErrorCodeString::new("EMPTY_SERIALIZED_DB"));
     }
 
     // Allocate using SQLite allocator (required by OwnedData::from_raw_nonnull).
     let sz = bytes.len();
     let ptr = unsafe { ffi::sqlite3_malloc64(sz as u64) as *mut u8 };
 
-    let nn = NonNull::new(ptr).ok_or_else(|| anyhow::anyhow!("SQLITE_OOM"))?;
+    let nn = NonNull::new(ptr).ok_or_else(|| ErrorCodeString::new("SQLITE_OOM"))?;
 
     unsafe {
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), nn.as_ptr(), sz);
@@ -65,8 +65,7 @@ fn open_protected_vault_session(
         | rusqlite::OpenFlags::SQLITE_OPEN_SHARED_CACHE;
     let conn = rusqlite::Connection::open_with_flags(&uri, flags)
         .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-    let owned =
-        owned_data_from_bytes(decrypted).map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+    let owned = owned_data_from_bytes(decrypted)?;
     conn.deserialize(DatabaseName::Main, owned, false)
         .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
