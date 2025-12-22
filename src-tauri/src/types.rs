@@ -19,6 +19,15 @@ pub struct AttachmentMeta {
     pub deleted_at: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AttachmentPreviewPayload {
+    pub attachment_id: String,
+    pub file_name: String,
+    pub mime_type: String,
+    pub byte_size: i64,
+    pub base64_data: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProfilesList {
     pub profiles: Vec<ProfileMeta>,

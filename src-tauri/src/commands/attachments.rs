@@ -2,7 +2,7 @@ use tauri::AppHandle;
 
 use crate::error::{ErrorCodeString, Result};
 use crate::services::attachments_service;
-use crate::types::AttachmentMeta;
+use crate::types::{AttachmentMeta, AttachmentPreviewPayload};
 
 #[tauri::command]
 pub async fn list_attachments(app: AppHandle, datacard_id: String) -> Result<Vec<AttachmentMeta>> {
@@ -58,9 +58,12 @@ pub async fn save_attachment_to_path(
 }
 
 #[tauri::command]
-pub async fn open_attachment(app: AppHandle, attachment_id: String) -> Result<()> {
+pub async fn get_attachment_preview(
+    app: AppHandle,
+    attachment_id: String,
+) -> Result<AttachmentPreviewPayload> {
     tauri::async_runtime::spawn_blocking(move || {
-        attachments_service::open_attachment(&app, attachment_id)
+        attachments_service::get_attachment_preview(&app, attachment_id)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?

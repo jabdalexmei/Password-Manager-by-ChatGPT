@@ -1,23 +1,23 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
+use base64::engine::general_purpose;
+use base64::Engine;
 use chrono::Utc;
 use tauri::AppHandle;
 use tauri::Manager;
-use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::data::crypto::cipher;
-use crate::data::profiles::paths::{
-    attachment_file_path, attachment_preview_path, attachments_preview_root,
-};
+use crate::data::profiles::paths::{attachment_file_path, attachments_preview_root};
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
-use crate::types::AttachmentMeta;
+use crate::types::{AttachmentMeta, AttachmentPreviewPayload};
 
 const MAX_ATTACHMENT_SIZE_BYTES: u64 = 50 * 1024 * 1024;
+const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 
 struct ActiveSession {
     state: Arc<AppState>,
@@ -75,36 +75,6 @@ fn ensure_target_dir(path: &Path) -> Result<()> {
         fs::create_dir_all(parent).map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
     }
     Ok(())
-}
-
-fn sanitized_file_name(name: &str) -> String {
-    Path::new(name)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .filter(|n| !n.is_empty())
-        .unwrap_or("attachment")
-        .to_string()
-}
-
-fn write_preview_file(
-    state: &Arc<AppState>,
-    profile_id: &str,
-    attachment_id: &str,
-    file_name: &str,
-    bytes: &[u8],
-) -> Result<PathBuf> {
-    let safe_name = sanitized_file_name(file_name);
-    let preview_path =
-        attachment_preview_path(&state.storage_paths, profile_id, attachment_id, &safe_name);
-
-    if let Some(parent) = preview_path.parent() {
-        let _ = fs::remove_dir_all(parent);
-    }
-
-    ensure_target_dir(&preview_path)?;
-    fs::write(&preview_path, bytes).map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
-
-    Ok(preview_path)
 }
 
 pub fn add_attachment_from_path(
@@ -209,7 +179,10 @@ pub fn save_attachment_to_path(
     fs::write(target, &output_bytes).map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))
 }
 
-pub fn open_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
+pub fn get_attachment_preview(
+    app: &AppHandle,
+    attachment_id: String,
+) -> Result<AttachmentPreviewPayload> {
     let session = require_logged_in(app)?;
     let meta = repo_impl::get_attachment(&session.state, &session.profile_id, &attachment_id)?
         .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_NOT_FOUND"))?;
@@ -217,29 +190,39 @@ pub fn open_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
         return Err(ErrorCodeString::new("ATTACHMENT_NOT_FOUND"));
     }
 
+    if meta.byte_size as usize > MAX_PREVIEW_BYTES {
+        return Err(ErrorCodeString::new("ATTACHMENT_TOO_LARGE_FOR_PREVIEW"));
+    }
+
     let stored_path =
         attachment_file_path(&session.state.storage_paths, &session.profile_id, &meta.id);
     let bytes =
         fs::read(&stored_path).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
+
     let output_bytes = if let Some(key) = session.vault_key {
         cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &key, &bytes)?
     } else {
         bytes
     };
 
-    let preview_path = write_preview_file(
-        &session.state,
-        &session.profile_id,
-        &meta.id,
-        meta.file_name.as_str(),
-        &output_bytes,
-    )?;
+    if output_bytes.len() > MAX_PREVIEW_BYTES {
+        return Err(ErrorCodeString::new("ATTACHMENT_TOO_LARGE_FOR_PREVIEW"));
+    }
 
-    let preview_path_str = preview_path.to_string_lossy().into_owned();
+    let mime = meta
+        .mime_type
+        .clone()
+        .unwrap_or_else(|| "application/octet-stream".to_string());
 
-    app.opener()
-        .open_path(preview_path_str, Option::<String>::None)
-        .map_err(|_| ErrorCodeString::new("ATTACHMENT_OPEN_FAILED"))
+    let base64_data = general_purpose::STANDARD.encode(output_bytes);
+
+    Ok(AttachmentPreviewPayload {
+        attachment_id: meta.id,
+        file_name: meta.file_name,
+        mime_type: mime,
+        byte_size: meta.byte_size,
+        base64_data,
+    })
 }
 
 pub fn clear_previews_for_profile(state: &Arc<AppState>, profile_id: &str) -> Result<()> {

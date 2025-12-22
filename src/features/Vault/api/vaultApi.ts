@@ -5,6 +5,7 @@ import {
   BackendDataCardSummary,
   BackendFolder,
   BackendAttachmentMeta,
+  BackendAttachmentPreviewPayload,
   BackendUpdateDataCardInput,
   BackendUserSettings,
 } from '../types/backend';
@@ -99,6 +100,8 @@ export async function saveAttachmentToPath(
   return invoke('save_attachment_to_path', { attachmentId, targetPath });
 }
 
-export async function openAttachment(attachmentId: string): Promise<void> {
-  return invoke('open_attachment', { attachmentId });
+export async function getAttachmentPreview(
+  attachmentId: string
+): Promise<BackendAttachmentPreviewPayload> {
+  return invoke('get_attachment_preview', { attachmentId });
 }

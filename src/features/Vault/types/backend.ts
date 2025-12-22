@@ -86,6 +86,14 @@ export type BackendAttachmentMeta = {
   deleted_at: string | null;
 };
 
+export type BackendAttachmentPreviewPayload = {
+  attachment_id: string;
+  file_name: string;
+  mime_type: string;
+  byte_size: number;
+  base64_data: string;
+};
+
 export type BackendUserSettings = {
   auto_hide_secret_timeout_seconds: number;
   auto_lock_enabled: boolean;
