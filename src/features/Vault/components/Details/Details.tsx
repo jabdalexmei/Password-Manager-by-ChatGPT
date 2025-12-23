@@ -12,7 +12,7 @@ import {
   IconPreviewOff,
 } from '@/components/lucide/icons';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
-import AttachmentPreviewModal from '../modals/AttachmentPreviewModal';
+import AttachmentPreviewDialog from '../modals/AttachmentPreviewDialog';
 import PasswordHistoryDialog from '../modals/PasswordHistoryDialog';
 
 export type DetailsProps = {
@@ -415,7 +415,7 @@ export function Details({
       </div>
     </div>
 
-      <AttachmentPreviewModal
+      <AttachmentPreviewDialog
         open={detailActions.previewOpen}
         fileName={previewTitle}
         mime={previewMimeType}

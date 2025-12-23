@@ -155,11 +155,9 @@ export type AttachmentPreviewDto = {
   bytesBase64: string;
 };
 
-export async function getAttachmentBytesBase64(
-  attachmentId: string
-): Promise<AttachmentPreviewDto> {
-  const payload = await invoke<BackendAttachmentPreviewPayload>('get_attachment_bytes_base64', {
-    attachmentId,
+export async function getAttachmentPreview(attachmentId: string): Promise<AttachmentPreviewDto> {
+  const payload = await invoke<BackendAttachmentPreviewPayload>('get_attachment_preview', {
+    attachment_id: attachmentId,
   });
 
   return {

@@ -5,7 +5,7 @@ import { useToaster } from '../../../../components/Toaster';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import {
   addAttachmentFromPath,
-  getAttachmentBytesBase64,
+  getAttachmentPreview,
   listAttachments,
   removeAttachment,
   saveAttachmentToPath,
@@ -227,7 +227,7 @@ export function useDetails({
       setPreviewPayload(null);
       revokePreviewUrl();
       try {
-        const payload = await getAttachmentBytesBase64(attachmentId);
+        const payload = await getAttachmentPreview(attachmentId);
         const bytes = base64ToBytes(payload.bytesBase64);
         const mimeType = payload.mimeType || 'application/octet-stream';
         const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
