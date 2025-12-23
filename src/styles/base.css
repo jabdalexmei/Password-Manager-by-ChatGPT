@@ -20,11 +20,6 @@ body,
 
 /* общий фон приложения */
 body {
-  background: linear-gradient(
-    135deg,
-    #0b1222 0%,
-    #0f172a 60%,
-    #0f172a 100%
-  );
+  background: var(--bg-app);
   color: var(--color-text);
 }

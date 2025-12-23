@@ -3,6 +3,7 @@
 mod app_state;
 mod commands;
 mod data {
+    pub mod storage_paths;
     pub mod crypto {
         pub mod cipher;
         pub mod kdf;
@@ -15,22 +16,70 @@ mod data {
     pub mod settings {
         pub mod config;
     }
+    pub mod sqlite {
+        pub mod init;
+        pub mod migrations;
+        pub mod pool;
+        pub mod repo_impl;
+    }
 }
 mod error;
 mod services {
+    pub mod attachments_service;
+    pub mod backup_service;
+    pub mod datacards_service;
+    pub mod folders_service;
+    pub mod password_history_service;
     pub mod profiles_service;
     pub mod security_service;
+    pub mod settings_service;
 }
 mod types;
 
 use std::sync::Arc;
 
 use app_state::AppState;
-use commands::{profiles::*, security::*};
+use commands::{
+    attachments::*,
+    backup::*,
+    datacards::*,
+    folders::*,
+    password_history::*,
+    profiles::*,
+    security::*,
+    settings::*,
+};
+use data::storage_paths::StoragePaths;
+use services::security_service;
+use tauri::{Manager, WindowEvent};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 fn main() {
     tauri::Builder::default()
-        .manage(Arc::new(AppState::new()))
+        .plugin(tauri_plugin_dialog::init())
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
+                let app_state = window.state::<Arc<AppState>>().inner().clone();
+                let _ = security_service::auto_lock_cleanup(&app_state);
+            }
+            _ => {}
+        })
+        .setup(|app| {
+            let storage_paths = match StoragePaths::new() {
+                Ok(paths) => paths,
+                Err(err) => {
+                    app.dialog()
+                        .message(err.message())
+                        .title("Password Manager")
+                        .kind(MessageDialogKind::Error)
+                        .blocking_show();
+                    std::process::exit(1);
+                }
+            };
+
+            app.manage(Arc::new(AppState::new(storage_paths)));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             profiles_list,
             profile_create,
@@ -41,7 +90,40 @@ fn main() {
             lock_vault,
             is_logged_in,
             auto_lock_cleanup,
-            health_check
+            health_check,
+            list_attachments,
+            add_attachment_from_path,
+            remove_attachment,
+            purge_attachment,
+            get_attachment_bytes_base64,
+            get_attachment_preview,
+            save_attachment_to_path,
+            export_backup_command,
+            decrypt_backup_to_temp_command,
+            finalize_restore_command,
+            finalize_import_as_new_profile_command,
+            list_folders,
+            create_folder,
+            rename_folder,
+            move_folder,
+            delete_folder_only,
+            delete_folder_and_cards,
+            list_datacards,
+            list_datacards_summary_command,
+            get_datacard,
+            create_datacard,
+            update_datacard,
+            set_datacard_favorite,
+            move_datacard_to_folder,
+            delete_datacard,
+            list_deleted_datacards,
+            list_deleted_datacards_summary_command,
+            restore_datacard,
+            purge_datacard,
+            get_datacard_password_history,
+            clear_datacard_password_history,
+            get_settings,
+            update_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

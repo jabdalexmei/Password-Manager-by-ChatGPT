@@ -1,3 +1,20 @@
+/* ==========================================================================
+   ui.css
+   --------------------------------------------------------------------------
+   Purpose:
+   - App-level UI building blocks (layouts, forms, buttons, dialogs, toasts).
+   - Uses CSS variables (var(--color-*), --radius-*, --shadow-*) coming from theme(s).
+   Conventions:
+   - "btn" = base button, "btn-*" = variants.
+   - "dialog-*" = modal/dialog UI blocks.
+   - "toast-*" = toaster notifications.
+   ========================================================================== */
+
+/* ==========================================================================
+   Profiles list / profile cards
+   --------------------------------------------------------------------------
+   - Styles for the profile selection/list view (cards, meta text, badges).
+   ========================================================================== */
 .profiles-list {
   display: flex;
   flex-direction: column;
@@ -33,26 +50,33 @@
   word-break: break-all;
 }
 
+/* Badge pill (used to show small labels/statuses inside profile card) */
 .badge {
   display: inline-block;
   margin-top: 8px;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--color-primary);
   color: var(--color-primary);
   font-size: 12px;
-  background: rgba(37, 99, 235, 0.08);
+  background: var(--primary-soft-bg);
 }
 
+/* Empty state (when no profiles / no data to show) */
 .empty-state {
   padding: 18px;
   text-align: center;
   color: var(--color-text-muted);
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface-tint-02);
 }
 
+/* ==========================================================================
+   Generic layout helpers
+   --------------------------------------------------------------------------
+   - Used across views: button rows, grids, centered blocks.
+   ========================================================================== */
 .button-row {
   display: flex;
   gap: 10px;
@@ -69,66 +93,101 @@
   margin-top: 12px;
 }
 
+/* ==========================================================================
+   Forms & inputs
+   --------------------------------------------------------------------------
+   - Generic form layout, label styles, inputs/textarea, focus rings, errors.
+   - These are shared by many dialogs/forms.
+   ========================================================================== */
 .form-grid {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .form-label {
+  font-size: 12px;
+  line-height: 16px;
   color: var(--color-text-muted);
-  font-size: 13px;
 }
 
-.form-field input {
-  width: 100%;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-input-bg);
-  color: var(--color-text);
-}
-
-
-.form-field input:focus {
-  outline: 2px solid var(--color-primary);
-  border-color: transparent;
-}
-
+/* Inputs - shared base for <input>, <select>, <textarea> in forms */
+.input,
+.textarea,
+.form-field input,
 .form-field select,
 .form-field textarea,
 .form-textarea {
   width: 100%;
-  padding: 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background: var(--color-surface-2);
+  background: var(--color-input-bg);
   color: var(--color-text);
+  padding: 10px 12px;
 }
 
-.form-field textarea:focus,
-.form-textarea:focus,
-.form-field select:focus {
-  outline: 2px solid var(--color-primary);
-  border-color: transparent;
-}
-
+/* Textareas - minimum height + allow resize */
+.textarea,
+.form-field textarea,
 .form-textarea {
-  min-height: 140px;
+  min-height: 84px;
   resize: vertical;
 }
 
-.form-error {
-  color: var(--color-danger);
-  font-size: 13px;
+/* Focus styles - consistent accessible outline on keyboard focus */
+.input:focus-visible,
+.textarea:focus-visible,
+.form-field input:focus-visible,
+.form-field select:focus-visible,
+.form-field textarea:focus-visible,
+.form-textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-color: transparent;
 }
 
+/* Notes textarea - larger than default */
+.textarea-notes {
+  min-height: 110px;
+  resize: vertical;
+}
+
+/* Form validation/error text */
+.form-error {
+  color: var(--color-danger);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* Input with action buttons (copy/generate/etc.) */
+.input-with-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-with-actions .input {
+  flex: 1;
+}
+
+.input-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Selected profile info block (summary panel) */
 .profile-selected {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -136,12 +195,21 @@
   padding: 12px;
 }
 
+/* Small uppercase label style (section headings inside panels) */
 .profile-label {
   text-transform: uppercase;
   color: var(--color-text-muted);
   font-size: 12px;
   letter-spacing: 0.08em;
 }
+
+/* ==========================================================================
+   Buttons
+   --------------------------------------------------------------------------
+   - Base button: sizing, alignment, transitions, disabled state.
+   - Variants: primary / secondary / danger / ghost / outline.
+   - Icon-only buttons: fixed square.
+   ========================================================================== */
 .btn {
   cursor: pointer;
   display: inline-flex;
@@ -155,15 +223,24 @@
   transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
+/* Icon button (square) */
+.btn-icon {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+}
+
+/* Disabled buttons: dimmed + no pointer/transform */
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
 }
 
+/* Primary action button (main call-to-action) */
 .btn-primary {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   border-color: var(--color-primary);
 }
 
@@ -171,9 +248,21 @@
   background: var(--color-primary-strong);
 }
 
+/* Secondary action button (neutral) */
+.btn-secondary {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.btn-secondary:not(:disabled):hover {
+  border-color: var(--color-primary);
+}
+
+/* Destructive action button */
 .btn-danger {
   background: var(--color-danger);
-  color: #fff;
+  color: var(--color-on-primary);
   border-color: var(--color-danger);
 }
 
@@ -181,6 +270,7 @@
   background: var(--color-danger-strong);
 }
 
+/* Ghost button (looks like secondary now; keep name for semantic usage) */
 .btn-ghost {
   background: var(--color-surface-2);
   color: var(--color-text);
@@ -191,12 +281,14 @@
   border-color: var(--color-primary);
 }
 
+/* Outline button (transparent background) */
 .btn-outline {
   background: transparent;
   color: var(--color-text);
   border-color: var(--color-border);
 }
 
+/* Link-styled button (text-only action) */
 .link-button {
   background: none;
   border: none;
@@ -209,10 +301,18 @@
 .link-button:hover {
   text-decoration: underline;
 }
+
+/* ==========================================================================
+   Dialog / Modal
+   --------------------------------------------------------------------------
+   - Backdrop + dialog container + header/body/footer.
+   - Close button styling.
+   - Attachments section inside dialog.
+   ========================================================================== */
 .dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--overlay-dialog-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -220,37 +320,273 @@
   z-index: 30;
 }
 
+/* Dialog container */
 .dialog {
-  width: min(420px, 100%);
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
+  width: min(520px, calc(100vw - 32px));
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-1);
   border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-card);
-  padding: 20px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Dialog header row */
+.dialog-header {
+  padding: 16px 18px;
+  
+}
+
+/* "X" close button inside dialogs */
+.dialog-close {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.dialog-close:hover {
+  border-color: var(--color-primary);
 }
 
 .dialog-title {
+  font-size: 16px;
+  line-height: 20px;
   margin: 0;
-  font-size: 18px;
-  color: var(--color-text);
 }
 
 .dialog-description {
-  margin: 8px 0 0 0;
+  margin: 0;
   color: var(--color-text-muted);
   font-size: 14px;
+  line-height: 20px;
 }
 
-.dialog-actions {
-  margin-top: 18px;
+/* Dialog body content area */
+.dialog-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Dialog footer (buttons row) */
+.dialog-footer {
+  padding: 14px 18px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* Dialog footer: keep Cancel on the left, actions on the right */
+.dialog-footer > .btn.btn-secondary:first-child {
+  margin-right: auto;
+}
+
+/* Split footer: left actions + right actions */
+.dialog-footer--split {
+  justify-content: space-between;
+}
+
+.dialog-footer-left,
+.dialog-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Dialog inputs: match Information field rounding */
+.dialog .input,
+.dialog .textarea,
+.dialog .form-field input,
+.dialog .form-field select,
+.dialog .form-field textarea,
+.dialog .form-textarea {
+  border-radius: var(--radius-sm);
+}
+
+/* Attachments block inside a dialog (list of attached files) */
+.dialog-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dialog-attachments-header {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.dialog-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+
+/* One attachment row: name left, actions right */
+.dialog-attachments-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+/* Attachment file name: single line, with ellipsis on overflow */
+.dialog-attachments-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A smaller button style used for "Attach" CTA inside attachment blocks */
+.btn-attach {
+  padding: 10px 12px;
+}
+
+.password-history-body {
+  gap: 16px;
+}
+
+.password-history-controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.password-history-controls .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.password-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.password-history-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+
+.password-history-meta {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.password-history-value {
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+.password-history-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.password-history-actions .icon-button {
+  margin-left: 4px;
+}
+
+.password-history-body .muted {
+  text-align: center;
+}
+
+/* ==========================================================================
+   Password generator dialog (specialized dialog layout)
+   --------------------------------------------------------------------------
+   - Wider dialog, footer/header layout tweaks, generator-specific blocks.
+   ========================================================================== */
+.generator-dialog {
+  max-width: 640px;
+  width: 100%;
+}
+
+.generator-dialog .dialog-header {
+  border-bottom: none;
+  padding-bottom: 10px;
+}
+
+.generator-dialog .dialog-footer {
+  border-top: none;
+  justify-content: space-between;
+  padding-top: 10px;
+}
+
+.generator-body {
+  gap: 16px;
+}
+
+.generator-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.generator-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Password strength visualization block */
+.generator-strength-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.generator-strength-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.generator-strength-title {
+  color: var(--color-text-muted);
+}
+
+.generator-strength-value {
+  color: var(--color-text-muted);
+}
+
+.generator-strength-bar {
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-tint-08);
+  overflow: hidden;
+}
+
+.generator-strength-fill {
+  height: 100%;
+  background: var(--color-success);
+  transition: width 0.2s ease;
+}
+
+/* ==========================================================================
+   Toasts (notifications)
+   --------------------------------------------------------------------------
+   - Host position (top-right) + toast card styling + success/error variants.
+   ========================================================================== */
 .toast-host {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  top: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -278,18 +614,28 @@
   font-size: 14px;
 }
 
+/* Toast variants */
 .toast-success {
   border-color: var(--color-success);
+  background: var(--success-soft-bg);
 }
 
 .toast-error {
   border-color: var(--color-danger);
+  background: var(--danger-soft-bg);
 }
 
+/* ==========================================================================
+   Legacy / compatibility styles
+   --------------------------------------------------------------------------
+   - There is still a ".primary.primary-danger" rule here.
+   - If you standardize on ".btn" variants everywhere, consider removing it later,
+     but only after confirming no components still use ".primary".
+   ========================================================================== */
 /* Маленькая красная кнопка на базе .primary */
 .primary.primary-danger {
   background-color: var(--color-danger);
-  color: #fff;
+  color: var(--color-on-primary);
   border-color: var(--color-danger);
 }
 

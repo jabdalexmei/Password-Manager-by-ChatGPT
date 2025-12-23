@@ -1,0 +1,174 @@
+import { invoke } from '@tauri-apps/api/core';
+import {
+  BackendCreateDataCardInput,
+  BackendDataCard,
+  BackendDataCardSummary,
+  BackendFolder,
+  BackendAttachmentMeta,
+  BackendUpdateDataCardInput,
+  BackendUserSettings,
+  BackendAttachmentPreviewPayload,
+  BackendPasswordHistoryRow,
+} from '../types/backend';
+import { mapPasswordHistoryFromBackend } from '../types/mappers';
+import { PasswordHistoryEntry } from '../types/ui';
+
+export async function listFolders(): Promise<BackendFolder[]> {
+  return invoke('list_folders');
+}
+
+export async function createFolder(input: { name: string; parent_id: string | null }): Promise<BackendFolder> {
+  return invoke('create_folder', { input });
+}
+
+export async function renameFolder(input: { id: string; name: string }): Promise<boolean> {
+  return invoke('rename_folder', { input });
+}
+
+export async function deleteFolderOnly(id: string): Promise<boolean> {
+  return invoke('delete_folder_only', { id });
+}
+
+export async function deleteFolderAndCards(id: string): Promise<boolean> {
+  return invoke('delete_folder_and_cards', { id });
+}
+
+export async function listDataCardSummaries(): Promise<BackendDataCardSummary[]> {
+  return invoke('list_datacards_summary_command');
+}
+
+export async function listDeletedDataCardSummaries(): Promise<BackendDataCardSummary[]> {
+  return invoke('list_deleted_datacards_summary_command');
+}
+
+export async function getDataCard(id: string): Promise<BackendDataCard> {
+  return invoke('get_datacard', { id });
+}
+
+export async function createDataCard(input: BackendCreateDataCardInput): Promise<BackendDataCard> {
+  return invoke('create_datacard', { input });
+}
+
+export async function updateDataCard(input: BackendUpdateDataCardInput): Promise<boolean> {
+  return invoke('update_datacard', { input });
+}
+
+export async function setDataCardFavorite(input: { id: string; is_favorite: boolean }): Promise<boolean> {
+  return invoke('set_datacard_favorite', { input });
+}
+
+export async function moveDataCardToFolder(input: { id: string; folder_id: string | null }): Promise<boolean> {
+  return invoke('move_datacard_to_folder', { input });
+}
+
+export async function deleteDataCard(id: string): Promise<boolean> {
+  return invoke('delete_datacard', { id });
+}
+
+export async function restoreDataCard(id: string): Promise<boolean> {
+  return invoke('restore_datacard', { id });
+}
+
+export async function purgeDataCard(id: string): Promise<boolean> {
+  return invoke('purge_datacard', { id });
+}
+
+export async function getSettings(): Promise<BackendUserSettings> {
+  return invoke('get_settings');
+}
+
+export async function updateSettings(settings: BackendUserSettings): Promise<boolean> {
+  return invoke('update_settings', { settings });
+}
+
+export async function exportBackup(
+  outputPath: string,
+  mode: 'profile' | 'custom',
+  customPassword?: string
+): Promise<boolean> {
+  return invoke('export_backup_command', {
+    output_path: outputPath,
+    mode,
+    custom_password: customPassword ?? null,
+  });
+}
+
+export async function decryptBackupToTemp(backupPath: string, password: string): Promise<string> {
+  return invoke('decrypt_backup_to_temp_command', { backup_path: backupPath, password });
+}
+
+export async function finalizeRestore(tempId: string): Promise<boolean> {
+  return invoke('finalize_restore_command', { temp_id: tempId });
+}
+
+export async function finalizeImportAsNewProfile(
+  tempId: string,
+  newProfileName: string,
+  password: string
+): Promise<boolean> {
+  return invoke('finalize_import_as_new_profile_command', {
+    temp_id: tempId,
+    new_profile_name: newProfileName,
+    password,
+  });
+}
+
+export async function getPasswordHistory(datacardId: string): Promise<PasswordHistoryEntry[]> {
+  const rows = await invoke<BackendPasswordHistoryRow[]>('get_datacard_password_history', {
+    datacard_id: datacardId,
+  });
+
+  return rows.map(mapPasswordHistoryFromBackend);
+}
+
+export async function clearPasswordHistory(datacardId: string): Promise<void> {
+  await invoke('clear_datacard_password_history', { datacard_id: datacardId });
+}
+
+export async function listAttachments(datacardId: string): Promise<BackendAttachmentMeta[]> {
+  return invoke('list_attachments', { datacard_id: datacardId });
+}
+
+export async function addAttachmentFromPath(
+  datacardId: string,
+  sourcePath: string
+): Promise<BackendAttachmentMeta> {
+  return invoke('add_attachment_from_path', { datacard_id: datacardId, source_path: sourcePath });
+}
+
+export async function removeAttachment(attachmentId: string): Promise<void> {
+  return invoke('remove_attachment', { attachment_id: attachmentId });
+}
+
+export async function purgeAttachment(attachmentId: string): Promise<void> {
+  return invoke('purge_attachment', { attachment_id: attachmentId });
+}
+
+export async function saveAttachmentToPath(
+  attachmentId: string,
+  targetPath: string
+): Promise<void> {
+  return invoke('save_attachment_to_path', { attachment_id: attachmentId, target_path: targetPath });
+}
+
+export type AttachmentPreviewDto = {
+  attachmentId: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+  bytesBase64: string;
+};
+
+export async function getAttachmentPreview(attachmentId: string): Promise<AttachmentPreviewDto> {
+  const payload = await invoke<BackendAttachmentPreviewPayload>('get_attachment_preview', {
+    attachment_id: attachmentId,
+  });
+
+  return {
+    attachmentId: payload.attachment_id,
+    fileName: payload.file_name,
+    mimeType: payload.mime_type,
+    byteSize: payload.byte_size,
+    bytesBase64: payload.base64_data,
+  };
+}
