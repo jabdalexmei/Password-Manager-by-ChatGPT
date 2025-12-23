@@ -42,13 +42,15 @@ const ExportBackupDialog: React.FC<ExportBackupDialogProps> = ({
   }, [confirmPassword, mode, password]);
 
   const handleConfirm = async () => {
-    if (validationError) return;
+    const customPassword = mode === 'custom' ? password.trim() : undefined;
+
+    if (validationError || (mode === 'custom' && !customPassword)) return;
     setSubmitting(true);
     setError(null);
     try {
       await onConfirm({
         mode,
-        customPassword: mode === 'custom' ? password : undefined,
+        customPassword,
         rememberPath,
       });
       setPassword('');
