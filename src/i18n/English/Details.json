@@ -22,6 +22,8 @@
   "action.purge": "Purge",
   "action.markFavorite": "Mark favorite",
   "action.unmarkFavorite": "Unmark favorite",
+  "action.passwordHistory": "Password history",
+  "action.clearHistory": "Clear history",
   "toast.copySuccess": "Copied",
   "toast.copyError": "Unable to copy",
   "dialog.delete.title": "Delete card",
@@ -48,5 +50,8 @@
   "toast.attachmentAddSuccess": "Attachment added",
   "toast.attachmentAddError": "Unable to add attachment",
   "toast.attachmentRemoveError": "Unable to remove attachment",
-  "toast.attachmentLoadError": "Unable to load attachments"
+  "toast.attachmentLoadError": "Unable to load attachments",
+  "dialog.passwordHistoryTitle": "Password history",
+  "dialog.clearHistoryConfirm": "Clear password history?",
+  "label.passwordHistoryEmpty": "No password history yet"
 }

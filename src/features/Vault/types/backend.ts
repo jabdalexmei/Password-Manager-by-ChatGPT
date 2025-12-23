@@ -24,6 +24,13 @@ export type BackendCustomField = {
   type: BackendCustomFieldType;
 };
 
+export type BackendPasswordHistoryRow = {
+  id: string;
+  datacard_id: string;
+  password_value: string;
+  created_at: string;
+};
+
 export type BackendDataCard = {
   id: string;
   folder_id: string | null;

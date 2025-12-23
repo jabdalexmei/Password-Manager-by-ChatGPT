@@ -95,6 +95,14 @@ pub struct DataCard {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PasswordHistoryRow {
+    pub id: String,
+    pub datacard_id: String,
+    pub password_value: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DataCardSummary {
     pub id: String,
     pub folder_id: Option<String>,

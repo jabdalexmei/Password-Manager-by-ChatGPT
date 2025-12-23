@@ -450,6 +450,61 @@
   padding: 10px 12px;
 }
 
+.password-history-body {
+  gap: 16px;
+}
+
+.password-history-controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.password-history-controls .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.password-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.password-history-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+
+.password-history-meta {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.password-history-value {
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+.password-history-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.password-history-actions .icon-button {
+  margin-left: 4px;
+}
+
+.password-history-body .muted {
+  text-align: center;
+}
+
 /* ==========================================================================
    Password generator dialog (specialized dialog layout)
    --------------------------------------------------------------------------

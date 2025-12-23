@@ -5,6 +5,7 @@ import {
   BackendFolder,
   BackendAttachmentMeta,
   BackendUpdateDataCardInput,
+  BackendPasswordHistoryRow,
 } from './backend';
 import {
   DataCard,
@@ -13,6 +14,7 @@ import {
   UpdateDataCardInput,
   DataCardSummary,
   Attachment,
+  PasswordHistoryEntry,
 } from './ui';
 
 export function mapFolderFromBackend(folder: BackendFolder): Folder {
@@ -115,6 +117,15 @@ export function mapAttachmentFromBackend(attachment: BackendAttachmentMeta): Att
     createdAt: attachment.created_at,
     updatedAt: attachment.updated_at,
     deletedAt: attachment.deleted_at,
+  };
+}
+
+export function mapPasswordHistoryFromBackend(entry: BackendPasswordHistoryRow): PasswordHistoryEntry {
+  return {
+    id: entry.id,
+    datacardId: entry.datacard_id,
+    passwordValue: entry.password_value,
+    createdAt: entry.created_at,
   };
 }
 

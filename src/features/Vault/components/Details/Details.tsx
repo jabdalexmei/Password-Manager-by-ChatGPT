@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useDetails } from './useDetails';
@@ -7,11 +7,13 @@ import {
   IconCopy,
   IconDelete,
   IconDownload,
+   IconHistory,
   IconPreview,
   IconPreviewOff,
 } from '@/components/lucide/icons';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import AttachmentPreviewModal from '../modals/AttachmentPreviewModal';
+import PasswordHistoryDialog from '../modals/PasswordHistoryDialog';
 
 export type DetailsProps = {
   card: DataCard | null;
@@ -58,6 +60,11 @@ export function Details({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const [attachmentToDelete, setAttachmentToDelete] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    setHistoryOpen(false);
+  }, [card?.id]);
 
   const informationTitle = (
     <div className="vault-section-header">{tVault('information.title')}</div>
@@ -299,6 +306,14 @@ export function Details({
               >
                 {detailActions.showPassword ? <IconPreviewOff /> : <IconPreview />}
               </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label={t('action.passwordHistory')}
+                onClick={() => setHistoryOpen(true)}
+              >
+                <IconHistory />
+              </button>
             </div>
           </div>
         </div>
@@ -401,6 +416,11 @@ export function Details({
         onClose={detailActions.closePreview}
         onDownload={previewDownloadHandler}
         loading={detailActions.isPreviewLoading}
+      />
+      <PasswordHistoryDialog
+        isOpen={historyOpen}
+        datacardId={card.id}
+        onClose={() => setHistoryOpen(false)}
       />
     </>
   );

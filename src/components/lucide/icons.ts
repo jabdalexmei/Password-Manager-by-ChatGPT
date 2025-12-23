@@ -17,4 +17,5 @@ export {
   Paperclip as IconAttachment,
 
   RefreshCw as IconRegenerate,
+  History as IconHistory,
 } from "lucide-react";

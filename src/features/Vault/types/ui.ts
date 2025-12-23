@@ -43,6 +43,13 @@ export type DataCard = {
   customFields: CustomField[];
 };
 
+export type PasswordHistoryEntry = {
+  id: string;
+  datacardId: string;
+  passwordValue: string;
+  createdAt: string;
+};
+
 export type Attachment = {
   id: string;
   datacardId: string;

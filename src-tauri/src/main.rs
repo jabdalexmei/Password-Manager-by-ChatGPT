@@ -28,6 +28,7 @@ mod services {
     pub mod attachments_service;
     pub mod datacards_service;
     pub mod folders_service;
+    pub mod password_history_service;
     pub mod profiles_service;
     pub mod security_service;
     pub mod settings_service;
@@ -37,7 +38,15 @@ mod types;
 use std::sync::Arc;
 
 use app_state::AppState;
-use commands::{attachments::*, datacards::*, folders::*, profiles::*, security::*, settings::*};
+use commands::{
+    attachments::*,
+    datacards::*,
+    folders::*,
+    password_history::*,
+    profiles::*,
+    security::*,
+    settings::*,
+};
 use data::storage_paths::StoragePaths;
 use services::security_service;
 use tauri::{Manager, WindowEvent};
@@ -105,6 +114,8 @@ fn main() {
             list_deleted_datacards_summary_command,
             restore_datacard,
             purge_datacard,
+            get_datacard_password_history,
+            clear_datacard_password_history,
             get_settings,
             update_settings
         ])

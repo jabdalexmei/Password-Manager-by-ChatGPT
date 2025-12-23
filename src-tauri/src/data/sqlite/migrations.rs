@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 3;
+const CURRENT_SCHEMA_VERSION: i32 = 4;
 
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
@@ -17,12 +17,20 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
         0 => {
             conn.execute_batch(include_str!("schema.sql"))
                 .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-            conn.execute_batch("PRAGMA user_version = 3;")
+            conn.execute_batch("PRAGMA user_version = 4;")
                 .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
             Ok(())
         }
-        1 => migrate_from_v1_to_v2(conn),
-        2 => migrate_from_v2_to_v3(conn),
+        1 => {
+            migrate_from_v1_to_v2(conn)?;
+            migrate_from_v2_to_v3(conn)?;
+            migrate_from_v3_to_v4(conn)
+        }
+        2 => {
+            migrate_from_v2_to_v3(conn)?;
+            migrate_from_v3_to_v4(conn)
+        }
+        3 => migrate_from_v3_to_v4(conn),
         CURRENT_SCHEMA_VERSION => Ok(()),
         _ => Err(ErrorCodeString::new("DB_MIGRATION_FAILED")),
     }
@@ -104,6 +112,26 @@ CREATE INDEX IF NOT EXISTS idx_attachments_deleted
 ON attachments(deleted_at);
 
 PRAGMA user_version = 3;",
+    )
+    .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+    Ok(())
+}
+
+fn migrate_from_v3_to_v4(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS datacard_password_history (
+  id TEXT PRIMARY KEY NOT NULL,
+  datacard_id TEXT NOT NULL,
+  password_value TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(datacard_id) REFERENCES datacards(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_datacard_password_history_datacard_id
+  ON datacard_password_history(datacard_id);
+
+PRAGMA user_version = 4;",
     )
     .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
 

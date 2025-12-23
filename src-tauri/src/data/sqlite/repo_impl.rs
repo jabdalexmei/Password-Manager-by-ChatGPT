@@ -12,7 +12,7 @@ use crate::data::profiles::paths::vault_db_path;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::{
     AttachmentMeta, BankCard, CreateDataCardInput, DataCard, DataCardSummary, Folder,
-    SetDataCardFavoriteInput, UpdateDataCardInput,
+    PasswordHistoryRow, SetDataCardFavoriteInput, UpdateDataCardInput,
 };
 
 use std::sync::Arc;
@@ -113,6 +113,15 @@ fn map_attachment(row: &rusqlite::Row) -> rusqlite::Result<AttachmentMeta> {
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
+    })
+}
+
+fn map_password_history_row(row: &rusqlite::Row) -> rusqlite::Result<PasswordHistoryRow> {
+    Ok(PasswordHistoryRow {
+        id: row.get("id")?,
+        datacard_id: row.get("datacard_id")?,
+        password_value: row.get("password_value")?,
+        created_at: row.get("created_at")?,
     })
 }
 
@@ -395,6 +404,36 @@ pub fn update_datacard(
         Some(card) => Some(serialize_json(card)?),
         None => None,
     };
+    let existing_password: Option<String> = conn
+        .query_row(
+            "SELECT password_value FROM datacards WHERE id = ?1",
+            params![input.id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    if existing_password.is_none() {
+        return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let old_trimmed = existing_password
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let new_trimmed = input.password.as_deref().unwrap_or("").trim().to_string();
+
+    if !old_trimmed.is_empty() && old_trimmed != new_trimmed {
+        insert_password_history(
+            state,
+            profile_id,
+            &input.id,
+            existing_password.as_deref().unwrap_or(""),
+            &now,
+        )?;
+    }
     let rows = conn
         .execute(
             "UPDATE datacards SET title = ?1, url = ?2, email = ?3, username = ?4, mobile_phone = ?5, note = ?6, tags_json = ?7, password_value = ?8, bank_card_json = ?9, custom_fields_json = ?10, folder_id = ?11, updated_at = ?12 WHERE id = ?13",
@@ -410,7 +449,7 @@ pub fn update_datacard(
                 bank_card_json,
                 custom_fields_json,
                 input.folder_id,
-                Utc::now().to_rfc3339(),
+                now,
                 input.id
             ],
         )
@@ -698,4 +737,59 @@ pub fn purge_attachment(
     }
 
     Ok(())
+}
+
+pub fn insert_password_history(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    datacard_id: &str,
+    password_value: &str,
+    created_at: &str,
+) -> Result<()> {
+    let conn = open_connection(state, profile_id)?;
+    let id = Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT INTO datacard_password_history (id, datacard_id, password_value, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![id, datacard_id, password_value, created_at],
+    )
+    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(())
+}
+
+pub fn list_password_history(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    datacard_id: &str,
+) -> Result<Vec<PasswordHistoryRow>> {
+    let conn = open_connection(state, profile_id)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT * FROM datacard_password_history WHERE datacard_id = ?1 ORDER BY created_at DESC",
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let rows = stmt
+        .query_map(params![datacard_id], map_password_history_row)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(rows)
+}
+
+pub fn clear_password_history(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    datacard_id: &str,
+) -> Result<usize> {
+    let conn = open_connection(state, profile_id)?;
+    let deleted = conn
+        .execute(
+            "DELETE FROM datacard_password_history WHERE datacard_id = ?1",
+            params![datacard_id],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(deleted as usize)
 }

@@ -8,7 +8,10 @@ import {
   BackendUpdateDataCardInput,
   BackendUserSettings,
   BackendAttachmentPreviewPayload,
+  BackendPasswordHistoryRow,
 } from '../types/backend';
+import { mapPasswordHistoryFromBackend } from '../types/mappers';
+import { PasswordHistoryEntry } from '../types/ui';
 
 export async function listFolders(): Promise<BackendFolder[]> {
   return invoke('list_folders');
@@ -72,6 +75,18 @@ export async function purgeDataCard(id: string): Promise<boolean> {
 
 export async function getSettings(): Promise<BackendUserSettings> {
   return invoke('get_settings');
+}
+
+export async function getPasswordHistory(datacardId: string): Promise<PasswordHistoryEntry[]> {
+  const rows = await invoke<BackendPasswordHistoryRow[]>('get_datacard_password_history', {
+    datacardId,
+  });
+
+  return rows.map(mapPasswordHistoryFromBackend);
+}
+
+export async function clearPasswordHistory(datacardId: string): Promise<void> {
+  await invoke('clear_datacard_password_history', { datacardId });
 }
 
 export async function listAttachments(datacardId: string): Promise<BackendAttachmentMeta[]> {
