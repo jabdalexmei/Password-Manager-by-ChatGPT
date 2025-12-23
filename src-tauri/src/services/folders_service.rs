@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::app_state::AppState;
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
+use crate::services::security_service;
 use crate::services::settings_service::get_settings;
 use crate::types::{CreateFolderInput, Folder, MoveFolderInput, RenameFolderInput};
 
@@ -35,7 +36,9 @@ pub fn create_folder(input: CreateFolderInput, state: &Arc<AppState>) -> Result<
     if name.is_empty() {
         return Err(ErrorCodeString::new("FOLDER_NAME_REQUIRED"));
     }
-    repo_impl::create_folder(state, &profile_id, name, &input.parent_id)
+    let folder = repo_impl::create_folder(state, &profile_id, name, &input.parent_id)?;
+    security_service::persist_active_vault(state)?;
+    Ok(folder)
 }
 
 pub fn rename_folder(input: RenameFolderInput, state: &Arc<AppState>) -> Result<bool> {
@@ -44,12 +47,16 @@ pub fn rename_folder(input: RenameFolderInput, state: &Arc<AppState>) -> Result<
     if name.is_empty() {
         return Err(ErrorCodeString::new("FOLDER_NAME_REQUIRED"));
     }
-    repo_impl::rename_folder(state, &profile_id, &input.id, name)
+    let renamed = repo_impl::rename_folder(state, &profile_id, &input.id, name)?;
+    security_service::persist_active_vault(state)?;
+    Ok(renamed)
 }
 
 pub fn move_folder(input: MoveFolderInput, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::move_folder(state, &profile_id, &input.id, &input.parent_id)
+    let moved = repo_impl::move_folder(state, &profile_id, &input.id, &input.parent_id)?;
+    security_service::persist_active_vault(state)?;
+    Ok(moved)
 }
 
 pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
@@ -60,7 +67,9 @@ pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
     }
 
     repo_impl::move_datacards_to_root(state, &profile_id, &id)?;
-    repo_impl::purge_folder(state, &profile_id, &id)
+    let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
+    security_service::persist_active_vault(state)?;
+    Ok(deleted)
 }
 
 pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool> {
@@ -78,5 +87,7 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
         repo_impl::purge_datacards_in_folder(state, &profile_id, &id)?;
     }
 
-    repo_impl::purge_folder(state, &profile_id, &id)
+    let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
+    security_service::persist_active_vault(state)?;
+    Ok(deleted)
 }

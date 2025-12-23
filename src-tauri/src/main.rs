@@ -39,12 +39,7 @@ use std::sync::Arc;
 
 use app_state::AppState;
 use commands::{
-    attachments::*,
-    datacards::*,
-    folders::*,
-    password_history::*,
-    profiles::*,
-    security::*,
+    attachments::*, datacards::*, folders::*, password_history::*, profiles::*, security::*,
     settings::*,
 };
 use data::storage_paths::StoragePaths;

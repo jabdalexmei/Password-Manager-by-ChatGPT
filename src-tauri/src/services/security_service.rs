@@ -106,12 +106,17 @@ pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) ->
     Ok(true)
 }
 
-fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
+pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
     let profile_id = state
         .logged_in_profile
         .lock()
         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
         .clone();
+
+    let _flight_guard = state
+        .vault_persist_guard
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
 
     if let Some(id) = profile_id.clone() {
         let keeper_guard = state

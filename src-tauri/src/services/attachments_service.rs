@@ -15,6 +15,7 @@ use crate::data::crypto::cipher;
 use crate::data::profiles::paths::{attachment_file_path, attachments_preview_root};
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
+use crate::services::security_service;
 use crate::types::{AttachmentMeta, AttachmentPreviewPayload};
 
 const MAX_ATTACHMENT_SIZE_BYTES: u64 = 50 * 1024 * 1024;
@@ -128,6 +129,8 @@ pub fn add_attachment_from_path(
 
     repo_impl::insert_attachment(&session.state, &session.profile_id, &meta)?;
 
+    security_service::persist_active_vault(&session.state)?;
+
     Ok(meta)
 }
 
@@ -139,7 +142,9 @@ pub fn list_attachments(app: &AppHandle, datacard_id: String) -> Result<Vec<Atta
 pub fn remove_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
     let session = require_logged_in(app)?;
     let now = Utc::now().to_rfc3339();
-    repo_impl::soft_delete_attachment(&session.state, &session.profile_id, &attachment_id, &now)
+    repo_impl::soft_delete_attachment(&session.state, &session.profile_id, &attachment_id, &now)?;
+    security_service::persist_active_vault(&session.state)?;
+    Ok(())
 }
 
 pub fn purge_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
@@ -150,7 +155,9 @@ pub fn purge_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
     let file_path =
         attachment_file_path(&session.state.storage_paths, &session.profile_id, &meta.id);
     let _ = fs::remove_file(file_path);
-    repo_impl::purge_attachment(&session.state, &session.profile_id, &attachment_id)
+    repo_impl::purge_attachment(&session.state, &session.profile_id, &attachment_id)?;
+    security_service::persist_active_vault(&session.state)?;
+    Ok(())
 }
 
 pub fn save_attachment_to_path(

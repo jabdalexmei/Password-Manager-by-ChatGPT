@@ -6,6 +6,7 @@ use crate::app_state::AppState;
 use crate::data::profiles::paths::attachment_file_path;
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
+use crate::services::security_service;
 use crate::services::settings_service::get_settings;
 use crate::types::{
     CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, SetDataCardFavoriteInput,
@@ -81,7 +82,9 @@ pub fn create_datacard(input: CreateDataCardInput, state: &Arc<AppState>) -> Res
     }
     sanitized.tags = normalize_tags(sanitized.tags);
 
-    repo_impl::create_datacard(state, &profile_id, &sanitized)
+    let created = repo_impl::create_datacard(state, &profile_id, &sanitized)?;
+    security_service::persist_active_vault(state)?;
+    Ok(created)
 }
 
 pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Result<bool> {
@@ -93,12 +96,16 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
     }
     sanitized.tags = normalize_tags(sanitized.tags);
 
-    repo_impl::update_datacard(state, &profile_id, &sanitized)
+    let updated = repo_impl::update_datacard(state, &profile_id, &sanitized)?;
+    security_service::persist_active_vault(state)?;
+    Ok(updated)
 }
 
 pub fn move_datacard_to_folder(input: MoveDataCardInput, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::move_datacard(state, &profile_id, &input.id, &input.folder_id)
+    let moved = repo_impl::move_datacard(state, &profile_id, &input.id, &input.folder_id)?;
+    security_service::persist_active_vault(state)?;
+    Ok(moved)
 }
 
 pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
@@ -108,6 +115,7 @@ pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
         let now = Utc::now().to_rfc3339();
         repo_impl::soft_delete_datacard(state, &profile_id, &id)?;
         repo_impl::soft_delete_attachments_by_datacard(state, &profile_id, &id, &now)?;
+        security_service::persist_active_vault(state)?;
         Ok(true)
     } else {
         purge_datacard_with_attachments(state, &profile_id, &id)
@@ -128,6 +136,7 @@ pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
     repo_impl::restore_datacard(state, &profile_id, &id)?;
     repo_impl::restore_attachments_by_datacard(state, &profile_id, &id)?;
+    security_service::persist_active_vault(state)?;
     Ok(true)
 }
 
@@ -153,7 +162,9 @@ fn purge_datacard_with_attachments(
         }
     }
 
-    repo_impl::purge_datacard(state, profile_id, id)
+    let purged = repo_impl::purge_datacard(state, profile_id, id)?;
+    security_service::persist_active_vault(state)?;
+    Ok(purged)
 }
 
 pub fn set_datacard_favorite(
@@ -161,5 +172,7 @@ pub fn set_datacard_favorite(
     state: &Arc<AppState>,
 ) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    repo_impl::set_datacard_favorite(state, &profile_id, &input)
+    let updated = repo_impl::set_datacard_favorite(state, &profile_id, &input)?;
+    security_service::persist_active_vault(state)?;
+    Ok(updated)
 }
