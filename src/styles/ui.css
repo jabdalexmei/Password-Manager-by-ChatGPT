@@ -379,6 +379,11 @@
   gap: 10px;
 }
 
+/* Dialog footer: keep Cancel on the left, actions on the right */
+.dialog-footer > .btn.btn-secondary:first-child {
+  margin-right: auto;
+}
+
 /* Split footer: left actions + right actions */
 .dialog-footer--split {
   justify-content: space-between;
@@ -389,6 +394,16 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* Dialog inputs: match Information field rounding */
+.dialog .input,
+.dialog .textarea,
+.dialog .form-field input,
+.dialog .form-field select,
+.dialog .form-field textarea,
+.dialog .form-textarea {
+  border-radius: var(--radius-sm);
 }
 
 /* Attachments block inside a dialog (list of attached files) */
