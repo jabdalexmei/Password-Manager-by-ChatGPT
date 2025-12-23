@@ -370,13 +370,14 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                 type="button"
                 onClick={() => viewModel.selectCard(card.id)}
               >
-                <div className="datacard-title">{card.title}</div>
+                <div className="datacard-top">
+                  <div className="datacard-title">{card.title}</div>
+                  {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
+                </div>
+
                 <div className="datacard-meta">
                   <span>{meta}</span>
-                  <div>
-                    {isFavorite && <span className="pill">{t('label.favorite')}</span>}
-                    <span className="muted">{updatedText}</span>
-                  </div>
+                  <span className="muted">{updatedText}</span>
                 </div>
               </button>
             );

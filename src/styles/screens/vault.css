@@ -230,7 +230,7 @@
 
 .vault-datacards,
 .vault-details {
-  background: var(--color-surface-2);
+  background: var(--color-surface-2); /* match .vault-sidebar */
   padding: 16px 20px;
   overflow: hidden;
   display: flex;
@@ -299,10 +299,10 @@
 
 /* Cards list */
 .vault-datacard-list {
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 10px;
+  background: transparent; /* remove panel fill */
+  border: none; /* remove stroke */
+  border-radius: 0; /* avoid “panel shape” */
+  padding: 0; /* use column padding instead */
   overflow: auto;
   flex: 1;
   display: flex;
@@ -348,10 +348,22 @@
   color: var(--color-text);
 }
 
+.datacard-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.datacard-favorite {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .datacard-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 10px;
   align-items: center;
   color: var(--color-text-muted);
   font-size: 12px;
