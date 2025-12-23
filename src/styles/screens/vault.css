@@ -230,7 +230,7 @@
 
 .vault-datacards,
 .vault-details {
-  background: radial-gradient(circle at top, var(--color-surface-3), var(--color-surface-1) 60%);
+  background: var(--color-surface-2);
   padding: 16px 20px;
   overflow: hidden;
   display: flex;
