@@ -112,7 +112,13 @@ export type BackendUserSettings = {
   backups_enabled: boolean;
   backup_frequency: "daily" | "weekly" | "monthly";
   backup_retention_days: number;
+  default_export_dir: string | null;
+  last_export_dir: string | null;
   default_sort_field: "created_at" | "updated_at" | "title";
   default_sort_direction: "ASC" | "DESC";
   mask_password_by_default: boolean;
+};
+
+export type BackendBackupTemp = {
+  temp_id: string;
 };

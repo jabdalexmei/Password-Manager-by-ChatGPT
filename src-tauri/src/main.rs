@@ -26,6 +26,7 @@ mod data {
 mod error;
 mod services {
     pub mod attachments_service;
+    pub mod backup_service;
     pub mod datacards_service;
     pub mod folders_service;
     pub mod password_history_service;
@@ -40,6 +41,7 @@ use std::sync::Arc;
 use app_state::AppState;
 use commands::{
     attachments::*,
+    backup::*,
     datacards::*,
     folders::*,
     password_history::*,
@@ -96,6 +98,10 @@ fn main() {
             get_attachment_bytes_base64,
             get_attachment_preview,
             save_attachment_to_path,
+            export_backup_command,
+            decrypt_backup_to_temp_command,
+            finalize_restore_command,
+            finalize_import_as_new_profile_command,
             list_folders,
             create_folder,
             rename_folder,

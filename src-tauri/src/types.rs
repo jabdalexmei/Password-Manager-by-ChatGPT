@@ -194,6 +194,9 @@ pub struct UserSettings {
     pub backup_frequency: String,
     pub backup_retention_days: i64,
 
+    pub default_export_dir: Option<String>,
+    pub last_export_dir: Option<String>,
+
     pub default_sort_field: String,
     pub default_sort_direction: String,
 
@@ -213,6 +216,8 @@ impl Default for UserSettings {
             backups_enabled: false,
             backup_frequency: "weekly".to_string(),
             backup_retention_days: 30,
+            default_export_dir: None,
+            last_export_dir: None,
             default_sort_field: "updated_at".to_string(),
             default_sort_direction: "DESC".to_string(),
             mask_password_by_default: true,

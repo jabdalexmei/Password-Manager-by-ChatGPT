@@ -77,6 +77,34 @@ export async function getSettings(): Promise<BackendUserSettings> {
   return invoke('get_settings');
 }
 
+export async function updateSettings(settings: BackendUserSettings): Promise<boolean> {
+  return invoke('update_settings', { settings });
+}
+
+export async function exportBackup(
+  outputPath: string,
+  mode: 'profile' | 'custom',
+  customPassword?: string
+): Promise<boolean> {
+  return invoke('export_backup_command', { outputPath, mode, customPassword });
+}
+
+export async function decryptBackupToTemp(backupPath: string, password: string): Promise<string> {
+  return invoke('decrypt_backup_to_temp_command', { backupPath, password });
+}
+
+export async function finalizeRestore(tempId: string): Promise<boolean> {
+  return invoke('finalize_restore_command', { tempId });
+}
+
+export async function finalizeImportAsNewProfile(
+  tempId: string,
+  newProfileName: string,
+  password: string
+): Promise<boolean> {
+  return invoke('finalize_import_as_new_profile_command', { tempId, newProfileName, password });
+}
+
 export async function getPasswordHistory(datacardId: string): Promise<PasswordHistoryEntry[]> {
   const rows = await invoke<BackendPasswordHistoryRow[]>('get_datacard_password_history', {
     datacardId,
