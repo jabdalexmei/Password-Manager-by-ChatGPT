@@ -5,6 +5,24 @@ use crate::error::{ErrorCodeString, Result};
 
 const CURRENT_SCHEMA_VERSION: i32 = 4;
 
+fn ensure_password_history_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS datacard_password_history (
+  id TEXT PRIMARY KEY NOT NULL,
+  datacard_id TEXT NOT NULL,
+  password_value TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(datacard_id) REFERENCES datacards(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_datacard_password_history_datacard_id
+  ON datacard_password_history(datacard_id);",
+    )
+    .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+    Ok(())
+}
+
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -13,7 +31,7 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version;", [], |row| row.get(0))
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-    match version {
+    let migration_result = match version {
         0 => {
             conn.execute_batch(include_str!("schema.sql"))
                 .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
@@ -33,7 +51,11 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
         3 => migrate_from_v3_to_v4(conn),
         CURRENT_SCHEMA_VERSION => Ok(()),
         _ => Err(ErrorCodeString::new("DB_MIGRATION_FAILED")),
-    }
+    };
+
+    migration_result?;
+    ensure_password_history_schema(conn)?;
+    Ok(())
 }
 
 fn migrate_from_v1_to_v2(conn: &Connection) -> Result<()> {

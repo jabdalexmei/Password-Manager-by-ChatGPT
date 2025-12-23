@@ -167,11 +167,23 @@ export function useVault(profileId: string, onLocked: () => void) {
           });
           setDeletedCards((prev) => prev.filter((c) => c.id !== id));
         }
+
+        return mapped;
       } catch (err) {
         handleError(err);
+        return null;
       }
     },
     [dtf, handleError, sortCardsWithSettings]
+  );
+
+  const ensureCardDetails = useCallback(
+    async (id: string) => {
+      if (cardDetailsById[id]) return cardDetailsById[id];
+      const loaded = await loadCard(id);
+      return loaded ?? cardDetailsById[id] ?? null;
+    },
+    [cardDetailsById, loadCard]
   );
 
   useEffect(() => {
@@ -602,6 +614,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     moveCardToFolder: moveCardAction,
     lock,
     loadCard,
+    ensureCardDetails,
     toggleFavorite,
     settings,
   };

@@ -7,7 +7,7 @@ import {
   IconCopy,
   IconDelete,
   IconDownload,
-   IconHistory,
+  IconHistory,
   IconPreview,
   IconPreviewOff,
 } from '@/components/lucide/icons';
@@ -127,6 +127,13 @@ export function Details({
               <div className="muted">{updatedText}</div>
             </div>
             <div className="detail-actions">
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+              >
+                {t('action.passwordHistory')}
+              </button>
               {!isTrashMode && (
                 <>
                   <button className="btn btn-secondary" type="button" onClick={detailActions.toggleFavorite}>

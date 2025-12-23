@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useVault } from './useVault';
 import { VaultHeader } from './components/Header/VaultHeader';
 import { Search } from './components/Search/Search';
@@ -9,6 +9,7 @@ import { useDataCards } from './components/DataCards/useDataCards';
 import { useFolders } from './components/Folders/useFolders';
 import { useTranslation } from '../../lib/i18n';
 import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
+import { DataCard } from './types/ui';
 
 type VaultProps = {
   profileId: string;
@@ -42,6 +43,16 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
   const folderDialogs = useFolders({ onCreateFolder: (name) => vault.createFolder(name, null) });
 
   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
+
+  const handleEdit = useCallback(
+    async (card: DataCard) => {
+      const fullDetails = await vault.ensureCardDetails(card.id);
+      if (fullDetails) {
+        dataCardsViewModel.openEditModal(fullDetails);
+      }
+    },
+    [dataCardsViewModel, vault]
+  );
 
   const handleDeleteFolder = (folderId: string) => {
     const target = vault.folders.find((folder) => folder.id === folderId);
@@ -102,7 +113,7 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
           <Details
             card={vault.selectedCard}
             folders={foldersForCards}
-            onEdit={(card) => dataCardsViewModel.openEditModal(card)}
+            onEdit={handleEdit}
             onDelete={vault.deleteCard}
             onRestore={vault.restoreCard}
             onPurge={vault.purgeCard}
