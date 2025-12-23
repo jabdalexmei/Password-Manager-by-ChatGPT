@@ -86,15 +86,15 @@ export async function exportBackup(
   mode: 'profile' | 'custom',
   customPassword?: string
 ): Promise<boolean> {
-  return invoke('export_backup_command', { outputPath, mode, customPassword });
+  return invoke('export_backup_command', { output_path: outputPath, mode, custom_password: customPassword });
 }
 
 export async function decryptBackupToTemp(backupPath: string, password: string): Promise<string> {
-  return invoke('decrypt_backup_to_temp_command', { backupPath, password });
+  return invoke('decrypt_backup_to_temp_command', { backup_path: backupPath, password });
 }
 
 export async function finalizeRestore(tempId: string): Promise<boolean> {
-  return invoke('finalize_restore_command', { tempId });
+  return invoke('finalize_restore_command', { temp_id: tempId });
 }
 
 export async function finalizeImportAsNewProfile(
@@ -102,45 +102,49 @@ export async function finalizeImportAsNewProfile(
   newProfileName: string,
   password: string
 ): Promise<boolean> {
-  return invoke('finalize_import_as_new_profile_command', { tempId, newProfileName, password });
+  return invoke('finalize_import_as_new_profile_command', {
+    temp_id: tempId,
+    new_profile_name: newProfileName,
+    password,
+  });
 }
 
 export async function getPasswordHistory(datacardId: string): Promise<PasswordHistoryEntry[]> {
   const rows = await invoke<BackendPasswordHistoryRow[]>('get_datacard_password_history', {
-    datacardId,
+    datacard_id: datacardId,
   });
 
   return rows.map(mapPasswordHistoryFromBackend);
 }
 
 export async function clearPasswordHistory(datacardId: string): Promise<void> {
-  await invoke('clear_datacard_password_history', { datacardId });
+  await invoke('clear_datacard_password_history', { datacard_id: datacardId });
 }
 
 export async function listAttachments(datacardId: string): Promise<BackendAttachmentMeta[]> {
-  return invoke('list_attachments', { datacardId });
+  return invoke('list_attachments', { datacard_id: datacardId });
 }
 
 export async function addAttachmentFromPath(
   datacardId: string,
   sourcePath: string
 ): Promise<BackendAttachmentMeta> {
-  return invoke('add_attachment_from_path', { datacardId, sourcePath });
+  return invoke('add_attachment_from_path', { datacard_id: datacardId, source_path: sourcePath });
 }
 
 export async function removeAttachment(attachmentId: string): Promise<void> {
-  return invoke('remove_attachment', { attachmentId });
+  return invoke('remove_attachment', { attachment_id: attachmentId });
 }
 
 export async function purgeAttachment(attachmentId: string): Promise<void> {
-  return invoke('purge_attachment', { attachmentId });
+  return invoke('purge_attachment', { attachment_id: attachmentId });
 }
 
 export async function saveAttachmentToPath(
   attachmentId: string,
   targetPath: string
 ): Promise<void> {
-  return invoke('save_attachment_to_path', { attachmentId, targetPath });
+  return invoke('save_attachment_to_path', { attachment_id: attachmentId, target_path: targetPath });
 }
 
 export type AttachmentPreviewDto = {

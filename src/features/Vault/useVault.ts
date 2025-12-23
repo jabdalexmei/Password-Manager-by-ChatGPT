@@ -344,14 +344,22 @@ export function useVault(profileId: string, onLocked: () => void) {
   const updateCardAction = useCallback(
     async (input: UpdateDataCardInput) => {
       try {
-        await updateDataCard(mapUpdateCardToBackend(input));
+        let existing = cardDetailsById[input.id];
+
+        if (!existing) {
+          const fetched = await getDataCard(input.id);
+          existing = mapCardFromBackend(fetched);
+          setCardDetailsById((prev) => ({ ...prev, [input.id]: existing as DataCard }));
+        }
+
+        await updateDataCard(mapUpdateCardToBackend(input, existing ?? undefined));
         await loadCard(input.id);
         if (isTrashMode) await refreshTrash();
       } catch (err) {
         handleError(err);
       }
     },
-    [handleError, isTrashMode, loadCard, refreshTrash]
+    [cardDetailsById, handleError, isTrashMode, loadCard, refreshTrash]
   );
 
   const deleteCardAction = useCallback(

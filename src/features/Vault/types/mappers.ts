@@ -145,9 +145,36 @@ export function mapCreateCardToBackend(input: CreateDataCardInput): BackendCreat
   };
 }
 
-export function mapUpdateCardToBackend(input: UpdateDataCardInput): BackendUpdateDataCardInput {
+export function mapUpdateCardToBackend(
+  input: UpdateDataCardInput,
+  existing?: DataCard
+): BackendUpdateDataCardInput {
   return {
     id: input.id,
-    ...mapCreateCardToBackend(input),
+    folder_id: input.folderId,
+    title: input.title,
+    url: input.url ?? null,
+    email: input.email ?? null,
+    username: input.username ?? null,
+    mobile_phone: input.mobilePhone ?? null,
+    note: input.note ?? null,
+    tags: input.tags ?? [],
+    password: input.password ?? null,
+    bank_card: existing?.bankCard
+      ? {
+          holder: existing.bankCard.holder,
+          number: existing.bankCard.number,
+          expiry_mm_yy: existing.bankCard.expiryMmYy,
+          cvc: existing.bankCard.cvc,
+          note: existing.bankCard.note,
+        }
+      : null,
+    custom_fields: existing?.customFields
+      ? existing.customFields.map((field) => ({
+          key: field.key,
+          value: field.value,
+          type: field.type,
+        }))
+      : [],
   };
 }
