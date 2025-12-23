@@ -1,3 +1,30 @@
+
+
+### Блок “Work Rules / Delivery”
+
+* **You must implement the required code yourself.** This TS is a specification, not a patch to apply blindly.
+* **Do not invent behavior** not described in the TS. If something is unclear, ask before implementing.
+* **Deliver as a PR / branch** with commits; no “here is a zip with random changes”.
+* **Every change must be traceable**: commit message references the TS section (e.g., `TS-1.3 Password History invoke args`).
+* **No partial implementations**: do not add UI without backend or vice versa.
+
+### Блок “Definition of Done”
+
+* `pnpm dev` / `npm run dev` passes
+* `cargo tauri dev` passes
+* Manual QA checklist from TS completed (attach screenshots/logs)
+* No console errors during the tested flows
+* All commands use snake_case args (grep check)
+
+
+**Implementation requirement (must read):**
+You are responsible for writing the code changes described below. Do not submit placeholders, stubs, or partial UI-only work. Deliver a PR with working backend + frontend, and include evidence that the QA checklist passes (screenshots + logs). If any point is unclear, stop and ask before implementing.
+
+
+
+
+
+
 ## Technical Specification (EN): Stabilize & Complete Password History + Attachments + Backup (Full Working State)
 
 ### Objective
