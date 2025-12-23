@@ -22,16 +22,20 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   if (!open) return null;
   return (
     <div className="dialog-backdrop">
-      <div className="dialog">
+      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
         <div className="dialog-header">
-          <h3>{title}</h3>
+          <h3 id="confirm-dialog-title" className="dialog-title">
+            {title}
+          </h3>
         </div>
-        <p>{description}</p>
-        <div className="dialog-actions">
-          <button className="secondary" onClick={onCancel}>
+        <div className="dialog-body">
+          <p className="dialog-description">{description}</p>
+        </div>
+        <div className="dialog-footer">
+          <button type="button" className="btn btn-secondary" onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button className="primary primary-danger" onClick={onConfirm}>
+          <button type="button" className="btn btn-danger" onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>
