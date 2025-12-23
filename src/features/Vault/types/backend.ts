@@ -78,8 +78,10 @@ export type BackendCreateDataCardInput = {
   custom_fields: BackendCustomField[];
 };
 
-export type BackendUpdateDataCardInput = BackendCreateDataCardInput & {
+export type BackendUpdateDataCardInput = Omit<BackendCreateDataCardInput, 'bank_card' | 'custom_fields'> & {
   id: string;
+  bank_card?: BackendBankCard | null;
+  custom_fields?: BackendCustomField[];
 };
 
 export type BackendAttachmentMeta = {

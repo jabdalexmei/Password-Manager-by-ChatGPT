@@ -10,6 +10,7 @@ use crate::services::password_history_service;
 #[derive(Serialize)]
 pub struct PasswordHistoryRowDto {
     pub id: String,
+    pub datacard_id: String,
     pub password_value: String,
     pub created_at: String,
 }
@@ -31,6 +32,7 @@ pub async fn get_datacard_password_history(
         .into_iter()
         .map(|row| PasswordHistoryRowDto {
             id: row.id,
+            datacard_id: row.datacard_id,
             password_value: row.password_value,
             created_at: row.created_at,
         })

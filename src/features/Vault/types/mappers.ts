@@ -149,7 +149,7 @@ export function mapUpdateCardToBackend(
   input: UpdateDataCardInput,
   existing?: DataCard
 ): BackendUpdateDataCardInput {
-  return {
+  const payload: BackendUpdateDataCardInput = {
     id: input.id,
     folder_id: input.folderId,
     title: input.title,
@@ -160,21 +160,25 @@ export function mapUpdateCardToBackend(
     note: input.note ?? null,
     tags: input.tags ?? [],
     password: input.password ?? null,
-    bank_card: existing?.bankCard
-      ? {
-          holder: existing.bankCard.holder,
-          number: existing.bankCard.number,
-          expiry_mm_yy: existing.bankCard.expiryMmYy,
-          cvc: existing.bankCard.cvc,
-          note: existing.bankCard.note,
-        }
-      : null,
-    custom_fields: existing?.customFields
-      ? existing.customFields.map((field) => ({
-          key: field.key,
-          value: field.value,
-          type: field.type,
-        }))
-      : [],
   };
+
+  if (existing?.bankCard) {
+    payload.bank_card = {
+      holder: existing.bankCard.holder,
+      number: existing.bankCard.number,
+      expiry_mm_yy: existing.bankCard.expiryMmYy,
+      cvc: existing.bankCard.cvc,
+      note: existing.bankCard.note,
+    };
+  }
+
+  if (existing?.customFields) {
+    payload.custom_fields = existing.customFields.map((field) => ({
+      key: field.key,
+      value: field.value,
+      type: field.type,
+    }));
+  }
+
+  return payload;
 }

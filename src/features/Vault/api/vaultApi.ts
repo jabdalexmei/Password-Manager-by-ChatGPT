@@ -86,7 +86,11 @@ export async function exportBackup(
   mode: 'profile' | 'custom',
   customPassword?: string
 ): Promise<boolean> {
-  return invoke('export_backup_command', { output_path: outputPath, mode, custom_password: customPassword });
+  return invoke('export_backup_command', {
+    output_path: outputPath,
+    mode,
+    custom_password: customPassword ?? null,
+  });
 }
 
 export async function decryptBackupToTemp(backupPath: string, password: string): Promise<string> {
