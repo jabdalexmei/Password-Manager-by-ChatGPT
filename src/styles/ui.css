@@ -332,7 +332,7 @@
 /* Dialog header row */
 .dialog-header {
   padding: 16px 18px;
-  border-bottom: 1px solid var(--color-border);
+  
 }
 
 /* "X" close button inside dialogs */
@@ -374,7 +374,6 @@
 /* Dialog footer (buttons row) */
 .dialog-footer {
   padding: 14px 18px;
-  border-top: 1px solid var(--color-border);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
