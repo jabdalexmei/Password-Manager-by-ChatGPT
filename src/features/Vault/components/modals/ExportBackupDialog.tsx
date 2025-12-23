@@ -28,6 +28,9 @@ const ExportBackupDialog: React.FC<ExportBackupDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const validationError = useMemo(() => {
+    if (mode === 'custom' && (!password.trim() || !confirmPassword.trim())) {
+      return 'Password required';
+    }
     if (mode === 'custom' && password !== confirmPassword) {
       return 'Passwords do not match';
     }
