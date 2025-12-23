@@ -302,7 +302,9 @@
   background: transparent; /* remove panel fill */
   border: none; /* remove stroke */
   border-radius: 0; /* avoid “panel shape” */
-  padding: 0; /* use column padding instead */
+
+  /* prevent clipping of hover transform + focus-visible outline */
+  padding: 4px;
   overflow: auto;
   flex: 1;
   display: flex;
