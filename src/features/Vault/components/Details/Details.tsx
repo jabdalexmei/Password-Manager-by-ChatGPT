@@ -82,9 +82,11 @@ export function Details({
   const hasUrl = hasValue(card.url);
   const hasUsername = hasValue(card.username);
   const hasEmail = hasValue(card.email);
-  const hasMobile = hasValue(card.mobilePhone);
+  const hasMobilePhone = hasValue(card.mobilePhone);
   const hasPassword = hasValue(card.password);
   const hasNote = hasValue(card.note);
+  const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
+  const hasFolderName = hasValue(folderName);
   const passwordDisplay = hasPassword
     ? detailActions.showPassword
       ? card.password
@@ -112,37 +114,37 @@ export function Details({
       <div className="vault-panel-wrapper">
         {informationTitle}
         <div className="vault-detail-card">
-        <div className="detail-row">
-          <div className="detail-dates">
-            <div className="muted">{createdText}</div>
-            <div className="muted">{updatedText}</div>
+          <div className="detail-row">
+            <div className="detail-dates">
+              <div className="muted">{createdText}</div>
+              <div className="muted">{updatedText}</div>
+            </div>
+            <div className="detail-actions">
+              {!isTrashMode && (
+                <>
+                  <button className="btn btn-secondary" type="button" onClick={detailActions.toggleFavorite}>
+                    {isFavorite ? t('action.unmarkFavorite') : t('action.markFavorite')}
+                  </button>
+                  <button className="btn btn-secondary" type="button" onClick={detailActions.editCard}>
+                    {t('action.edit')}
+                  </button>
+                  <button className="btn btn-danger" type="button" onClick={() => setDeleteConfirmOpen(true)}>
+                    {t('action.delete')}
+                  </button>
+                </>
+              )}
+              {isTrashMode && (
+                <>
+                  <button className="btn btn-secondary" type="button" onClick={detailActions.restoreCard}>
+                    {t('action.restore')}
+                  </button>
+                  <button className="btn btn-danger" type="button" onClick={() => setPurgeConfirmOpen(true)}>
+                    {t('action.purge')}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-          <div className="detail-actions">
-            {!isTrashMode && (
-              <>
-                <button className="btn btn-secondary" type="button" onClick={detailActions.toggleFavorite}>
-                  {isFavorite ? t('action.unmarkFavorite') : t('action.markFavorite')}
-                </button>
-                <button className="btn btn-secondary" type="button" onClick={detailActions.editCard}>
-                  {t('action.edit')}
-                </button>
-                <button className="btn btn-danger" type="button" onClick={() => setDeleteConfirmOpen(true)}>
-                  {t('action.delete')}
-                </button>
-              </>
-            )}
-            {isTrashMode && (
-              <>
-                <button className="btn btn-secondary" type="button" onClick={detailActions.restoreCard}>
-                  {t('action.restore')}
-                </button>
-                <button className="btn btn-danger" type="button" onClick={() => setPurgeConfirmOpen(true)}>
-                  {t('action.purge')}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
 
         <ConfirmDialog
           open={deleteConfirmOpen}
@@ -190,18 +192,20 @@ export function Details({
         </div>
       </div>
 
-      <div className="detail-field">
-        <div className="detail-label">{t('label.folder')}</div>
-        <div className="detail-value-box">
-          <div className="detail-value-text">{folderName}</div>
+      {hasFolderName && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.folder')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{folderName}</div>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="detail-field">
-        <div className="detail-label">{t('label.username')}</div>
-        <div className="detail-value-box">
-          <div className="detail-value-text">{card.username ?? ''}</div>
-          {hasUsername && (
+      {hasUsername && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.username')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{card.username ?? ''}</div>
             <div className="detail-value-actions">
               <button
                 className="icon-button"
@@ -212,15 +216,15 @@ export function Details({
                 <IconCopy />
               </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="detail-field">
-        <div className="detail-label">{t('label.email')}</div>
-        <div className="detail-value-box">
-          <div className="detail-value-text">{card.email ?? ''}</div>
-          {hasEmail && (
+      {hasEmail && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.email')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{card.email ?? ''}</div>
             <div className="detail-value-actions">
               <button
                 className="icon-button"
@@ -231,15 +235,15 @@ export function Details({
                 <IconCopy />
               </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="detail-field">
-        <div className="detail-label">{t('label.url')}</div>
-        <div className="detail-value-box">
-          <div className="detail-value-text">{card.url ?? ''}</div>
-          {hasUrl && (
+      {hasUrl && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.url')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{card.url ?? ''}</div>
             <div className="detail-value-actions">
               <button
                 className="icon-button"
@@ -250,15 +254,15 @@ export function Details({
                 <IconCopy />
               </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="detail-field">
-        <div className="detail-label">{t('label.mobile')}</div>
-        <div className="detail-value-box">
-          <div className="detail-value-text">{card.mobilePhone ?? ''}</div>
-          {hasMobile && (
+      {hasMobilePhone && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.mobile')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{card.mobilePhone ?? ''}</div>
             <div className="detail-value-actions">
               <button
                 className="icon-button"
@@ -269,15 +273,15 @@ export function Details({
                 <IconCopy />
               </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="detail-field">
-        <div className="detail-label">{t('label.password')}</div>
-        <div className="detail-value-box">
-          <div className="detail-value-text">{passwordDisplay}</div>
-          {hasPassword && (
+      {hasPassword && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.password')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{passwordDisplay}</div>
             <div className="detail-value-actions">
               <button
                 className="icon-button"
@@ -296,15 +300,15 @@ export function Details({
                 {detailActions.showPassword ? <IconPreviewOff /> : <IconPreview />}
               </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="detail-field">
-        <div className="detail-label">{t('label.note')}</div>
-        <div className="detail-value-box detail-value-multiline">
-          <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
-          {hasNote && (
+      {hasNote && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.note')}</div>
+          <div className="detail-value-box detail-value-multiline">
+            <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
             <div className="detail-value-actions">
               <button
                 className="icon-button"
@@ -315,16 +319,18 @@ export function Details({
                 <IconCopy />
               </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="detail-field">
-        <div className="detail-label">{t('label.tags')}</div>
-        <div className="detail-value-box">
-          <div className="detail-value-text">{card.tags && card.tags.length > 0 ? card.tags.join(', ') : ''}</div>
+      {hasTags && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.tags')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{card.tags?.join(', ')}</div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="detail-field attachments-panel">
         <div className="attachments-header">
