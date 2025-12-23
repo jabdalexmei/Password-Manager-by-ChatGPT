@@ -140,7 +140,9 @@
   flex-direction: column;
   gap: 6px;
 }
-
+.vault-folder-list + .vault-sidebar-title {
+  margin-top: 8px;
+}
 .vault-context-backdrop {
   position: fixed;
   inset: 0;
@@ -207,6 +209,7 @@
 .vault-folder-list li.active .vault-folder {
   background: linear-gradient(90deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
   border-color: var(--color-primary);
+  
 }
 
 .folder-name {
