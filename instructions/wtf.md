@@ -1,62 +1,89 @@
+TS (EN) — Split into Parts (Incremental Delivery)
+Общие правила поставки (для исполнителя)
 
+Each part must be delivered as a PR/branch with commits.
 
-# TS (EN) — Split into Parts (Incremental Delivery)
+Do not add placeholders/stubs. If a part includes UI, the backend must work for that part.
 
-## Общие правила поставки (для исполнителя)
+Provide evidence: screenshots + short console logs for the acceptance checks of that part.
 
-* Each part must be delivered as a PR/branch with commits.
-* Do not add placeholders/stubs. If a part includes UI, the backend must work for that part.
-* Provide evidence: screenshots + short console logs for the acceptance checks of that part.
-
----
-
-## Part 1 — Stabilize invoke args + prevent data loss on update
+## Part 2 — Ensure Edit uses full card details (no summary-save bugs)
 
 ### Goal
 
-Stop “Operation failed” caused by wrong invoke payload keys and stop wiping `bank_card/custom_fields` on save.
+Prevent accidental clearing of password/note/mobile/etc when editing.
 
 ### Changes
 
-#### 1.1 Standardize invoke payload keys to snake_case
+#### 2.1 Load full card before opening Edit modal
 
-**Files (search all `invoke(`):**
+**Files**
 
-* `src/features/Vault/api/vaultApi.ts`
-* any other files calling `invoke` directly
-
-**Requirement**
-Frontend must send snake_case keys matching Rust command parameters:
-
-* `datacardId` → `datacard_id`
-* `attachmentId` → `attachment_id`
-* `sourcePath` → `source_path`
-* `targetPath` → `target_path`
-* etc.
-
-#### 1.2 Fix update mapper so it does NOT wipe unrelated fields
-
-**File**
-
-* `src/features/Vault/types/mappers.ts`
+* `src/features/Vault/useVault.ts`
+* `src/features/Vault/components/DataCards/useDataCards.ts`
 
 **Requirement**
-`mapUpdateCardToBackend()` must not hardcode:
+When user clicks “Edit”:
 
-* `bank_card: null`
-* `custom_fields: []`
+* if full details for selected card are not loaded yet (`cardDetailsById[id]` missing),
 
-**Implementation options (choose one)**
+  * fetch details first (existing `get_datacard` / `loadCard`)
+  * only then open edit dialog with full model
 
-* Option A (recommended): for update payload, omit `bank_card` and `custom_fields` entirely if UI does not edit them.
-* Option B: include existing values from loaded card details (requires Part 2 behavior).
+Alternative: disable Edit until details loaded (acceptable but worse UX).
 
 ### Acceptance checks
 
-* Edit a card and change only “title/meta/username/email” → Save → values persist.
-* Existing `bank_card/custom_fields` (if present) are unchanged after saving.
-* No console “Operation failed” due to missing command args (verify by expanding error object).
+* Select a card, immediately click Edit, change a random field, Save.
+* Verify `password` is NOT cleared if user did not touch it.
+* Verify notes/phones/urls are not cleared.
+
+---
+
+## Part 3 — Password History: end-to-end working + accessible even when password empty
+
+### Goal
+
+Password history works reliably and can be opened even if current password is empty (since you hide empty fields).
+
+### Changes
+
+#### 3.1 DB safety: always ensure history table exists (no migration dependency)
+
+**Files**
+
+* `src-tauri/src/data/sqlite/schema.sql`
+* `src-tauri/src/data/sqlite/init.rs` (or wherever schema is applied)
+
+**Requirement**
+Execute `CREATE TABLE IF NOT EXISTS datacard_password_history ...` and index on every init/startup.
+
+#### 3.2 Commands wiring + invoke keys
+
+**Backend**
+
+* `src-tauri/src/commands/password_history.rs`
+  **Frontend**
+* `src/features/Vault/api/vaultApi.ts`
+
+Ensure invoke uses `{ datacard_id }`.
+
+#### 3.3 UI: make history accessible even if password field hidden
+
+**Files**
+
+* `src/features/Vault/components/Details/Details.tsx`
+* `src/features/Vault/components/modals/PasswordHistoryDialog.tsx`
+
+**Requirement**
+History entry point must not be inside the password row only.
+Add a “Password history” icon/button in a stable place (e.g., Details “Actions” row) that opens dialog for the card.
+
+### Acceptance checks
+
+* Change password twice → History shows previous passwords with timestamps.
+* Clear password → old password is written to history.
+* With current password empty, history dialog is still accessible and shows entries.
+* Clear history works.
 
 
-
-Если хочешь, я могу **сразу начать с Part 1** и сделать его ещё более конкретным под твой код: перечислить точные команды/ключи, которые сейчас расходятся, и в каких строках `mappers.ts` идёт затирание.
