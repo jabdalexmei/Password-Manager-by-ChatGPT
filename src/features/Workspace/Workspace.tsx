@@ -62,25 +62,36 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   }, [onWorkspaceReady, refresh, t, useDefaultPath]);
 
   // IMPORTANT: this button acts as:
-  // - "open in Explorer" when active workspace is valid
-  // - "browse/select folder" when there is no valid active workspace
+  // - browse/select folder (always opens picker)
+  // - if the picked folder equals the current active valid workspace -> open in Explorer
   const handleOpenDataFolder = useCallback(async () => {
     setBusy(true);
     try {
-      if (activeWorkspace && activeWorkspace.exists && activeWorkspace.valid) {
-        await workspaceOpenInExplorer();
-        return;
-      }
-
+      // Always open directory picker first (acts as "Browse…")
       const selected = await open({
         directory: true,
         multiple: false,
         title: t('chooseFolder'),
       });
 
-      if (typeof selected !== 'string') return;
+      if (typeof selected !== 'string') {
+        return; // cancelled
+      }
 
+      // If user picked the currently active valid workspace -> just reveal it in Explorer
+      if (
+        activeWorkspace &&
+        activeWorkspace.exists &&
+        activeWorkspace.valid &&
+        activeWorkspace.path === selected
+      ) {
+        await workspaceOpenInExplorer();
+        return;
+      }
+
+      // Otherwise initialize/add this folder as a workspace
       await workspaceCreate(selected);
+
       await refresh();
       onWorkspaceReady();
     } finally {
@@ -104,7 +115,6 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
       <div className="workspace-list">
         {workspaces.map((workspace) => {
           const isSelected = workspace.id === selectedId;
-
           const statusLabel = workspace.exists ? (workspace.valid ? null : t('invalid')) : t('missing');
 
           return (
