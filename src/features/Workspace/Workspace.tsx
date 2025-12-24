@@ -24,10 +24,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
     [selectedId, workspaces]
   );
 
-  const activeWorkspace = useMemo(
-    () => workspaces.find((w) => w.is_active) ?? null,
-    [workspaces]
-  );
+  const activeWorkspace = useMemo(() => workspaces.find((w) => w.is_active) ?? null, [workspaces]);
 
   const handleSelect = useCallback(
     async (id: string) => {
@@ -54,9 +51,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
           multiple: false,
           title: t('chooseFolder'),
         });
-        if (typeof selected !== 'string') {
-          return;
-        }
+        if (typeof selected !== 'string') return;
         await workspaceCreate(selected);
       }
       await refresh();
@@ -83,9 +78,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
         title: t('chooseFolder'),
       });
 
-      if (typeof selected !== 'string') {
-        return;
-      }
+      if (typeof selected !== 'string') return;
 
       await workspaceCreate(selected);
       await refresh();
@@ -96,13 +89,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   }, [activeWorkspace, onWorkspaceReady, refresh, t]);
 
   const workspaceListContent = useMemo(() => {
-    if (loading) {
-      return <p className="muted centered">{t('loading')}</p>;
-    }
-
-    if (error) {
-      return <p className="muted centered">{t('error')}</p>;
-    }
+    if (loading) return <p className="muted centered">{t('loading')}</p>;
+    if (error) return <p className="muted centered">{t('error')}</p>;
 
     if (!workspaces.length) {
       return (
@@ -117,12 +105,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
         {workspaces.map((workspace) => {
           const isSelected = workspace.id === selectedId;
 
-          // keep status info (optional UI chip)
-          const statusLabel = workspace.exists
-            ? workspace.valid
-              ? null
-              : t('invalid')
-            : t('missing');
+          const statusLabel = workspace.exists ? (workspace.valid ? null : t('invalid')) : t('missing');
 
           return (
             <div
@@ -130,9 +113,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
               className={`workspace-tile ${isSelected ? 'selected' : ''}`}
               onClick={() => setSelectedId(workspace.id)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  setSelectedId(workspace.id);
-                }
+                if (event.key === 'Enter') setSelectedId(workspace.id);
               }}
               role="button"
               tabIndex={0}
@@ -201,11 +182,16 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
           <p className="workspace-subtitle">{t('subtitle')}</p>
         </header>
 
+        {/* 2-row grid:
+            row 1: left title only
+            row 2: left list + right actions aligned to list top */}
         <div className="workspace-mock-layout">
-          <section className="workspace-left">
+          <div className="workspace-left-title">
             <h2 className="workspace-section-title">{t('workspaces')}</h2>
-            {workspaceListContent}
-          </section>
+          </div>
+          <div className="workspace-right-title-spacer" />
+
+          <section className="workspace-left">{workspaceListContent}</section>
 
           <section className="workspace-right">
             <button
@@ -236,7 +222,6 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
               <span>{t('useDefaultPath')}</span>
             </label>
 
-            {/* Optional: keep selection info hidden to match mock exactly */}
             <div className="workspace-selection-hint" aria-hidden="true">
               {selectedWorkspace ? selectedWorkspace.display_name : ''}
             </div>
