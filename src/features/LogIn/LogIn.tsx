@@ -1,10 +1,11 @@
-import React, { FormEvent } from 'react';
+import React, { FormEvent, useEffect } from 'react';
 import { useTranslation } from '../../lib/i18n';
 import { useLogIn } from './useLogIn';
 
 type LogInProps = {
   profileId: string;
   profileName: string;
+  hasPassword: boolean;
   onBack: () => void;
   onSuccess: () => void;
 };
@@ -12,6 +13,7 @@ type LogInProps = {
 const LogIn: React.FC<LogInProps> = ({
   profileId,
   profileName,
+  hasPassword,
   onBack,
   onSuccess,
 }) => {
@@ -21,10 +23,20 @@ const LogIn: React.FC<LogInProps> = ({
     onSuccess,
   );
 
+  useEffect(() => {
+    if (!hasPassword) {
+      onBack();
+    }
+  }, [hasPassword, onBack]);
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     submit();
   };
+
+  if (!hasPassword) {
+    return null;
+  }
 
   return (
     <div className="login-screen">

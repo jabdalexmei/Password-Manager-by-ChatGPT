@@ -5,11 +5,13 @@ import { useTranslation } from '../../../../lib/i18n';
 type Props = {
   profileName: string;
   profileId: string;
+  isPasswordless: boolean;
   onLock: () => void;
 };
 
-export function VaultHeader({ profileName, profileId, onLock }: Props) {
+export function VaultHeader({ profileName, profileId, isPasswordless, onLock }: Props) {
   const { t } = useTranslation('Vault');
+  const lockLabel = isPasswordless ? t('logout') : t('lock');
 
   return (
     <header className="vault-appbar">
@@ -28,7 +30,7 @@ export function VaultHeader({ profileName, profileId, onLock }: Props) {
         <button className="vault-action-button" type="button" aria-label={t('settings')} disabled>
           <IconSettings />
         </button>
-        <button className="vault-action-button" type="button" aria-label={t('lock')} onClick={onLock}>
+        <button className="vault-action-button" type="button" aria-label={lockLabel} title={lockLabel} onClick={onLock}>
           <IconLock />
         </button>
       </div>

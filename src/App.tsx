@@ -47,13 +47,26 @@ const App: React.FC = () => {
           <LogIn
             profileId={activeProfile.id}
             profileName={activeProfile.name}
+            hasPassword={activeProfile.has_password}
             onBack={() => setView('startup')}
             onSuccess={() => setView('vault')}
           />
         ) : null;
       case 'vault':
         return activeProfile ? (
-          <Vault profileId={activeProfile.id} profileName={activeProfile.name} onLocked={() => setView('login')} />
+          <Vault
+            profileId={activeProfile.id}
+            profileName={activeProfile.name}
+            isPasswordless={!activeProfile.has_password}
+            onLocked={() => {
+              if (activeProfile.has_password) {
+                setView('login');
+              } else {
+                setProfile(null);
+                setView('startup');
+              }
+            }}
+          />
         ) : null;
       default:
         return null;
