@@ -6,6 +6,7 @@ use rusqlite::types::Type;
 use rusqlite::OptionalExtension;
 use uuid::Uuid;
 
+use super::diagnostics::log_sqlite_err;
 use super::pool::{self, DbTarget};
 use crate::app_state::AppState;
 use crate::data::profiles::paths::vault_db_path;
@@ -149,15 +150,23 @@ fn map_constraint_error(err: rusqlite::Error) -> ErrorCodeString {
 
 pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folder>> {
     let conn = open_connection(state, profile_id)?;
-    let mut stmt = conn
-        .prepare("SELECT * FROM folders WHERE deleted_at IS NULL ORDER BY name ASC")
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    let sql = "SELECT * FROM folders WHERE deleted_at IS NULL ORDER BY name ASC";
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        log_sqlite_err("list_folders.prepare", sql, &e);
+        ErrorCodeString::new("DB_QUERY_FAILED")
+    })?;
 
     let folders = stmt
         .query_map([], map_folder)
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .map_err(|e| {
+            log_sqlite_err("list_folders.query_map", sql, &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        .map_err(|e| {
+            log_sqlite_err("list_folders.collect", sql, &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
 
     Ok(folders)
 }
@@ -319,15 +328,22 @@ pub fn list_datacards_summary(
     let query = format!(
         "SELECT id, folder_id, title, url, email, username, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NULL {clause}"
     );
-    let mut stmt = conn
-        .prepare(&query)
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    let mut stmt = conn.prepare(&query).map_err(|e| {
+        log_sqlite_err("list_datacards_summary.prepare", &query, &e);
+        ErrorCodeString::new("DB_QUERY_FAILED")
+    })?;
 
     let cards = stmt
         .query_map([], map_datacard_summary)
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .map_err(|e| {
+            log_sqlite_err("list_datacards_summary.query_map", &query, &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        .map_err(|e| {
+            log_sqlite_err("list_datacards_summary.collect", &query, &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
 
     Ok(cards)
 }

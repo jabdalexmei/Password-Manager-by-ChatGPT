@@ -23,6 +23,7 @@ mod data {
         pub mod config;
     }
     pub mod sqlite {
+        pub mod diagnostics;
         pub mod init;
         pub mod migrations;
         pub mod pool;
@@ -56,6 +57,7 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_log::Builder::new().build())
         .on_window_event(|window, event| match event {
             WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
                 let app_state = window.state::<Arc<AppState>>().inner().clone();

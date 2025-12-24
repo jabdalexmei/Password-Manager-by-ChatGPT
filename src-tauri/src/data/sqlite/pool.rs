@@ -68,6 +68,8 @@ fn get_or_create_pool(
         DbTarget::Uri(uri) => format!("{profile_id}::uri::{uri}"),
     };
 
+    log::info!("[DB][pool] profile_id={profile_id} target={target:?} key={key}");
+
     if let Some(pool) = pools.get(&key) {
         return Ok(pool.clone());
     }
@@ -81,7 +83,10 @@ fn get_or_create_pool(
                 .connection_timeout(Duration::from_secs(5))
                 .connection_customizer(Box::new(FilePragmas))
                 .build(manager)
-                .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?
+                .map_err(|e| {
+                    log::error!("[DB][pool] build failed: {e:?}");
+                    ErrorCodeString::new("DB_OPEN_FAILED")
+                })?
         }
         DbTarget::Uri(uri) => {
             let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -95,7 +100,10 @@ fn get_or_create_pool(
                 .connection_timeout(Duration::from_secs(5))
                 .connection_customizer(Box::new(MemoryPragmas))
                 .build(manager)
-                .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?
+                .map_err(|e| {
+                    log::error!("[DB][pool] build failed: {e:?}");
+                    ErrorCodeString::new("DB_OPEN_FAILED")
+                })?
         }
     };
 
