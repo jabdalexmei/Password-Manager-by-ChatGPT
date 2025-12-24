@@ -448,18 +448,19 @@ pub fn update_datacard(
         Some(card) => Some(serialize_json(card)?),
         None => None,
     };
-    let existing_password: Option<String> = conn
+    let existing_password_row: Option<Option<String>> = conn
         .query_row(
             "SELECT password_value FROM datacards WHERE id = ?1",
             params![input.id],
-            |row| row.get(0),
+            |row| row.get::<_, Option<String>>(0),
         )
         .optional()
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-    if existing_password.is_none() {
-        return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
-    }
+    let existing_password: Option<String> = match existing_password_row {
+        None => return Err(ErrorCodeString::new("DATACARD_NOT_FOUND")),
+        Some(value) => value,
+    };
 
     let now = Utc::now().to_rfc3339();
     let old_trimmed = existing_password
