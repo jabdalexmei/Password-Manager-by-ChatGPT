@@ -8,6 +8,11 @@
   --color-surface: var(--color-surface-3);
   --color-border: #1f2937;
 
+  /* Button overrides (optional) */
+  --btn-secondary-bg: #1f2937;
+  --btn-secondary-border: #374151;
+  --btn-secondary-text: var(--color-text);
+
   --color-input-bg: var(--color-surface-2);
 
 
