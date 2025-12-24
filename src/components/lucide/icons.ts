@@ -7,7 +7,9 @@ export {
   Download as IconDownload,
   Upload as IconImport,
 
+  SquarePen as IconRename,
   Trash2 as IconDelete,
+  Trash2 as IconTrash,
 
   Settings as IconSettings,
   Lock as IconLock,
