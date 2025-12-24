@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { DataCard, Folder } from '../../types/ui';
+import { CustomField, DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useDetails } from './useDetails';
 import {
@@ -61,10 +61,22 @@ export function Details({
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const [attachmentToDelete, setAttachmentToDelete] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [revealedCustomFields, setRevealedCustomFields] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setHistoryOpen(false);
   }, [card?.id]);
+
+  useEffect(() => {
+    setRevealedCustomFields({});
+  }, [card?.id]);
+
+  const toggleCustomFieldVisibility = (fieldId: string) => {
+    setRevealedCustomFields((prev) => ({
+      ...prev,
+      [fieldId]: !prev[fieldId],
+    }));
+  };
 
   const informationTitle = (
     <div className="vault-section-header">{tVault('information.title')}</div>
@@ -283,6 +295,47 @@ export function Details({
           </div>
         </div>
       )}
+
+      {(card.customFields ?? [])
+        .filter((field) => Boolean(field.value?.trim()))
+        .map((field: CustomField, index: number) => {
+          const fieldId = `custom-field-${index}-${field.key}`;
+          const isSecret = field.type === 'secret';
+          const isRevealed = Boolean(revealedCustomFields[fieldId]);
+          const displayValue = isSecret ? (isRevealed ? field.value : '••••••••••••') : field.value;
+
+          return (
+            <div key={fieldId} className="detail-field">
+              <div className="detail-label">{field.key}</div>
+
+              <div className="detail-value-box">
+                <div className="detail-value-text">{displayValue}</div>
+
+                <div className="detail-value-actions">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={t('action.copy')}
+                    onClick={() => detailActions.copyToClipboard(field.value, { isSecret })}
+                  >
+                    <IconCopy />
+                  </button>
+
+                  {isSecret && (
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label={isRevealed ? t('action.hide') : t('action.reveal')}
+                      onClick={() => toggleCustomFieldVisibility(fieldId)}
+                    >
+                      {isRevealed ? <IconPreviewOff /> : <IconPreview />}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
 
       {hasPassword && (
         <div className="detail-field">
