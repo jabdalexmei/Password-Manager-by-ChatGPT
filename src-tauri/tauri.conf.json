@@ -1,7 +1,7 @@
 {
-  "productName": "NewAppTest",
+  "productName": "Password Manager",
   "version": "0.1.0",
-  "identifier": "com.example.newapptest",
+  "identifier": "PasswordManager",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "NewAppTest",
+        "title": "Password Manager",
         "width": 1200,
         "height": 900
       }
