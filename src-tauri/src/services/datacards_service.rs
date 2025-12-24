@@ -113,7 +113,7 @@ pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let settings = get_settings(&state.storage_paths, &profile_id)?;
     if settings.soft_delete_enabled {
         let now = Utc::now().to_rfc3339();
-        repo_impl::soft_delete_datacard(state, &profile_id, &id)?;
+        repo_impl::soft_delete_datacard(state, &profile_id, &id, &now)?;
         repo_impl::soft_delete_attachments_by_datacard(state, &profile_id, &id, &now)?;
         security_service::persist_active_vault(state)?;
         Ok(true)
