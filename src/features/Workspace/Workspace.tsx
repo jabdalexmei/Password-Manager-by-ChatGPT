@@ -25,6 +25,10 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
     () => workspaces.find((workspace) => workspace.id === selectedId) ?? null,
     [selectedId, workspaces]
   );
+  const activeWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.is_active) ?? null,
+    [workspaces]
+  );
 
   const mapWorkspaceError = (code?: string) => {
     switch (code) {
@@ -81,18 +85,32 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   }, [onWorkspaceReady, refresh, show, t, useDefaultPath]);
 
   const handleOpenDataFolder = useCallback(async () => {
-    if (!selectedWorkspace || !selectedWorkspace.is_active || !selectedWorkspace.valid) {
-      return;
-    }
+    setBusy(true);
     try {
-      await workspaceOpenInExplorer();
+      if (activeWorkspace && activeWorkspace.exists && activeWorkspace.valid) {
+        await workspaceOpenInExplorer();
+        return;
+      }
+
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t('chooseFolder'),
+      });
+
+      if (typeof selected !== 'string') {
+        return;
+      }
+
+      await workspaceCreate(selected);
+      await refresh();
+      onWorkspaceReady();
     } catch (err: any) {
       show(mapWorkspaceError(err?.code), { title: t('errorTitle') });
+    } finally {
+      setBusy(false);
     }
-  }, [selectedWorkspace, show, t]);
-
-  const canOpenDataFolder =
-    Boolean(selectedWorkspace?.is_active) && Boolean(selectedWorkspace?.valid);
+  }, [activeWorkspace, onWorkspaceReady, refresh, show, t]);
 
   const workspaceListContent = useMemo(() => {
     if (loading) {
@@ -209,7 +227,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
                 type="button"
                 className="btn btn-secondary"
                 onClick={handleOpenDataFolder}
-                disabled={!canOpenDataFolder || busy}
+                disabled={busy}
               >
                 {t('openDataFolder')}
               </button>

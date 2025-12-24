@@ -5,7 +5,7 @@
   "loading": "Loading workspaces...",
   "error": "Unable to load workspaces.",
   "errorTitle": "Workspace error",
-  "empty": "No workspaces yet. Create one to get started.",
+  "empty": "No workspaces yet. Use Create or Open data folder to select a folder and initialize it.",
   "operationFailed": "Workspace action failed. Please try again.",
   "notWritable": "Selected folder is not writable. Please choose another location.",
   "chooseFolder": "Choose data folder",
