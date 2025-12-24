@@ -83,6 +83,11 @@ export type DataCardsViewModel = {
   updateCreateCustomFieldValue: (rowId: string, value: string) => void;
   addEditCustomFieldByName: (name: string) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
   updateEditCustomFieldValue: (rowId: string, value: string) => void;
+  renameEditCustomFieldById: (
+    rowId: string,
+    nextName: string
+  ) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
+  removeEditCustomFieldById: (rowId: string) => void;
 };
 
 type PendingAttachment = {
@@ -333,6 +338,41 @@ export function useDataCards({
     });
   }, []);
 
+  const renameEditCustomFieldById = useCallback(
+    (rowId: string, nextName: string) => {
+      const trimmed = nextName.trim();
+      if (!trimmed) return { ok: false as const, reason: 'EMPTY' as const };
+
+      const exists = (editForm?.customFields ?? []).some((row) => {
+        if (row.id === rowId) return false;
+        return row.key.trim().toLowerCase() === trimmed.toLowerCase();
+      });
+
+      if (exists) return { ok: false as const, reason: 'DUPLICATE' as const };
+
+      setEditForm((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          customFields: prev.customFields.map((row) => (row.id === rowId ? { ...row, key: trimmed } : row)),
+        };
+      });
+
+      return { ok: true as const };
+    },
+    [editForm]
+  );
+
+  const removeEditCustomFieldById = useCallback((rowId: string) => {
+    setEditForm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        customFields: prev.customFields.filter((row) => row.id !== rowId),
+      };
+    });
+  }, []);
+
   const updateCreateField = useCallback(
     (field: keyof DataCardFormState, value: string | boolean | null) => {
       if (field === 'title') {
@@ -499,5 +539,7 @@ export function useDataCards({
     updateCreateCustomFieldValue,
     addEditCustomFieldByName,
     updateEditCustomFieldValue,
+    renameEditCustomFieldById,
+    removeEditCustomFieldById,
   };
 }

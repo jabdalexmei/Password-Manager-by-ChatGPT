@@ -4,10 +4,13 @@ import {
   IconAttachment,
   IconPreview,
   IconPreviewOff,
+  IconRename,
   IconRegenerate,
+  IconTrash,
 } from '@/components/lucide/icons';
 import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
 import { CustomFieldModal } from '../modals/CustomFieldModal';
+import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
 import { useToaster } from '../../../../components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
@@ -31,7 +34,6 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     isCreateSubmitting,
     isEditSubmitting,
     closeCreateModal,
-    closeEditModal,
     togglePasswordVisibility,
   } = viewModel;
   const createTitleRef = useRef<HTMLInputElement | null>(null);
@@ -52,6 +54,11 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   const [customFieldName, setCustomFieldName] = useState('');
   const [customFieldModalError, setCustomFieldModalError] = useState<string | null>(null);
   const [customFieldTargetDialogId, setCustomFieldTargetDialogId] = useState<string | null>(null);
+  const [isEditFieldsMode, setIsEditFieldsMode] = useState(false);
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+  const [renameTargetRowId, setRenameTargetRowId] = useState<string | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -60,6 +67,15 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     setGeneratedPassword(password);
     setCharsetSize(size);
   }, []);
+
+  const handleCloseEditModal = useCallback(() => {
+    viewModel.closeEditModal();
+    setIsEditFieldsMode(false);
+    setIsRenameModalOpen(false);
+    setRenameTargetRowId(null);
+    setRenameName('');
+    setRenameError(null);
+  }, [viewModel]);
 
   useEffect(() => {
     if (!isGeneratorOpen) return;
@@ -116,6 +132,11 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     setIsActionMenuOpen(false);
     setIsCustomFieldModalOpen(false);
     setCustomFieldTargetDialogId(null);
+    setIsEditFieldsMode(false);
+    setIsRenameModalOpen(false);
+    setRenameTargetRowId(null);
+    setRenameName('');
+    setRenameError(null);
   }, [isCreateOpen, isEditOpen]);
 
   useEffect(() => {
@@ -131,14 +152,27 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
           setIsCustomFieldModalOpen(false);
           return;
         }
-        if (isEditOpen) closeEditModal();
+        if (isRenameModalOpen) {
+          setIsRenameModalOpen(false);
+          setRenameError(null);
+          return;
+        }
+        if (isEditOpen) handleCloseEditModal();
         if (isCreateOpen) closeCreateModal();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [closeCreateModal, closeEditModal, isActionMenuOpen, isCreateOpen, isCustomFieldModalOpen, isEditOpen]);
+  }, [
+    closeCreateModal,
+    handleCloseEditModal,
+    isActionMenuOpen,
+    isCreateOpen,
+    isCustomFieldModalOpen,
+    isEditOpen,
+    isRenameModalOpen,
+  ]);
 
   useEffect(() => {
     if (!isActionMenuOpen) return undefined;
@@ -222,6 +256,18 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                   >
                     {t('customFields.add')}
                   </button>
+                  {dialogId === 'datacard-edit-dialog' && (
+                    <button
+                      type="button"
+                      className="dialog-actionmenu-item"
+                      onClick={() => {
+                        setIsActionMenuOpen(false);
+                        setIsEditFieldsMode((prev) => !prev);
+                      }}
+                    >
+                      {t('customFields.editFields')}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -330,18 +376,47 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                 <label className="form-label" htmlFor={`${dialogId}-cf-${row.id}`}>
                   {row.key}
                 </label>
-                <input
-                  id={`${dialogId}-cf-${row.id}`}
-                  className="input"
-                  value={row.value}
-                  onChange={(e) => {
-                    if (dialogId === 'datacard-create-dialog') {
-                      viewModel.updateCreateCustomFieldValue(row.id, e.target.value);
-                    } else {
-                      viewModel.updateEditCustomFieldValue(row.id, e.target.value);
-                    }
-                  }}
-                />
+                <div className="input-with-actions">
+                  <input
+                    id={`${dialogId}-cf-${row.id}`}
+                    className="input"
+                    value={row.value}
+                    onChange={(e) => {
+                      if (dialogId === 'datacard-create-dialog') {
+                        viewModel.updateCreateCustomFieldValue(row.id, e.target.value);
+                      } else {
+                        viewModel.updateEditCustomFieldValue(row.id, e.target.value);
+                      }
+                    }}
+                  />
+                  {dialogId === 'datacard-edit-dialog' && isEditFieldsMode && (
+                    <div className="input-actions">
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={t('customFields.rename')}
+                        title={t('customFields.rename')}
+                        onClick={() => {
+                          setRenameTargetRowId(row.id);
+                          setRenameName(row.key);
+                          setRenameError(null);
+                          setIsRenameModalOpen(true);
+                        }}
+                      >
+                        <IconRename />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button icon-button-danger"
+                        aria-label={t('customFields.delete')}
+                        title={t('customFields.delete')}
+                        onClick={() => viewModel.removeEditCustomFieldById(row.id)}
+                      >
+                        <IconTrash />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
 
@@ -498,7 +573,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
           viewModel.editForm,
           viewModel.editError,
           viewModel.editFolderError,
-          viewModel.closeEditModal,
+          handleCloseEditModal,
           viewModel.submitEdit,
           viewModel.updateEditField,
           t('action.save'),
@@ -535,6 +610,34 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
 
           setIsCustomFieldModalOpen(false);
           setCustomFieldModalError(null);
+        }}
+      />
+
+      <CustomFieldRenameModal
+        isOpen={isRenameModalOpen}
+        name={renameName}
+        error={renameError}
+        onChangeName={(value) => {
+          setRenameName(value);
+          setRenameError(null);
+        }}
+        onCancel={() => {
+          setIsRenameModalOpen(false);
+          setRenameError(null);
+        }}
+        onOk={() => {
+          if (!renameTargetRowId) return;
+
+          const result = viewModel.renameEditCustomFieldById(renameTargetRowId, renameName);
+          if (!result.ok) {
+            setRenameError(
+              result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
+            );
+            return;
+          }
+
+          setIsRenameModalOpen(false);
+          setRenameError(null);
         }}
       />
 
