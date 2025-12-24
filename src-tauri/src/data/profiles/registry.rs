@@ -51,7 +51,32 @@ fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
     let path = registry_path(sp);
     let serialized = serde_json::to_string_pretty(registry)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    fs::write(path, serialized).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+    write_atomic(&path, &serialized)
+}
+
+fn write_atomic(path: &PathBuf, contents: &str) -> Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    let temp_path = parent.join(format!("{file_name}.{}.tmp", Uuid::new_v4()));
+
+    fs::write(&temp_path, contents).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+    if fs::rename(&temp_path, path).is_err() {
+        if path.exists() {
+            let _ = fs::remove_file(path);
+        }
+        if let Err(_) = fs::rename(&temp_path, path) {
+            let _ = fs::remove_file(&temp_path);
+            return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+        }
+    }
+
+    Ok(())
 }
 
 pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
@@ -69,7 +94,6 @@ pub fn create_profile(
     password: Option<String>,
 ) -> Result<ProfileMeta> {
     ensure_profiles_dir(sp).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
-    let mut registry = load_registry(sp)?;
     let id = Uuid::new_v4().to_string();
     let has_password = password.as_ref().map(|p| !p.is_empty()).unwrap_or(false);
 
@@ -79,16 +103,31 @@ pub fn create_profile(
         has_password,
     };
 
-    registry.profiles.push(record.clone());
-    save_registry(sp, &registry)?;
-
     let profile_dir = crate::data::profiles::paths::profile_dir(sp, &id);
-    fs::create_dir_all(&profile_dir).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    crate::data::profiles::paths::ensure_profile_dirs(sp, &id)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     let config_path: PathBuf = profile_config_path(sp, &id);
     let config = serde_json::json!({ "name": name });
-    fs::write(config_path, serde_json::to_string_pretty(&config).unwrap())
+    let serialized_config = serde_json::to_string_pretty(&config)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    if let Err(err) = write_atomic(&config_path, &serialized_config) {
+        let _ = fs::remove_dir_all(&profile_dir);
+        return Err(err);
+    }
+
+    let mut registry = match load_registry(sp) {
+        Ok(registry) => registry,
+        Err(err) => {
+            let _ = fs::remove_dir_all(&profile_dir);
+            return Err(err);
+        }
+    };
+    registry.profiles.push(record.clone());
+    if let Err(err) = save_registry(sp, &registry) {
+        let _ = fs::remove_dir_all(&profile_dir);
+        return Err(err);
+    }
 
     Ok(record.into())
 }
