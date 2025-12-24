@@ -13,10 +13,11 @@ import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
 type VaultProps = {
   profileId: string;
   profileName: string;
+  isPasswordless: boolean;
   onLocked: () => void;
 };
 
-export default function Vault({ profileId, profileName, onLocked }: VaultProps) {
+export default function Vault({ profileId, profileName, isPasswordless, onLocked }: VaultProps) {
   const vault = useVault(profileId, onLocked);
   const { t: tDataCards } = useTranslation('DataCards');
   const { t: tFolders } = useTranslation('Folders');
@@ -67,7 +68,7 @@ export default function Vault({ profileId, profileName, onLocked }: VaultProps) 
 
   return (
     <div className="vault-shell">
-      <VaultHeader profileName={profileName} profileId={profileId} onLock={vault.lock} />
+      <VaultHeader profileName={profileName} profileId={profileId} isPasswordless={isPasswordless} onLock={vault.lock} />
 
       <div className="vault-body">
         <aside className="vault-sidebar">

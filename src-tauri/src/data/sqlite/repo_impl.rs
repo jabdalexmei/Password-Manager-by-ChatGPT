@@ -253,6 +253,33 @@ pub fn move_datacards_to_root(
     Ok(true)
 }
 
+pub fn list_datacard_ids_in_folder(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    folder_id: &str,
+    include_deleted: bool,
+) -> Result<Vec<String>> {
+    let conn = open_connection(state, profile_id)?;
+    let clause = if include_deleted {
+        String::new()
+    } else {
+        " AND deleted_at IS NULL".to_string()
+    };
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT id FROM datacards WHERE folder_id = ?1{clause}",
+        ))
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let rows = stmt
+        .query_map(params![folder_id], |row| row.get("id"))
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .collect::<rusqlite::Result<Vec<String>>>()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(rows)
+}
+
 pub fn list_datacards(
     state: &Arc<AppState>,
     profile_id: &str,
@@ -503,13 +530,17 @@ pub fn move_datacard(
     Ok(true)
 }
 
-pub fn soft_delete_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
+pub fn soft_delete_datacard(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    id: &str,
+    now: &str,
+) -> Result<bool> {
     let conn = open_connection(state, profile_id)?;
-    let now = Utc::now().to_rfc3339();
     let rows = conn
         .execute(
             "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
-            params![now.clone(), now, id],
+            params![now, now, id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     if rows == 0 {

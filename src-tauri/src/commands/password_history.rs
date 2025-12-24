@@ -38,7 +38,10 @@ pub async fn get_datacard_password_history(
 }
 
 #[tauri::command]
-pub async fn clear_datacard_password_history(app: tauri::AppHandle, datacard_id: String) -> Result<()> {
+pub async fn clear_datacard_password_history(
+    app: tauri::AppHandle,
+    datacard_id: String,
+) -> Result<()> {
     let app_state = app.state::<Arc<AppState>>().inner().clone();
 
     tauri::async_runtime::spawn_blocking(move || {

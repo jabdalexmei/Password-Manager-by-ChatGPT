@@ -12,6 +12,7 @@ pub struct AppState {
     pub vault_keeper_conn: Mutex<Option<rusqlite::Connection>>,
     pub vault_db_uri: Mutex<Option<String>>,
     pub vault_key: Mutex<Option<Zeroizing<[u8; 32]>>>,
+    pub vault_persist_guard: Mutex<()>,
 }
 
 impl AppState {
@@ -24,6 +25,7 @@ impl AppState {
             vault_keeper_conn: Mutex::new(None),
             vault_db_uri: Mutex::new(None),
             vault_key: Mutex::new(None),
+            vault_persist_guard: Mutex::new(()),
         }
     }
 }

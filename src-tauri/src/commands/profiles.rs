@@ -4,7 +4,7 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::error::{ErrorCodeString, Result};
-use crate::services::profiles_service;
+use crate::services::{profiles_service, security_service};
 use crate::types::{ProfileMeta, ProfilesList};
 
 #[tauri::command]
@@ -37,12 +37,24 @@ pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Resu
     let storage_paths = app_state.storage_paths.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
-        if let Ok(mut active) = app_state.active_profile.lock() {
-            if active.as_deref() == Some(&id) {
-                *active = None;
+        let should_lock = app_state
+            .logged_in_profile
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+            .as_deref()
+            == Some(&id);
+        if should_lock {
+            security_service::lock_vault(&app_state)?;
+        }
+        let delete_result = profiles_service::delete_profile(&storage_paths, &id);
+        if delete_result.is_ok() {
+            if let Ok(mut active) = app_state.active_profile.lock() {
+                if active.as_deref() == Some(&id) {
+                    *active = None;
+                }
             }
         }
-        profiles_service::delete_profile(&storage_paths, &id)
+        delete_result
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?

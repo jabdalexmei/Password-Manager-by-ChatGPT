@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::app_state::AppState;
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
+use crate::services::security_service;
 use crate::types::PasswordHistoryRow;
 
 fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
@@ -31,5 +32,6 @@ pub fn list_history(state: &Arc<AppState>, datacard_id: &str) -> Result<Vec<Pass
 pub fn clear_history(state: &Arc<AppState>, datacard_id: &str) -> Result<()> {
     let profile_id = require_logged_in(state)?;
     repo_impl::clear_password_history(state, &profile_id, datacard_id)?;
+    security_service::persist_active_vault(state)?;
     Ok(())
 }
