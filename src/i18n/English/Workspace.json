@@ -1,0 +1,17 @@
+{
+  "title": "Workspace",
+  "subtitle": "Choose or create a data folder before continuing.",
+  "workspaces": "Available workspaces",
+  "loading": "Loading workspaces...",
+  "error": "Unable to load workspaces.",
+  "empty": "No workspaces yet. Create one to get started.",
+  "chooseFolder": "Choose data folder",
+  "create": "Create",
+  "openDataFolder": "Open data folder",
+  "useDefaultPath": "Use default path",
+  "missing": "Missing",
+  "invalid": "Invalid",
+  "removeFromList": "Remove from list",
+  "open": "Open",
+  "selected": "Selected workspace"
+}

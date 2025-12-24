@@ -219,3 +219,13 @@ impl Default for UserSettings {
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkspaceItem {
+    pub id: String,
+    pub display_name: String,
+    pub path: String,
+    pub exists: bool,
+    pub valid: bool,
+    pub is_active: bool,
+}

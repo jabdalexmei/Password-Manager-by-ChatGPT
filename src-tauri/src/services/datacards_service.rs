@@ -47,7 +47,8 @@ fn normalize_tags(tags: Vec<String>) -> Vec<String> {
 
 pub fn list_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
     let profile_id = require_logged_in(state)?;
-    let settings = get_settings(&state.storage_paths, &profile_id)?;
+    let storage_paths = state.get_storage_paths()?;
+    let settings = get_settings(&storage_paths, &profile_id)?;
     repo_impl::list_datacards(
         state,
         &profile_id,
@@ -59,7 +60,8 @@ pub fn list_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
 
 pub fn list_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataCardSummary>> {
     let profile_id = require_logged_in(state)?;
-    let settings = get_settings(&state.storage_paths, &profile_id)?;
+    let storage_paths = state.get_storage_paths()?;
+    let settings = get_settings(&storage_paths, &profile_id)?;
     repo_impl::list_datacards_summary(
         state,
         &profile_id,
@@ -110,7 +112,8 @@ pub fn move_datacard_to_folder(input: MoveDataCardInput, state: &Arc<AppState>) 
 
 pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    let settings = get_settings(&state.storage_paths, &profile_id)?;
+    let storage_paths = state.get_storage_paths()?;
+    let settings = get_settings(&storage_paths, &profile_id)?;
     if settings.soft_delete_enabled {
         let now = Utc::now().to_rfc3339();
         repo_impl::soft_delete_datacard(state, &profile_id, &id, &now)?;
@@ -151,8 +154,9 @@ fn purge_datacard_with_attachments(
     id: &str,
 ) -> Result<bool> {
     let attachments = repo_impl::list_all_attachments_by_datacard(state, profile_id, id)?;
+    let storage_paths = state.get_storage_paths()?;
     for attachment in attachments {
-        let file_path = attachment_file_path(&state.storage_paths, profile_id, &attachment.id);
+        let file_path = attachment_file_path(&storage_paths, profile_id, &attachment.id)?;
         let _ = fs::remove_file(file_path);
         if let Err(err) = repo_impl::purge_attachment(state, profile_id, &attachment.id) {
             if err.code == "ATTACHMENT_NOT_FOUND" {

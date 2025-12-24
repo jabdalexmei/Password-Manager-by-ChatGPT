@@ -3,13 +3,14 @@ import LogIn from './features/LogIn/LogIn';
 import ProfileCreate from './features/ProfileCreate/ProfileCreate';
 import Startup from './features/Startup/Startup';
 import Vault from './features/Vault/Vault';
+import Workspace from './features/Workspace/Workspace';
 import { ToasterProvider } from './components/Toaster';
 import { ProfileMeta, loginVault, setActiveProfile } from './lib/tauri';
 
-type View = 'startup' | 'create' | 'login' | 'vault';
+type View = 'workspace' | 'startup' | 'create' | 'login' | 'vault';
 
 const App: React.FC = () => {
-  const [view, setView] = useState<View>('startup');
+  const [view, setView] = useState<View>('workspace');
   const [activeProfile, setProfile] = useState<ProfileMeta | null>(null);
 
   const openProfile = useCallback(async (profile: ProfileMeta) => {
@@ -34,6 +35,15 @@ const App: React.FC = () => {
     switch (view) {
       case 'startup':
         return <Startup onCreate={() => setView('create')} onOpen={openProfile} />;
+      case 'workspace':
+        return (
+          <Workspace
+            onWorkspaceReady={() => {
+              setProfile(null);
+              setView('startup');
+            }}
+          />
+        );
       case 'create':
         return (
           <ProfileCreate

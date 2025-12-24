@@ -83,7 +83,8 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
         return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
     }
 
-    let settings = get_settings(&state.storage_paths, &profile_id)?;
+    let storage_paths = state.get_storage_paths()?;
+    let settings = get_settings(&storage_paths, &profile_id)?;
 
     if settings.soft_delete_enabled {
         let now = Utc::now().to_rfc3339();
@@ -102,7 +103,7 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
 
             for attachment in attachments {
                 let file_path =
-                    attachment_file_path(&state.storage_paths, &profile_id, &attachment.id);
+                    attachment_file_path(&storage_paths, &profile_id, &attachment.id)?;
                 let _ = fs::remove_file(file_path);
                 if let Err(err) = repo_impl::purge_attachment(state, &profile_id, &attachment.id) {
                     if err.code != "ATTACHMENT_NOT_FOUND" {

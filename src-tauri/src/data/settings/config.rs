@@ -12,9 +12,7 @@ pub struct UserSettings {
 }
 
 fn settings_path(sp: &StoragePaths) -> Result<PathBuf> {
-    ensure_profiles_dir(sp)
-        .map(|dir| dir.join("user_settings.json"))
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))
+    ensure_profiles_dir(sp).map(|dir| dir.join("user_settings.json"))
 }
 
 pub fn load_settings(sp: &StoragePaths) -> Result<UserSettings> {

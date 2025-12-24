@@ -33,7 +33,7 @@ pub fn create_profile(
         init_database_passwordless(sp, &profile.id)?;
     } else {
         let salt = generate_kdf_salt();
-        fs::write(kdf_salt_path(sp, &profile.id), &salt)
+        fs::write(kdf_salt_path(sp, &profile.id)?, &salt)
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
         let pwd = password.unwrap_or_default();
         let key = Zeroizing::new(derive_master_key(&pwd, &salt)?);

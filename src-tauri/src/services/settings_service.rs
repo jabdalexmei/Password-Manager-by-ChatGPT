@@ -52,7 +52,7 @@ fn validate_settings(settings: &UserSettings) -> Result<()> {
 }
 
 pub fn get_settings(sp: &StoragePaths, profile_id: &str) -> Result<UserSettings> {
-    let path = user_settings_path(sp, profile_id);
+    let path = user_settings_path(sp, profile_id)?;
     if !path.exists() {
         let defaults = UserSettings::default();
         let serialized = serde_json::to_string_pretty(&defaults)
@@ -71,7 +71,7 @@ pub fn update_settings(
     profile_id: &str,
 ) -> Result<bool> {
     validate_settings(&new_settings)?;
-    let path = user_settings_path(sp, profile_id);
+    let path = user_settings_path(sp, profile_id)?;
     let serialized = serde_json::to_string_pretty(&new_settings)
         .map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
     fs::write(path, serialized).map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
@@ -80,10 +80,12 @@ pub fn update_settings(
 
 pub fn update_settings_command(state: &Arc<AppState>, settings: UserSettings) -> Result<bool> {
     let profile_id = require_logged_in(state)?;
-    update_settings(&state.storage_paths, settings, &profile_id)
+    let storage_paths = state.get_storage_paths()?;
+    update_settings(&storage_paths, settings, &profile_id)
 }
 
 pub fn get_settings_command(state: &Arc<AppState>) -> Result<UserSettings> {
     let profile_id = require_logged_in(state)?;
-    get_settings(&state.storage_paths, &profile_id)
+    let storage_paths = state.get_storage_paths()?;
+    get_settings(&storage_paths, &profile_id)
 }

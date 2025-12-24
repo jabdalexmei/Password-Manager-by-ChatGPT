@@ -9,11 +9,14 @@ use crate::types::{ProfileMeta, ProfilesList};
 
 #[tauri::command]
 pub async fn profiles_list(state: State<'_, Arc<AppState>>) -> Result<ProfilesList> {
-    let storage_paths = state.inner().storage_paths.clone();
+    let app_state = state.inner().clone();
 
-    tauri::async_runtime::spawn_blocking(move || profiles_service::list_profiles(&storage_paths))
-        .await
-        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let storage_paths = app_state.get_storage_paths()?;
+        profiles_service::list_profiles(&storage_paths)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
 
 #[tauri::command]
@@ -22,9 +25,10 @@ pub async fn profile_create(
     password: Option<String>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<ProfileMeta> {
-    let storage_paths = state.inner().storage_paths.clone();
+    let app_state = state.inner().clone();
 
     tauri::async_runtime::spawn_blocking(move || {
+        let storage_paths = app_state.get_storage_paths()?;
         profiles_service::create_profile(&storage_paths, &name, password)
     })
     .await
@@ -34,9 +38,9 @@ pub async fn profile_create(
 #[tauri::command]
 pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let app_state = state.inner().clone();
-    let storage_paths = app_state.storage_paths.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
+        let storage_paths = app_state.get_storage_paths()?;
         let should_lock = app_state
             .logged_in_profile
             .lock()
@@ -63,9 +67,9 @@ pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Resu
 #[tauri::command]
 pub async fn get_active_profile(state: State<'_, Arc<AppState>>) -> Result<Option<ProfileMeta>> {
     let app_state = state.inner().clone();
-    let storage_paths = app_state.storage_paths.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
+        let storage_paths = app_state.get_storage_paths()?;
         if let Ok(active) = app_state.active_profile.lock() {
             if let Some(id) = &*active {
                 return profiles_service::get_active_profile(&storage_paths)
@@ -81,9 +85,9 @@ pub async fn get_active_profile(state: State<'_, Arc<AppState>>) -> Result<Optio
 #[tauri::command]
 pub async fn set_active_profile(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let app_state = state.inner().clone();
-    let storage_paths = app_state.storage_paths.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
+        let storage_paths = app_state.get_storage_paths()?;
         if !profiles_service::list_profiles(&storage_paths)?
             .profiles
             .iter()

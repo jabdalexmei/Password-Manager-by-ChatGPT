@@ -23,12 +23,14 @@ const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 
 struct ActiveSession {
     state: Arc<AppState>,
+    storage_paths: crate::data::storage_paths::StoragePaths,
     profile_id: String,
     vault_key: Option<[u8; 32]>,
 }
 
 fn require_logged_in(app: &AppHandle) -> Result<ActiveSession> {
     let app_state = app.state::<Arc<AppState>>().inner().clone();
+    let storage_paths = app_state.get_storage_paths()?;
     let active_profile = app_state
         .active_profile
         .lock()
@@ -51,6 +53,7 @@ fn require_logged_in(app: &AppHandle) -> Result<ActiveSession> {
 
             Ok(ActiveSession {
                 state: app_state,
+                storage_paths,
                 profile_id: active,
                 vault_key,
             })
@@ -113,8 +116,7 @@ pub fn add_attachment_from_path(
         deleted_at: None,
     };
 
-    let file_path =
-        attachment_file_path(&session.state.storage_paths, &session.profile_id, &meta.id);
+    let file_path = attachment_file_path(&session.storage_paths, &session.profile_id, &meta.id)?;
     ensure_target_dir(&file_path)?;
 
     if let Some(key) = session.vault_key {
@@ -152,8 +154,7 @@ pub fn purge_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
     let meta = repo_impl::get_attachment(&session.state, &session.profile_id, &attachment_id)?
         .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_NOT_FOUND"))?;
 
-    let file_path =
-        attachment_file_path(&session.state.storage_paths, &session.profile_id, &meta.id);
+    let file_path = attachment_file_path(&session.storage_paths, &session.profile_id, &meta.id)?;
     let _ = fs::remove_file(file_path);
     repo_impl::purge_attachment(&session.state, &session.profile_id, &attachment_id)?;
     security_service::persist_active_vault(&session.state)?;
@@ -173,7 +174,7 @@ pub fn save_attachment_to_path(
     }
 
     let stored_path =
-        attachment_file_path(&session.state.storage_paths, &session.profile_id, &meta.id);
+        attachment_file_path(&session.storage_paths, &session.profile_id, &meta.id)?;
     let bytes =
         fs::read(&stored_path).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
     let output_bytes = if let Some(key) = session.vault_key {
@@ -203,7 +204,7 @@ pub fn get_attachment_preview(
     }
 
     let stored_path =
-        attachment_file_path(&session.state.storage_paths, &session.profile_id, &meta.id);
+        attachment_file_path(&session.storage_paths, &session.profile_id, &meta.id)?;
     let bytes =
         fs::read(&stored_path).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
 
@@ -241,7 +242,8 @@ pub fn get_attachment_bytes_base64(
 }
 
 pub fn clear_previews_for_profile(state: &Arc<AppState>, profile_id: &str) -> Result<()> {
-    let preview_root = attachments_preview_root(&state.storage_paths, profile_id);
+    let storage_paths = state.get_storage_paths()?;
+    let preview_root = attachments_preview_root(&storage_paths, profile_id)?;
     if preview_root.exists() {
         let _ = fs::remove_dir_all(&preview_root);
     }

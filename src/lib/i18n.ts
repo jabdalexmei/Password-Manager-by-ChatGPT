@@ -8,6 +8,7 @@ import common from '../i18n/English/Common.json';
 import search from '../i18n/English/Search.json';
 import folders from '../i18n/English/Folders.json';
 import details from '../i18n/English/Details.json';
+import workspace from '../i18n/English/Workspace.json';
 
 type Dictionaries = {
   Common: typeof common;
@@ -19,6 +20,7 @@ type Dictionaries = {
   Search: typeof search;
   Folders: typeof folders;
   Details: typeof details;
+  Workspace: typeof workspace;
 };
 
 const dictionaries: Dictionaries = {
@@ -31,6 +33,7 @@ const dictionaries: Dictionaries = {
   Search: search,
   Folders: folders,
   Details: details,
+  Workspace: workspace,
 };
 
 export type Namespace = keyof Dictionaries;

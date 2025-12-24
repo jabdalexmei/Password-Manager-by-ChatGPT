@@ -37,9 +37,10 @@ fn owned_data_from_bytes(bytes: Vec<u8>) -> Result<OwnedData> {
 fn open_protected_vault_session(
     profile_id: &str,
     password: &str,
+    storage_paths: &crate::data::storage_paths::StoragePaths,
     state: &Arc<AppState>,
 ) -> Result<()> {
-    let salt_path = kdf_salt_path(&state.storage_paths, profile_id);
+    let salt_path = kdf_salt_path(storage_paths, profile_id)?;
     if !salt_path.exists() {
         return Err(ErrorCodeString::new("KDF_SALT_MISSING"));
     }
@@ -47,11 +48,11 @@ fn open_protected_vault_session(
         std::fs::read(&salt_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
     let key = Zeroizing::new(kdf::derive_master_key(password, &salt)?);
 
-    if !key_check::verify_key_check_file(&state.storage_paths, profile_id, &key)? {
+    if !key_check::verify_key_check_file(storage_paths, profile_id, &key)? {
         return Err(ErrorCodeString::new("INVALID_PASSWORD"));
     }
 
-    let vault_path = vault_db_path(&state.storage_paths, profile_id);
+    let vault_path = vault_db_path(storage_paths, profile_id)?;
     if !vault_path.exists() {
         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
     }
@@ -86,15 +87,16 @@ fn open_protected_vault_session(
 }
 
 pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) -> Result<bool> {
-    let profile = registry::get_profile(&state.storage_paths, id)?
+    let storage_paths = state.get_storage_paths()?;
+    let profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
     let pwd = password.unwrap_or_default();
     let is_passwordless = !profile.has_password;
 
     if is_passwordless {
-        init_database_passwordless(&state.storage_paths, id)?;
+        init_database_passwordless(&storage_paths, id)?;
     } else {
-        open_protected_vault_session(id, &pwd, state)?;
+        open_protected_vault_session(id, &pwd, &storage_paths, state)?;
     }
 
     if let Ok(mut active) = state.active_profile.lock() {
@@ -119,6 +121,7 @@ pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
 
     if let Some(id) = profile_id.clone() {
+        let storage_paths = state.get_storage_paths()?;
         let keeper_guard = state
             .vault_keeper_conn
             .lock()
@@ -135,7 +138,7 @@ pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
                 .serialize(DatabaseName::Main)
                 .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
             let encrypted = cipher::encrypt_vault_blob(&id, &key_material, &bytes)?;
-            cipher::write_encrypted_file(&vault_db_path(&state.storage_paths, &id), &encrypted)?;
+            cipher::write_encrypted_file(&vault_db_path(&storage_paths, &id)?, &encrypted)?;
         }
     }
 

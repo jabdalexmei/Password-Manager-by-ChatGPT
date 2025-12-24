@@ -17,25 +17,26 @@ use crate::types::{
 
 use std::sync::Arc;
 
-fn db_target(state: &Arc<AppState>, profile_id: &str) -> DbTarget {
+fn db_target(state: &Arc<AppState>, profile_id: &str) -> Result<DbTarget> {
     if let Ok(uri_guard) = state.vault_db_uri.lock() {
         if let Some(uri) = uri_guard.clone() {
             if let Ok(active) = state.logged_in_profile.lock() {
                 if active.as_deref() == Some(profile_id) {
-                    return DbTarget::Uri(uri);
+                    return Ok(DbTarget::Uri(uri));
                 }
             }
         }
     }
 
-    DbTarget::File(vault_db_path(&state.storage_paths, profile_id))
+    let storage_paths = state.get_storage_paths()?;
+    Ok(DbTarget::File(vault_db_path(&storage_paths, profile_id)?))
 }
 
 fn open_connection(
     state: &Arc<AppState>,
     profile_id: &str,
 ) -> Result<PooledConnection<SqliteConnectionManager>> {
-    let target = db_target(state, profile_id);
+    let target = db_target(state, profile_id)?;
     pool::get_conn(profile_id, target)
 }
 

@@ -4,6 +4,9 @@ mod app_state;
 mod commands;
 mod data {
     pub mod storage_paths;
+    pub mod workspaces {
+        pub mod registry;
+    }
     pub mod crypto {
         pub mod cipher;
         pub mod kdf;
@@ -40,7 +43,7 @@ use std::sync::Arc;
 use app_state::AppState;
 use commands::{
     attachments::*, datacards::*, folders::*, password_history::*, profiles::*, security::*,
-    settings::*,
+    settings::*, workspace::*,
 };
 use data::storage_paths::StoragePaths;
 use services::security_service;
@@ -58,11 +61,17 @@ fn main() {
             _ => {}
         })
         .setup(|app| {
-            let storage_paths = match StoragePaths::new() {
+            let storage_paths = match StoragePaths::new_unconfigured() {
                 Ok(paths) => paths,
                 Err(err) => {
+                    let message = match err.code.as_str() {
+                        "APP_DIR_UNAVAILABLE" => {
+                            "Unable to determine application directory for Password Manager."
+                        }
+                        _ => "Unable to initialize Password Manager workspace storage.",
+                    };
                     app.dialog()
-                        .message(err.message())
+                        .message(message)
                         .title("Password Manager")
                         .kind(MessageDialogKind::Error)
                         .blocking_show();
@@ -112,7 +121,13 @@ fn main() {
             get_datacard_password_history,
             clear_datacard_password_history,
             get_settings,
-            update_settings
+            update_settings,
+            workspace_list,
+            workspace_select,
+            workspace_create,
+            workspace_create_default,
+            workspace_remove,
+            workspace_open_in_explorer
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

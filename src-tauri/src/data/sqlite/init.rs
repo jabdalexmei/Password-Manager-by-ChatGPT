@@ -12,7 +12,7 @@ pub fn init_database_passwordless(sp: &StoragePaths, profile_id: &str) -> Result
     ensure_profile_dirs(sp, profile_id)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    let conn = Connection::open(vault_db_path(sp, profile_id))
+    let conn = Connection::open(vault_db_path(sp, profile_id)?)
         .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 
     migrations::migrate_to_latest(&conn)
@@ -33,5 +33,5 @@ pub fn init_database_protected_encrypted(
         .serialize(DatabaseName::Main)
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     let encrypted = encrypt_vault_blob(profile_id, key, &bytes)?;
-    write_encrypted_file(&vault_db_path(sp, profile_id), &encrypted)
+    write_encrypted_file(&vault_db_path(sp, profile_id)?, &encrypted)
 }

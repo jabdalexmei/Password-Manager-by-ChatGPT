@@ -21,7 +21,7 @@ pub fn create_key_check_file(
     payload.extend_from_slice(&random_bytes);
 
     let blob = encrypt_key_check(profile_id, key, &payload)?;
-    write_encrypted_file(&key_check_path(sp, profile_id), &blob)
+    write_encrypted_file(&key_check_path(sp, profile_id)?, &blob)
 }
 
 pub fn verify_key_check_file(
@@ -29,7 +29,7 @@ pub fn verify_key_check_file(
     profile_id: &str,
     key: &[u8; KEY_LEN],
 ) -> Result<bool> {
-    let path = key_check_path(sp, profile_id);
+    let path = key_check_path(sp, profile_id)?;
     if !path.exists() {
         return Err(ErrorCodeString::new("KEY_CHECK_MISSING"));
     }
