@@ -37,12 +37,15 @@ pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Resu
     let storage_paths = app_state.storage_paths.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
-        if let Ok(mut active) = app_state.active_profile.lock() {
-            if active.as_deref() == Some(&id) {
-                *active = None;
+        let delete_result = profiles_service::delete_profile(&storage_paths, &id);
+        if delete_result.is_ok() {
+            if let Ok(mut active) = app_state.active_profile.lock() {
+                if active.as_deref() == Some(&id) {
+                    *active = None;
+                }
             }
         }
-        profiles_service::delete_profile(&storage_paths, &id)
+        delete_result
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?

@@ -135,7 +135,11 @@ pub fn create_profile(
 pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
     ensure_profiles_dir(sp).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
     let mut registry = load_registry(sp)?;
+    let original_len = registry.profiles.len();
     registry.profiles.retain(|p| p.id != id);
+    if registry.profiles.len() == original_len {
+        return Err(ErrorCodeString::new("PROFILE_NOT_FOUND"));
+    }
     save_registry(sp, &registry)?;
     let dir = crate::data::profiles::paths::profile_dir(sp, id);
     if dir.exists() {
