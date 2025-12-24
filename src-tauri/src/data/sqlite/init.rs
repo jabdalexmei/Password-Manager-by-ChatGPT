@@ -12,8 +12,12 @@ pub fn init_database_passwordless(sp: &StoragePaths, profile_id: &str) -> Result
     ensure_profile_dirs(sp, profile_id)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    let conn = Connection::open(vault_db_path(sp, profile_id)?)
-        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+    let db_path = vault_db_path(sp, profile_id)?;
+    log::info!("[DB][init] passwordless vault path: {}", db_path.display());
+    let conn = Connection::open(&db_path).map_err(|e| {
+        log::error!("[DB][init] open failed: {e:?}");
+        ErrorCodeString::new("DB_OPEN_FAILED")
+    })?;
 
     migrations::migrate_to_latest(&conn)
 }

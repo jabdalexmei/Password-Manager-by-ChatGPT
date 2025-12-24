@@ -13,6 +13,10 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
         .query_row("PRAGMA user_version;", [], |row| row.get(0))
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
+    log::info!(
+        "[DB][migrate] user_version={version}, current={CURRENT_SCHEMA_VERSION}"
+    );
+
     match version {
         0 => {
             conn.execute_batch(include_str!("schema.sql"))
