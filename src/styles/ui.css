@@ -321,6 +321,10 @@
   z-index: 30;
 }
 
+.dialog-backdrop--inner {
+  z-index: 40;
+}
+
 /* Dialog container */
 .dialog {
   width: min(520px, calc(100vw - 32px));
@@ -333,7 +337,70 @@
 /* Dialog header row */
 .dialog-header {
   padding: 16px 18px;
-  
+}
+
+.dialog-header--with-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialog-header-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dialog-actionbar {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 6px !important;
+  height: 24px;
+  border-radius: 10px;
+}
+
+.dialog-actionbar:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.dialog-actionbar-dots {
+  font-size: 20px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.88);
+  transform: translateY(-1px);
+}
+
+.dialog-actionmenu {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+  z-index: 2;
+}
+
+.dialog-actionmenu-item {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 10px;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.dialog-actionmenu-item:hover {
+  background: var(--color-surface-2);
+}
+
+.customfield-dialog {
+  width: min(420px, calc(100vw - 40px));
 }
 
 /* "X" close button inside dialogs */

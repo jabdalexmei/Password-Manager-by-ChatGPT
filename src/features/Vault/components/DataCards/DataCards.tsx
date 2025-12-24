@@ -7,6 +7,7 @@ import {
   IconRegenerate,
 } from '@/components/lucide/icons';
 import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
+import { CustomFieldModal } from '../modals/CustomFieldModal';
 import { useToaster } from '../../../../components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
@@ -46,6 +47,13 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   });
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [charsetSize, setCharsetSize] = useState(0);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isCustomFieldModalOpen, setIsCustomFieldModalOpen] = useState(false);
+  const [customFieldName, setCustomFieldName] = useState('');
+  const [customFieldModalError, setCustomFieldModalError] = useState<string | null>(null);
+  const [customFieldTargetDialogId, setCustomFieldTargetDialogId] = useState<string | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
+  const actionMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const regeneratePassword = useCallback((options: PasswordGeneratorOptions) => {
     const { password, charsetSize: size } = generatePassword(options);
@@ -104,10 +112,25 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   }, [isCreateOpen, isEditOpen]);
 
   useEffect(() => {
+    if (isCreateOpen || isEditOpen) return;
+    setIsActionMenuOpen(false);
+    setIsCustomFieldModalOpen(false);
+    setCustomFieldTargetDialogId(null);
+  }, [isCreateOpen, isEditOpen]);
+
+  useEffect(() => {
     if (!isCreateOpen && !isEditOpen) return undefined;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (isActionMenuOpen) {
+          setIsActionMenuOpen(false);
+          return;
+        }
+        if (isCustomFieldModalOpen) {
+          setIsCustomFieldModalOpen(false);
+          return;
+        }
         if (isEditOpen) closeEditModal();
         if (isCreateOpen) closeCreateModal();
       }
@@ -115,7 +138,23 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [closeCreateModal, closeEditModal, isCreateOpen, isEditOpen]);
+  }, [closeCreateModal, closeEditModal, isActionMenuOpen, isCreateOpen, isCustomFieldModalOpen, isEditOpen]);
+
+  useEffect(() => {
+    if (!isActionMenuOpen) return undefined;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const isInsideMenu = actionMenuRef.current?.contains(target);
+      const isInsideButton = actionMenuButtonRef.current?.contains(target);
+      if (!isInsideMenu && !isInsideButton) {
+        setIsActionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isActionMenuOpen]);
 
   const renderDialog = (
     title: string,
@@ -149,10 +188,43 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     return (
       <div className="dialog-backdrop">
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleElementId}>
-          <div className="dialog-header">
+          <div className="dialog-header dialog-header--with-actions">
             <h2 id={titleElementId} className="dialog-title">
               {title}
             </h2>
+            <div className="dialog-header-actions">
+              <button
+                type="button"
+                className="btn btn-icon dialog-actionbar"
+                aria-label={t('action.more')}
+                title={t('action.more')}
+                onClick={() => {
+                  setCustomFieldTargetDialogId(dialogId);
+                  setIsActionMenuOpen((prev) => (customFieldTargetDialogId === dialogId ? !prev : true));
+                }}
+                ref={actionMenuButtonRef}
+              >
+                <span className="dialog-actionbar-dots">⋯</span>
+              </button>
+
+              {isActionMenuOpen && customFieldTargetDialogId === dialogId && (
+                <div className="dialog-actionmenu" role="menu" ref={actionMenuRef}>
+                  <button
+                    type="button"
+                    className="dialog-actionmenu-item"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setCustomFieldTargetDialogId(dialogId);
+                      setCustomFieldName('');
+                      setCustomFieldModalError(null);
+                      setIsCustomFieldModalOpen(true);
+                    }}
+                  >
+                    {t('customFields.add')}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <form className="dialog-body" onSubmit={handleSubmit}>
@@ -252,6 +324,26 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                 onChange={(e) => onFieldChange('mobilePhone', e.target.value)}
               />
             </div>
+
+            {form.customFields.map((row) => (
+              <div className="form-field" key={row.id}>
+                <label className="form-label" htmlFor={`${dialogId}-cf-${row.id}`}>
+                  {row.key}
+                </label>
+                <input
+                  id={`${dialogId}-cf-${row.id}`}
+                  className="input"
+                  value={row.value}
+                  onChange={(e) => {
+                    if (dialogId === 'datacard-create-dialog') {
+                      viewModel.updateCreateCustomFieldValue(row.id, e.target.value);
+                    } else {
+                      viewModel.updateEditCustomFieldValue(row.id, e.target.value);
+                    }
+                  }}
+                />
+              </div>
+            ))}
 
             <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-note`}>
@@ -414,6 +506,37 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
           'datacard-edit-dialog',
           isEditSubmitting
         )}
+
+      <CustomFieldModal
+        isOpen={isCustomFieldModalOpen}
+        name={customFieldName}
+        error={customFieldModalError}
+        onChangeName={(value) => {
+          setCustomFieldName(value);
+          setCustomFieldModalError(null);
+        }}
+        onCancel={() => {
+          setIsCustomFieldModalOpen(false);
+          setCustomFieldModalError(null);
+        }}
+        onOk={() => {
+          if (!customFieldTargetDialogId) return;
+          const result =
+            customFieldTargetDialogId === 'datacard-create-dialog'
+              ? viewModel.addCreateCustomFieldByName(customFieldName)
+              : viewModel.addEditCustomFieldByName(customFieldName);
+
+          if (!result.ok) {
+            setCustomFieldModalError(
+              result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
+            );
+            return;
+          }
+
+          setIsCustomFieldModalOpen(false);
+          setCustomFieldModalError(null);
+        }}
+      />
 
       <PasswordGeneratorModal
         isOpen={isGeneratorOpen}

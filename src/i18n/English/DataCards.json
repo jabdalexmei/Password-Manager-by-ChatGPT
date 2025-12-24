@@ -34,6 +34,8 @@
   "action.addFile": "Add file",
   "action.create": "Create",
   "action.cancel": "Cancel",
+  "action.ok": "OK",
+  "action.more": "More",
   "action.save": "Save",
   "dialog.createTitle": "Create data card",
   "dialog.editTitle": "Edit data card",
@@ -57,5 +59,11 @@
   "attachments.add": "Add file",
   "attachments.selected": "Selected files",
   "attachments.remove": "Remove",
-  "toast.attachmentUploadError": "Some files failed to upload"
+  "toast.attachmentUploadError": "Some files failed to upload",
+  "customFields.add": "Add field",
+  "customFields.modalTitle": "Add custom field",
+  "customFields.nameLabel": "Field name",
+  "customFields.namePlaceholder": "e.g. API key",
+  "customFields.errorEmpty": "Field name is required",
+  "customFields.errorDuplicate": "Field with this name already exists"
 }

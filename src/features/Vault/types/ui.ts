@@ -77,6 +77,7 @@ export type CreateDataCardInput = {
   note?: string | null;
   tags?: string[];
   password?: string | null;
+  customFields?: CustomField[];
 };
 
 export type UpdateDataCardInput = CreateDataCardInput & {
