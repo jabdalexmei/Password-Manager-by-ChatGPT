@@ -1,7 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { useToaster } from '../../../../components/Toaster';
-import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput } from '../../types/ui';
+import {
+  CreateDataCardInput,
+  CustomField,
+  CustomFieldType,
+  DataCard,
+  DataCardSummary,
+  Folder,
+  UpdateDataCardInput,
+} from '../../types/ui';
+
+type CustomFieldFormRow = {
+  id: string;
+  key: string;
+  value: string;
+  type: CustomFieldType;
+};
 
 export type DataCardFormState = {
   title: string;
@@ -14,6 +29,7 @@ export type DataCardFormState = {
   mobilePhone: string;
   note: string;
   tagsText: string;
+  customFields: CustomFieldFormRow[];
 };
 
 type UseDataCardsParams = {
@@ -63,6 +79,10 @@ export type DataCardsViewModel = {
   createAttachments: PendingAttachment[];
   addCreateAttachments: (paths: string[]) => void;
   removeCreateAttachment: (path: string) => void;
+  addCreateCustomFieldByName: (name: string) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
+  updateCreateCustomFieldValue: (rowId: string, value: string) => void;
+  addEditCustomFieldByName: (name: string) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
+  updateEditCustomFieldValue: (rowId: string, value: string) => void;
 };
 
 type PendingAttachment = {
@@ -86,6 +106,9 @@ const normalizeTags = (value: string) => {
   return Array.from(tagSet);
 };
 
+const makeRowId = () =>
+  globalThis.crypto?.randomUUID?.() ?? `cf_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
 const buildCreateInput = (form: DataCardFormState): CreateDataCardInput => ({
   folderId: form.folderId,
   title: form.title.trim(),
@@ -96,6 +119,11 @@ const buildCreateInput = (form: DataCardFormState): CreateDataCardInput => ({
   mobilePhone: normalizeOptional(form.mobilePhone),
   note: normalizeOptional(form.note),
   tags: normalizeTags(form.tagsText),
+  customFields: form.customFields.map((row) => ({
+    key: row.key,
+    value: row.value,
+    type: row.type,
+  })),
 });
 
 const buildUpdateInput = (form: DataCardFormState, id: string): UpdateDataCardInput => ({
@@ -114,6 +142,7 @@ const buildInitialForm = (defaultFolderId: string | null, folderName: string): D
   mobilePhone: '',
   note: '',
   tagsText: '',
+  customFields: [],
 });
 
 const findFolderName = (folderId: string | null, folderList: Folder[]) => {
@@ -197,6 +226,12 @@ export function useDataCards({
       mobilePhone: card.mobilePhone || '',
       note: card.note || '',
       tagsText: (card.tags || []).join(', '),
+      customFields: (card.customFields ?? []).map((field: CustomField) => ({
+        id: makeRowId(),
+        key: field.key,
+        value: field.value,
+        type: field.type,
+      })),
     });
     setEditOpen(true);
     setShowPassword(false);
@@ -236,6 +271,66 @@ export function useDataCards({
 
   const removeCreateAttachment = useCallback((path: string) => {
     setCreateAttachments((prev) => prev.filter((item) => item.path !== path));
+  }, []);
+
+  const addCreateCustomFieldByName = useCallback(
+    (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return { ok: false as const, reason: 'EMPTY' as const };
+
+      const exists = createForm.customFields.some(
+        (row) => row.key.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (exists) return { ok: false as const, reason: 'DUPLICATE' as const };
+
+      setCreateForm((prev) => ({
+        ...prev,
+        customFields: [...prev.customFields, { id: makeRowId(), key: trimmed, value: '', type: 'text' }],
+      }));
+
+      return { ok: true as const };
+    },
+    [createForm.customFields]
+  );
+
+  const updateCreateCustomFieldValue = useCallback((rowId: string, value: string) => {
+    setCreateForm((prev) => ({
+      ...prev,
+      customFields: prev.customFields.map((row) => (row.id === rowId ? { ...row, value } : row)),
+    }));
+  }, []);
+
+  const addEditCustomFieldByName = useCallback(
+    (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return { ok: false as const, reason: 'EMPTY' as const };
+
+      const exists = (editForm?.customFields ?? []).some(
+        (row) => row.key.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (exists) return { ok: false as const, reason: 'DUPLICATE' as const };
+
+      setEditForm((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          customFields: [...prev.customFields, { id: makeRowId(), key: trimmed, value: '', type: 'text' }],
+        };
+      });
+
+      return { ok: true as const };
+    },
+    [editForm]
+  );
+
+  const updateEditCustomFieldValue = useCallback((rowId: string, value: string) => {
+    setEditForm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        customFields: prev.customFields.map((row) => (row.id === rowId ? { ...row, value } : row)),
+      };
+    });
   }, []);
 
   const updateCreateField = useCallback(
@@ -400,5 +495,9 @@ export function useDataCards({
     createAttachments,
     addCreateAttachments,
     removeCreateAttachment,
+    addCreateCustomFieldByName,
+    updateCreateCustomFieldValue,
+    addEditCustomFieldByName,
+    updateEditCustomFieldValue,
   };
 }

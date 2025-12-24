@@ -141,7 +141,11 @@ export function mapCreateCardToBackend(input: CreateDataCardInput): BackendCreat
     tags: input.tags ?? [],
     password: input.password ?? null,
     bank_card: null,
-    custom_fields: [],
+    custom_fields: (input.customFields ?? []).map((field) => ({
+      key: field.key,
+      value: field.value,
+      type: field.type,
+    })),
   };
 }
 
