@@ -4,7 +4,7 @@ use std::sync::Arc;
 use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
 use rusqlite::DatabaseName;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::app_state::AppState;
 use crate::data::crypto::{cipher, kdf, key_check};
@@ -16,22 +16,23 @@ use crate::data::sqlite::pool::clear_pool;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::attachments_service;
 
-fn owned_data_from_bytes(bytes: Vec<u8>) -> Result<OwnedData> {
+fn owned_data_from_bytes(mut bytes: Vec<u8>) -> Result<OwnedData> {
     if bytes.is_empty() {
         return Err(ErrorCodeString::new("EMPTY_SERIALIZED_DB"));
     }
 
-    // Allocate using SQLite allocator (required by OwnedData::from_raw_nonnull).
-    let sz = bytes.len();
-    let ptr = unsafe { ffi::sqlite3_malloc64(sz as u64) as *mut u8 };
-
-    let nn = NonNull::new(ptr).ok_or_else(|| ErrorCodeString::new("SQLITE_OOM"))?;
-
-    unsafe {
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), nn.as_ptr(), sz);
-        // Safety: ptr was allocated by sqlite3_malloc64, as required by rusqlite.
-        Ok(OwnedData::from_raw_nonnull(nn, sz))
+    let mem = unsafe { ffi::sqlite3_malloc64(bytes.len() as u64) };
+    if mem.is_null() {
+        return Err(ErrorCodeString::new("SQLITE_OOM"));
     }
+
+    let owned = unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), mem as *mut u8, bytes.len());
+        OwnedData::from_raw_nonnull(NonNull::new_unchecked(mem as *mut u8), bytes.len())
+    };
+
+    bytes.zeroize();
+    Ok(owned)
 }
 
 fn open_protected_vault_session(

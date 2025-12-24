@@ -4,6 +4,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use zeroize::Zeroizing;
 
+use crate::data::fs::atomic_write::write_atomic;
 use crate::error::{ErrorCodeString, Result};
 
 pub const PM_ENC_MAGIC: [u8; 6] = *b"PMENC1";
@@ -79,7 +80,7 @@ pub fn decrypt_bytes(key: &[u8; KEY_LEN], aad: &[u8], blob: &[u8]) -> Result<Vec
 }
 
 pub fn write_encrypted_file(path: &std::path::Path, blob: &[u8]) -> Result<()> {
-    std::fs::write(path, blob).map_err(|_| ErrorCodeString::new("ENCRYPTED_FILE_WRITE"))
+    write_atomic(path, blob).map_err(|_| ErrorCodeString::new("ENCRYPTED_FILE_WRITE"))
 }
 
 pub fn read_encrypted_file(path: &std::path::Path) -> Result<Vec<u8>> {

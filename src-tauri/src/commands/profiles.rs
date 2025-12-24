@@ -4,7 +4,7 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::error::{ErrorCodeString, Result};
-use crate::services::{profiles_service, security_service};
+use crate::services::profiles_service;
 use crate::types::{ProfileMeta, ProfilesList};
 
 #[tauri::command]
@@ -47,8 +47,9 @@ pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Resu
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
             .as_deref()
             == Some(&id);
+        crate::data::sqlite::pool::clear_pool(&id);
         if should_lock {
-            security_service::lock_vault(&app_state)?;
+            app_state.logout_and_cleanup()?;
         }
         let delete_result = profiles_service::delete_profile(&storage_paths, &id);
         if delete_result.is_ok() {

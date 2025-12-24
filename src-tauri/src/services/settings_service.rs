@@ -2,6 +2,7 @@ use std::fs;
 use std::sync::Arc;
 
 use crate::app_state::AppState;
+use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::user_settings_path;
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
@@ -57,7 +58,8 @@ pub fn get_settings(sp: &StoragePaths, profile_id: &str) -> Result<UserSettings>
         let defaults = UserSettings::default();
         let serialized = serde_json::to_string_pretty(&defaults)
             .map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
-        fs::write(&path, serialized).map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
+        write_atomic(&path, serialized.as_bytes())
+            .map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
         return Ok(defaults);
     }
 
@@ -74,7 +76,8 @@ pub fn update_settings(
     let path = user_settings_path(sp, profile_id)?;
     let serialized = serde_json::to_string_pretty(&new_settings)
         .map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
-    fs::write(path, serialized).map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
+    write_atomic(&path, serialized.as_bytes())
+        .map_err(|_| ErrorCodeString::new("SETTINGS_WRITE"))?;
     Ok(true)
 }
 

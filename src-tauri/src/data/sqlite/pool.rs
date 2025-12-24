@@ -117,3 +117,9 @@ pub fn clear_pool(profile_id: &str) {
         pools.retain(|key, _| !key.starts_with(&format!("{profile_id}::")));
     }
 }
+
+pub fn clear_all_pools() {
+    if let Ok(mut pools) = POOLS.lock() {
+        pools.clear();
+    }
+}

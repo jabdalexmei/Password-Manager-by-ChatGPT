@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::data::crypto::cipher;
+use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{attachment_file_path, attachments_preview_root};
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
@@ -99,7 +100,11 @@ pub fn add_attachment_from_path(
     let bytes = read_source_file(source)?;
     let attachment_id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
-    let file_name = source.file_name().unwrap().to_string_lossy().to_string();
+    let file_name = source
+        .file_name()
+        .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_INVALID_SOURCE_PATH"))?
+        .to_string_lossy()
+        .to_string();
     let mime = mime_guess::from_path(&file_name)
         .first_or_octet_stream()
         .essence_str()
@@ -122,10 +127,10 @@ pub fn add_attachment_from_path(
     if let Some(key) = session.vault_key {
         let encrypted =
             cipher::encrypt_attachment_blob(&session.profile_id, &meta.id, &key, &bytes)?;
-        fs::write(&file_path, &encrypted)
+        write_atomic(&file_path, &encrypted)
             .map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
     } else {
-        fs::write(&file_path, &bytes)
+        write_atomic(&file_path, &bytes)
             .map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
     }
 

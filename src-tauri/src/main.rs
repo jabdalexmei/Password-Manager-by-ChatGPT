@@ -3,6 +3,9 @@
 mod app_state;
 mod commands;
 mod data {
+    pub mod fs {
+        pub mod atomic_write;
+    }
     pub mod storage_paths;
     pub mod workspaces {
         pub mod registry;

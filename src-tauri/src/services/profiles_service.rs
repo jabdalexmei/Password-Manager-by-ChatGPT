@@ -1,5 +1,6 @@
 use crate::data::crypto::kdf::{derive_master_key, generate_kdf_salt};
 use crate::data::crypto::key_check;
+use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path};
 use crate::data::profiles::registry;
 use crate::data::settings::config;
@@ -25,23 +26,37 @@ pub fn create_profile(
         return Err(ErrorCodeString::new("PROFILE_NAME_REQUIRED"));
     }
     let profile = registry::create_profile(sp, name, password.clone())?;
-    ensure_profile_dirs(sp, &profile.id)
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
-    if is_passwordless {
-        init_database_passwordless(sp, &profile.id)?;
-    } else {
-        let salt = generate_kdf_salt();
-        fs::write(kdf_salt_path(sp, &profile.id)?, &salt)
+    let init_result: Result<()> = (|| {
+        ensure_profile_dirs(sp, &profile.id)
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        let pwd = password.unwrap_or_default();
-        let key = Zeroizing::new(derive_master_key(&pwd, &salt)?);
-        key_check::create_key_check_file(sp, &profile.id, &key)?;
-        init_database_protected_encrypted(sp, &profile.id, &key)?;
+
+        let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
+        if is_passwordless {
+            init_database_passwordless(sp, &profile.id)?;
+        } else {
+            let salt = generate_kdf_salt();
+            let salt_path = kdf_salt_path(sp, &profile.id)?;
+            write_atomic(&salt_path, &salt)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+            let pwd = password.unwrap_or_default();
+            let key = Zeroizing::new(derive_master_key(&pwd, &salt)?);
+            key_check::create_key_check_file(sp, &profile.id, &key)?;
+            init_database_protected_encrypted(sp, &profile.id, &key)?;
+        }
+
+        let _ = get_settings(sp, &profile.id)?;
+        Ok(())
+    })();
+
+    if let Err(err) = init_result {
+        let _ = registry::delete_profile(sp, &profile.id);
+        if let Ok(dir) = crate::data::profiles::paths::profile_dir(sp, &profile.id) {
+            let _ = fs::remove_dir_all(dir);
+        }
+        return Err(err);
     }
 
-    let _ = get_settings(sp, &profile.id)?;
     Ok(profile)
 }
 

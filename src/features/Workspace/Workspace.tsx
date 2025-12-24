@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
+import { useToaster } from '../../components/Toaster';
 import { useTranslation } from '../../lib/i18n';
 import {
   workspaceCreate,
@@ -15,6 +16,7 @@ type WorkspaceProps = {
 
 const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const { t } = useTranslation('Workspace');
+  const { show } = useToaster();
   const { workspaces, loading, error, selectedId, setSelectedId, refresh, remove } = useWorkspace();
   const [useDefaultPath, setUseDefaultPath] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -24,6 +26,19 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
     [selectedId, workspaces]
   );
 
+  const mapWorkspaceError = (code?: string) => {
+    switch (code) {
+      case 'WORKSPACE_NOT_WRITABLE':
+        return t('notWritable');
+      case 'WORKSPACE_INVALID_MARKER':
+        return t('invalid');
+      case 'WORKSPACE_FOLDER_MISSING':
+        return t('missing');
+      default:
+        return t('operationFailed');
+    }
+  };
+
   const handleSelect = useCallback(
     async (id: string) => {
       setBusy(true);
@@ -31,11 +46,13 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
         await workspaceSelect(id);
         await refresh();
         onWorkspaceReady();
+      } catch (err: any) {
+        show(mapWorkspaceError(err?.code), { title: t('errorTitle') });
       } finally {
         setBusy(false);
       }
     },
-    [onWorkspaceReady, refresh]
+    [onWorkspaceReady, refresh, show, t]
   );
 
   const handleCreate = useCallback(async () => {
@@ -56,17 +73,23 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
       }
       await refresh();
       onWorkspaceReady();
+    } catch (err: any) {
+      show(mapWorkspaceError(err?.code), { title: t('errorTitle') });
     } finally {
       setBusy(false);
     }
-  }, [onWorkspaceReady, refresh, t, useDefaultPath]);
+  }, [onWorkspaceReady, refresh, show, t, useDefaultPath]);
 
   const handleOpenDataFolder = useCallback(async () => {
     if (!selectedWorkspace || !selectedWorkspace.is_active || !selectedWorkspace.valid) {
       return;
     }
-    await workspaceOpenInExplorer();
-  }, [selectedWorkspace]);
+    try {
+      await workspaceOpenInExplorer();
+    } catch (err: any) {
+      show(mapWorkspaceError(err?.code), { title: t('errorTitle') });
+    }
+  }, [selectedWorkspace, show, t]);
 
   const canOpenDataFolder =
     Boolean(selectedWorkspace?.is_active) && Boolean(selectedWorkspace?.valid);

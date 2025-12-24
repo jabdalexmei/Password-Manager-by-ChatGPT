@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use zeroize::Zeroizing;
 
@@ -63,6 +63,24 @@ impl AppState {
             return Err(ErrorCodeString::new("WORKSPACE_NOT_SELECTED"));
         }
         Ok(storage_paths.clone())
+    }
+
+    pub fn logout_and_cleanup(self: &Arc<Self>) -> Result<()> {
+        let is_logged_in = self
+            .logged_in_profile
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+            .is_some();
+
+        if is_logged_in {
+            crate::services::security_service::lock_vault(self)?;
+        }
+
+        crate::data::sqlite::pool::clear_all_pools();
+
+        self.clear_security_state()?;
+
+        Ok(())
     }
 
     fn clear_security_state(&self) -> Result<()> {

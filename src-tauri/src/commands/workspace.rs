@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -5,6 +6,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
+use crate::data::fs::atomic_write::write_atomic;
 use crate::data::workspaces::registry::{
     display_name_from_path, encode_workspace_path, load_registry, resolve_workspace_path,
     save_registry, WorkspaceRecord,
@@ -34,7 +36,8 @@ fn ensure_marker(root: &Path) -> Result<()> {
     let payload = serde_json::json!({ "schema_version": 1 });
     let serialized = serde_json::to_string_pretty(&payload)
         .map_err(|_| ErrorCodeString::new("WORKSPACE_NOT_WRITABLE"))?;
-    std::fs::write(&marker, serialized).map_err(|_| ErrorCodeString::new("WORKSPACE_NOT_WRITABLE"))
+    write_atomic(&marker, serialized.as_bytes())
+        .map_err(|_| ErrorCodeString::new("WORKSPACE_NOT_WRITABLE"))
 }
 
 fn ensure_workspace_root(root: &Path) -> Result<()> {
@@ -88,22 +91,36 @@ fn upsert_workspace(
     record
 }
 
-fn workspace_status(root: &Path) -> (bool, bool) {
+fn is_dir_writable(root: &Path) -> bool {
+    if !root.exists() || !root.is_dir() {
+        return false;
+    }
+    let test_path = root.join(format!(".pm-write-test-{}", uuid::Uuid::new_v4()));
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&test_path)
+    {
+        Ok(mut f) => {
+            let _ = f.write_all(b"test");
+            let _ = f.sync_all();
+            let _ = std::fs::remove_file(&test_path);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+fn workspace_status(root: &Path) -> Result<(bool, bool)> {
     if !root.exists() {
-        return (false, false);
+        return Ok((false, false));
     }
     let marker = marker_path(root);
     if !marker.exists() {
-        return (true, false);
+        return Ok((true, false));
     }
-    let profiles_dir = root.join("Profiles");
-    if profiles_dir.exists() {
-        return (true, true);
-    }
-    match std::fs::create_dir_all(&profiles_dir) {
-        Ok(_) => (true, true),
-        Err(_) => (true, false),
-    }
+
+    Ok((true, is_dir_writable(root)))
 }
 
 #[tauri::command]
@@ -113,22 +130,22 @@ pub async fn workspace_list(state: State<'_, Arc<AppState>>) -> Result<Vec<Works
         let app_dir = app_dir_from_state(&app_state)?;
         let registry = load_registry(&app_dir)?;
         let active_id = registry.active_workspace_id.clone();
-        Ok(registry
+        registry
             .workspaces
             .iter()
             .map(|record| {
                 let resolved = resolve_workspace_path(&app_dir, record);
-                let (exists, valid) = workspace_status(&resolved);
-                WorkspaceItem {
+                let (exists, valid) = workspace_status(&resolved)?;
+                Ok(WorkspaceItem {
                     id: record.id.clone(),
                     display_name: record.display_name.clone(),
                     path: resolved.to_string_lossy().to_string(),
                     exists,
                     valid,
                     is_active: active_id.as_deref() == Some(&record.id),
-                }
+                })
             })
-            .collect())
+            .collect()
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
@@ -152,6 +169,7 @@ pub async fn workspace_select(
 
         let resolved = resolve_workspace_path(&app_dir, &record);
         validate_workspace_root(&resolved)?;
+        app_state.logout_and_cleanup()?;
         app_state.set_workspace_root(resolved)?;
         registry.active_workspace_id = Some(id);
         if let Err(err) = save_registry(&app_dir, &registry) {
@@ -174,6 +192,7 @@ pub async fn workspace_create(path: String, state: State<'_, Arc<AppState>>) -> 
 
         let mut registry = load_registry(&app_dir)?;
         let record = upsert_workspace(&mut registry.workspaces, &app_dir, &root);
+        app_state.logout_and_cleanup()?;
         app_state.set_workspace_root(root)?;
         registry.active_workspace_id = Some(record.id.clone());
         if let Err(err) = save_registry(&app_dir, &registry) {
@@ -196,6 +215,7 @@ pub async fn workspace_create_default(state: State<'_, Arc<AppState>>) -> Result
 
         let mut registry = load_registry(&app_dir)?;
         let record = upsert_workspace(&mut registry.workspaces, &app_dir, &root);
+        app_state.logout_and_cleanup()?;
         app_state.set_workspace_root(root)?;
         registry.active_workspace_id = Some(record.id.clone());
         if let Err(err) = save_registry(&app_dir, &registry) {
@@ -218,6 +238,7 @@ pub async fn workspace_remove(id: String, state: State<'_, Arc<AppState>>) -> Re
         registry.workspaces.retain(|record| record.id != id);
         if was_active {
             registry.active_workspace_id = None;
+            app_state.logout_and_cleanup()?;
             app_state.clear_workspace_root()?;
         }
         save_registry(&app_dir, &registry)?;
