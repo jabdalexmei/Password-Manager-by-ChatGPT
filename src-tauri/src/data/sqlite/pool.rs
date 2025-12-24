@@ -29,7 +29,6 @@ impl r2d2::CustomizeConnection<rusqlite::Connection, rusqlite::Error> for FilePr
         conn.execute_batch(
             r#"
             PRAGMA foreign_keys = ON;
-            PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
             "#,
         )

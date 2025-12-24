@@ -12,14 +12,25 @@ pub fn init_database_passwordless(sp: &StoragePaths, profile_id: &str) -> Result
     ensure_profile_dirs(sp, profile_id)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    let db_path = vault_db_path(sp, profile_id)?;
-    log::info!("[DB][init] passwordless vault path: {}", db_path.display());
-    let conn = Connection::open(&db_path).map_err(|e| {
-        log::error!("[DB][init] open failed: {e:?}");
-        ErrorCodeString::new("DB_OPEN_FAILED")
-    })?;
+    let conn = Connection::open(vault_db_path(sp, profile_id)?)
+        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 
-    migrations::migrate_to_latest(&conn)
+    migrations::migrate_to_latest(&conn)?;
+
+    // Set WAL ONCE (DB-file persistent) and avoid doing it in pool connections.
+    // WAL persistence is documented by SQLite. :contentReference[oaicite:1]{index=1}
+    let current: String = conn
+        .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    if current.to_uppercase() != "WAL" {
+        // This PRAGMA changes the DB file state; run it only from init, not from r2d2 on_acquire.
+        let _: String = conn
+            .query_row("PRAGMA journal_mode=WAL;", [], |row| row.get(0))
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    }
+
+    Ok(())
 }
 
 pub fn init_database_protected_encrypted(
