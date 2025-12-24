@@ -4,17 +4,14 @@
   "workspaces": "Available workspaces",
   "loading": "Loading workspaces...",
   "error": "Unable to load workspaces.",
-  "errorTitle": "Workspace error",
   "empty": "No workspaces yet. Use Create or Open data folder to select a folder and initialize it.",
-  "operationFailed": "Workspace action failed. Please try again.",
-  "notWritable": "Selected folder is not writable. Please choose another location.",
   "chooseFolder": "Choose data folder",
   "create": "Create",
   "openDataFolder": "Open data folder",
   "useDefaultPath": "Use default path",
   "missing": "Missing",
   "invalid": "Invalid",
-  "removeFromList": "Remove from list",
+  "removeFromList": "Delete",
   "open": "Open",
-  "selected": "Selected workspace"
+  "actions": "Actions"
 }

@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { useToaster } from '../../components/Toaster';
 import { useTranslation } from '../../lib/i18n';
 import {
   workspaceCreate,
@@ -16,32 +15,19 @@ type WorkspaceProps = {
 
 const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const { t } = useTranslation('Workspace');
-  const { show } = useToaster();
   const { workspaces, loading, error, selectedId, setSelectedId, refresh, remove } = useWorkspace();
   const [useDefaultPath, setUseDefaultPath] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const selectedWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === selectedId) ?? null,
+    () => workspaces.find((w) => w.id === selectedId) ?? null,
     [selectedId, workspaces]
   );
+
   const activeWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.is_active) ?? null,
+    () => workspaces.find((w) => w.is_active) ?? null,
     [workspaces]
   );
-
-  const mapWorkspaceError = (code?: string) => {
-    switch (code) {
-      case 'WORKSPACE_NOT_WRITABLE':
-        return t('notWritable');
-      case 'WORKSPACE_INVALID_MARKER':
-        return t('invalid');
-      case 'WORKSPACE_FOLDER_MISSING':
-        return t('missing');
-      default:
-        return t('operationFailed');
-    }
-  };
 
   const handleSelect = useCallback(
     async (id: string) => {
@@ -50,13 +36,11 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
         await workspaceSelect(id);
         await refresh();
         onWorkspaceReady();
-      } catch (err: any) {
-        show(mapWorkspaceError(err?.code), { title: t('errorTitle') });
       } finally {
         setBusy(false);
       }
     },
-    [onWorkspaceReady, refresh, show, t]
+    [onWorkspaceReady, refresh]
   );
 
   const handleCreate = useCallback(async () => {
@@ -77,13 +61,14 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
       }
       await refresh();
       onWorkspaceReady();
-    } catch (err: any) {
-      show(mapWorkspaceError(err?.code), { title: t('errorTitle') });
     } finally {
       setBusy(false);
     }
-  }, [onWorkspaceReady, refresh, show, t, useDefaultPath]);
+  }, [onWorkspaceReady, refresh, t, useDefaultPath]);
 
+  // IMPORTANT: this button acts as:
+  // - "open in Explorer" when active workspace is valid
+  // - "browse/select folder" when there is no valid active workspace
   const handleOpenDataFolder = useCallback(async () => {
     setBusy(true);
     try {
@@ -105,12 +90,10 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
       await workspaceCreate(selected);
       await refresh();
       onWorkspaceReady();
-    } catch (err: any) {
-      show(mapWorkspaceError(err?.code), { title: t('errorTitle') });
     } finally {
       setBusy(false);
     }
-  }, [activeWorkspace, onWorkspaceReady, refresh, show, t]);
+  }, [activeWorkspace, onWorkspaceReady, refresh, t]);
 
   const workspaceListContent = useMemo(() => {
     if (loading) {
@@ -123,8 +106,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
 
     if (!workspaces.length) {
       return (
-        <div className="empty-state">
-          <p>{t('empty')}</p>
+        <div className="workspace-empty">
+          <p className="workspace-empty-text">{t('empty')}</p>
         </div>
       );
     }
@@ -132,18 +115,19 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
     return (
       <div className="workspace-list">
         {workspaces.map((workspace) => {
+          const isSelected = workspace.id === selectedId;
+
+          // keep status info (optional UI chip)
           const statusLabel = workspace.exists
             ? workspace.valid
               ? null
               : t('invalid')
             : t('missing');
-          const isSelected = workspace.id === selectedId;
+
           return (
             <div
               key={workspace.id}
-              className={`workspace-item ${isSelected ? 'selected' : ''} ${
-                workspace.is_active ? 'active' : ''
-              }`}
+              className={`workspace-tile ${isSelected ? 'selected' : ''}`}
               onClick={() => setSelectedId(workspace.id)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -153,35 +137,53 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
               role="button"
               tabIndex={0}
             >
-              <div className="workspace-item-header">
-                <div>
-                  <p className="workspace-name">{workspace.display_name}</p>
-                  <p className="workspace-path">{workspace.path}</p>
+              <div className="workspace-tile-top">
+                <div className="workspace-tile-info">
+                  <div className="workspace-tile-title-row">
+                    <p className="workspace-tile-title">{workspace.display_name}</p>
+                    {statusLabel && <span className="workspace-status">{statusLabel}</span>}
+                  </div>
+                  <p className="workspace-tile-path">{workspace.path}</p>
                 </div>
-                {statusLabel && <span className="badge">{statusLabel}</span>}
-              </div>
-              <div className="workspace-item-actions">
+
+                {/* Action Bar placeholder (no behavior for now) */}
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleSelect(workspace.id);
+                  className="btn btn-icon workspace-actionbar"
+                  aria-label={t('actions')}
+                  title={t('actions')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // intentionally empty (future action menu)
                   }}
-                  disabled={!workspace.valid || busy}
                 >
-                  {t('open')}
+                  <span className="workspace-actionbar-dots">⋯</span>
                 </button>
+              </div>
+
+              <div className="workspace-tile-bottom">
                 <button
                   type="button"
-                  className="btn btn-danger"
-                  onClick={(event) => {
-                    event.stopPropagation();
+                  className="btn btn-danger workspace-btn-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     remove(workspace.id);
                   }}
                   disabled={busy}
                 >
                   {t('removeFromList')}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-primary workspace-btn-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelect(workspace.id);
+                  }}
+                  disabled={!workspace.valid || busy}
+                >
+                  {t('open')}
                 </button>
               </div>
             </div>
@@ -193,52 +195,51 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
 
   return (
     <div className="workspace-shell">
-      <div className="workspace-card">
+      <div className="workspace-card workspace-card-mock">
         <header className="workspace-header">
           <h1 className="workspace-title">{t('title')}</h1>
           <p className="workspace-subtitle">{t('subtitle')}</p>
         </header>
-        <div className="workspace-layout">
-          <section>
+
+        <div className="workspace-mock-layout">
+          <section className="workspace-left">
             <h2 className="workspace-section-title">{t('workspaces')}</h2>
             {workspaceListContent}
           </section>
-          <section className="workspace-controls">
-            <div className="workspace-control-block">
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={useDefaultPath}
-                  onChange={(event) => setUseDefaultPath(event.target.checked)}
-                />
-                <span>{t('useDefaultPath')}</span>
-              </label>
-            </div>
-            <div className="workspace-control-block">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleCreate}
+
+          <section className="workspace-right">
+            <button
+              type="button"
+              className="btn btn-primary workspace-cta"
+              onClick={handleCreate}
+              disabled={busy}
+            >
+              {t('create')}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-secondary workspace-cta-secondary"
+              onClick={handleOpenDataFolder}
+              disabled={busy}
+            >
+              {t('openDataFolder')}
+            </button>
+
+            <label className="workspace-default-path">
+              <input
+                type="checkbox"
+                checked={useDefaultPath}
+                onChange={(event) => setUseDefaultPath(event.target.checked)}
                 disabled={busy}
-              >
-                {t('create')}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={handleOpenDataFolder}
-                disabled={busy}
-              >
-                {t('openDataFolder')}
-              </button>
+              />
+              <span>{t('useDefaultPath')}</span>
+            </label>
+
+            {/* Optional: keep selection info hidden to match mock exactly */}
+            <div className="workspace-selection-hint" aria-hidden="true">
+              {selectedWorkspace ? selectedWorkspace.display_name : ''}
             </div>
-            {selectedWorkspace && (
-              <div className="workspace-selection">
-                <p className="workspace-selection-label">{t('selected')}</p>
-                <p className="workspace-selection-name">{selectedWorkspace.display_name}</p>
-                <p className="workspace-selection-path">{selectedWorkspace.path}</p>
-              </div>
-            )}
           </section>
         </div>
       </div>
