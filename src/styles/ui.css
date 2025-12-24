@@ -250,9 +250,10 @@
 
 /* Secondary action button (neutral) */
 .btn-secondary {
-  background: var(--color-surface-2);
-  color: var(--color-text);
-  border-color: var(--color-border);
+  /* Solid fill (no gradient) — matches the old/demo look */
+  background: var(--btn-secondary-bg, var(--color-surface-2));
+  color: var(--btn-secondary-text, var(--color-text));
+  border-color: var(--btn-secondary-border, var(--color-border));
 }
 
 .btn-secondary:not(:disabled):hover {
