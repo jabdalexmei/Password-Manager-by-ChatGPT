@@ -12,8 +12,9 @@ use crate::app_state::AppState;
 use crate::data::profiles::paths::vault_db_path;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::{
-    AttachmentMeta, BankCard, CreateDataCardInput, DataCard, DataCardSummary, Folder,
-    PasswordHistoryRow, SetDataCardFavoriteInput, UpdateDataCardInput,
+    AttachmentMeta, BankCardItem, BankCardSummary, CreateBankCardInput, CreateDataCardInput,
+    DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardFavoriteInput,
+    SetDataCardFavoriteInput, UpdateBankCardInput, UpdateDataCardInput,
 };
 
 use std::sync::Arc;
@@ -78,10 +79,6 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
         password: row.get("password_value")?,
-        bank_card: match row.get::<_, Option<String>>("bank_card_json")? {
-            Some(value) => Some(deserialize_json::<BankCard>(value)?),
-            None => None,
-        },
         custom_fields: deserialize_json(row.get::<_, String>("custom_fields_json")?)?,
     })
 }
@@ -102,6 +99,40 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
         is_favorite,
+    })
+}
+
+fn map_bank_card(row: &rusqlite::Row) -> rusqlite::Result<BankCardItem> {
+    Ok(BankCardItem {
+        id: row.get("id")?,
+        title: row.get("title")?,
+        holder: row.get("holder")?,
+        number: row.get("number")?,
+        expiry_mm_yy: row.get("expiry_mm_yy")?,
+        cvc: row.get("cvc")?,
+        note: row.get("note")?,
+        tags: deserialize_json(row.get::<_, String>("tags_json")?)?,
+        is_favorite: row.get::<_, i64>("is_favorite")? != 0,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        deleted_at: row.get("deleted_at")?,
+    })
+}
+
+fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummary> {
+    let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
+    let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
+
+    Ok(BankCardSummary {
+        id: row.get("id")?,
+        title: row.get("title")?,
+        holder: row.get("holder")?,
+        number: row.get("number")?,
+        tags,
+        is_favorite,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        deleted_at: row.get("deleted_at")?,
     })
 }
 
@@ -393,27 +424,18 @@ pub fn get_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result
         .map_err(|_| ErrorCodeString::new("DATACARD_NOT_FOUND"))
 }
 
-fn serialize_card_fields(input: &CreateDataCardInput) -> Result<(String, String, Option<String>)> {
-    let tags_json = serialize_json(&input.tags)?;
-    let custom_fields_json = serialize_json(&input.custom_fields)?;
-    let bank_card_json = match &input.bank_card {
-        Some(card) => Some(serialize_json(card)?),
-        None => None,
-    };
-    Ok((tags_json, custom_fields_json, bank_card_json))
-}
-
 pub fn create_datacard(
     state: &Arc<AppState>,
     profile_id: &str,
     input: &CreateDataCardInput,
 ) -> Result<DataCard> {
     let conn = open_connection(state, profile_id)?;
-    let (tags_json, custom_fields_json, bank_card_json) = serialize_card_fields(input)?;
+    let tags_json = serialize_json(&input.tags)?;
+    let custom_fields_json = serialize_json(&input.custom_fields)?;
     let now = Utc::now().to_rfc3339();
     let id = Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, bank_card_json, custom_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, NULL)",
+        "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, custom_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, NULL)",
         params![
             id,
             input.folder_id,
@@ -425,7 +447,6 @@ pub fn create_datacard(
             input.note,
             tags_json,
             input.password,
-            bank_card_json,
             custom_fields_json,
             now,
             now
@@ -444,10 +465,6 @@ pub fn update_datacard(
     let conn = open_connection(state, profile_id)?;
     let tags_json = serialize_json(&input.tags)?;
     let custom_fields_json = serialize_json(&input.custom_fields)?;
-    let bank_card_json = match &input.bank_card {
-        Some(card) => Some(serialize_json(card)?),
-        None => None,
-    };
     let existing_password_row: Option<Option<String>> = conn
         .query_row(
             "SELECT password_value FROM datacards WHERE id = ?1",
@@ -481,7 +498,7 @@ pub fn update_datacard(
     }
     let rows = conn
         .execute(
-            "UPDATE datacards SET title = ?1, url = ?2, email = ?3, username = ?4, mobile_phone = ?5, note = ?6, tags_json = ?7, password_value = ?8, bank_card_json = ?9, custom_fields_json = ?10, folder_id = ?11, updated_at = ?12 WHERE id = ?13",
+            "UPDATE datacards SET title = ?1, url = ?2, email = ?3, username = ?4, mobile_phone = ?5, note = ?6, tags_json = ?7, password_value = ?8, custom_fields_json = ?9, folder_id = ?10, updated_at = ?11 WHERE id = ?12",
             params![
                 input.title,
                 input.url,
@@ -491,7 +508,6 @@ pub fn update_datacard(
                 input.note,
                 tags_json,
                 input.password,
-                bank_card_json,
                 custom_fields_json,
                 input.folder_id,
                 now,
@@ -632,6 +648,191 @@ pub fn purge_datacards_in_folder(
         params![folder_id],
     )
     .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    Ok(true)
+}
+
+pub fn list_bank_cards_summary(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    sort_field: &str,
+    sort_dir: &str,
+) -> Result<Vec<BankCardSummary>> {
+    let conn = open_connection(state, profile_id)?;
+    let clause = order_clause(sort_field, sort_dir).unwrap_or("ORDER BY updated_at DESC");
+    let query = format!(
+        "SELECT id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
+    );
+    let mut stmt = conn.prepare(&query).map_err(|e| {
+        log_sqlite_err("list_bank_cards_summary.prepare", &query, &e);
+        ErrorCodeString::new("DB_QUERY_FAILED")
+    })?;
+
+    let cards = stmt
+        .query_map([], map_bank_card_summary)
+        .map_err(|e| {
+            log_sqlite_err("list_bank_cards_summary.query_map", &query, &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| {
+            log_sqlite_err("list_bank_cards_summary.collect", &query, &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
+
+    Ok(cards)
+}
+
+pub fn list_deleted_bank_cards_summary(
+    state: &Arc<AppState>,
+    profile_id: &str,
+) -> Result<Vec<BankCardSummary>> {
+    let conn = open_connection(state, profile_id)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let cards = stmt
+        .query_map([], map_bank_card_summary)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    Ok(cards)
+}
+
+pub fn get_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<BankCardItem> {
+    let conn = open_connection(state, profile_id)?;
+    let mut stmt = conn
+        .prepare("SELECT * FROM bank_cards WHERE id = ?1")
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    stmt.query_row(params![id], map_bank_card)
+        .map_err(|_| ErrorCodeString::new("BANK_CARD_NOT_FOUND"))
+}
+
+pub fn create_bank_card(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    input: &CreateBankCardInput,
+) -> Result<BankCardItem> {
+    let conn = open_connection(state, profile_id)?;
+    let tags_json = serialize_json(&input.tags)?;
+    let now = Utc::now().to_rfc3339();
+    let id = Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT INTO bank_cards (id, title, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, NULL)",
+        params![
+            id,
+            input.title,
+            input.holder,
+            input.number,
+            input.expiry_mm_yy,
+            input.cvc,
+            input.note,
+            tags_json,
+            now,
+            now
+        ],
+    )
+    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    get_bank_card(state, profile_id, &id)
+}
+
+pub fn update_bank_card(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    input: &UpdateBankCardInput,
+) -> Result<bool> {
+    let conn = open_connection(state, profile_id)?;
+    let tags_json = serialize_json(&input.tags)?;
+    let rows = conn
+        .execute(
+            "UPDATE bank_cards SET title = ?1, holder = ?2, number = ?3, expiry_mm_yy = ?4, cvc = ?5, note = ?6, tags_json = ?7, updated_at = ?8 WHERE id = ?9",
+            params![
+                input.title,
+                input.holder,
+                input.number,
+                input.expiry_mm_yy,
+                input.cvc,
+                input.note,
+                tags_json,
+                Utc::now().to_rfc3339(),
+                input.id
+            ],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    if rows == 0 {
+        return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
+    }
+    Ok(true)
+}
+
+pub fn set_bank_card_favorite(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    input: &SetBankCardFavoriteInput,
+) -> Result<bool> {
+    let conn = open_connection(state, profile_id)?;
+    let rows = conn
+        .execute(
+            "UPDATE bank_cards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
+            params![
+                if input.is_favorite { 1 } else { 0 },
+                Utc::now().to_rfc3339(),
+                input.id
+            ],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    if rows == 0 {
+        return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
+    }
+    Ok(true)
+}
+
+pub fn soft_delete_bank_card(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    id: &str,
+    now: &str,
+) -> Result<bool> {
+    let conn = open_connection(state, profile_id)?;
+    let rows = conn
+        .execute(
+            "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
+            params![now, now, id],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    if rows == 0 {
+        return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
+    }
+    Ok(true)
+}
+
+pub fn restore_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
+    let conn = open_connection(state, profile_id)?;
+    let rows = conn
+        .execute(
+            "UPDATE bank_cards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
+            params![Utc::now().to_rfc3339(), id],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    if rows == 0 {
+        return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
+    }
+    Ok(true)
+}
+
+pub fn purge_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
+    let conn = open_connection(state, profile_id)?;
+    let rows = conn
+        .execute("DELETE FROM bank_cards WHERE id = ?1", params![id])
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    if rows == 0 {
+        return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
+    }
     Ok(true)
 }
 

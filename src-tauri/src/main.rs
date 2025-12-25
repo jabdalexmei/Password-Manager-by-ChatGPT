@@ -33,6 +33,7 @@ mod data {
 mod error;
 mod services {
     pub mod attachments_service;
+    pub mod bank_cards_service;
     pub mod datacards_service;
     pub mod folders_service;
     pub mod password_history_service;
@@ -46,8 +47,8 @@ use std::sync::Arc;
 
 use app_state::AppState;
 use commands::{
-    attachments::*, datacards::*, folders::*, password_history::*, profiles::*, security::*,
-    settings::*, workspace::*,
+    attachments::*, bank_cards::*, datacards::*, folders::*, password_history::*, profiles::*,
+    security::*, settings::*, workspace::*,
 };
 use data::storage_paths::StoragePaths;
 use services::security_service;
@@ -111,6 +112,15 @@ fn main() {
             move_folder,
             delete_folder_only,
             delete_folder_and_cards,
+            list_bank_cards_summary_command,
+            list_deleted_bank_cards_summary_command,
+            get_bank_card,
+            create_bank_card,
+            update_bank_card,
+            set_bank_card_favorite,
+            delete_bank_card,
+            restore_bank_card,
+            purge_bank_card,
             list_datacards,
             list_datacards_summary_command,
             get_datacard,

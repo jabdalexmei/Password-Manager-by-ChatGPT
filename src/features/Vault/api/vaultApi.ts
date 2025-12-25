@@ -1,10 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import {
+  BackendBankCardItem,
+  BackendBankCardSummary,
+  BackendCreateBankCardInput,
   BackendCreateDataCardInput,
   BackendDataCard,
   BackendDataCardSummary,
   BackendFolder,
   BackendAttachmentMeta,
+  BackendUpdateBankCardInput,
   BackendUpdateDataCardInput,
   BackendUserSettings,
   BackendAttachmentPreviewPayload,
@@ -39,6 +43,42 @@ export async function listDataCardSummaries(): Promise<BackendDataCardSummary[]>
 
 export async function listDeletedDataCardSummaries(): Promise<BackendDataCardSummary[]> {
   return invoke('list_deleted_datacards_summary_command');
+}
+
+export async function listBankCardSummaries(): Promise<BackendBankCardSummary[]> {
+  return invoke('list_bank_cards_summary_command');
+}
+
+export async function listDeletedBankCardSummaries(): Promise<BackendBankCardSummary[]> {
+  return invoke('list_deleted_bank_cards_summary_command');
+}
+
+export async function getBankCard(id: string): Promise<BackendBankCardItem> {
+  return invoke('get_bank_card', { id });
+}
+
+export async function createBankCard(input: BackendCreateBankCardInput): Promise<BackendBankCardItem> {
+  return invoke('create_bank_card', { input });
+}
+
+export async function updateBankCard(input: BackendUpdateBankCardInput): Promise<boolean> {
+  return invoke('update_bank_card', { input });
+}
+
+export async function setBankCardFavorite(input: { id: string; is_favorite: boolean }): Promise<boolean> {
+  return invoke('set_bank_card_favorite', { input });
+}
+
+export async function deleteBankCard(id: string): Promise<boolean> {
+  return invoke('delete_bank_card', { id });
+}
+
+export async function restoreBankCard(id: string): Promise<boolean> {
+  return invoke('restore_bank_card', { id });
+}
+
+export async function purgeBankCard(id: string): Promise<boolean> {
+  return invoke('purge_bank_card', { id });
 }
 
 export async function getDataCard(id: string): Promise<BackendDataCard> {

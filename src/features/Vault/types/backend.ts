@@ -8,14 +8,6 @@ export type BackendFolder = {
   deleted_at: string | null;
 };
 
-export type BackendBankCard = {
-  holder: string;
-  number: string;
-  expiry_mm_yy: string;
-  cvc: string;
-  note: string | null;
-};
-
 export type BackendCustomFieldType = "text" | "secret" | "url" | "number" | "date";
 
 export type BackendCustomField = {
@@ -46,7 +38,6 @@ export type BackendDataCard = {
   updated_at: string;
   deleted_at: string | null;
   password: string | null;
-  bank_card: BackendBankCard | null;
   custom_fields: BackendCustomField[];
 };
 
@@ -74,11 +65,51 @@ export type BackendCreateDataCardInput = {
   note: string | null;
   tags: string[];
   password: string | null;
-  bank_card: BackendBankCard | null;
   custom_fields: BackendCustomField[];
 };
 
 export type BackendUpdateDataCardInput = BackendCreateDataCardInput & {
+  id: string;
+};
+
+export type BackendBankCardItem = {
+  id: string;
+  title: string;
+  holder: string | null;
+  number: string | null;
+  expiry_mm_yy: string | null;
+  cvc: string | null;
+  note: string | null;
+  tags: string[];
+  is_favorite: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type BackendBankCardSummary = {
+  id: string;
+  title: string;
+  holder: string | null;
+  number: string | null;
+  tags: string[];
+  is_favorite: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type BackendCreateBankCardInput = {
+  title: string;
+  holder: string | null;
+  number: string | null;
+  expiry_mm_yy: string | null;
+  cvc: string | null;
+  note: string | null;
+  tags: string[];
+};
+
+export type BackendUpdateBankCardInput = BackendCreateBankCardInput & {
   id: string;
 };
 

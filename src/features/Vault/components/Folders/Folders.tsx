@@ -12,7 +12,12 @@ type Counts = {
   folders: Record<string, number>;
 };
 
+export type VaultCategory = 'data_cards' | 'bank_cards';
+
 export type FolderListProps = {
+  selectedCategory: VaultCategory;
+  onSelectCategory: (category: VaultCategory) => void;
+  onAddBankCard: () => void;
   folders: Folder[];
   counts: Counts;
   selectedNav: SelectedNav;
@@ -24,6 +29,9 @@ export type FolderListProps = {
 };
 
 export function Folders({
+  selectedCategory,
+  onSelectCategory,
+  onAddBankCard,
   folders,
   counts,
   selectedNav,
@@ -38,6 +46,7 @@ export function Folders({
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const [contextMenu, setContextMenu] = useState<{ folderId: string; x: number; y: number } | null>(null);
+  const [categoryMenu, setCategoryMenu] = useState<{ x: number; y: number } | null>(null);
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -56,20 +65,21 @@ export function Folders({
   }, [renameTargetId]);
 
   useEffect(() => {
-    if (!contextMenu) return;
+    if (!contextMenu && !categoryMenu) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setContextMenu(null);
+        setCategoryMenu(null);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [contextMenu]);
+  }, [categoryMenu, contextMenu]);
 
   const renderCreateDialog = () => {
-    if (!dialogState.isCreateOpen) return null;
+    if (!dialogState.isCreateOpen || selectedCategory === 'bank_cards') return null;
 
     const handleSubmit = (event: React.FormEvent) => {
       event.preventDefault();
@@ -152,6 +162,7 @@ export function Folders({
   };
 
   const closeContextMenu = () => setContextMenu(null);
+  const closeCategoryMenu = () => setCategoryMenu(null);
 
   const openRenameDialog = (folderId: string) => {
     const folder = folders.find((item) => item.id === folderId);
@@ -188,7 +199,7 @@ export function Folders({
   };
 
   const renderRenameDialog = () => {
-    if (!renameTargetId) return null;
+    if (!renameTargetId || selectedCategory === 'bank_cards') return null;
 
     const handleSubmit = (event: React.FormEvent) => {
       event.preventDefault();
@@ -241,6 +252,27 @@ export function Folders({
 
   return (
     <div>
+      <div className="vault-sidebar-title">{t('category.title')}</div>
+      <ul className="vault-folder-list">
+        <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
+          <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
+            <span className="folder-name">{t('category.dataCards')}</span>
+          </button>
+        </li>
+        <li className={selectedCategory === 'bank_cards' ? 'active' : ''}>
+          <button
+            className="vault-folder"
+            type="button"
+            onClick={() => onSelectCategory('bank_cards')}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setCategoryMenu({ x: event.clientX, y: event.clientY });
+            }}
+          >
+            <span className="folder-name">{t('category.bankCards')}</span>
+          </button>
+        </li>
+      </ul>
       <div className="vault-sidebar-title">{t('nav.title')}</div>
       <ul className="vault-folder-list">
         {renderSystemItem('all', t('nav.allItems'), counts.all, selectedNav === 'all')}
@@ -248,8 +280,12 @@ export function Folders({
         {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
         {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
       </ul>
-      <div className="vault-sidebar-title">{t('title')}</div>
-      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
+      {selectedCategory === 'data_cards' && (
+        <>
+          <div className="vault-sidebar-title">{t('title')}</div>
+          <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
+        </>
+      )}
       {renderCreateDialog()}
       {renderRenameDialog()}
 
@@ -266,6 +302,32 @@ export function Folders({
             </button>
             <button type="button" className="vault-context-item" onClick={() => handleDeleteFromMenu(contextMenu.folderId)}>
               {t('action.deleteFolder')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {categoryMenu && (
+        <div
+          className="vault-context-backdrop"
+          onClick={closeCategoryMenu}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div
+            className="vault-context-menu"
+            role="menu"
+            style={{ top: categoryMenu.y, left: categoryMenu.x }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="vault-context-item"
+              onClick={() => {
+                onAddBankCard();
+                closeCategoryMenu();
+              }}
+            >
+              {t('action.addBankCard')}
             </button>
           </div>
         </div>

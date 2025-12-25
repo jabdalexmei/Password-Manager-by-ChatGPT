@@ -4,6 +4,7 @@ import profileCreate from '../i18n/English/ProfileCreate.json';
 import login from '../i18n/English/LogIn.json';
 import vault from '../i18n/English/Vault.json';
 import dataCards from '../i18n/English/DataCards.json';
+import bankCards from '../i18n/English/BankCards.json';
 import common from '../i18n/English/Common.json';
 import search from '../i18n/English/Search.json';
 import folders from '../i18n/English/Folders.json';
@@ -17,6 +18,7 @@ type Dictionaries = {
   LogIn: typeof login;
   Vault: typeof vault;
   DataCards: typeof dataCards;
+  BankCards: typeof bankCards;
   Search: typeof search;
   Folders: typeof folders;
   Details: typeof details;
@@ -30,6 +32,7 @@ const dictionaries: Dictionaries = {
   LogIn: login,
   Vault: vault,
   DataCards: dataCards,
+  BankCards: bankCards,
   Search: search,
   Folders: folders,
   Details: details,

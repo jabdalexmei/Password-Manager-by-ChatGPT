@@ -1,4 +1,10 @@
-import { DataCardSummary, Folder } from './ui';
+import { Folder } from './ui';
+
+type SortableCard = {
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 const compareStringsCaseInsensitive = (a: string, b: string) => {
   const lowerA = a.toLowerCase();
@@ -29,9 +35,9 @@ const compareTitles = (a: string, b: string, direction: 'ASC' | 'DESC') => {
   return direction === 'ASC' ? result : -result;
 };
 
-export function sortCards(
-  a: DataCardSummary,
-  b: DataCardSummary,
+export function sortCards<T extends SortableCard>(
+  a: T,
+  b: T,
   sortField: string,
   sortDir: string
 ): number {
