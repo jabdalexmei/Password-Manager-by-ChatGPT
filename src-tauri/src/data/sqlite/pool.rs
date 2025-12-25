@@ -8,6 +8,11 @@ use r2d2_sqlite::SqliteConnectionManager;
 
 use crate::error::{ErrorCodeString, Result};
 
+const DB_POOL_MAX_SIZE_FILE: u32 = 2;
+const DB_POOL_MIN_IDLE_FILE: u32 = 0;
+const DB_POOL_CONNECTION_TIMEOUT_SECS_FILE: u64 = 10;
+const DB_BUSY_TIMEOUT_SECS_FILE: u64 = 15;
+
 #[derive(Clone, Debug)]
 pub enum DbTarget {
     File(std::path::PathBuf),
@@ -25,7 +30,7 @@ impl r2d2::CustomizeConnection<rusqlite::Connection, rusqlite::Error> for FilePr
         &self,
         conn: &mut rusqlite::Connection,
     ) -> std::result::Result<(), rusqlite::Error> {
-        conn.busy_timeout(Duration::from_secs(5))?;
+        conn.busy_timeout(Duration::from_secs(DB_BUSY_TIMEOUT_SECS_FILE))?;
         conn.execute_batch(
             r#"
             PRAGMA foreign_keys = ON;
@@ -77,9 +82,9 @@ fn get_or_create_pool(
         DbTarget::File(path) => {
             let manager = SqliteConnectionManager::file(path);
             r2d2::Pool::builder()
-                .max_size(8)
-                .min_idle(Some(4))
-                .connection_timeout(Duration::from_secs(5))
+                .max_size(DB_POOL_MAX_SIZE_FILE)
+                .min_idle(Some(DB_POOL_MIN_IDLE_FILE))
+                .connection_timeout(Duration::from_secs(DB_POOL_CONNECTION_TIMEOUT_SECS_FILE))
                 .connection_customizer(Box::new(FilePragmas))
                 .build(manager)
                 .map_err(|e| {
@@ -94,9 +99,9 @@ fn get_or_create_pool(
                 | rusqlite::OpenFlags::SQLITE_OPEN_SHARED_CACHE;
             let manager = SqliteConnectionManager::file(uri).with_flags(flags);
             r2d2::Pool::builder()
-                .max_size(8)
-                .min_idle(Some(4))
-                .connection_timeout(Duration::from_secs(5))
+                .max_size(DB_POOL_MAX_SIZE_FILE)
+                .min_idle(Some(DB_POOL_MIN_IDLE_FILE))
+                .connection_timeout(Duration::from_secs(DB_POOL_CONNECTION_TIMEOUT_SECS_FILE))
                 .connection_customizer(Box::new(MemoryPragmas))
                 .build(manager)
                 .map_err(|e| {
