@@ -45,15 +45,6 @@ pub struct Folder {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BankCard {
-    pub holder: String,
-    pub number: String,
-    pub expiry_mm_yy: String,
-    pub cvc: String,
-    pub note: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum CustomFieldType {
     Text,
@@ -90,7 +81,6 @@ pub struct DataCard {
     pub deleted_at: Option<String>,
 
     pub password: Option<String>,
-    pub bank_card: Option<BankCard>,
     pub custom_fields: Vec<CustomField>,
 }
 
@@ -145,7 +135,6 @@ pub struct CreateDataCardInput {
     pub note: Option<String>,
     pub tags: Vec<String>,
     pub password: Option<String>,
-    pub bank_card: Option<BankCard>,
     pub custom_fields: Vec<CustomField>,
     pub folder_id: Option<String>,
 }
@@ -161,7 +150,6 @@ pub struct UpdateDataCardInput {
     pub note: Option<String>,
     pub tags: Vec<String>,
     pub password: Option<String>,
-    pub bank_card: Option<BankCard>,
     pub custom_fields: Vec<CustomField>,
     pub folder_id: Option<String>,
 }
@@ -174,6 +162,64 @@ pub struct MoveDataCardInput {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetDataCardFavoriteInput {
+    pub id: String,
+    pub is_favorite: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct BankCardItem {
+    pub id: String,
+    pub title: String,
+    pub holder: Option<String>,
+    pub number: Option<String>,
+    pub expiry_mm_yy: Option<String>,
+    pub cvc: Option<String>,
+    pub note: Option<String>,
+    pub tags: Vec<String>,
+    pub is_favorite: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct BankCardSummary {
+    pub id: String,
+    pub title: String,
+    pub holder: Option<String>,
+    pub number: Option<String>,
+    pub tags: Vec<String>,
+    pub is_favorite: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct CreateBankCardInput {
+    pub title: String,
+    pub holder: Option<String>,
+    pub number: Option<String>,
+    pub expiry_mm_yy: Option<String>,
+    pub cvc: Option<String>,
+    pub note: Option<String>,
+    pub tags: Vec<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct UpdateBankCardInput {
+    pub id: String,
+    pub title: String,
+    pub holder: Option<String>,
+    pub number: Option<String>,
+    pub expiry_mm_yy: Option<String>,
+    pub cvc: Option<String>,
+    pub note: Option<String>,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetBankCardFavoriteInput {
     pub id: String,
     pub is_favorite: bool,
 }

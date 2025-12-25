@@ -14,8 +14,7 @@
     "types": ["@tauri-apps/api"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "lucide-react": ["./vendor/lucide-react"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],

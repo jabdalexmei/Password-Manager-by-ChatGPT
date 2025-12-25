@@ -16,14 +16,6 @@ export type CustomField = {
   type: CustomFieldType;
 };
 
-export type BankCard = {
-  holder: string;
-  number: string;
-  expiryMmYy: string;
-  cvc: string;
-  note: string | null;
-};
-
 export type DataCard = {
   id: string;
   folderId: string | null;
@@ -39,7 +31,6 @@ export type DataCard = {
   updatedAt: string;
   deletedAt: string | null;
   password: string | null;
-  bankCard: BankCard | null;
   customFields: CustomField[];
 };
 
@@ -81,5 +72,40 @@ export type CreateDataCardInput = {
 };
 
 export type UpdateDataCardInput = CreateDataCardInput & {
+  id: string;
+};
+
+export type BankCardItem = {
+  id: string;
+  title: string;
+  holder: string | null;
+  number: string | null;
+  expiryMmYy: string | null;
+  cvc: string | null;
+  note: string | null;
+  tags: string[];
+  isFavorite: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+export type BankCardSummary = BankCardItem & {
+  updatedAtLabel: string;
+  createdAtLabel: string;
+  metaLine: string;
+};
+
+export type CreateBankCardInput = {
+  title: string;
+  holder?: string | null;
+  number?: string | null;
+  expiryMmYy?: string | null;
+  cvc?: string | null;
+  note?: string | null;
+  tags?: string[];
+};
+
+export type UpdateBankCardInput = CreateBankCardInput & {
   id: string;
 };
