@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { BankCardItem } from '../../types/ui';
 import { useBankCardDetails } from './useBankCardDetails';
@@ -86,7 +86,7 @@ export function BankCardDetails({
       : '•••'
     : '';
 
-  const tagsText = useMemo(() => card.tags?.join(', ') ?? '', [card.tags]);
+  const tagsText = card.tags?.join(', ') ?? '';
 
   return (
     <>
