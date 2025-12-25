@@ -2,6 +2,9 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { BankCardItem, BankCardSummary, CreateBankCardInput, UpdateBankCardInput } from '../../types/ui';
 
+export type BankCardFieldErrorKey = 'title' | 'expiryMmYy' | 'cvc';
+export type BankCardFieldErrors = Partial<Record<BankCardFieldErrorKey, string>>;
+
 export type BankCardFormState = {
   title: string;
   holder: string;
@@ -40,8 +43,8 @@ export type BankCardsViewModel = {
   isEditOpen: boolean;
   createForm: BankCardFormState;
   editForm: BankCardFormState | null;
-  createError: string | null;
-  editError: string | null;
+  createErrors: BankCardFieldErrors;
+  editErrors: BankCardFieldErrors;
   isCreateSubmitting: boolean;
   isEditSubmitting: boolean;
   updateCreateField: (field: keyof BankCardFormState, value: string) => void;
@@ -91,6 +94,17 @@ const buildInitialForm = (): BankCardFormState => ({
   tagsText: '',
 });
 
+const EXPIRY_RE = /^(0[1-9]|1[0-2])\/\d{2}$/;
+const CVC_RE = /^\d{3,4}$/;
+
+const formatExpiryMmYy = (raw: string) => {
+  const digits = raw.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+};
+
+const formatCvc = (raw: string) => raw.replace(/\D/g, '').slice(0, 4);
+
 export function useBankCardsViewModel({
   cards,
   selectedCardId,
@@ -108,8 +122,8 @@ export function useBankCardsViewModel({
   const [editCardId, setEditCardId] = useState<string | null>(null);
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [isEditOpen, setEditOpen] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [editError, setEditError] = useState<string | null>(null);
+  const [createErrors, setCreateErrors] = useState<BankCardFieldErrors>({});
+  const [editErrors, setEditErrors] = useState<BankCardFieldErrors>({});
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
@@ -120,18 +134,18 @@ export function useBankCardsViewModel({
   const resetEditForm = useCallback(() => {
     setEditForm(null);
     setEditCardId(null);
-    setEditError(null);
+    setEditErrors({});
   }, []);
 
   const openCreateModal = useCallback(() => {
     resetCreateForm();
-    setCreateError(null);
+    setCreateErrors({});
     setCreateOpen(true);
   }, [resetCreateForm]);
 
   const closeCreateModal = useCallback(() => {
     setCreateOpen(false);
-    setCreateError(null);
+    setCreateErrors({});
     resetCreateForm();
   }, [resetCreateForm]);
 
@@ -146,7 +160,7 @@ export function useBankCardsViewModel({
       tagsText: (card.tags ?? []).join(', '),
     });
     setEditCardId(card.id);
-    setEditError(null);
+    setEditErrors({});
     setEditOpen(true);
   }, []);
 
@@ -156,19 +170,52 @@ export function useBankCardsViewModel({
   }, [resetEditForm]);
 
   const updateCreateField = useCallback((field: keyof BankCardFormState, value: string) => {
-    setCreateForm((prev) => ({ ...prev, [field]: value }));
+    const nextValue =
+      field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
+    setCreateForm((prev) => ({ ...prev, [field]: nextValue }));
+    if (field === 'title' || field === 'expiryMmYy' || field === 'cvc') {
+      setCreateErrors((prev) => {
+        if (!prev[field]) return prev;
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   }, []);
 
   const updateEditField = useCallback((field: keyof BankCardFormState, value: string) => {
-    setEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+    const nextValue =
+      field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
+    setEditForm((prev) => (prev ? { ...prev, [field]: nextValue } : prev));
+    if (field === 'title' || field === 'expiryMmYy' || field === 'cvc') {
+      setEditErrors((prev) => {
+        if (!prev[field]) return prev;
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   }, []);
 
   const submitCreate = useCallback(async () => {
     if (isCreateSubmitting) return;
-    setCreateError(null);
+    setCreateErrors({});
     const trimmedTitle = createForm.title.trim();
-    if (!trimmedTitle) {
-      setCreateError(t('validation.titleRequired'));
+    const nextErrors: BankCardFieldErrors = {};
+    if (!trimmedTitle) nextErrors.title = t('validation.titleRequired');
+
+    const expiry = createForm.expiryMmYy.trim();
+    if (expiry.length > 0 && !EXPIRY_RE.test(expiry)) {
+      nextErrors.expiryMmYy = t('validation.expiryInvalid');
+    }
+
+    const cvc = createForm.cvc.trim();
+    if (cvc.length > 0 && !CVC_RE.test(cvc)) {
+      nextErrors.cvc = t('validation.cvcInvalid');
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setCreateErrors(nextErrors);
       return;
     }
     setIsCreateSubmitting(true);
@@ -177,7 +224,7 @@ export function useBankCardsViewModel({
       setCreateOpen(false);
       resetCreateForm();
     } catch {
-      setCreateError(t('validation.titleRequired'));
+      setCreateErrors({ title: t('validation.titleRequired') });
     } finally {
       setIsCreateSubmitting(false);
     }
@@ -185,10 +232,23 @@ export function useBankCardsViewModel({
 
   const submitEdit = useCallback(async () => {
     if (isEditSubmitting || !editForm || !editCardId) return;
-    setEditError(null);
+    setEditErrors({});
     const trimmedTitle = editForm.title.trim();
-    if (!trimmedTitle) {
-      setEditError(t('validation.titleRequired'));
+    const nextErrors: BankCardFieldErrors = {};
+    if (!trimmedTitle) nextErrors.title = t('validation.titleRequired');
+
+    const expiry = editForm.expiryMmYy.trim();
+    if (expiry.length > 0 && !EXPIRY_RE.test(expiry)) {
+      nextErrors.expiryMmYy = t('validation.expiryInvalid');
+    }
+
+    const cvc = editForm.cvc.trim();
+    if (cvc.length > 0 && !CVC_RE.test(cvc)) {
+      nextErrors.cvc = t('validation.cvcInvalid');
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setEditErrors(nextErrors);
       return;
     }
     setIsEditSubmitting(true);
@@ -197,7 +257,7 @@ export function useBankCardsViewModel({
       setEditOpen(false);
       resetEditForm();
     } catch {
-      setEditError(t('validation.titleRequired'));
+      setEditErrors({ title: t('validation.titleRequired') });
     } finally {
       setIsEditSubmitting(false);
     }
@@ -250,8 +310,8 @@ export function useBankCardsViewModel({
     isEditOpen,
     createForm,
     editForm,
-    createError,
-    editError,
+    createErrors,
+    editErrors,
     isCreateSubmitting,
     isEditSubmitting,
     updateCreateField,

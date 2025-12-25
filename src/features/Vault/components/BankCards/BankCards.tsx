@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
-import { BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
+import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
 
 export type BankCardsProps = {
   viewModel: BankCardsViewModel;
@@ -48,7 +48,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
   const renderDialog = (
     title: string,
     form: BankCardFormState | null,
-    error: string | null,
+    errors: BankCardFieldErrors,
     onClose: () => void,
     onSubmit: () => Promise<void>,
     onFieldChange: (field: keyof BankCardFormState, value: string) => void,
@@ -81,12 +81,12 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <input
                 id={`${dialogId}-title-input`}
                 className="input"
-                ref={titleRef}
-                value={form.title}
-                onChange={(e) => onFieldChange('title', e.target.value)}
-                placeholder={t('label.titlePlaceholder')}
-              />
-              {error && <div className="form-error">{error}</div>}
+              ref={titleRef}
+              value={form.title}
+              onChange={(e) => onFieldChange('title', e.target.value)}
+              placeholder={t('label.titlePlaceholder')}
+            />
+              {errors.title && <div className="form-error">{errors.title}</div>}
             </div>
 
             <div className="form-field">
@@ -122,11 +122,12 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <input
                 id={`${dialogId}-expiry-input`}
                 className="input"
-                value={form.expiryMmYy}
-                onChange={(e) => onFieldChange('expiryMmYy', e.target.value)}
-                placeholder={t('label.expiryPlaceholder')}
-              />
-            </div>
+              value={form.expiryMmYy}
+              onChange={(e) => onFieldChange('expiryMmYy', e.target.value)}
+              placeholder={t('label.expiryPlaceholder')}
+            />
+            {errors.expiryMmYy && <div className="form-error">{errors.expiryMmYy}</div>}
+          </div>
 
             <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-cvc-input`}>
@@ -135,11 +136,12 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <input
                 id={`${dialogId}-cvc-input`}
                 className="input"
-                value={form.cvc}
-                onChange={(e) => onFieldChange('cvc', e.target.value)}
-                placeholder={t('label.cvcPlaceholder')}
-              />
-            </div>
+              value={form.cvc}
+              onChange={(e) => onFieldChange('cvc', e.target.value)}
+              placeholder={t('label.cvcPlaceholder')}
+            />
+            {errors.cvc && <div className="form-error">{errors.cvc}</div>}
+          </div>
 
             <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-note-input`}>
@@ -229,7 +231,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
         renderDialog(
           t('dialog.createTitle'),
           viewModel.createForm,
-          viewModel.createError,
+          viewModel.createErrors,
           viewModel.closeCreateModal,
           viewModel.submitCreate,
           viewModel.updateCreateField,
@@ -243,7 +245,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
         renderDialog(
           t('dialog.editTitle'),
           viewModel.editForm,
-          viewModel.editError,
+          viewModel.editErrors,
           viewModel.closeEditModal,
           viewModel.submitEdit,
           viewModel.updateEditField,

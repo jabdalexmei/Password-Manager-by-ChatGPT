@@ -270,14 +270,12 @@ export function useBankCards(profileId: string, onLocked: () => void) {
           const updated = { ...restored, deletedAt: null };
           return sortCardsWithSettings([...prev.filter((card) => card.id !== id), updated]);
         });
-        setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
-        setSelectedCardId(id);
-        await loadCard(id);
+        setSelectedCardId((prev) => (prev === id ? null : prev));
       } catch (err) {
         handleError(err);
       }
     },
-    [deletedCards, handleError, loadCard, sortCardsWithSettings]
+    [deletedCards, handleError, sortCardsWithSettings]
   );
 
   const purgeCardAction = useCallback(

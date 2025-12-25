@@ -70,7 +70,6 @@ export function BankCardDetails({
   };
   const hasHolder = hasValue(card.holder);
   const hasNumber = hasValue(card.number);
-  const hasExpiry = hasValue(card.expiryMmYy);
   const hasCvc = hasValue(card.cvc);
   const hasNote = hasValue(card.note);
   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
@@ -84,7 +83,7 @@ export function BankCardDetails({
     ? detailActions.showCvc
       ? card.cvc
       : '•••'
-    : '';
+    : tCommon('value.empty');
 
   const tagsText = card.tags?.join(', ') ?? '';
 
@@ -92,7 +91,7 @@ export function BankCardDetails({
     <>
       <div className="vault-panel-wrapper">
         {informationTitle}
-        <div className="vault-detail-card">
+        <div className="vault-detail-card bankcard-detail-card">
           <div className="detail-row">
             <div className="detail-dates">
               <div className="muted">{createdText}</div>
@@ -168,20 +167,18 @@ export function BankCardDetails({
             </div>
           )}
 
-          {hasExpiry && (
+          <div className="bankcard-detail-grid">
             <div className="detail-field">
               <div className="detail-label">{t('label.expiry')}</div>
               <div className="detail-value-box">
-                <div className="detail-value-text">{card.expiryMmYy ?? ''}</div>
+                <div className="detail-value-text">{card.expiryMmYy || tCommon('value.empty')}</div>
               </div>
             </div>
-          )}
 
-          {hasCvc && (
             <div className="detail-field">
               <div className="detail-label">{t('label.cvc')}</div>
               <div className="detail-value-box">
-                <div className="detail-value-text">{cvcDisplay}</div>
+                <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
                 <div className="detail-value-actions">
                   <button
                     className="icon-button"
@@ -202,7 +199,7 @@ export function BankCardDetails({
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
           {hasNote && (
             <div className="detail-field">
