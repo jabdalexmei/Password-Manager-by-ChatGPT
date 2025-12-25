@@ -167,36 +167,34 @@ export function BankCardDetails({
             </div>
           )}
 
-          <div className="bankcard-detail-grid">
-            <div className="detail-field">
-              <div className="detail-label">{t('label.expiry')}</div>
-              <div className="detail-value-box">
-                <div className="detail-value-text">{card.expiryMmYy || tCommon('value.empty')}</div>
-              </div>
+          <div className="detail-field bankcard-compact-expiry">
+            <div className="detail-label">{t('label.expiry')}</div>
+            <div className="detail-value-box">
+              <div className="detail-value-text">{card.expiryMmYy || tCommon('value.empty')}</div>
             </div>
+          </div>
 
-            <div className="detail-field">
-              <div className="detail-label">{t('label.cvc')}</div>
-              <div className="detail-value-box">
-                <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
-                <div className="detail-value-actions">
-                  <button
-                    className="icon-button"
-                    type="button"
-                    aria-label={t('action.copy')}
-                    onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
-                  >
-                    <IconCopy />
-                  </button>
-                  <button
-                    className="icon-button"
-                    type="button"
-                    aria-label={detailActions.showCvc ? t('action.hide') : t('action.reveal')}
-                    onClick={detailActions.toggleCvcVisibility}
-                  >
-                    {detailActions.showCvc ? <IconPreviewOff /> : <IconPreview />}
-                  </button>
-                </div>
+          <div className="detail-field bankcard-compact-cvc">
+            <div className="detail-label">{t('label.cvc')}</div>
+            <div className="detail-value-box">
+              <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
+              <div className="detail-value-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label={t('action.copy')}
+                  onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
+                >
+                  <IconCopy />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label={detailActions.showCvc ? t('action.hide') : t('action.reveal')}
+                  onClick={detailActions.toggleCvcVisibility}
+                >
+                  {detailActions.showCvc ? <IconPreviewOff /> : <IconPreview />}
+                </button>
               </div>
             </div>
           </div>
