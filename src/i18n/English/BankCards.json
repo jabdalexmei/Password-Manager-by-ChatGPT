@@ -12,7 +12,7 @@
   "label.holderPlaceholder": "Card holder",
   "label.number": "Number",
   "label.numberPlaceholder": "Card number",
-  "label.expiry": "Expiry (MM/YY)",
+  "label.expiry": "Expiry date",
   "label.expiryPlaceholder": "MM/YY",
   "label.cvc": "CVC/CVV",
   "label.cvcPlaceholder": "CVC",
@@ -41,6 +41,8 @@
   "dialog.purge.message": "This will permanently remove the bank card.",
   "dialog.purge.confirm": "Purge",
   "validation.titleRequired": "Title is required",
+  "validation.expiryInvalid": "Expiry date must be in MM/YY format (01-12/YY).",
+  "validation.cvcInvalid": "CVC/CVV must be 3 or 4 digits.",
   "toast.copySuccess": "Copied",
   "toast.copyError": "Unable to copy"
 }
