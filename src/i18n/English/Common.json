@@ -1,0 +1,9 @@
+{
+  "action.cancel": "Cancel",
+  "action.close": "Close",
+  "action.ok": "OK",
+  "aria.dismissToast": "Dismiss",
+  "error.hookToaster": "useToaster must be used within ToasterProvider",
+  "error.operationFailed": "Operation failed. Please try again.",
+  "error.network": "Network error. Please try again."
+}

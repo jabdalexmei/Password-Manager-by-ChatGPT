@@ -13,5 +13,6 @@
 
   "invalidPassword": "Invalid password",
   "validationPassword": "Enter the password",
-  "error": "Unable to unlock the profile"
+  "error": "Unable to unlock the profile",
+  "label.profileId": "ID: {{id}}"
 }

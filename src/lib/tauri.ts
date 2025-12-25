@@ -10,6 +10,15 @@ export type ProfilesList = {
   profiles: ProfileMeta[];
 };
 
+export type WorkspaceItem = {
+  id: string;
+  display_name: string;
+  path: string;
+  exists: boolean;
+  valid: boolean;
+  is_active: boolean;
+};
+
 export async function listProfiles(): Promise<ProfilesList> {
   return invoke('profiles_list');
 }
@@ -48,4 +57,28 @@ export async function autoLockCleanup(): Promise<boolean> {
 
 export async function healthCheck(): Promise<boolean> {
   return invoke('health_check');
+}
+
+export function workspaceList(): Promise<WorkspaceItem[]> {
+  return invoke('workspace_list');
+}
+
+export function workspaceSelect(id: string): Promise<boolean> {
+  return invoke('workspace_select', { id });
+}
+
+export function workspaceCreate(path: string): Promise<boolean> {
+  return invoke('workspace_create', { path });
+}
+
+export function workspaceCreateDefault(): Promise<boolean> {
+  return invoke('workspace_create_default');
+}
+
+export function workspaceRemove(id: string): Promise<boolean> {
+  return invoke('workspace_remove', { id });
+}
+
+export function workspaceOpenInExplorer(): Promise<boolean> {
+  return invoke('workspace_open_in_explorer');
 }
