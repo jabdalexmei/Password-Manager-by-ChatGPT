@@ -553,11 +553,8 @@
   padding: 8px 10px;
 }
 
-/* Bank card details: Expiry/CVC should be normal vertical fields, but shorter width */
-.bankcard-detail-card .bankcard-compact-expiry .detail-value-box {
-  max-width: 520px;
-}
-
+/* Bank card details: Expiry and CVC must be same compact width */
+.bankcard-detail-card .bankcard-compact-expiry .detail-value-box,
 .bankcard-detail-card .bankcard-compact-cvc .detail-value-box {
   max-width: 360px;
 }
