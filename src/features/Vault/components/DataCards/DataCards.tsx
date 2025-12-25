@@ -302,6 +302,19 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
             </div>
 
             <div className="form-field">
+              <label className="form-label" htmlFor={`${dialogId}-email`}>
+                {t('label.email')}
+              </label>
+              <input
+                id={`${dialogId}-email`}
+                className="input"
+                type="email"
+                value={form.email}
+                onChange={(e) => onFieldChange('email', e.target.value)}
+              />
+            </div>
+
+            <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-username`}>
                 {t('label.username')}
               </label>
@@ -314,15 +327,14 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
             </div>
 
             <div className="form-field">
-              <label className="form-label" htmlFor={`${dialogId}-email`}>
-                {t('label.email')}
+              <label className="form-label" htmlFor={`${dialogId}-mobile`}>
+                {t('label.mobile')}
               </label>
               <input
-                id={`${dialogId}-email`}
+                id={`${dialogId}-mobile`}
                 className="input"
-                type="email"
-                value={form.email}
-                onChange={(e) => onFieldChange('email', e.target.value)}
+                value={form.mobilePhone}
+                onChange={(e) => onFieldChange('mobilePhone', e.target.value)}
               />
             </div>
 
@@ -357,18 +369,6 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                   </button>
                 </div>
               </div>
-            </div>
-
-            <div className="form-field">
-              <label className="form-label" htmlFor={`${dialogId}-mobile`}>
-                {t('label.mobile')}
-              </label>
-              <input
-                id={`${dialogId}-mobile`}
-                className="input"
-                value={form.mobilePhone}
-                onChange={(e) => onFieldChange('mobilePhone', e.target.value)}
-              />
             </div>
 
             {form.customFields.map((row) => (
