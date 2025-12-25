@@ -553,16 +553,39 @@
   padding: 8px 10px;
 }
 
+/* Bank card details: Expiry + CVC should be compact (match mock) */
 .bankcard-detail-grid {
-  display: grid;
-  grid-template-columns: minmax(160px, 220px) minmax(240px, 1fr);
+  display: flex;
   gap: 12px;
-  align-items: start;
+  align-items: flex-start;
+  flex-wrap: wrap; /* allows stacking on narrow widths */
 }
 
+/* prevent "stretch to full width" behavior */
+.bankcard-detail-grid > .detail-field {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* compact widths to match mock screenshot */
+.bankcard-detail-grid > .detail-field:first-child {
+  width: 180px; /* Expiry date */
+}
+
+.bankcard-detail-grid > .detail-field:last-child {
+  width: 260px; /* CVC/CVV + action buttons */
+}
+
+/* value box should fill the compact field width */
+.bankcard-detail-grid .detail-value-box {
+  width: 100%;
+}
+
+/* Mobile: stack vertically */
 @media (max-width: 900px) {
-  .bankcard-detail-grid {
-    grid-template-columns: 1fr;
+  .bankcard-detail-grid > .detail-field:first-child,
+  .bankcard-detail-grid > .detail-field:last-child {
+    width: 100%;
   }
 }
 
