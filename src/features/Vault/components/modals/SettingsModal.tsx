@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from '../../../../lib/i18n';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BackendUserSettings } from '../../types/backend';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
 
 export type SettingsModalProps = {
   open: boolean;
@@ -11,8 +11,6 @@ export type SettingsModalProps = {
 };
 
 export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: SettingsModalProps) {
-  const { t } = useTranslation('Vault');
-  const { t: tCommon } = useTranslation('Common');
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState('60');
   const [retentionDays, setRetentionDays] = useState('30');
@@ -24,105 +22,181 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     setRetentionDays(String(settings.backup_retention_days));
   }, [open, settings]);
 
-  if (!open) return null;
+  const busy = isSaving;
 
-  const canSave =
-    Number.isFinite(Number(intervalMinutes)) &&
-    Number(intervalMinutes) >= 5 &&
-    Number(intervalMinutes) <= 1440 &&
-    Number.isFinite(Number(retentionDays)) &&
-    Number(retentionDays) >= 1 &&
-    Number(retentionDays) <= 3650;
+  const canSave = useMemo(() => {
+    const interval = Number(intervalMinutes);
+    const retention = Number(retentionDays);
+    if (!Number.isFinite(interval) || !Number.isFinite(retention)) return false;
+    if (autoBackupEnabled && (interval < 5 || interval > 1440)) return false;
+    if (retention < 1 || retention > 3650) return false;
+    return true;
+  }, [autoBackupEnabled, intervalMinutes, retentionDays]);
 
   const handleSave = () => {
     if (!settings) return;
+
     const interval = Number(intervalMinutes);
     const retention = Number(retentionDays);
-    if (!Number.isFinite(interval) || interval < 5 || interval > 1440) return;
+
+    if (!Number.isFinite(interval)) return;
+    if (autoBackupEnabled && (interval < 5 || interval > 1440)) return;
     if (!Number.isFinite(retention) || retention < 1 || retention > 3650) return;
+
     const nextSettings: BackendUserSettings = {
       ...settings,
       backups_enabled: autoBackupEnabled,
       auto_backup_interval_minutes: interval,
       backup_retention_days: retention,
     };
+
     onSave(nextSettings);
   };
 
+  // ---- Layout styles (no borders). "Backups" is a subtitle (h3). ----
+  const subtitleStyle: React.CSSProperties = {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 700,
+    lineHeight: '20px',
+  };
+
+  const toggleRowStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: '1fr 140px', // fixed control column (not flush to modal edge)
+    alignItems: 'center',
+    columnGap: 16,
+  };
+
+  // ---- Toggle switch (button role="switch") ----
+  // WAI-ARIA switch pattern: role="switch" + aria-checked true/false, keyboard operable.
+  // https://www.w3.org/WAI/ARIA/apg/patterns/switch/
+  // https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/switch_role
+  const switchButtonStyle: React.CSSProperties = {
+  width: 44,
+  height: 24,
+  borderRadius: 9999,
+  border: autoBackupEnabled
+    ? '1px solid rgba(34, 197, 94, 0.95)'
+    : '1px solid rgba(255, 255, 255, 0.25)',
+  background: autoBackupEnabled
+    ? 'rgba(34, 197, 94, 0.55)'
+    : 'rgba(255, 255, 255, 0.14)',
+  padding: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'flex-start',
+  cursor: busy ? 'not-allowed' : 'pointer',
+  opacity: busy ? 0.65 : 1,
+  outline: 'none',
+};
+
+
+  const switchThumbStyle: React.CSSProperties = {
+    width: 18,
+    height: 18,
+    borderRadius: 9999,
+    background: 'rgba(255, 255, 255, 0.95)',
+    transform: autoBackupEnabled ? 'translateX(22px)' : 'translateX(2px)',
+    transition: 'transform 160ms ease',
+  };
+
+  const fullWidthInputStyle: React.CSSProperties = {
+    width: '100%',
+  };
+
   return (
-    <div className="dialog-backdrop">
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-        <div className="dialog-header">
-          <h2 id="settings-title" className="dialog-title">
-            {t('backup.settings.title')}
-          </h2>
+    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
+      <DialogContent aria-labelledby="settings-title">
+        <DialogHeader>
+          <DialogTitle id="settings-title">Settings</DialogTitle>
+        </DialogHeader>
+
+        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <h3 id="backups-title" style={subtitleStyle}>
+            Backups
+          </h3>
+
+          <div role="group" aria-labelledby="backups-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="form-field" style={toggleRowStyle}>
+              <label className="form-label" id="backup-auto-enabled-label" htmlFor="backup-auto-enabled-switch">
+                Auto backup enabled
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  id="backup-auto-enabled-switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={autoBackupEnabled}
+                  aria-labelledby="backup-auto-enabled-label"
+                  disabled={busy}
+                  onClick={() => setAutoBackupEnabled((v) => !v)}
+                  onKeyDown={(e) => {
+                    // Space/Enter toggles for keyboard users
+                    if (busy) return;
+                    if (e.key === ' ' || e.key === 'Enter') {
+                      e.preventDefault();
+                      setAutoBackupEnabled((v) => !v);
+                    }
+                  }}
+                  style={switchButtonStyle}
+                >
+                  <span style={switchThumbStyle} />
+                </button>
+              </div>
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="backup-interval-minutes">
+                Interval (minutes)
+              </label>
+              <input
+                id="backup-interval-minutes"
+                type="number"
+                min={5}
+                max={1440}
+                value={intervalMinutes}
+                disabled={busy || !autoBackupEnabled}
+                inputMode="numeric"
+                onChange={(event) => setIntervalMinutes(event.target.value)}
+                style={fullWidthInputStyle}
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="backup-retention-days">
+                Retention days
+              </label>
+              <input
+                id="backup-retention-days"
+                type="number"
+                min={1}
+                max={3650}
+                value={retentionDays}
+                disabled={busy}
+                inputMode="numeric"
+                onChange={(event) => setRetentionDays(event.target.value)}
+                style={fullWidthInputStyle}
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="dialog-body">
-          <div className="form-field">
-            <label className="form-label" htmlFor="backup-auto-enabled">
-              {t('backup.settings.autoEnabled')}
-            </label>
-            <input
-              id="backup-auto-enabled"
-              type="checkbox"
-              checked={autoBackupEnabled}
-              onChange={(event) => setAutoBackupEnabled(event.target.checked)}
-              disabled={isSaving}
-            />
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="backup-interval-minutes">
-              {t('backup.settings.intervalMinutes')}
-            </label>
-            <input
-              id="backup-interval-minutes"
-              className="input"
-              type="number"
-              min={5}
-              max={1440}
-              value={intervalMinutes}
-              disabled={!autoBackupEnabled || isSaving}
-              onChange={(event) => setIntervalMinutes(event.target.value)}
-            />
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="backup-retention-days">
-              {t('backup.settings.retentionDays')}
-            </label>
-            <input
-              id="backup-retention-days"
-              className="input"
-              type="number"
-              min={1}
-              max={3650}
-              value={retentionDays}
-              disabled={isSaving}
-              onChange={(event) => setRetentionDays(event.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="dialog-footer dialog-footer--split">
+        <DialogFooter className="dialog-footer--split">
           <div className="dialog-footer-left">
-            <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={isSaving}>
-              {tCommon('action.cancel')}
+            <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={busy}>
+              Cancel
             </button>
           </div>
+
           <div className="dialog-footer-right">
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving || !settings || !canSave}
-            >
-              {t('backup.settings.save')}
+            <button className="btn btn-primary" type="button" onClick={handleSave} disabled={busy || !settings || !canSave}>
+              Save
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
