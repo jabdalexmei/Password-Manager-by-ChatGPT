@@ -13,12 +13,14 @@ export type SettingsModalProps = {
 export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: SettingsModalProps) {
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState('60');
+  const [maxCopies, setMaxCopies] = useState('10');
   const [retentionDays, setRetentionDays] = useState('30');
 
   useEffect(() => {
     if (!open || !settings) return;
     setAutoBackupEnabled(settings.backups_enabled);
     setIntervalMinutes(String(settings.auto_backup_interval_minutes));
+    setMaxCopies(String(settings.backup_max_copies));
     setRetentionDays(String(settings.backup_retention_days));
   }, [open, settings]);
 
@@ -26,27 +28,32 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
   const canSave = useMemo(() => {
     const interval = Number(intervalMinutes);
+    const max = Number(maxCopies);
     const retention = Number(retentionDays);
-    if (!Number.isFinite(interval) || !Number.isFinite(retention)) return false;
+    if (!Number.isFinite(interval) || !Number.isFinite(max) || !Number.isFinite(retention)) return false;
     if (autoBackupEnabled && (interval < 5 || interval > 1440)) return false;
+    if (max < 1 || max > 500) return false;
     if (retention < 1 || retention > 3650) return false;
     return true;
-  }, [autoBackupEnabled, intervalMinutes, retentionDays]);
+  }, [autoBackupEnabled, intervalMinutes, maxCopies, retentionDays]);
 
   const handleSave = () => {
     if (!settings) return;
 
     const interval = Number(intervalMinutes);
+    const max = Number(maxCopies);
     const retention = Number(retentionDays);
 
-    if (!Number.isFinite(interval)) return;
+    if (!Number.isFinite(interval) || !Number.isFinite(max)) return;
     if (autoBackupEnabled && (interval < 5 || interval > 1440)) return;
+    if (max < 1 || max > 500) return;
     if (!Number.isFinite(retention) || retention < 1 || retention > 3650) return;
 
     const nextSettings: BackendUserSettings = {
       ...settings,
       backups_enabled: autoBackupEnabled,
       auto_backup_interval_minutes: interval,
+      backup_max_copies: max,
       backup_retention_days: retention,
     };
 
@@ -73,23 +80,23 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
   // https://www.w3.org/WAI/ARIA/apg/patterns/switch/
   // https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/switch_role
   const switchButtonStyle: React.CSSProperties = {
-  width: 44,
-  height: 24,
-  borderRadius: 9999,
-  border: autoBackupEnabled
-    ? '1px solid rgba(34, 197, 94, 0.95)'
-    : '1px solid rgba(255, 255, 255, 0.25)',
-  background: autoBackupEnabled
-    ? 'rgba(34, 197, 94, 0.55)'
-    : 'rgba(255, 255, 255, 0.14)',
-  padding: 0,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'flex-start',
-  cursor: busy ? 'not-allowed' : 'pointer',
-  opacity: busy ? 0.65 : 1,
-  outline: 'none',
-};
+    width: 44,
+    height: 24,
+    borderRadius: 9999,
+    border: autoBackupEnabled
+      ? '1px solid rgba(34, 197, 94, 0.95)'
+      : '1px solid rgba(255, 255, 255, 0.25)',
+    background: autoBackupEnabled
+      ? 'rgba(34, 197, 94, 0.55)'
+      : 'rgba(255, 255, 255, 0.14)',
+    padding: 0,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    cursor: busy ? 'not-allowed' : 'pointer',
+    opacity: busy ? 0.65 : 1,
+    outline: 'none',
+  };
 
 
   const switchThumbStyle: React.CSSProperties = {
@@ -160,6 +167,23 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
                 disabled={busy || !autoBackupEnabled}
                 inputMode="numeric"
                 onChange={(event) => setIntervalMinutes(event.target.value)}
+                style={fullWidthInputStyle}
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="backup-max-copies">
+                Max copies
+              </label>
+              <input
+                id="backup-max-copies"
+                type="number"
+                min={1}
+                max={500}
+                value={maxCopies}
+                disabled={busy}
+                inputMode="numeric"
+                onChange={(event) => setMaxCopies(event.target.value)}
                 style={fullWidthInputStyle}
               />
             </div>

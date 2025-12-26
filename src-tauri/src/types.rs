@@ -243,6 +243,8 @@ pub struct UserSettings {
     pub backups_enabled: bool,
     #[serde(default = "default_auto_backup_interval_minutes")]
     pub auto_backup_interval_minutes: i64,
+    #[serde(default = "default_backup_max_copies")]
+    pub backup_max_copies: i64,
     pub backup_frequency: String,
     pub backup_retention_days: i64,
 
@@ -264,6 +266,7 @@ impl Default for UserSettings {
             trash_retention_days: 30,
             backups_enabled: false,
             auto_backup_interval_minutes: default_auto_backup_interval_minutes(),
+            backup_max_copies: default_backup_max_copies(),
             backup_frequency: "weekly".to_string(),
             backup_retention_days: 30,
             default_sort_field: "updated_at".to_string(),
@@ -275,6 +278,10 @@ impl Default for UserSettings {
 
 fn default_auto_backup_interval_minutes() -> i64 {
     60
+}
+
+fn default_backup_max_copies() -> i64 {
+    10
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
