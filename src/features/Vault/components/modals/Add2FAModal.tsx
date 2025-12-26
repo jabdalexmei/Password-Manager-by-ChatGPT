@@ -64,7 +64,6 @@ export const Add2FAModal: React.FC<Props> = ({
           return;
         }
         setTextValue(norm.uri);
-        setTab('text');
       } finally {
         URL.revokeObjectURL(url);
       }
