@@ -81,6 +81,7 @@ pub struct DataCard {
     pub deleted_at: Option<String>,
 
     pub password: Option<String>,
+    pub totp_uri: Option<String>,
     pub custom_fields: Vec<CustomField>,
 }
 
@@ -105,6 +106,7 @@ pub struct DataCardSummary {
     pub updated_at: String,
     pub deleted_at: Option<String>,
     pub is_favorite: bool,
+    pub has_totp: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -135,6 +137,7 @@ pub struct CreateDataCardInput {
     pub note: Option<String>,
     pub tags: Vec<String>,
     pub password: Option<String>,
+    pub totp_uri: Option<String>,
     pub custom_fields: Vec<CustomField>,
     pub folder_id: Option<String>,
 }
@@ -150,6 +153,7 @@ pub struct UpdateDataCardInput {
     pub note: Option<String>,
     pub tags: Vec<String>,
     pub password: Option<String>,
+    pub totp_uri: Option<String>,
     pub custom_fields: Vec<CustomField>,
     pub folder_id: Option<String>,
 }

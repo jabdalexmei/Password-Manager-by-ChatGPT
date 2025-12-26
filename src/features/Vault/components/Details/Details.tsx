@@ -2,12 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CustomField, DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useDetails } from './useDetails';
+import { TotpField } from './TotpField';
 import {
   IconAttachment,
   IconCopy,
   IconDelete,
   IconDownload,
-   IconHistory,
+  IconHistory,
   IconPreview,
   IconPreviewOff,
 } from '@/components/lucide/icons';
@@ -336,6 +337,8 @@ export function Details({
             </div>
           );
         })}
+
+      {card.totpUri && <TotpField uri={card.totpUri} />}
 
       {hasPassword && (
         <div className="detail-field">

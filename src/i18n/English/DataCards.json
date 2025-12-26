@@ -69,5 +69,32 @@
   "customFields.delete": "Delete field",
   "customFields.renameTitle": "Rename field",
   "customFields.errorEmpty": "Field name is required",
-  "customFields.errorDuplicate": "Field with this name already exists"
+  "customFields.errorDuplicate": "Field with this name already exists",
+  "twoFactor": {
+    "pill": "2FA",
+    "addAction": "Add 2FA",
+    "editAction": "Edit 2FA",
+    "remove": "Remove 2FA",
+    "title": "Two-factor authentication (TOTP)",
+    "tab": {
+      "text": "Text",
+      "qr": "QR"
+    },
+    "text": {
+      "label": "Setup code / secret",
+      "placeholder": "Paste otpauth://... OR paste Base32 secret",
+      "hint": "You can paste a full otpauth:// URI or a Base32 secret. The app will store it securely and generate codes."
+    },
+    "qr": {
+      "label": "Upload QR image",
+      "loading": "Decoding QR..."
+    },
+    "error": {
+      "EMPTY": "Enter a setup code or secret",
+      "INVALID_URI": "Invalid otpauth URI",
+      "NOT_TOTP": "Only TOTP is supported",
+      "INVALID_SECRET": "Invalid Base32 secret",
+      "QR_DECODE_FAILED": "Unable to decode QR from image"
+    }
+  }
 }

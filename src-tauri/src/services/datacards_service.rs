@@ -83,6 +83,16 @@ pub fn create_datacard(input: CreateDataCardInput, state: &Arc<AppState>) -> Res
         return Err(ErrorCodeString::new("DATACARD_TITLE_REQUIRED"));
     }
     sanitized.tags = normalize_tags(sanitized.tags);
+    sanitized.totp_uri = sanitized
+        .totp_uri
+        .and_then(|value| {
+            let trimmed = value.trim().to_string();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        });
 
     let created = repo_impl::create_datacard(state, &profile_id, &sanitized)?;
     security_service::persist_active_vault(state)?;
@@ -97,6 +107,16 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
         return Err(ErrorCodeString::new("DATACARD_TITLE_REQUIRED"));
     }
     sanitized.tags = normalize_tags(sanitized.tags);
+    sanitized.totp_uri = sanitized
+        .totp_uri
+        .and_then(|value| {
+            let trimmed = value.trim().to_string();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        });
 
     let updated = repo_impl::update_datacard(state, &profile_id, &sanitized)?;
     security_service::persist_active_vault(state)?;

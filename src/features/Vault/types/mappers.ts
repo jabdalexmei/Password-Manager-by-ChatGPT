@@ -53,6 +53,7 @@ export function mapCardFromBackend(card: BackendDataCard): DataCard {
     updatedAt: card.updated_at,
     deletedAt: card.deleted_at,
     password: card.password,
+    totpUri: card.totp_uri,
     customFields: (card.custom_fields || []).map((field) => ({
       key: field.key,
       value: field.value,
@@ -85,8 +86,10 @@ export function mapCardSummaryFromBackend(
     updatedAt: card.updated_at,
     deletedAt: card.deleted_at,
     password: null,
+    totpUri: null,
     customFields: [],
     isFavorite: card.is_favorite,
+    hasTotp: card.has_totp,
     updatedAtLabel,
     createdAtLabel,
     metaLine: metaFromCard(card, ''),
@@ -102,6 +105,7 @@ export function mapCardToSummary(card: DataCard, formatter: Intl.DateTimeFormat)
     updatedAtLabel,
     createdAtLabel,
     metaLine: metaFromCard(card, ''),
+    hasTotp: (card.totpUri ?? null) !== null,
   };
 }
 
@@ -138,6 +142,7 @@ export function mapCreateCardToBackend(input: CreateDataCardInput): BackendCreat
     note: input.note ?? null,
     tags: input.tags ?? [],
     password: input.password ?? null,
+    totp_uri: input.totpUri ?? null,
     custom_fields: (input.customFields ?? []).map((field) => ({
       key: field.key,
       value: field.value,

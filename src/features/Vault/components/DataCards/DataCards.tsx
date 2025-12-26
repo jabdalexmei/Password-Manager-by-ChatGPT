@@ -11,6 +11,7 @@ import {
 import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
 import { CustomFieldModal } from '../modals/CustomFieldModal';
 import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
+import { Add2FAModal } from '../modals/Add2FAModal';
 import { useToaster } from '../../../../components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
@@ -59,6 +60,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   const [renameTargetRowId, setRenameTargetRowId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [is2faModalOpen, setIs2faModalOpen] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -137,6 +139,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     setRenameTargetRowId(null);
     setRenameName('');
     setRenameError(null);
+    setIs2faModalOpen(false);
   }, [isCreateOpen, isEditOpen]);
 
   useEffect(() => {
@@ -243,6 +246,18 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
 
               {isActionMenuOpen && customFieldTargetDialogId === dialogId && (
                 <div className="dialog-actionmenu" role="menu" ref={actionMenuRef}>
+                  {dialogId === 'datacard-edit-dialog' && (
+                    <button
+                      type="button"
+                      className="dialog-actionmenu-item"
+                      onClick={() => {
+                        setIsActionMenuOpen(false);
+                        setIs2faModalOpen(true);
+                      }}
+                    >
+                      {viewModel.editForm?.totpUri ? t('twoFactor.editAction') : t('twoFactor.addAction')}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="dialog-actionmenu-item"
@@ -539,6 +554,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
               >
                 <div className="datacard-top">
                   <div className="datacard-title">{card.title}</div>
+                  {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
                   {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
                 </div>
 
@@ -651,6 +667,24 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
         onUse={handleUseGeneratedPassword}
         onRegenerate={() => regeneratePassword(generatorOptions)}
         onCopy={handleCopyGeneratedPassword}
+      />
+
+      <Add2FAModal
+        isOpen={is2faModalOpen}
+        existingUri={viewModel.editForm?.totpUri ?? null}
+        defaults={{
+          issuer: (viewModel.editForm?.title ?? 'Vault').trim() || 'Vault',
+          label: (viewModel.editForm?.title ?? 'Account').trim() || 'Account',
+        }}
+        onCancel={() => setIs2faModalOpen(false)}
+        onSave={(uri) => {
+          viewModel.updateEditField('totpUri', uri);
+          setIs2faModalOpen(false);
+        }}
+        onRemove={() => {
+          viewModel.updateEditField('totpUri', '');
+          setIs2faModalOpen(false);
+        }}
       />
     </div>
   );

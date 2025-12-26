@@ -38,6 +38,7 @@ export type BackendDataCard = {
   updated_at: string;
   deleted_at: string | null;
   password: string | null;
+  totp_uri: string | null;
   custom_fields: BackendCustomField[];
 };
 
@@ -53,6 +54,7 @@ export type BackendDataCardSummary = {
   updated_at: string;
   deleted_at: string | null;
   is_favorite: boolean;
+  has_totp: boolean;
 };
 
 export type BackendCreateDataCardInput = {
@@ -65,6 +67,7 @@ export type BackendCreateDataCardInput = {
   note: string | null;
   tags: string[];
   password: string | null;
+  totp_uri: string | null;
   custom_fields: BackendCustomField[];
 };
 

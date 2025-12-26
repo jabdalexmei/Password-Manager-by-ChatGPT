@@ -31,6 +31,7 @@ export type DataCard = {
   updatedAt: string;
   deletedAt: string | null;
   password: string | null;
+  totpUri: string | null;
   customFields: CustomField[];
 };
 
@@ -56,6 +57,7 @@ export type DataCardSummary = DataCard & {
   updatedAtLabel: string;
   createdAtLabel: string;
   metaLine: string;
+  hasTotp: boolean;
 };
 
 export type CreateDataCardInput = {
@@ -68,6 +70,7 @@ export type CreateDataCardInput = {
   note?: string | null;
   tags?: string[];
   password?: string | null;
+  totpUri?: string | null;
   customFields?: CustomField[];
 };
 
