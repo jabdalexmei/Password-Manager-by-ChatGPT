@@ -35,18 +35,54 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
   const handleSave = () => {
     if (!settings) return;
+
     const interval = Number(intervalMinutes);
     const retention = Number(retentionDays);
+
     if (!Number.isFinite(interval)) return;
     if (autoBackupEnabled && (interval < 5 || interval > 1440)) return;
     if (!Number.isFinite(retention) || retention < 1 || retention > 3650) return;
+
     const nextSettings: BackendUserSettings = {
       ...settings,
       backups_enabled: autoBackupEnabled,
       auto_backup_interval_minutes: interval,
       backup_retention_days: retention,
     };
+
     onSave(nextSettings);
+  };
+
+  // Layout-only styles (NO borders). We use a semantic group with aria-labelledby instead of <fieldset>/<legend>
+  // so "Backups" renders as a normal subtitle (h3).
+  const sectionWrapStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  };
+
+  const subtitleStyle: React.CSSProperties = {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 700,
+    lineHeight: '20px',
+  };
+
+  // Label left, checkbox in a fixed "control column" (not flush to modal edge)
+  const toggleRowStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: '1fr 140px',
+    alignItems: 'center',
+    columnGap: 16,
+  };
+
+  const toggleControlStyle: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'center',
+  };
+
+  const fullWidthInputStyle: React.CSSProperties = {
+    width: '100%',
   };
 
   return (
@@ -56,21 +92,27 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
           <DialogTitle id="settings-title">Settings</DialogTitle>
         </DialogHeader>
 
-        <div className="dialog-body">
-          <fieldset className="form-stack">
-            <legend className="form-label">Backups</legend>
+        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Subtitle + grouped controls */}
+          <h3 id="backups-title" style={subtitleStyle}>
+            Backups
+          </h3>
 
-            <div className="form-field form-field--row">
+          <div role="group" aria-labelledby="backups-title" style={sectionWrapStyle}>
+            <div className="form-field" style={toggleRowStyle}>
               <label className="form-label" htmlFor="backup-auto-enabled">
                 Auto backup enabled
               </label>
-              <input
-                id="backup-auto-enabled"
-                type="checkbox"
-                checked={autoBackupEnabled}
-                disabled={busy}
-                onChange={(event) => setAutoBackupEnabled(event.target.checked)}
-              />
+
+              <div style={toggleControlStyle}>
+                <input
+                  id="backup-auto-enabled"
+                  type="checkbox"
+                  checked={autoBackupEnabled}
+                  disabled={busy}
+                  onChange={(event) => setAutoBackupEnabled(event.target.checked)}
+                />
+              </div>
             </div>
 
             <div className="form-field">
@@ -86,6 +128,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
                 disabled={busy || !autoBackupEnabled}
                 inputMode="numeric"
                 onChange={(event) => setIntervalMinutes(event.target.value)}
+                style={fullWidthInputStyle}
               />
             </div>
 
@@ -102,9 +145,10 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
                 disabled={busy}
                 inputMode="numeric"
                 onChange={(event) => setRetentionDays(event.target.value)}
+                style={fullWidthInputStyle}
               />
             </div>
-          </fieldset>
+          </div>
         </div>
 
         <DialogFooter className="dialog-footer--split">
@@ -113,13 +157,9 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
               Cancel
             </button>
           </div>
+
           <div className="dialog-footer-right">
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={handleSave}
-              disabled={busy || !settings || !canSave}
-            >
+            <button className="btn btn-primary" type="button" onClick={handleSave} disabled={busy || !settings || !canSave}>
               Save
             </button>
           </div>
