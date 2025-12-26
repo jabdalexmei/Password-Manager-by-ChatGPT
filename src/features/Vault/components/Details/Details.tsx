@@ -65,6 +65,17 @@ export function Details({
   const [revealedCustomFields, setRevealedCustomFields] = useState<Record<string, boolean>>({});
   const [totpNow, setTotpNow] = useState(() => Date.now());
 
+  const totpData = useMemo(() => {
+    const uri = card?.totpUri;
+    if (!uri) return null;
+
+    try {
+      return generateTotpCode(uri, totpNow);
+    } catch {
+      return null;
+    }
+  }, [card?.totpUri, totpNow]);
+
   useEffect(() => {
     if (!card?.totpUri) return;
 
@@ -120,15 +131,6 @@ export function Details({
       ? card.password
       : '••••••••••••'
     : '';
-  const totpData = useMemo(() => {
-    if (!card.totpUri) return null;
-
-    try {
-      return generateTotpCode(card.totpUri, totpNow);
-    } catch {
-      return null;
-    }
-  }, [card.totpUri, totpNow]);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
