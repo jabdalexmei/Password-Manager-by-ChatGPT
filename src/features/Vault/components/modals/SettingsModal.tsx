@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from '../../../../lib/i18n';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BackendUserSettings } from '../../types/backend';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
 
 export type SettingsModalProps = {
   open: boolean;
@@ -11,8 +11,6 @@ export type SettingsModalProps = {
 };
 
 export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: SettingsModalProps) {
-  const { t } = useTranslation('Vault');
-  const { t: tCommon } = useTranslation('Common');
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState('60');
   const [retentionDays, setRetentionDays] = useState('30');
@@ -24,21 +22,23 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     setRetentionDays(String(settings.backup_retention_days));
   }, [open, settings]);
 
-  if (!open) return null;
+  const busy = isSaving;
 
-  const canSave =
-    Number.isFinite(Number(intervalMinutes)) &&
-    Number(intervalMinutes) >= 5 &&
-    Number(intervalMinutes) <= 1440 &&
-    Number.isFinite(Number(retentionDays)) &&
-    Number(retentionDays) >= 1 &&
-    Number(retentionDays) <= 3650;
+  const canSave = useMemo(() => {
+    const interval = Number(intervalMinutes);
+    const retention = Number(retentionDays);
+    if (!Number.isFinite(interval) || !Number.isFinite(retention)) return false;
+    if (autoBackupEnabled && (interval < 5 || interval > 1440)) return false;
+    if (retention < 1 || retention > 3650) return false;
+    return true;
+  }, [autoBackupEnabled, intervalMinutes, retentionDays]);
 
   const handleSave = () => {
     if (!settings) return;
     const interval = Number(intervalMinutes);
     const retention = Number(retentionDays);
-    if (!Number.isFinite(interval) || interval < 5 || interval > 1440) return;
+    if (!Number.isFinite(interval)) return;
+    if (autoBackupEnabled && (interval < 5 || interval > 1440)) return;
     if (!Number.isFinite(retention) || retention < 1 || retention > 3650) return;
     const nextSettings: BackendUserSettings = {
       ...settings,
@@ -50,65 +50,67 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
   };
 
   return (
-    <div className="dialog-backdrop">
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-        <div className="dialog-header">
-          <h2 id="settings-title" className="dialog-title">
-            {t('backup.settings.title')}
-          </h2>
-        </div>
+    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
+      <DialogContent aria-labelledby="settings-title">
+        <DialogHeader>
+          <DialogTitle id="settings-title">Settings</DialogTitle>
+        </DialogHeader>
 
         <div className="dialog-body">
-          <div className="form-field">
-            <label className="form-label" htmlFor="backup-auto-enabled">
-              {t('backup.settings.autoEnabled')}
-            </label>
-            <input
-              id="backup-auto-enabled"
-              type="checkbox"
-              checked={autoBackupEnabled}
-              onChange={(event) => setAutoBackupEnabled(event.target.checked)}
-              disabled={isSaving}
-            />
-          </div>
+          <fieldset className="form-stack">
+            <legend className="form-label">Backups</legend>
 
-          <div className="form-field">
-            <label className="form-label" htmlFor="backup-interval-minutes">
-              {t('backup.settings.intervalMinutes')}
-            </label>
-            <input
-              id="backup-interval-minutes"
-              className="input"
-              type="number"
-              min={5}
-              max={1440}
-              value={intervalMinutes}
-              disabled={!autoBackupEnabled || isSaving}
-              onChange={(event) => setIntervalMinutes(event.target.value)}
-            />
-          </div>
+            <div className="form-field form-field--row">
+              <label className="form-label" htmlFor="backup-auto-enabled">
+                Auto backup enabled
+              </label>
+              <input
+                id="backup-auto-enabled"
+                type="checkbox"
+                checked={autoBackupEnabled}
+                disabled={busy}
+                onChange={(event) => setAutoBackupEnabled(event.target.checked)}
+              />
+            </div>
 
-          <div className="form-field">
-            <label className="form-label" htmlFor="backup-retention-days">
-              {t('backup.settings.retentionDays')}
-            </label>
-            <input
-              id="backup-retention-days"
-              className="input"
-              type="number"
-              min={1}
-              max={3650}
-              value={retentionDays}
-              disabled={isSaving}
-              onChange={(event) => setRetentionDays(event.target.value)}
-            />
-          </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="backup-interval-minutes">
+                Interval (minutes)
+              </label>
+              <input
+                id="backup-interval-minutes"
+                type="number"
+                min={5}
+                max={1440}
+                value={intervalMinutes}
+                disabled={busy || !autoBackupEnabled}
+                inputMode="numeric"
+                onChange={(event) => setIntervalMinutes(event.target.value)}
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="backup-retention-days">
+                Retention days
+              </label>
+              <input
+                id="backup-retention-days"
+                type="number"
+                min={1}
+                max={3650}
+                value={retentionDays}
+                disabled={busy}
+                inputMode="numeric"
+                onChange={(event) => setRetentionDays(event.target.value)}
+              />
+            </div>
+          </fieldset>
         </div>
 
-        <div className="dialog-footer dialog-footer--split">
+        <DialogFooter className="dialog-footer--split">
           <div className="dialog-footer-left">
-            <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={isSaving}>
-              {tCommon('action.cancel')}
+            <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={busy}>
+              Cancel
             </button>
           </div>
           <div className="dialog-footer-right">
@@ -116,13 +118,13 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
               className="btn btn-primary"
               type="button"
               onClick={handleSave}
-              disabled={isSaving || !settings || !canSave}
+              disabled={busy || !settings || !canSave}
             >
-              {t('backup.settings.save')}
+              Save
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
