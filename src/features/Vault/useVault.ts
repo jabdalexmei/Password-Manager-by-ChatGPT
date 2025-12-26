@@ -481,6 +481,43 @@ export function useVault(profileId: string, onLocked: () => void) {
     onLocked();
   }, [mapErrorMessage, onLocked, showToast]);
 
+  useEffect(() => {
+    if (!settings?.auto_lock_enabled) return;
+
+    const timeoutSec = Number(settings.auto_lock_timeout);
+    if (!Number.isFinite(timeoutSec) || timeoutSec < 30 || timeoutSec > 86400) return;
+
+    let timerId: number | null = null;
+
+    const schedule = () => {
+      if (timerId !== null) {
+        window.clearTimeout(timerId);
+      }
+      timerId = window.setTimeout(() => {
+        void lock();
+      }, timeoutSec * 1000);
+    };
+
+    const onActivity = () => {
+      schedule();
+    };
+
+    schedule();
+
+    window.addEventListener('pointerdown', onActivity, { passive: true });
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('wheel', onActivity, { passive: true });
+    window.addEventListener('focus', onActivity);
+
+    return () => {
+      if (timerId !== null) window.clearTimeout(timerId);
+      window.removeEventListener('pointerdown', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('wheel', onActivity);
+      window.removeEventListener('focus', onActivity);
+    };
+  }, [settings?.auto_lock_enabled, settings?.auto_lock_timeout, lock]);
+
   const visibleCards = useMemo(() => {
     const activeCards = cards.filter((card) => !card.deletedAt);
     const isArchived = (card: DataCardSummary) => card.tags?.includes('archived');
