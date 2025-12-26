@@ -82,6 +82,11 @@ export type DataCardsViewModel = {
   removeCreateAttachment: (path: string) => void;
   addCreateCustomFieldByName: (name: string) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
   updateCreateCustomFieldValue: (rowId: string, value: string) => void;
+  renameCreateCustomFieldById: (
+    rowId: string,
+    nextName: string
+  ) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
+  removeCreateCustomFieldById: (rowId: string) => void;
   addEditCustomFieldByName: (name: string) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
   updateEditCustomFieldValue: (rowId: string, value: string) => void;
   renameEditCustomFieldById: (
@@ -306,6 +311,35 @@ export function useDataCards({
     setCreateForm((prev) => ({
       ...prev,
       customFields: prev.customFields.map((row) => (row.id === rowId ? { ...row, value } : row)),
+    }));
+  }, []);
+
+  const renameCreateCustomFieldById = useCallback(
+    (rowId: string, nextName: string) => {
+      const trimmed = nextName.trim();
+      if (!trimmed) return { ok: false as const, reason: 'EMPTY' as const };
+
+      const exists = createForm.customFields.some((row) => {
+        if (row.id === rowId) return false;
+        return row.key.trim().toLowerCase() === trimmed.toLowerCase();
+      });
+
+      if (exists) return { ok: false as const, reason: 'DUPLICATE' as const };
+
+      setCreateForm((prev) => ({
+        ...prev,
+        customFields: prev.customFields.map((row) => (row.id === rowId ? { ...row, key: trimmed } : row)),
+      }));
+
+      return { ok: true as const };
+    },
+    [createForm.customFields]
+  );
+
+  const removeCreateCustomFieldById = useCallback((rowId: string) => {
+    setCreateForm((prev) => ({
+      ...prev,
+      customFields: prev.customFields.filter((row) => row.id !== rowId),
     }));
   }, []);
 
@@ -541,6 +575,8 @@ export function useDataCards({
     removeCreateAttachment,
     addCreateCustomFieldByName,
     updateCreateCustomFieldValue,
+    renameCreateCustomFieldById,
+    removeCreateCustomFieldById,
     addEditCustomFieldByName,
     updateEditCustomFieldValue,
     renameEditCustomFieldById,
