@@ -231,7 +231,9 @@ pub struct SetBankCardFavoriteInput {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserSettings {
     pub auto_hide_secret_timeout_seconds: i64,
+    #[serde(default = "default_auto_lock_enabled")]
     pub auto_lock_enabled: bool,
+    #[serde(default = "default_auto_lock_timeout_seconds")]
     pub auto_lock_timeout: i64,
     pub reveal_requires_confirmation: bool,
 
@@ -258,8 +260,8 @@ impl Default for UserSettings {
     fn default() -> Self {
         Self {
             auto_hide_secret_timeout_seconds: 15,
-            auto_lock_enabled: true,
-            auto_lock_timeout: 300,
+            auto_lock_enabled: default_auto_lock_enabled(),
+            auto_lock_timeout: default_auto_lock_timeout_seconds(),
             reveal_requires_confirmation: false,
             clipboard_clear_timeout_seconds: 30,
             soft_delete_enabled: true,
@@ -282,6 +284,14 @@ fn default_auto_backup_interval_minutes() -> i64 {
 
 fn default_backup_max_copies() -> i64 {
     10
+}
+
+fn default_auto_lock_enabled() -> bool {
+    true
+}
+
+fn default_auto_lock_timeout_seconds() -> i64 {
+    60
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
