@@ -199,7 +199,7 @@ fn build_backup_source(
             .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
         let mut dest_conn = rusqlite::Connection::open(&vault_path)
             .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
-        let mut backup = rusqlite::backup::Backup::new(&src_conn, "main", &mut dest_conn, "main")
+        let mut backup = rusqlite::backup::Backup::new(&src_conn, &mut dest_conn)
             .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
         backup
             .run_to_completion(5, std::time::Duration::from_millis(250), None)
@@ -245,7 +245,7 @@ fn create_archive(
     if source.attachments_path.exists() {
         for entry in WalkDir::new(&source.attachments_path)
             .into_iter()
-            .filter_map(Result::ok)
+            .filter_map(|e| e.ok())
             .filter(|entry| entry.file_type().is_file())
         {
             let relative = entry
