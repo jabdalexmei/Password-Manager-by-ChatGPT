@@ -38,6 +38,11 @@ fn validate_settings(settings: &UserSettings) -> Result<()> {
     ]
     .into_iter()
     .all(|v| v);
+    let valid_auto_backup_interval = if settings.backups_enabled {
+        in_range(settings.auto_backup_interval_minutes, 5, 525_600)
+    } else {
+        true
+    };
 
     let valid_frequency =
         ["daily", "weekly", "monthly"].contains(&settings.backup_frequency.as_str());
@@ -45,7 +50,7 @@ fn validate_settings(settings: &UserSettings) -> Result<()> {
         ["created_at", "updated_at", "title"].contains(&settings.default_sort_field.as_str());
     let valid_sort_direction = ["ASC", "DESC"].contains(&settings.default_sort_direction.as_str());
 
-    if valid_values && valid_frequency && valid_sort_field && valid_sort_direction {
+    if valid_values && valid_auto_backup_interval && valid_frequency && valid_sort_field && valid_sort_direction {
         Ok(())
     } else {
         Err(ErrorCodeString::new("SETTINGS_VALIDATION_FAILED"))

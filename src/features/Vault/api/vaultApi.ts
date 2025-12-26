@@ -117,6 +117,31 @@ export async function getSettings(): Promise<BackendUserSettings> {
   return invoke('get_settings');
 }
 
+export async function updateSettings(settings: BackendUserSettings): Promise<boolean> {
+  return invoke('update_settings', { settings });
+}
+
+export async function createBackup(
+  destinationPath: string | null,
+  useDefaultPath: boolean
+): Promise<string> {
+  return invoke('backup_create', { destinationPath, useDefaultPath });
+}
+
+export async function restoreBackup(backupPath: string): Promise<boolean> {
+  return invoke('backup_restore', { backupPath });
+}
+
+export async function listBackups(): Promise<
+  Array<{ id: string; created_at_utc: string; path: string; bytes: number }>
+> {
+  return invoke('backup_list');
+}
+
+export async function createBackupIfDueAuto(): Promise<string | null> {
+  return invoke('backup_create_if_due_auto');
+}
+
 export async function getPasswordHistory(datacardId: string): Promise<PasswordHistoryEntry[]> {
   const rows = await invoke<BackendPasswordHistoryRow[]>('get_datacard_password_history', {
     datacardId,
