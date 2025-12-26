@@ -23,6 +23,32 @@ use crate::error::{ErrorCodeString, Result};
 use crate::services::{security_service, settings_service};
 use crate::types::UserSettings;
 
+#[cfg(windows)]
+fn replace_file_windows(src: &Path, dst: &Path) -> std::io::Result<()> {
+    use std::iter;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let src_w: Vec<u16> = src.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let dst_w: Vec<u16> = dst.as_os_str().encode_wide().chain(iter::once(0)).collect();
+
+    let ok = unsafe {
+        MoveFileExW(
+            src_w.as_ptr(),
+            dst_w.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+
+    if ok == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BackupListItem {
     pub id: String,
@@ -133,6 +159,28 @@ fn validate_zip_entry_rel_path_windows(rel: &Path) -> bool {
     }
 
     true
+}
+
+fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
+    use std::time::Duration;
+
+    let mut last_err: Option<std::io::Error> = None;
+    for _ in 0..25 {
+        match fs::rename(src, dst) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    last_err = Some(e);
+                    std::thread::sleep(Duration::from_millis(80));
+                    continue;
+                }
+                return Err(e);
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::Other, "rename failed")
+    }))
 }
 
 fn ensure_backup_guard(state: &Arc<AppState>) -> Result<std::sync::MutexGuard<'_, ()>> {
@@ -316,7 +364,27 @@ fn create_archive(
         .finish()
         .map_err(|_| ErrorCodeString::new("BACKUP_ZIP_WRITE_FAILED"))?;
 
-    fs::rename(&tmp_dest, destination).map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
+    let replace_result = {
+        #[cfg(windows)]
+        {
+            replace_file_windows(&tmp_dest, destination)
+        }
+        #[cfg(not(windows))]
+        {
+            fs::rename(&tmp_dest, destination)
+        }
+    };
+
+    if replace_result.is_err() {
+        if tmp_dest.exists() {
+            let _ = fs::remove_file(&tmp_dest);
+        }
+        return Err(ErrorCodeString::new("BACKUP_CREATE_FAILED"));
+    }
+
+    if tmp_dest.exists() {
+        let _ = fs::remove_file(&tmp_dest);
+    }
     let bytes = fs::metadata(destination)
         .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?
         .len() as i64;
@@ -435,7 +503,6 @@ pub fn backup_list(state: &Arc<AppState>) -> Result<Vec<BackupListItem>> {
 pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
     let _guard = ensure_backup_guard(state)?;
     let profile_id = require_logged_in(state)?;
-    security_service::lock_vault(state)?;
     let sp = state.get_storage_paths()?;
 
     let backup_path = PathBuf::from(&backup_path);
@@ -468,6 +535,33 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
 
     let manifest: BackupManifest =
         serde_json::from_str(&manifest_contents).map_err(|_| ErrorCodeString::new("BACKUP_MANIFEST_INVALID"))?;
+
+    if manifest.format_version != 1 {
+        return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));
+    }
+
+    if manifest.profile_id != profile_id {
+        return Err(ErrorCodeString::new("BACKUP_PROFILE_MISMATCH"));
+    }
+
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    let mut has_vault = false;
+
+    for f in &manifest.files {
+        if !seen.insert(&f.path) {
+            return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
+        }
+        if f.path == "vault.db" {
+            has_vault = true;
+        }
+    }
+
+    if !has_vault {
+        return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+    }
+
+    security_service::lock_vault(state)?;
 
     for entry in &manifest.files {
         let rel_path = Path::new(&entry.path);
@@ -525,7 +619,7 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
     let mut moved_attachments = false;
     let restore_result: Result<()> = (|| {
         if vault_path.exists() {
-            fs::rename(&vault_path, &vault_backup_path)
+            rename_with_retry(&vault_path, &vault_backup_path)
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
             moved_vault = true;
         }
@@ -533,17 +627,17 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
         let vault_tmp_path = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
         fs::copy(&extracted_vault, &vault_tmp_path)
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-        fs::rename(&vault_tmp_path, &vault_path)
+        rename_with_retry(&vault_tmp_path, &vault_path)
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
 
         if attachments_path.exists() {
-            fs::rename(&attachments_path, &attachments_backup_path)
+            rename_with_retry(&attachments_path, &attachments_backup_path)
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
             moved_attachments = true;
         }
 
         if extracted_attachments.exists() {
-            fs::rename(&extracted_attachments, &attachments_path)
+            rename_with_retry(&extracted_attachments, &attachments_path)
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
         } else {
             fs::create_dir_all(&attachments_path)
@@ -557,7 +651,7 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
                 if target.exists() {
                     let _ = fs::remove_file(&target);
                 }
-                fs::rename(&extracted_file, &target)
+                rename_with_retry(&extracted_file, &target)
                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
             }
         }

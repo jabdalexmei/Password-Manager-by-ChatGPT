@@ -26,13 +26,25 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
   if (!open) return null;
 
+  const canSave =
+    Number.isFinite(Number(intervalMinutes)) &&
+    Number(intervalMinutes) >= 5 &&
+    Number(intervalMinutes) <= 1440 &&
+    Number.isFinite(Number(retentionDays)) &&
+    Number(retentionDays) >= 1 &&
+    Number(retentionDays) <= 3650;
+
   const handleSave = () => {
     if (!settings) return;
+    const interval = Number(intervalMinutes);
+    const retention = Number(retentionDays);
+    if (!Number.isFinite(interval) || interval < 5 || interval > 1440) return;
+    if (!Number.isFinite(retention) || retention < 1 || retention > 3650) return;
     const nextSettings: BackendUserSettings = {
       ...settings,
       backups_enabled: autoBackupEnabled,
-      auto_backup_interval_minutes: Number(intervalMinutes),
-      backup_retention_days: Number(retentionDays),
+      auto_backup_interval_minutes: interval,
+      backup_retention_days: retention,
     };
     onSave(nextSettings);
   };
@@ -69,7 +81,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
               className="input"
               type="number"
               min={5}
-              max={525600}
+              max={1440}
               value={intervalMinutes}
               disabled={!autoBackupEnabled || isSaving}
               onChange={(event) => setIntervalMinutes(event.target.value)}
@@ -104,7 +116,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
               className="btn btn-primary"
               type="button"
               onClick={handleSave}
-              disabled={isSaving || !settings}
+              disabled={isSaving || !settings || !canSave}
             >
               {t('backup.settings.save')}
             </button>

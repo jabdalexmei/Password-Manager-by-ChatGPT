@@ -80,6 +80,10 @@ export function useVault(profileId: string, onLocked: () => void) {
       switch (code) {
         case 'NETWORK_ERROR':
           return tCommon('error.network', { code });
+        case 'BACKUP_PROFILE_MISMATCH':
+          return tCommon('error.backupProfileMismatch', { code });
+        case 'BACKUP_UNSUPPORTED_FORMAT':
+          return tCommon('error.backupUnsupportedFormat', { code });
         case 'VALIDATION_ERROR':
           return fallback ?? tCommon('error.operationFailed', { code });
         default:
