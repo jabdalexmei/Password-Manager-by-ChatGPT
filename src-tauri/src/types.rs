@@ -237,6 +237,9 @@ pub struct UserSettings {
     pub auto_lock_timeout: i64,
     pub reveal_requires_confirmation: bool,
 
+    #[serde(default = "default_clipboard_auto_clear_enabled")]
+    pub clipboard_auto_clear_enabled: bool,
+    #[serde(default = "default_clipboard_clear_timeout_seconds")]
     pub clipboard_clear_timeout_seconds: i64,
 
     pub soft_delete_enabled: bool,
@@ -263,7 +266,8 @@ impl Default for UserSettings {
             auto_lock_enabled: default_auto_lock_enabled(),
             auto_lock_timeout: default_auto_lock_timeout_seconds(),
             reveal_requires_confirmation: false,
-            clipboard_clear_timeout_seconds: 30,
+            clipboard_auto_clear_enabled: default_clipboard_auto_clear_enabled(),
+            clipboard_clear_timeout_seconds: default_clipboard_clear_timeout_seconds(),
             soft_delete_enabled: true,
             trash_retention_days: 30,
             backups_enabled: false,
@@ -284,6 +288,14 @@ fn default_auto_backup_interval_minutes() -> i64 {
 
 fn default_backup_max_copies() -> i64 {
     10
+}
+
+fn default_clipboard_auto_clear_enabled() -> bool {
+    true
+}
+
+fn default_clipboard_clear_timeout_seconds() -> i64 {
+    20
 }
 
 fn default_auto_lock_enabled() -> bool {

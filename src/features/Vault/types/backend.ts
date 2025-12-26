@@ -140,6 +140,7 @@ export type BackendUserSettings = {
   auto_lock_enabled: boolean;
   auto_lock_timeout: number;
   reveal_requires_confirmation: boolean;
+  clipboard_auto_clear_enabled: boolean;
   clipboard_clear_timeout_seconds: number;
   soft_delete_enabled: boolean;
   trash_retention_days: number;

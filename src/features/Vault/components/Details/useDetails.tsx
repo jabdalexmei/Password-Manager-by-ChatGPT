@@ -12,7 +12,7 @@ import {
 } from '../../api/vaultApi';
 import { mapAttachmentFromBackend } from '../../types/mappers';
 
-const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 30;
+const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 20;
 
 type UseDetailsParams = {
   card: DataCard | null;
@@ -22,6 +22,7 @@ type UseDetailsParams = {
   onRestore: (id: string) => void;
   onPurge: (id: string) => void;
   isTrashMode: boolean;
+  clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
 };
 
@@ -60,6 +61,7 @@ export function useDetails({
   onRestore,
   onPurge,
   isTrashMode,
+  clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
 }: UseDetailsParams): UseDetailsResult {
   const [showPassword, setShowPassword] = useState(false);
@@ -131,7 +133,8 @@ export function useDetails({
       try {
         await navigator.clipboard.writeText(value);
         showToast(t('toast.copySuccess'), 'success');
-        if (opts.isSecret) {
+        const autoClearEnabled = clipboardAutoClearEnabled ?? true;
+        if (opts.isSecret && autoClearEnabled) {
           lastCopiedValueRef.current = value;
           const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
           timeoutRef.current = window.setTimeout(async () => {
@@ -153,7 +156,7 @@ export function useDetails({
         lastCopiedValueRef.current = null;
       }
     },
-    [clearPendingTimeout, clipboardClearTimeoutSeconds, showToast, t]
+    [clearPendingTimeout, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
   );
 
   const deleteCard = useCallback(() => {

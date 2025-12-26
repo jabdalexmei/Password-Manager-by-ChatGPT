@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import { useTranslation } from '../../../../lib/i18n';
 import { useToaster } from '../../../../components/Toaster';
@@ -10,19 +10,39 @@ type PasswordHistoryDialogProps = {
   isOpen: boolean;
   datacardId: string;
   onClose: () => void;
+  clipboardAutoClearEnabled?: boolean;
+  clipboardClearTimeoutSeconds?: number;
 };
 
 const MASKED_PASSWORD = '••••••••';
 
 const formatTimestamp = (value: string) => new Date(value).toLocaleString();
 
-const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({ isOpen, datacardId, onClose }) => {
+const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
+  isOpen,
+  datacardId,
+  onClose,
+  clipboardAutoClearEnabled,
+  clipboardClearTimeoutSeconds,
+}) => {
   const { t } = useTranslation('Details');
   const { t: tCommon } = useTranslation('Common');
   const { show: showToast } = useToaster();
   const [items, setItems] = useState<PasswordHistoryEntry[]>([]);
   const [showPasswords, setShowPasswords] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCopiedValueRef = useRef<string | null>(null);
+
+  const clearPendingTimeout = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    lastCopiedValueRef.current = null;
+  }, []);
+
+  useEffect(() => clearPendingTimeout, [clearPendingTimeout]);
 
   const loadHistory = useCallback(async () => {
     if (!datacardId) return;
@@ -47,15 +67,40 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({ isOpen, d
 
   const copyPassword = useCallback(
     async (value: string) => {
+      const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 20;
+      if (!value || !value.trim()) return;
+      clearPendingTimeout();
+
       try {
         await navigator.clipboard.writeText(value);
         showToast(t('toast.copySuccess'), 'success');
+
+        const enabled = clipboardAutoClearEnabled ?? true;
+        if (!enabled) return;
+
+        lastCopiedValueRef.current = value;
+        const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
+
+        timeoutRef.current = window.setTimeout(async () => {
+          try {
+            const current = await navigator.clipboard.readText();
+            if (current === lastCopiedValueRef.current) {
+              await navigator.clipboard.writeText('');
+            }
+          } catch (err) {
+            console.error(err);
+          } finally {
+            timeoutRef.current = null;
+            lastCopiedValueRef.current = null;
+          }
+        }, timeoutMs);
       } catch (err) {
         console.error(err);
         showToast(t('toast.copyError'), 'error');
+        clearPendingTimeout();
       }
     },
-    [showToast, t]
+    [clearPendingTimeout, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
   );
 
   const handleClearHistory = useCallback(async () => {

@@ -13,6 +13,8 @@ export type SettingsModalProps = {
 export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: SettingsModalProps) {
   const [autoLockEnabled, setAutoLockEnabled] = useState(false);
   const [autoLockTimeoutSeconds, setAutoLockTimeoutSeconds] = useState('60');
+  const [clipboardAutoClearEnabled, setClipboardAutoClearEnabled] = useState(false);
+  const [clipboardClearTimeoutSeconds, setClipboardClearTimeoutSeconds] = useState('20');
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState('60');
   const [maxCopies, setMaxCopies] = useState('10');
@@ -22,6 +24,8 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     if (!open || !settings) return;
     setAutoLockEnabled(settings.auto_lock_enabled);
     setAutoLockTimeoutSeconds(String(settings.auto_lock_timeout));
+    setClipboardAutoClearEnabled(settings.clipboard_auto_clear_enabled);
+    setClipboardClearTimeoutSeconds(String(settings.clipboard_clear_timeout_seconds));
     setAutoBackupEnabled(settings.backups_enabled);
     setIntervalMinutes(String(settings.auto_backup_interval_minutes));
     setMaxCopies(String(settings.backup_max_copies));
@@ -32,29 +36,47 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
   const canSave = useMemo(() => {
     const lockTimeout = Number(autoLockTimeoutSeconds);
+    const clipTimeout = Number(clipboardClearTimeoutSeconds);
     const interval = Number(intervalMinutes);
     const max = Number(maxCopies);
     const retention = Number(retentionDays);
-    if (!Number.isFinite(lockTimeout) || !Number.isFinite(interval) || !Number.isFinite(max) || !Number.isFinite(retention)) {
+    if (
+      !Number.isFinite(lockTimeout) ||
+      !Number.isFinite(clipTimeout) ||
+      !Number.isFinite(interval) ||
+      !Number.isFinite(max) ||
+      !Number.isFinite(retention)
+    ) {
       return false;
     }
     if (autoLockEnabled && (lockTimeout < 30 || lockTimeout > 86400)) return false;
+    if (clipTimeout < 1 || clipTimeout > 600) return false;
     if (autoBackupEnabled && (interval < 5 || interval > 1440)) return false;
     if (max < 1 || max > 500) return false;
     if (retention < 1 || retention > 3650) return false;
     return true;
-  }, [autoBackupEnabled, autoLockEnabled, autoLockTimeoutSeconds, intervalMinutes, maxCopies, retentionDays]);
+  }, [
+    autoBackupEnabled,
+    autoLockEnabled,
+    autoLockTimeoutSeconds,
+    clipboardClearTimeoutSeconds,
+    intervalMinutes,
+    maxCopies,
+    retentionDays,
+  ]);
 
   const handleSave = () => {
     if (!settings) return;
 
     const lockTimeout = Number(autoLockTimeoutSeconds);
+    const clipTimeout = Number(clipboardClearTimeoutSeconds);
     const interval = Number(intervalMinutes);
     const max = Number(maxCopies);
     const retention = Number(retentionDays);
 
     if (!Number.isFinite(lockTimeout)) return;
     if (autoLockEnabled && (lockTimeout < 30 || lockTimeout > 86400)) return;
+    if (!Number.isFinite(clipTimeout) || clipTimeout < 1 || clipTimeout > 600) return;
     if (!Number.isFinite(interval) || !Number.isFinite(max)) return;
     if (autoBackupEnabled && (interval < 5 || interval > 1440)) return;
     if (max < 1 || max > 500) return;
@@ -64,6 +86,8 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
       ...settings,
       auto_lock_enabled: autoLockEnabled,
       auto_lock_timeout: lockTimeout,
+      clipboard_auto_clear_enabled: clipboardAutoClearEnabled,
+      clipboard_clear_timeout_seconds: clipTimeout,
       backups_enabled: autoBackupEnabled,
       auto_backup_interval_minutes: interval,
       backup_max_copies: max,
@@ -209,6 +233,77 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
                 disabled={busy || !autoLockEnabled}
                 inputMode="numeric"
                 onChange={(event) => setAutoLockTimeoutSeconds(event.target.value)}
+                style={fullWidthInputStyle}
+              />
+            </div>
+
+            <div className="form-field" style={toggleRowStyle}>
+              <span className="form-label" id="clipboard-auto-clear-enabled-label">
+                Enable clipboard auto-clear
+              </span>
+
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  id="clipboard-auto-clear-enabled-switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={clipboardAutoClearEnabled}
+                  aria-labelledby="clipboard-auto-clear-enabled-label"
+                  disabled={busy}
+                  onClick={() => setClipboardAutoClearEnabled((v) => !v)}
+                  onKeyDown={(e) => {
+                    if (busy) return;
+                    if (e.key === ' ' || e.key === 'Enter') {
+                      e.preventDefault();
+                      setClipboardAutoClearEnabled((v) => !v);
+                    }
+                  }}
+                  style={{
+                    width: 44,
+                    height: 24,
+                    borderRadius: 9999,
+                    border: clipboardAutoClearEnabled
+                      ? '1px solid rgba(34, 197, 94, 0.95)'
+                      : '1px solid rgba(255, 255, 255, 0.25)',
+                    background: clipboardAutoClearEnabled
+                      ? 'rgba(34, 197, 94, 0.55)'
+                      : 'rgba(255, 255, 255, 0.14)',
+                    padding: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    opacity: busy ? 0.65 : 1,
+                    outline: 'none',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 9999,
+                      background: 'rgba(255, 255, 255, 0.95)',
+                      transform: clipboardAutoClearEnabled ? 'translateX(22px)' : 'translateX(2px)',
+                      transition: 'transform 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
+                Clipboard clear timeout (seconds)
+              </label>
+              <input
+                id="clipboard-clear-timeout-seconds"
+                type="number"
+                min={1}
+                max={600}
+                value={clipboardClearTimeoutSeconds}
+                disabled={busy || !clipboardAutoClearEnabled}
+                inputMode="numeric"
+                onChange={(event) => setClipboardClearTimeoutSeconds(event.target.value)}
                 style={fullWidthInputStyle}
               />
             </div>
