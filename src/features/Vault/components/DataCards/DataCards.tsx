@@ -34,7 +34,6 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     isEditOpen,
     isCreateSubmitting,
     isEditSubmitting,
-    closeCreateModal,
     togglePasswordVisibility,
   } = viewModel;
   const createTitleRef = useRef<HTMLInputElement | null>(null);
@@ -58,6 +57,9 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   const [isEditFieldsMode, setIsEditFieldsMode] = useState(false);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [renameTargetRowId, setRenameTargetRowId] = useState<string | null>(null);
+  const [renameTargetDialogId, setRenameTargetDialogId] = useState<
+    'datacard-create-dialog' | 'datacard-edit-dialog' | null
+  >(null);
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [is2faModalOpen, setIs2faModalOpen] = useState(false);
@@ -78,8 +80,18 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     setIsEditFieldsMode(false);
     setIsRenameModalOpen(false);
     setRenameTargetRowId(null);
+    setRenameTargetDialogId(null);
     setRenameName('');
     setRenameError(null);
+  }, [viewModel]);
+
+  const handleCloseCreateModal = useCallback(() => {
+    viewModel.closeCreateModal();
+    setIsEditFieldsMode(false);
+    setIsRenameModalOpen(false);
+    setRenameError(null);
+    setRenameTargetRowId(null);
+    setRenameTargetDialogId(null);
   }, [viewModel]);
 
   useEffect(() => {
@@ -140,6 +152,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     setIsEditFieldsMode(false);
     setIsRenameModalOpen(false);
     setRenameTargetRowId(null);
+    setRenameTargetDialogId(null);
     setRenameName('');
     setRenameError(null);
     setIs2faModalOpen(false);
@@ -170,14 +183,14 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
           return;
         }
         if (isEditOpen) handleCloseEditModal();
-        if (isCreateOpen) closeCreateModal();
+        if (isCreateOpen) handleCloseCreateModal();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    closeCreateModal,
+    handleCloseCreateModal,
     handleCloseEditModal,
     isActionMenuOpen,
     is2faModalOpen,
@@ -283,7 +296,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                   >
                     {t('customFields.add')}
                   </button>
-                  {dialogId === 'datacard-edit-dialog' && (
+                  {(form?.customFields?.length ?? 0) > 0 && (
                     <button
                       type="button"
                       className="dialog-actionmenu-item"
@@ -416,7 +429,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                       }
                     }}
                   />
-                  {dialogId === 'datacard-edit-dialog' && isEditFieldsMode && (
+                  {isEditFieldsMode && (
                     <div className="input-actions">
                       <button
                         type="button"
@@ -425,6 +438,11 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                         title={t('customFields.rename')}
                         onClick={() => {
                           setRenameTargetRowId(row.id);
+                          setRenameTargetDialogId(
+                            dialogId === 'datacard-create-dialog'
+                              ? 'datacard-create-dialog'
+                              : 'datacard-edit-dialog'
+                          );
                           setRenameName(row.key);
                           setRenameError(null);
                           setIsRenameModalOpen(true);
@@ -437,7 +455,13 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                         className="icon-button icon-button-danger"
                         aria-label={t('customFields.delete')}
                         title={t('customFields.delete')}
-                        onClick={() => viewModel.removeEditCustomFieldById(row.id)}
+                        onClick={() => {
+                          if (dialogId === 'datacard-create-dialog') {
+                            viewModel.removeCreateCustomFieldById(row.id);
+                          } else {
+                            viewModel.removeEditCustomFieldById(row.id);
+                          }
+                        }}
                       >
                         <IconTrash />
                       </button>
@@ -586,7 +610,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
           viewModel.createForm,
           viewModel.createError,
           viewModel.createFolderError,
-          viewModel.closeCreateModal,
+          handleCloseCreateModal,
           viewModel.submitCreate,
           viewModel.updateCreateField,
           t('action.create'),
@@ -654,9 +678,16 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
           setRenameError(null);
         }}
         onOk={() => {
-          if (!renameTargetRowId) return;
+          if (!renameTargetRowId || !renameTargetDialogId) {
+            setIsRenameModalOpen(false);
+            setRenameError(null);
+            return;
+          }
 
-          const result = viewModel.renameEditCustomFieldById(renameTargetRowId, renameName);
+          const result =
+            renameTargetDialogId === 'datacard-create-dialog'
+              ? viewModel.renameCreateCustomFieldById(renameTargetRowId, renameName)
+              : viewModel.renameEditCustomFieldById(renameTargetRowId, renameName);
           if (!result.ok) {
             setRenameError(
               result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
@@ -666,6 +697,8 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
 
           setIsRenameModalOpen(false);
           setRenameError(null);
+          setRenameTargetRowId(null);
+          setRenameTargetDialogId(null);
         }}
       />
 
