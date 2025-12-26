@@ -1,6 +1,6 @@
 use std::fs;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::{SecondsFormat, Utc};
@@ -59,6 +59,7 @@ struct BackupSource {
     attachments_path: PathBuf,
     config_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
+    _temp_dir: Option<tempfile::TempDir>,
 }
 
 struct BackupResult {
@@ -116,11 +117,22 @@ fn now_utc_string() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
-fn compute_sha256_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    let digest = hasher.finalize();
-    hex::encode(digest)
+fn validate_zip_entry_rel_path_windows(rel: &Path) -> bool {
+    if rel.is_absolute() {
+        return false;
+    }
+
+    for component in rel.components() {
+        match component {
+            Component::Prefix(_) => return false,
+            Component::RootDir => return false,
+            Component::ParentDir => return false,
+            Component::CurDir => {}
+            Component::Normal(_) => {}
+        }
+    }
+
+    true
 }
 
 fn ensure_backup_guard(state: &Arc<AppState>) -> Result<std::sync::MutexGuard<'_, ()>> {
@@ -136,19 +148,33 @@ fn add_file_to_zip(
     archive_path: &str,
     manifest_entries: &mut Vec<BackupManifestFile>,
 ) -> Result<()> {
-    let bytes = fs::read(source_path).map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
-    let sha256 = compute_sha256_hex(&bytes);
     let options = FileOptions::default().compression_method(CompressionMethod::Stored);
     writer
         .start_file(archive_path, options)
         .map_err(|_| ErrorCodeString::new("BACKUP_ZIP_WRITE_FAILED"))?;
-    writer
-        .write_all(&bytes)
-        .map_err(|_| ErrorCodeString::new("BACKUP_ZIP_WRITE_FAILED"))?;
+    let file = fs::File::open(source_path).map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = [0u8; 64 * 1024];
+    let mut hasher = Sha256::new();
+    let mut bytes_written = 0i64;
+    loop {
+        let read = reader
+            .read(&mut buffer)
+            .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
+        if read == 0 {
+            break;
+        }
+        writer
+            .write_all(&buffer[..read])
+            .map_err(|_| ErrorCodeString::new("BACKUP_ZIP_WRITE_FAILED"))?;
+        hasher.update(&buffer[..read]);
+        bytes_written += read as i64;
+    }
+    let sha256 = hex::encode(hasher.finalize());
     manifest_entries.push(BackupManifestFile {
         path: archive_path.to_string(),
         sha256,
-        bytes: bytes.len() as i64,
+        bytes: bytes_written,
     });
     Ok(())
 }
@@ -211,6 +237,7 @@ fn build_backup_source(
                 attachments_path,
                 config_path,
                 settings_path,
+                _temp_dir: Some(temp_dir),
             },
             vault_mode,
         ))
@@ -222,6 +249,7 @@ fn build_backup_source(
                 attachments_path,
                 config_path,
                 settings_path,
+                _temp_dir: None,
             },
             vault_mode,
         ))
@@ -243,11 +271,12 @@ fn create_archive(
     add_file_to_zip(&mut writer, &source.vault_path, "vault.db", &mut manifest_entries)?;
 
     if source.attachments_path.exists() {
-        for entry in WalkDir::new(&source.attachments_path)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|entry| entry.file_type().is_file())
-        {
+        for entry_res in WalkDir::new(&source.attachments_path).into_iter() {
+            let entry = entry_res
+                .map_err(|_| ErrorCodeString::new("BACKUP_ATTACHMENTS_ENUM_FAILED"))?;
+            if !entry.file_type().is_file() {
+                continue;
+            }
             let relative = entry
                 .path()
                 .strip_prefix(&source.attachments_path)
@@ -404,6 +433,7 @@ pub fn backup_list(state: &Arc<AppState>) -> Result<Vec<BackupListItem>> {
 }
 
 pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
+    let _guard = ensure_backup_guard(state)?;
     let profile_id = require_logged_in(state)?;
     security_service::lock_vault(state)?;
     let sp = state.get_storage_paths()?;
@@ -440,27 +470,44 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
         serde_json::from_str(&manifest_contents).map_err(|_| ErrorCodeString::new("BACKUP_MANIFEST_INVALID"))?;
 
     for entry in &manifest.files {
-        if entry.path.contains("..") {
+        let rel_path = Path::new(&entry.path);
+        if !validate_zip_entry_rel_path_windows(rel_path) {
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
         let mut zipped_file = archive
             .by_name(&entry.path)
             .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
-        let mut bytes = Vec::new();
-        zipped_file
-            .read_to_end(&mut bytes)
-            .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
-        let sha256 = compute_sha256_hex(&bytes);
-        if sha256 != entry.sha256 || bytes.len() as i64 != entry.bytes {
-            return Err(ErrorCodeString::new("BACKUP_INTEGRITY_FAILED"));
-        }
-        let target_path = temp_dir.path().join(&entry.path);
+        let target_path = temp_dir.path().join(rel_path);
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent)
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
         }
-        fs::write(&target_path, &bytes)
+        let file = fs::File::create(&target_path)
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+        let mut writer = BufWriter::new(file);
+        let mut buffer = [0u8; 64 * 1024];
+        let mut hasher = Sha256::new();
+        let mut bytes_written = 0i64;
+        loop {
+            let read = zipped_file
+                .read(&mut buffer)
+                .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
+            if read == 0 {
+                break;
+            }
+            writer
+                .write_all(&buffer[..read])
+                .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+            hasher.update(&buffer[..read]);
+            bytes_written += read as i64;
+        }
+        writer
+            .flush()
+            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+        let sha256 = hex::encode(hasher.finalize());
+        if sha256 != entry.sha256 || bytes_written != entry.bytes {
+            return Err(ErrorCodeString::new("BACKUP_INTEGRITY_FAILED"));
+        }
     }
 
     let vault_path = vault_db_path(&sp, &profile_id)?;
