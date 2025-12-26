@@ -40,11 +40,14 @@ export const ToasterProvider: React.FC<{ children: React.ReactNode }> = ({ child
             className={`toast ${toast.variant === 'success' ? 'toast-success' : 'toast-error'}`}
             key={toast.id}
           >
-            <span>{toast.message}</span>
+            <div className="toast-body">
+              <p className="toast-title">{toast.message}</p>
+            </div>
             <button
-              className="icon-button"
+              type="button"
+              className="toast-close"
               onClick={() => dismiss(toast.id)}
-              aria-label={tCommon('aria.dismissToast')}
+              aria-label="Close"
             >
               ×
             </button>

@@ -725,6 +725,44 @@
   padding: 12px 14px;
   color: var(--color-text);
   box-shadow: var(--shadow-card);
+
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.toast-close {
+  margin-left: auto;
+  flex: 0 0 auto;
+  align-self: flex-start;
+
+  width: 28px;
+  height: 28px;
+  padding: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  border-color: var(--color-border);
+  color: var(--color-text);
 }
 
 .toast-title {
