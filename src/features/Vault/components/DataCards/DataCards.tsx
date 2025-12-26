@@ -61,6 +61,9 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [is2faModalOpen, setIs2faModalOpen] = useState(false);
+  const [twoFactorTargetDialogId, setTwoFactorTargetDialogId] = useState<
+    'datacard-create-dialog' | 'datacard-edit-dialog' | null
+  >(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -140,6 +143,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     setRenameName('');
     setRenameError(null);
     setIs2faModalOpen(false);
+    setTwoFactorTargetDialogId(null);
   }, [isCreateOpen, isEditOpen]);
 
   useEffect(() => {
@@ -149,6 +153,11 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
       if (event.key === 'Escape') {
         if (isActionMenuOpen) {
           setIsActionMenuOpen(false);
+          return;
+        }
+        if (is2faModalOpen) {
+          setIs2faModalOpen(false);
+          setTwoFactorTargetDialogId(null);
           return;
         }
         if (isCustomFieldModalOpen) {
@@ -171,6 +180,7 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     closeCreateModal,
     handleCloseEditModal,
     isActionMenuOpen,
+    is2faModalOpen,
     isCreateOpen,
     isCustomFieldModalOpen,
     isEditOpen,
@@ -246,18 +256,19 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
 
               {isActionMenuOpen && customFieldTargetDialogId === dialogId && (
                 <div className="dialog-actionmenu" role="menu" ref={actionMenuRef}>
-                  {dialogId === 'datacard-edit-dialog' && (
-                    <button
-                      type="button"
-                      className="dialog-actionmenu-item"
-                      onClick={() => {
-                        setIsActionMenuOpen(false);
-                        setIs2faModalOpen(true);
-                      }}
-                    >
-                      {viewModel.editForm?.totpUri ? t('twoFactor.editAction') : t('twoFactor.addAction')}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="dialog-actionmenu-item"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setTwoFactorTargetDialogId(
+                        dialogId === 'datacard-create-dialog' ? 'datacard-create-dialog' : 'datacard-edit-dialog'
+                      );
+                      setIs2faModalOpen(true);
+                    }}
+                  >
+                    {form.totpUri?.trim() ? t('twoFactor.editAction') : t('twoFactor.addAction')}
+                  </button>
                   <button
                     type="button"
                     className="dialog-actionmenu-item"
@@ -671,19 +682,42 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
 
       <Add2FAModal
         isOpen={is2faModalOpen}
-        existingUri={viewModel.editForm?.totpUri ?? null}
+        existingUri={
+          twoFactorTargetDialogId === 'datacard-create-dialog'
+            ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
+            : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
+        }
         defaults={{
-          issuer: (viewModel.editForm?.title ?? 'Vault').trim() || 'Vault',
-          label: (viewModel.editForm?.title ?? 'Account').trim() || 'Account',
+          issuer:
+            twoFactorTargetDialogId === 'datacard-create-dialog'
+              ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
+              : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
+          label:
+            twoFactorTargetDialogId === 'datacard-create-dialog'
+              ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
+              : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
         }}
-        onCancel={() => setIs2faModalOpen(false)}
-        onSave={(uri) => {
-          viewModel.updateEditField('totpUri', uri);
+        onCancel={() => {
           setIs2faModalOpen(false);
+          setTwoFactorTargetDialogId(null);
+        }}
+        onSave={(uri) => {
+          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+            viewModel.updateCreateField('totpUri', uri);
+          } else {
+            viewModel.updateEditField('totpUri', uri);
+          }
+          setIs2faModalOpen(false);
+          setTwoFactorTargetDialogId(null);
         }}
         onRemove={() => {
-          viewModel.updateEditField('totpUri', '');
+          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+            viewModel.updateCreateField('totpUri', '');
+          } else {
+            viewModel.updateEditField('totpUri', '');
+          }
           setIs2faModalOpen(false);
+          setTwoFactorTargetDialogId(null);
         }}
       />
     </div>
