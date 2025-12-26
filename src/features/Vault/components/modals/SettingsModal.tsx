@@ -53,14 +53,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     onSave(nextSettings);
   };
 
-  // Layout-only styles (NO borders). We use a semantic group with aria-labelledby instead of <fieldset>/<legend>
-  // so "Backups" renders as a normal subtitle (h3).
-  const sectionWrapStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 14,
-  };
-
+  // ---- Layout styles (no borders). "Backups" is a subtitle (h3). ----
   const subtitleStyle: React.CSSProperties = {
     margin: 0,
     fontSize: 16,
@@ -68,17 +61,44 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     lineHeight: '20px',
   };
 
-  // Label left, checkbox in a fixed "control column" (not flush to modal edge)
   const toggleRowStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: '1fr 140px',
+    gridTemplateColumns: '1fr 140px', // fixed control column (not flush to modal edge)
     alignItems: 'center',
     columnGap: 16,
   };
 
-  const toggleControlStyle: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'center',
+  // ---- Toggle switch (button role="switch") ----
+  // WAI-ARIA switch pattern: role="switch" + aria-checked true/false, keyboard operable.
+  // https://www.w3.org/WAI/ARIA/apg/patterns/switch/
+  // https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/switch_role
+  const switchButtonStyle: React.CSSProperties = {
+  width: 44,
+  height: 24,
+  borderRadius: 9999,
+  border: autoBackupEnabled
+    ? '1px solid rgba(34, 197, 94, 0.95)'
+    : '1px solid rgba(255, 255, 255, 0.25)',
+  background: autoBackupEnabled
+    ? 'rgba(34, 197, 94, 0.55)'
+    : 'rgba(255, 255, 255, 0.14)',
+  padding: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'flex-start',
+  cursor: busy ? 'not-allowed' : 'pointer',
+  opacity: busy ? 0.65 : 1,
+  outline: 'none',
+};
+
+
+  const switchThumbStyle: React.CSSProperties = {
+    width: 18,
+    height: 18,
+    borderRadius: 9999,
+    background: 'rgba(255, 255, 255, 0.95)',
+    transform: autoBackupEnabled ? 'translateX(22px)' : 'translateX(2px)',
+    transition: 'transform 160ms ease',
   };
 
   const fullWidthInputStyle: React.CSSProperties = {
@@ -93,25 +113,37 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
         </DialogHeader>
 
         <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Subtitle + grouped controls */}
           <h3 id="backups-title" style={subtitleStyle}>
             Backups
           </h3>
 
-          <div role="group" aria-labelledby="backups-title" style={sectionWrapStyle}>
+          <div role="group" aria-labelledby="backups-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="form-field" style={toggleRowStyle}>
-              <label className="form-label" htmlFor="backup-auto-enabled">
+              <label className="form-label" id="backup-auto-enabled-label" htmlFor="backup-auto-enabled-switch">
                 Auto backup enabled
               </label>
 
-              <div style={toggleControlStyle}>
-                <input
-                  id="backup-auto-enabled"
-                  type="checkbox"
-                  checked={autoBackupEnabled}
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  id="backup-auto-enabled-switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={autoBackupEnabled}
+                  aria-labelledby="backup-auto-enabled-label"
                   disabled={busy}
-                  onChange={(event) => setAutoBackupEnabled(event.target.checked)}
-                />
+                  onClick={() => setAutoBackupEnabled((v) => !v)}
+                  onKeyDown={(e) => {
+                    // Space/Enter toggles for keyboard users
+                    if (busy) return;
+                    if (e.key === ' ' || e.key === 'Enter') {
+                      e.preventDefault();
+                      setAutoBackupEnabled((v) => !v);
+                    }
+                  }}
+                  style={switchButtonStyle}
+                >
+                  <span style={switchThumbStyle} />
+                </button>
               </div>
             </div>
 
