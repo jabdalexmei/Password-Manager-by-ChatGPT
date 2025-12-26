@@ -146,6 +146,11 @@ export const Add2FAModal: React.FC<Props> = ({
                   }}
                 />
 
+                
+                <div className="input file-picker__name" title={qrFileName}>
+                  {qrFileName}
+                </div>
+
                 <label
                   htmlFor="totp-qr"
                   className="btn btn-secondary file-picker__btn"
@@ -154,9 +159,6 @@ export const Add2FAModal: React.FC<Props> = ({
                   {t('twoFactor.qr.chooseFile')}
                 </label>
 
-                <div className="input file-picker__name" title={qrFileName}>
-                  {qrFileName}
-                </div>
               </div>
               {error && <div className="form-error">{error}</div>}
               {busy && (
