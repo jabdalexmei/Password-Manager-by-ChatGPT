@@ -29,6 +29,7 @@ export type DataCardFormState = {
   mobilePhone: string;
   note: string;
   tagsText: string;
+  totpUri: string;
   customFields: CustomFieldFormRow[];
 };
 
@@ -124,6 +125,7 @@ const buildCreateInput = (form: DataCardFormState): CreateDataCardInput => ({
   mobilePhone: normalizeOptional(form.mobilePhone),
   note: normalizeOptional(form.note),
   tags: normalizeTags(form.tagsText),
+  totpUri: normalizeOptional(form.totpUri),
   customFields: form.customFields.map((row) => ({
     key: row.key,
     value: row.value,
@@ -147,6 +149,7 @@ const buildInitialForm = (defaultFolderId: string | null, folderName: string): D
   mobilePhone: '',
   note: '',
   tagsText: '',
+  totpUri: '',
   customFields: [],
 });
 
@@ -228,6 +231,7 @@ export function useDataCards({
       email: card.email || '',
       username: card.username || '',
       password: card.password || '',
+      totpUri: card.totpUri || '',
       mobilePhone: card.mobilePhone || '',
       note: card.note || '',
       tagsText: (card.tags || []).join(', '),

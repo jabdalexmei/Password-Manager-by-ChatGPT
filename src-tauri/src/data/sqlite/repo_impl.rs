@@ -79,6 +79,7 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
         password: row.get("password_value")?,
+        totp_uri: row.get("totp_uri")?,
         custom_fields: deserialize_json(row.get::<_, String>("custom_fields_json")?)?,
     })
 }
@@ -86,6 +87,7 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
 fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary> {
     let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
     let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
+    let has_totp = row.get::<_, Option<String>>("totp_uri")?.is_some();
 
     Ok(DataCardSummary {
         id: row.get("id")?,
@@ -99,6 +101,7 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
         is_favorite,
+        has_totp,
     })
 }
 
@@ -357,7 +360,7 @@ pub fn list_datacards_summary(
     let clause = order_clause(sort_field, sort_dir)
         .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     let query = format!(
-        "SELECT id, folder_id, title, url, email, username, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NULL {clause}"
+        "SELECT id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NULL {clause}"
     );
     let mut stmt = conn.prepare(&query).map_err(|e| {
         log_sqlite_err("list_datacards_summary.prepare", &query, &e);
@@ -401,7 +404,7 @@ pub fn list_deleted_datacards_summary(
     let conn = open_connection(state, profile_id)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, folder_id, title, url, email, username, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+            "SELECT id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -435,7 +438,7 @@ pub fn create_datacard(
     let now = Utc::now().to_rfc3339();
     let id = Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, custom_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, NULL)",
+        "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, custom_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, NULL)",
         params![
             id,
             input.folder_id,
@@ -447,6 +450,7 @@ pub fn create_datacard(
             input.note,
             tags_json,
             input.password,
+            input.totp_uri,
             custom_fields_json,
             now,
             now
@@ -498,7 +502,7 @@ pub fn update_datacard(
     }
     let rows = conn
         .execute(
-            "UPDATE datacards SET title = ?1, url = ?2, email = ?3, username = ?4, mobile_phone = ?5, note = ?6, tags_json = ?7, password_value = ?8, custom_fields_json = ?9, folder_id = ?10, updated_at = ?11 WHERE id = ?12",
+            "UPDATE datacards SET title = ?1, url = ?2, email = ?3, username = ?4, mobile_phone = ?5, note = ?6, tags_json = ?7, password_value = ?8, totp_uri = ?9, custom_fields_json = ?10, folder_id = ?11, updated_at = ?12 WHERE id = ?13",
             params![
                 input.title,
                 input.url,
@@ -508,6 +512,7 @@ pub fn update_datacard(
                 input.note,
                 tags_json,
                 input.password,
+                input.totp_uri,
                 custom_fields_json,
                 input.folder_id,
                 now,

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS datacards (
 
   tags_json           TEXT NOT NULL DEFAULT '[]',
   password_value      TEXT NULL,
+  totp_uri            TEXT NULL,
   custom_fields_json  TEXT NOT NULL DEFAULT '[]',
 
   created_at   TEXT NOT NULL,
