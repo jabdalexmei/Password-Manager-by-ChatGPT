@@ -25,6 +25,30 @@ type Dictionaries = {
   Workspace: typeof workspace;
 };
 
+const hasOwn = (obj: object, prop: string) => Object.prototype.hasOwnProperty.call(obj, prop);
+
+const resolveI18nValue = (dict: unknown, key: string): unknown => {
+  if (!dict || typeof dict !== 'object') return undefined;
+
+  const record = dict as Record<string, unknown>;
+
+  // 1) Preserve existing flat keys (including those with dots)
+  if (hasOwn(record, key)) return record[key];
+
+  // 2) Try deep lookup only if key looks like a path
+  if (!key.includes('.')) return undefined;
+
+  let current: unknown = record;
+  for (const part of key.split('.')) {
+    if (!current || typeof current !== 'object') return undefined;
+    const curRec = current as Record<string, unknown>;
+    if (!hasOwn(curRec, part)) return undefined;
+    current = curRec[part];
+  }
+
+  return current;
+};
+
 const dictionaries: Dictionaries = {
   Common: common,
   Startup: startup,
@@ -46,10 +70,10 @@ export const useTranslation = (namespace?: Namespace) => {
 
   const t = useCallback(
     (key: string, params?: Record<string, string | number>): string => {
-      if (!dict || !(key in dict)) return key;
+      const value = resolveI18nValue(dict, key);
+      if (typeof value !== 'string') return key;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let result = (dict as any)[key] as string;
+      let result = value;
       if (params) {
         Object.entries(params).forEach(([paramKey, value]) => {
           const pattern = new RegExp(`{{${paramKey}}}`, 'g');
@@ -71,10 +95,10 @@ export const tGlobal = (
   params?: Record<string, string | number>
 ): string => {
   const dict = dictionaries[namespace];
-  if (!(key in dict)) return key;
+  const value = resolveI18nValue(dict, key);
+  if (typeof value !== 'string') return key;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let result = (dict as any)[key] as string;
+  let result = value;
   if (params) {
     Object.entries(params).forEach(([paramKey, value]) => {
       const pattern = new RegExp(`{{${paramKey}}}`, 'g');

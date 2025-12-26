@@ -246,8 +246,9 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
                 aria-label={t('action.more')}
                 title={t('action.more')}
                 onClick={() => {
+                  const isSameDialog = customFieldTargetDialogId === dialogId;
                   setCustomFieldTargetDialogId(dialogId);
-                  setIsActionMenuOpen((prev) => (customFieldTargetDialogId === dialogId ? !prev : true));
+                  setIsActionMenuOpen((prev) => (isSameDialog ? !prev : true));
                 }}
                 ref={actionMenuButtonRef}
               >
