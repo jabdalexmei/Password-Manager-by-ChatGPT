@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CustomField, DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useDetails } from './useDetails';
-import { TotpField } from './TotpField';
+import { generateTotpCode } from '../../utils/totp';
 import {
   IconAttachment,
   IconCopy,
@@ -63,6 +63,14 @@ export function Details({
   const [attachmentToDelete, setAttachmentToDelete] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [revealedCustomFields, setRevealedCustomFields] = useState<Record<string, boolean>>({});
+  const [totpNow, setTotpNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!card?.totpUri) return;
+
+    const id = window.setInterval(() => setTotpNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [card?.totpUri]);
 
   useEffect(() => {
     setHistoryOpen(false);
@@ -112,6 +120,15 @@ export function Details({
       ? card.password
       : '••••••••••••'
     : '';
+  const totpData = useMemo(() => {
+    if (!card.totpUri) return null;
+
+    try {
+      return generateTotpCode(card.totpUri, totpNow);
+    } catch {
+      return null;
+    }
+  }, [card.totpUri, totpNow]);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -338,7 +355,38 @@ export function Details({
           );
         })}
 
-      {card.totpUri && <TotpField uri={card.totpUri} />}
+      {card.totpUri && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.totp')}</div>
+
+          <div className="detail-value-box">
+            <div className="detail-value-text" style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: 2 }}>
+                {totpData ? totpData.token : t('totp.invalid')}
+              </span>
+
+              {totpData && (
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {t('totp.expiresIn', { seconds: totpData.remaining })}
+                </span>
+              )}
+            </div>
+
+            {totpData && (
+              <div className="detail-value-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label={t('action.copy')}
+                  onClick={() => detailActions.copyToClipboard(totpData.token, { isSecret: true })}
+                >
+                  <IconCopy />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {hasPassword && (
         <div className="detail-field">
