@@ -76,17 +76,70 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
         </div>
 
         <div className="dialog-body">
-          <div className="form-field">
-            <label className="form-label" htmlFor="export-backup-default">
+          <div
+            className="form-field"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 140px',
+              alignItems: 'center',
+              columnGap: 16,
+            }}
+          >
+            <label
+              className="form-label"
+              id="export-backup-default-label"
+              style={{ cursor: isSaving ? 'default' : 'pointer', userSelect: 'none' }}
+              onClick={() => {
+                if (isSaving) return;
+                setUseDefaultPath((v) => !v);
+              }}
+            >
               {t('backup.export.useDefaultPath')}
             </label>
-            <input
-              id="export-backup-default"
-              type="checkbox"
-              checked={useDefaultPath}
-              disabled={isSaving}
-              onChange={(event) => setUseDefaultPath(event.target.checked)}
-            />
+
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button
+                id="export-backup-default-switch"
+                type="button"
+                role="switch"
+                aria-checked={useDefaultPath}
+                aria-labelledby="export-backup-default-label"
+                disabled={isSaving}
+                onClick={() => setUseDefaultPath((v) => !v)}
+                onKeyDown={(e) => {
+                  if (isSaving) return;
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    setUseDefaultPath((v) => !v);
+                  }
+                }}
+                style={{
+                  width: 44,
+                  height: 24,
+                  borderRadius: 9999,
+                  border: useDefaultPath ? '1px solid rgba(34, 197, 94, 0.95)' : '1px solid rgba(255, 255, 255, 0.25)',
+                  background: useDefaultPath ? 'rgba(34, 197, 94, 0.55)' : 'rgba(255, 255, 255, 0.14)',
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-start',
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  opacity: isSaving ? 0.65 : 1,
+                  outline: 'none',
+                }}
+              >
+                <span
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9999,
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    transform: useDefaultPath ? 'translateX(22px)' : 'translateX(2px)',
+                    transition: 'transform 160ms ease',
+                  }}
+                />
+              </button>
+            </div>
           </div>
           {!useDefaultPath && (
             <div className="form-field">
