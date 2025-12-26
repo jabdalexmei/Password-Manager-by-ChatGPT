@@ -143,9 +143,9 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
             style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
           >
             <div className="form-field" style={toggleRowStyle}>
-              <label className="form-label" id="auto-lock-enabled-label" htmlFor="auto-lock-enabled-switch">
+              <span className="form-label" id="auto-lock-enabled-label">
                 Enable auto-lock
-              </label>
+              </span>
 
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <button
@@ -220,9 +220,9 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
           <div role="group" aria-labelledby="backups-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="form-field" style={toggleRowStyle}>
-              <label className="form-label" id="backup-auto-enabled-label" htmlFor="backup-auto-enabled-switch">
+              <span className="form-label" id="backup-auto-enabled-label">
                 Auto backup enabled
-              </label>
+              </span>
 
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <button

@@ -85,25 +85,17 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
               columnGap: 16,
             }}
           >
-            <label
-              className="form-label"
-              id="export-backup-default-label"
-              style={{ cursor: isSaving ? 'default' : 'pointer', userSelect: 'none' }}
-              onClick={() => {
-                if (isSaving) return;
-                setUseDefaultPath((v) => !v);
-              }}
-            >
+            <span className="form-label" id="use-default-path-label">
               {t('backup.export.useDefaultPath')}
-            </label>
+            </span>
 
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <button
-                id="export-backup-default-switch"
+                id="use-default-path-switch"
                 type="button"
                 role="switch"
                 aria-checked={useDefaultPath}
-                aria-labelledby="export-backup-default-label"
+                aria-labelledby="use-default-path-label"
                 disabled={isSaving}
                 onClick={() => setUseDefaultPath((v) => !v)}
                 onKeyDown={(e) => {
