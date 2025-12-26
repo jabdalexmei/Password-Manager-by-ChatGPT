@@ -87,6 +87,8 @@
     },
     "qr": {
       "label": "Upload QR image",
+      "chooseFile": "Choose file",
+      "noFileChosen": "No file chosen",
       "loading": "Decoding QR..."
     },
     "error": {
