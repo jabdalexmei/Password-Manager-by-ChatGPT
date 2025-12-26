@@ -142,7 +142,13 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             showToast(tVault('backup.auto.success'), 'success');
           }
         })
-        .catch(handleBackupError);
+        .catch((err) => {
+          const code = err?.code ?? err?.error ?? err?.message ?? 'UNKNOWN';
+          if (code === 'BACKUP_ALREADY_RUNNING') {
+            return;
+          }
+          handleBackupError(err);
+        });
     }, 60_000);
 
     return () => clearInterval(intervalId);

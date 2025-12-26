@@ -1,4 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
+// Tauri convention: Rust snake_case command args are passed as camelCase from the frontend by default.
+// Do not send snake_case keys unless the Rust command uses #[tauri::command(rename_all = "snake_case")].
 import {
   BackendBankCardItem,
   BackendBankCardSummary,
