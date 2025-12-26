@@ -25,6 +25,7 @@ export const Add2FAModal: React.FC<Props> = ({
   const [textValue, setTextValue] = useState(existingUri ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [qrFileName, setQrFileName] = useState<string>(t('twoFactor.qr.noFileChosen'));
 
   const canRemove = useMemo(() => (existingUri ?? '').trim().length > 0, [existingUri]);
 
@@ -33,6 +34,7 @@ export const Add2FAModal: React.FC<Props> = ({
     setTextValue(existingUri ?? '');
     setError(null);
     setTab('text');
+    setQrFileName(t('twoFactor.qr.noFileChosen'));
   }, [existingUri, isOpen]);
 
   if (!isOpen) return null;
@@ -125,17 +127,37 @@ export const Add2FAModal: React.FC<Props> = ({
               <label className="form-label" htmlFor="totp-qr">
                 {t('twoFactor.qr.label')}
               </label>
-              <input
-                id="totp-qr"
-                className="input"
-                type="file"
-                accept="image/*"
-                disabled={busy}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void handleQrFile(file);
-                }}
-              />
+              <div className="file-picker">
+                <input
+                  id="totp-qr"
+                  className="visually-hidden"
+                  type="file"
+                  accept="image/*"
+                  disabled={busy}
+                  onChange={(e) => {
+                    const file = e.currentTarget.files?.[0];
+                    if (!file) return;
+
+                    setQrFileName(file.name);
+
+                    void handleQrFile(file);
+
+                    e.currentTarget.value = '';
+                  }}
+                />
+
+                <label
+                  htmlFor="totp-qr"
+                  className="btn btn-secondary file-picker__btn"
+                  aria-disabled={busy ? 'true' : 'false'}
+                >
+                  {t('twoFactor.qr.chooseFile')}
+                </label>
+
+                <div className="input file-picker__name" title={qrFileName}>
+                  {qrFileName}
+                </div>
+              </div>
               {error && <div className="form-error">{error}</div>}
               {busy && (
                 <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
