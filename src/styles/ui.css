@@ -146,6 +146,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
 }
 
 .file-picker__btn[aria-disabled='true'] {
@@ -154,9 +155,19 @@
   pointer-events: none;
 }
 
+.file-picker__btn {
+  flex: 0 0 auto;
+  min-width: 120px;
+  white-space: nowrap;
+  min-height: 42px;
+}
+
 .file-picker__name {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
