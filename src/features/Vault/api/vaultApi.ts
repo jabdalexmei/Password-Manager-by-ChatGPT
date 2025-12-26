@@ -1,4 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
+// Tauri convention: Rust snake_case command args are passed as camelCase from the frontend by default.
+// Do not send snake_case keys unless the Rust command uses #[tauri::command(rename_all = "snake_case")].
 import {
   BackendBankCardItem,
   BackendBankCardSummary,
@@ -115,6 +117,31 @@ export async function purgeDataCard(id: string): Promise<boolean> {
 
 export async function getSettings(): Promise<BackendUserSettings> {
   return invoke('get_settings');
+}
+
+export async function updateSettings(settings: BackendUserSettings): Promise<boolean> {
+  return invoke('update_settings', { settings });
+}
+
+export async function createBackup(
+  destinationPath: string | null,
+  useDefaultPath: boolean
+): Promise<string> {
+  return invoke('backup_create', { destinationPath, useDefaultPath });
+}
+
+export async function restoreBackup(backupPath: string): Promise<boolean> {
+  return invoke('backup_restore', { backupPath });
+}
+
+export async function listBackups(): Promise<
+  Array<{ id: string; created_at_utc: string; path: string; bytes: number }>
+> {
+  return invoke('backup_list');
+}
+
+export async function createBackupIfDueAuto(): Promise<string | null> {
+  return invoke('backup_create_if_due_auto');
 }
 
 export async function getPasswordHistory(datacardId: string): Promise<PasswordHistoryEntry[]> {

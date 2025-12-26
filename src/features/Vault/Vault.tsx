@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { open } from '@tauri-apps/plugin-dialog';
 import { useVault } from './useVault';
 import { VaultHeader } from './components/Header/VaultHeader';
 import { Search } from './components/Search/Search';
@@ -13,6 +14,12 @@ import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewMo
 import { useTranslation } from '../../lib/i18n';
 import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
 import { useBankCards } from './useBankCards';
+import { useToaster } from '../../components/Toaster';
+import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
+import { ExportBackupModal } from './components/modals/ExportBackupModal';
+import { ImportBackupModal } from './components/modals/ImportBackupModal';
+import { SettingsModal } from './components/modals/SettingsModal';
+import { BackendUserSettings } from './types/backend';
 
 type VaultProps = {
   profileId: string;
@@ -27,7 +34,15 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
   const { t: tDataCards } = useTranslation('DataCards');
   const { t: tBankCards } = useTranslation('BankCards');
   const { t: tFolders } = useTranslation('Folders');
+  const { t: tVault } = useTranslation('Vault');
+  const { t: tCommon } = useTranslation('Common');
+  const { show: showToast } = useToaster();
   const [selectedCategory, setSelectedCategory] = useState<'data_cards' | 'bank_cards'>('data_cards');
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<{
     id: string;
     name: string;
@@ -62,6 +77,83 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
 
+  const handleBackupError = useCallback(
+    (err: any) => {
+      const code = err?.code ?? err?.error ?? 'UNKNOWN';
+      if (code === 'VAULT_LOCKED') {
+        onLocked();
+        return;
+      }
+      showToast(`${tCommon('error.operationFailed')} (${code})`, 'error');
+    },
+    [onLocked, showToast, tCommon]
+  );
+
+  const handleExportBackup = () => setExportModalOpen(true);
+
+  const handleImportBackup = async () => {
+    const selection = await open({
+      multiple: false,
+      filters: [{ name: 'Password Manager Backup', extensions: ['pmbackup', 'zip'] }],
+    });
+    const selectedPath = Array.isArray(selection) ? selection[0] : selection;
+    if (typeof selectedPath !== 'string') return;
+    setPendingImportPath(selectedPath);
+  };
+
+  const handleConfirmImport = async () => {
+    if (!pendingImportPath) return;
+    setIsRestoringBackup(true);
+    try {
+      await restoreBackup(pendingImportPath);
+      showToast(tVault('backup.import.success'), 'success');
+      setPendingImportPath(null);
+      onLocked();
+    } catch (err) {
+      handleBackupError(err);
+    } finally {
+      setIsRestoringBackup(false);
+    }
+  };
+
+  const handleCloseImport = () => {
+    if (isRestoringBackup) return;
+    setPendingImportPath(null);
+  };
+
+  const handleOpenSettings = () => setSettingsModalOpen(true);
+
+  const handleSaveSettings = async (nextSettings: BackendUserSettings) => {
+    setIsSavingSettings(true);
+    const saved = await vault.updateSettings(nextSettings);
+    if (saved) {
+      bankCards.setSettings(nextSettings);
+      setSettingsModalOpen(false);
+    }
+    setIsSavingSettings(false);
+  };
+
+  useEffect(() => {
+    if (!vault.settings?.backups_enabled) return;
+    const intervalId = setInterval(() => {
+      createBackupIfDueAuto()
+        .then((path) => {
+          if (path) {
+            showToast(tVault('backup.auto.success'), 'success');
+          }
+        })
+        .catch((err) => {
+          const code = err?.code ?? err?.error ?? err?.message ?? 'UNKNOWN';
+          if (code === 'BACKUP_ALREADY_RUNNING') {
+            return;
+          }
+          handleBackupError(err);
+        });
+    }, 60_000);
+
+    return () => clearInterval(intervalId);
+  }, [handleBackupError, showToast, tVault, vault.settings?.backups_enabled]);
+
   const handleDeleteFolder = (folderId: string) => {
     const target = vault.folders.find((folder) => folder.id === folderId);
     if (!target) return;
@@ -86,7 +178,15 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   return (
     <div className="vault-shell">
-      <VaultHeader profileName={profileName} profileId={profileId} isPasswordless={isPasswordless} onLock={vault.lock} />
+      <VaultHeader
+        profileName={profileName}
+        profileId={profileId}
+        isPasswordless={isPasswordless}
+        onLock={vault.lock}
+        onExportBackup={handleExportBackup}
+        onImportBackup={handleImportBackup}
+        onOpenSettings={handleOpenSettings}
+      />
 
       <div className="vault-body">
         <aside className="vault-sidebar">
@@ -170,6 +270,24 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
         onCancel={closeDeleteModal}
         onDeleteFolderOnly={handleDeleteFolderOnly}
         onDeleteFolderAndCards={handleDeleteFolderAndCards}
+      />
+
+      <ExportBackupModal open={exportModalOpen} profileId={profileId} onClose={() => setExportModalOpen(false)} />
+
+      <ImportBackupModal
+        open={!!pendingImportPath}
+        backupPath={pendingImportPath}
+        isSubmitting={isRestoringBackup}
+        onCancel={handleCloseImport}
+        onConfirm={handleConfirmImport}
+      />
+
+      <SettingsModal
+        open={settingsModalOpen}
+        settings={vault.settings}
+        isSaving={isSavingSettings}
+        onCancel={() => setSettingsModalOpen(false)}
+        onSave={handleSaveSettings}
       />
 
     </div>

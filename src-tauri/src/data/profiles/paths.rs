@@ -60,6 +60,14 @@ pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf
     Ok(profile_dir(sp, profile_id)?.join("user_settings.json"))
 }
 
+pub fn backups_dir(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
+    Ok(profile_dir(sp, profile_id)?.join("backups"))
+}
+
+pub fn backup_registry_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
+    Ok(backups_dir(sp, profile_id)?.join("registry.json"))
+}
+
 pub fn registry_path(sp: &StoragePaths) -> Result<PathBuf> {
     Ok(profiles_root(sp)?.join("registry.json"))
 }

@@ -1,4 +1,5 @@
 pub mod attachments;
+pub mod backup;
 pub mod bank_cards;
 pub mod datacards;
 pub mod folders;

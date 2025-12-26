@@ -4,6 +4,7 @@ import {
   deleteBankCard,
   getBankCard,
   getSettings,
+  updateSettings,
   listBankCardSummaries,
   listDeletedBankCardSummaries,
   purgeBankCard,
@@ -130,6 +131,24 @@ export function useBankCards(profileId: string, onLocked: () => void) {
       setTrashLoaded(false);
     }
   }, [dtf, handleError, sortCardsWithSettings]);
+
+  const updateSettingsAction = useCallback(
+    async (nextSettings: BackendUserSettings) => {
+      try {
+        await updateSettings(nextSettings);
+        setSettings(nextSettings);
+        return true;
+      } catch (err) {
+        handleError(err);
+        return false;
+      }
+    },
+    [handleError]
+  );
+
+  const setSettingsState = useCallback((nextSettings: BackendUserSettings | null) => {
+    setSettings(nextSettings);
+  }, []);
 
   const loadCard = useCallback(
     async (id: string) => {
@@ -411,5 +430,7 @@ export function useBankCards(profileId: string, onLocked: () => void) {
     loadCard,
     toggleFavorite,
     settings,
+    updateSettings: updateSettingsAction,
+    setSettings: setSettingsState,
   };
 }

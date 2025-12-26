@@ -14,6 +14,7 @@ pub struct AppState {
     pub vault_db_uri: Mutex<Option<String>>,
     pub vault_key: Mutex<Option<Zeroizing<[u8; 32]>>>,
     pub vault_persist_guard: Mutex<()>,
+    pub backup_guard: Mutex<()>,
 }
 
 impl AppState {
@@ -27,6 +28,7 @@ impl AppState {
             vault_db_uri: Mutex::new(None),
             vault_key: Mutex::new(None),
             vault_persist_guard: Mutex::new(()),
+            backup_guard: Mutex::new(()),
         }
     }
 

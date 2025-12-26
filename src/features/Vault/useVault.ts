@@ -8,6 +8,7 @@ import {
   deleteFolderOnly,
   getDataCard,
   getSettings,
+  updateSettings,
   listDataCardSummaries,
   listDeletedDataCardSummaries,
   listFolders,
@@ -79,6 +80,10 @@ export function useVault(profileId: string, onLocked: () => void) {
       switch (code) {
         case 'NETWORK_ERROR':
           return tCommon('error.network', { code });
+        case 'BACKUP_PROFILE_MISMATCH':
+          return tCommon('error.backupProfileMismatch', { code });
+        case 'BACKUP_UNSUPPORTED_FORMAT':
+          return tCommon('error.backupUnsupportedFormat', { code });
         case 'VALIDATION_ERROR':
           return fallback ?? tCommon('error.operationFailed', { code });
         default:
@@ -144,6 +149,20 @@ export function useVault(profileId: string, onLocked: () => void) {
       setTrashLoaded(false);
     }
   }, [dtf, handleError, sortCardsWithSettings]);
+
+  const updateSettingsAction = useCallback(
+    async (nextSettings: BackendUserSettings) => {
+      try {
+        await updateSettings(nextSettings);
+        setSettings(nextSettings);
+        return true;
+      } catch (err) {
+        handleError(err);
+        return false;
+      }
+    },
+    [handleError]
+  );
 
   const loadCard = useCallback(
     async (id: string) => {
@@ -596,5 +615,6 @@ export function useVault(profileId: string, onLocked: () => void) {
     loadCard,
     toggleFavorite,
     settings,
+    updateSettings: updateSettingsAction,
   };
 }

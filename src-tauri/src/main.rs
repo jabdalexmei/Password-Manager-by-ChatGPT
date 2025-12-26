@@ -33,6 +33,7 @@ mod data {
 mod error;
 mod services {
     pub mod attachments_service;
+    pub mod backup_service;
     pub mod bank_cards_service;
     pub mod datacards_service;
     pub mod folders_service;
@@ -47,8 +48,8 @@ use std::sync::Arc;
 
 use app_state::AppState;
 use commands::{
-    attachments::*, bank_cards::*, datacards::*, folders::*, password_history::*, profiles::*,
-    security::*, settings::*, workspace::*,
+    attachments::*, backup::*, bank_cards::*, datacards::*, folders::*, password_history::*,
+    profiles::*, security::*, settings::*, workspace::*,
 };
 use data::storage_paths::StoragePaths;
 use services::security_service;
@@ -106,6 +107,10 @@ fn main() {
             get_attachment_bytes_base64,
             get_attachment_preview,
             save_attachment_to_path,
+            backup_create,
+            backup_restore,
+            backup_list,
+            backup_create_if_due_auto,
             list_folders,
             create_folder,
             rename_folder,
