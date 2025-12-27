@@ -5,6 +5,7 @@ import { useToaster } from '../../../../components/Toaster';
 import { clearPasswordHistory, getPasswordHistory } from '../../api/vaultApi';
 import { PasswordHistoryEntry } from '../../types/ui';
 import { IconCopy, IconHistory, IconPreview, IconPreviewOff } from '@/components/lucide/icons';
+import { clipboardClearAll } from '../../../../lib/tauri';
 
 type PasswordHistoryDialogProps = {
   isOpen: boolean;
@@ -85,7 +86,7 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
           try {
             const current = await navigator.clipboard.readText();
             if (current === lastCopiedValueRef.current) {
-              await navigator.clipboard.writeText('');
+              await clipboardClearAll();
             }
           } catch (err) {
             console.error(err);

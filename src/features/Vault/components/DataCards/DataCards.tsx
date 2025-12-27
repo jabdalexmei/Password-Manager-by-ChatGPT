@@ -16,6 +16,7 @@ import { useToaster } from '../../../../components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 import { open } from '@tauri-apps/plugin-dialog';
+import { clipboardClearAll } from '../../../../lib/tauri';
 
 export type DataCardsProps = {
   viewModel: DataCardsViewModel;
@@ -160,7 +161,7 @@ export function DataCards({
         try {
           const current = await navigator.clipboard.readText();
           if (current === genPwdLastCopiedRef.current) {
-            await navigator.clipboard.writeText('');
+            await clipboardClearAll();
           }
         } catch (err) {
           console.error(err);

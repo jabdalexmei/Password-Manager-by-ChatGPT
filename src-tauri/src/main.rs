@@ -35,6 +35,7 @@ mod services {
     pub mod attachments_service;
     pub mod backup_service;
     pub mod bank_cards_service;
+    pub mod clipboard_service;
     pub mod datacards_service;
     pub mod folders_service;
     pub mod password_history_service;
@@ -48,8 +49,8 @@ use std::sync::Arc;
 
 use app_state::AppState;
 use commands::{
-    attachments::*, backup::*, bank_cards::*, datacards::*, folders::*, password_history::*,
-    profiles::*, security::*, settings::*, workspace::*,
+    attachments::*, backup::*, bank_cards::*, clipboard::*, datacards::*, folders::*,
+    password_history::*, profiles::*, security::*, settings::*, workspace::*,
 };
 use data::storage_paths::StoragePaths;
 use services::security_service;
@@ -147,7 +148,8 @@ fn main() {
             workspace_create,
             workspace_create_default,
             workspace_remove,
-            workspace_open_in_explorer
+            workspace_open_in_explorer,
+            clipboard_clear_all
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
