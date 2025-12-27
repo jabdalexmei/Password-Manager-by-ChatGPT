@@ -1,10 +1,25 @@
 #[cfg(target_os = "windows")]
+use std::ptr;
+
+#[cfg(target_os = "windows")]
 use std::time::Duration;
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::GetLastError;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard};
+
+#[cfg(target_os = "windows")]
+struct ClipboardGuard;
+
+#[cfg(target_os = "windows")]
+impl Drop for ClipboardGuard {
+    fn drop(&mut self) {
+        unsafe {
+            CloseClipboard();
+        }
+    }
+}
 
 /// Clears the entire Windows clipboard (all formats).
 /// Uses OpenClipboard -> EmptyClipboard -> CloseClipboard.
@@ -16,9 +31,7 @@ pub fn clear_clipboard_all() -> Result<(), String> {
 
     for attempt in 0..ATTEMPTS {
         unsafe {
-            // Pass NULL owner handle (current task). This is allowed by WinAPI.
-            let opened = OpenClipboard(0);
-
+            let opened = OpenClipboard(ptr::null_mut());
             if opened == 0 {
                 if attempt + 1 < ATTEMPTS {
                     std::thread::sleep(Duration::from_millis(SLEEP_MS));
@@ -28,9 +41,10 @@ pub fn clear_clipboard_all() -> Result<(), String> {
                 return Err(format!("OPENCLIPBOARD_FAILED ({})", err));
             }
 
-            let emptied = EmptyClipboard();
-            CloseClipboard();
+            // Ensure CloseClipboard is called no matter what
+            let _guard = ClipboardGuard;
 
+            let emptied = EmptyClipboard();
             if emptied == 0 {
                 let err = GetLastError();
                 return Err(format!("EMPTYCLIPBOARD_FAILED ({})", err));
