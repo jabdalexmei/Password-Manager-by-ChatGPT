@@ -23,12 +23,18 @@ fn with_connection<T>(
     profile_id: &str,
     f: impl FnOnce(&Connection) -> Result<T>,
 ) -> Result<T> {
-    if let Ok(active_guard) = state.logged_in_profile.lock() {
-        if active_guard.as_deref() == Some(profile_id) {
-            if let Ok(mut keeper_guard) = state.vault_keeper_conn.lock() {
-                if let Some(conn) = keeper_guard.as_ref() {
-                    return f(conn);
-                }
+    {
+        let active = state
+            .logged_in_profile
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
+        if active.as_deref() == Some(profile_id) {
+            let keeper = state
+                .vault_keeper_conn
+                .lock()
+                .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
+            if let Some(conn) = keeper.as_ref() {
+                return f(conn);
             }
         }
     }
