@@ -6,25 +6,8 @@ use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::user_settings_path;
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
+use crate::services::security_service;
 use crate::types::UserSettings;
-
-fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
-    let active_profile = state
-        .active_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-    let logged_in_profile = state
-        .logged_in_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-
-    match (active_profile, logged_in_profile) {
-        (Some(active), Some(logged)) if active == logged => Ok(active),
-        _ => Err(ErrorCodeString::new("VAULT_LOCKED")),
-    }
-}
 
 fn validate_settings(settings: &UserSettings) -> Result<()> {
     let in_range = |value: i64, min: i64, max: i64| (min..=max).contains(&value);
@@ -87,13 +70,13 @@ pub fn update_settings(
 }
 
 pub fn update_settings_command(state: &Arc<AppState>, settings: UserSettings) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let storage_paths = state.get_storage_paths()?;
     update_settings(&storage_paths, settings, &profile_id)
 }
 
 pub fn get_settings_command(state: &Arc<AppState>) -> Result<UserSettings> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let storage_paths = state.get_storage_paths()?;
     get_settings(&storage_paths, &profile_id)
 }
