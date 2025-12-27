@@ -3,6 +3,7 @@ import { Attachment, DataCard } from '../../types/ui';
 import { useTranslation } from '../../../../lib/i18n';
 import { useToaster } from '../../../../components/Toaster';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import { clipboardClearAll } from '../../../../lib/tauri';
 import {
   addAttachmentFromPath,
   getAttachmentBytesBase64,
@@ -141,7 +142,7 @@ export function useDetails({
             try {
               const currentClipboard = await navigator.clipboard.readText();
               if (currentClipboard === lastCopiedValueRef.current) {
-                await navigator.clipboard.writeText('');
+                await clipboardClearAll();
               }
             } catch (err) {
               console.error(err);

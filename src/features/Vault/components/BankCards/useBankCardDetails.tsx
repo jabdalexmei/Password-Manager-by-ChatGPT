@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../../lib/i18n';
 import { useToaster } from '../../../../components/Toaster';
 import { BankCardItem } from '../../types/ui';
+import { clipboardClearAll } from '../../../../lib/tauri';
 
 const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 20;
 
@@ -79,7 +80,7 @@ export function useBankCardDetails({
             try {
               const currentClipboard = await navigator.clipboard.readText();
               if (currentClipboard === lastCopiedValueRef.current) {
-                await navigator.clipboard.writeText('');
+                await clipboardClearAll();
               }
             } catch (err) {
               console.error(err);

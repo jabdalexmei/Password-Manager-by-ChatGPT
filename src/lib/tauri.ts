@@ -82,3 +82,7 @@ export function workspaceRemove(id: string): Promise<boolean> {
 export function workspaceOpenInExplorer(): Promise<boolean> {
   return invoke('workspace_open_in_explorer');
 }
+
+export async function clipboardClearAll(): Promise<void> {
+  await invoke('clipboard_clear_all');
+}

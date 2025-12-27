@@ -19,7 +19,7 @@ import {
   setDataCardFavorite,
   updateDataCard,
 } from './api/vaultApi';
-import { lockVault } from '../../lib/tauri';
+import { clipboardClearAll, lockVault } from '../../lib/tauri';
 import {
   mapCardFromBackend,
   mapCardSummaryFromBackend,
@@ -471,6 +471,12 @@ export function useVault(profileId: string, onLocked: () => void) {
       const message = mapErrorMessage(code, (err as any)?.message ?? undefined);
       showToast(message, 'error');
       console.error(err);
+    } finally {
+      try {
+        await clipboardClearAll();
+      } catch (err) {
+        console.error(err);
+      }
     }
     setFolders([]);
     setCards([]);
