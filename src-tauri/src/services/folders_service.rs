@@ -11,31 +11,13 @@ use crate::services::security_service;
 use crate::services::settings_service::get_settings;
 use crate::types::{CreateFolderInput, Folder, MoveFolderInput, RenameFolderInput};
 
-fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
-    let active_profile = state
-        .active_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-    let logged_in_profile = state
-        .logged_in_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-
-    match (active_profile, logged_in_profile) {
-        (Some(active), Some(logged)) if active == logged => Ok(active),
-        _ => Err(ErrorCodeString::new("VAULT_LOCKED")),
-    }
-}
-
 pub fn list_folders(state: &Arc<AppState>) -> Result<Vec<Folder>> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::list_folders(state, &profile_id)
 }
 
 pub fn create_folder(input: CreateFolderInput, state: &Arc<AppState>) -> Result<Folder> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let name = input.name.trim();
     if name.is_empty() {
         return Err(ErrorCodeString::new("FOLDER_NAME_REQUIRED"));
@@ -46,7 +28,7 @@ pub fn create_folder(input: CreateFolderInput, state: &Arc<AppState>) -> Result<
 }
 
 pub fn rename_folder(input: RenameFolderInput, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let name = input.name.trim();
     if name.is_empty() {
         return Err(ErrorCodeString::new("FOLDER_NAME_REQUIRED"));
@@ -57,14 +39,14 @@ pub fn rename_folder(input: RenameFolderInput, state: &Arc<AppState>) -> Result<
 }
 
 pub fn move_folder(input: MoveFolderInput, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let moved = repo_impl::move_folder(state, &profile_id, &input.id, &input.parent_id)?;
     security_service::persist_active_vault(state)?;
     Ok(moved)
 }
 
 pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let folder = repo_impl::get_folder(state, &profile_id, &id)?;
     if folder.is_system {
         return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
@@ -77,7 +59,7 @@ pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
 }
 
 pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let folder = repo_impl::get_folder(state, &profile_id, &id)?;
     if folder.is_system {
         return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));

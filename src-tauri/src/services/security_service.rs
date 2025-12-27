@@ -6,7 +6,7 @@ use rusqlite::serialize::OwnedData;
 use rusqlite::DatabaseName;
 use zeroize::{Zeroize, Zeroizing};
 
-use crate::app_state::AppState;
+use crate::app_state::{AppState, VaultSession};
 use crate::data::crypto::{cipher, kdf, key_check};
 use crate::data::profiles::paths::{kdf_salt_path, vault_db_path};
 use crate::data::profiles::registry;
@@ -72,25 +72,16 @@ fn open_protected_vault_session(
         .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
     {
-        let mut keeper = state
-            .vault_keeper_conn
+        let mut session = state
+            .vault_session
             .lock()
             .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
-        *keeper = Some(conn);
-    }
-    {
-        let mut active = state
-            .logged_in_profile
-            .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
-        *active = Some(profile_id.to_string());
-    }
-    {
-        let mut vault_key = state
-            .vault_key
-            .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
-        *vault_key = Some(key);
+
+        *session = Some(VaultSession {
+            profile_id: profile_id.to_string(),
+            conn,
+            key,
+        });
     }
 
     Ok(())
@@ -112,86 +103,135 @@ pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) ->
     if let Ok(mut active) = state.active_profile.lock() {
         *active = Some(id.to_string());
     }
-    if let Ok(mut logged_in) = state.logged_in_profile.lock() {
-        *logged_in = Some(id.to_string());
-    }
     Ok(true)
 }
 
 pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
-    let profile_id = state
-        .logged_in_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-
     let _flight_guard = state
         .vault_persist_guard
         .lock()
         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
 
-    if let Some(id) = profile_id.clone() {
-        let storage_paths = state.get_storage_paths()?;
-        let keeper_guard = state
-            .vault_keeper_conn
+    let maybe_bytes_and_meta = {
+        let session_guard = state
+            .vault_session
             .lock()
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-        let key_copy = state
-            .vault_key
-            .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-            .as_ref()
-            .map(|k| **k);
 
-        if let (Some(conn), Some(key_material)) = (keeper_guard.as_ref(), key_copy) {
-            let bytes = conn
+        if let Some(session) = session_guard.as_ref() {
+            let bytes = session
+                .conn
                 .serialize(DatabaseName::Main)
                 .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-            let encrypted = cipher::encrypt_vault_blob(&id, &key_material, &bytes)?;
-            cipher::write_encrypted_file(&vault_db_path(&storage_paths, &id)?, &encrypted)?;
+
+            let profile_id = session.profile_id.clone();
+            let key_material: [u8; 32] = *session.key;
+
+            Some((profile_id, key_material, bytes))
+        } else {
+            None
         }
+    };
+
+    if let Some((profile_id, key_material, bytes)) = maybe_bytes_and_meta {
+        let storage_paths = state.get_storage_paths()?;
+        let encrypted = cipher::encrypt_vault_blob(&profile_id, &key_material, &bytes)?;
+        cipher::write_encrypted_file(&vault_db_path(&storage_paths, &profile_id)?, &encrypted)?;
+        return Ok(Some(profile_id));
     }
 
-    Ok(profile_id)
+    Ok(None)
 }
 
 pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
     if let Some(id) = persist_active_vault(state)? {
         attachments_service::clear_previews_for_profile(state, &id)?;
 
-        let mut keeper = state
-            .vault_keeper_conn
-            .lock()
+        {
+            let mut session = state
+                .vault_session
+                .lock()
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-        let _key = state
-            .vault_key
-            .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-            .take();
-
-        if let Some(conn) = keeper.take() {
-            drop(conn);
+            *session = None;
         }
 
         clear_pool(&id);
-
-        if let Ok(mut vault_key) = state.vault_key.lock() {
-            *vault_key = None;
-        }
     }
 
-    if let Ok(mut logged_in) = state.logged_in_profile.lock() {
-        *logged_in = None;
-    }
     Ok(true)
 }
 
 pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
-    if let Ok(logged_in) = state.logged_in_profile.lock() {
-        Ok(logged_in.is_some())
-    } else {
-        Err(ErrorCodeString::new("STATE_UNAVAILABLE"))
+    let storage_paths = state.get_storage_paths()?;
+
+    let active_id = state
+        .active_profile
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+        .clone();
+
+    let Some(id) = active_id else {
+        return Ok(false);
+    };
+
+    let profile = crate::data::profiles::registry::get_profile(&storage_paths, &id)?
+        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+
+    if !profile.has_password {
+        return Ok(true);
     }
+
+    let session = state
+        .vault_session
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+
+    Ok(session
+        .as_ref()
+        .map(|s| s.profile_id == id)
+        .unwrap_or(false))
+}
+
+pub struct ActiveSessionInfo {
+    pub profile_id: String,
+    pub vault_key: Option<[u8; 32]>,
+}
+
+pub fn require_unlocked_active_profile(state: &Arc<AppState>) -> Result<ActiveSessionInfo> {
+    let storage_paths = state.get_storage_paths()?;
+
+    let active_id = state
+        .active_profile
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+        .clone()
+        .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
+
+    let profile = crate::data::profiles::registry::get_profile(&storage_paths, &active_id)?
+        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+
+    if !profile.has_password {
+        return Ok(ActiveSessionInfo {
+            profile_id: active_id,
+            vault_key: None,
+        });
+    }
+
+    let session = state
+        .vault_session
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+
+    if let Some(s) = session.as_ref() {
+        if s.profile_id == active_id {
+            return Ok(ActiveSessionInfo {
+                profile_id: active_id,
+                vault_key: Some(*s.key),
+            });
+        }
+    }
+
+    Err(ErrorCodeString::new("VAULT_LOCKED"))
 }
 
 pub fn auto_lock_cleanup(state: &Arc<AppState>) -> Result<bool> {

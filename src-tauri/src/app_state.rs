@@ -1,17 +1,21 @@
 use std::sync::{Arc, Mutex};
 
-use zeroize::Zeroizing;
-
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 
+use zeroize::Zeroizing;
+
+pub struct VaultSession {
+    pub profile_id: String,
+    pub conn: rusqlite::Connection,
+    pub key: Zeroizing<[u8; 32]>,
+}
+
 pub struct AppState {
     pub active_profile: Mutex<Option<String>>,
-    pub logged_in_profile: Mutex<Option<String>>,
     pub storage_paths: Mutex<StoragePaths>,
 
-    pub vault_keeper_conn: Mutex<Option<rusqlite::Connection>>,
-    pub vault_key: Mutex<Option<Zeroizing<[u8; 32]>>>,
+    pub vault_session: Mutex<Option<VaultSession>>,
     pub vault_persist_guard: Mutex<()>,
     pub backup_guard: Mutex<()>,
 }
@@ -20,11 +24,9 @@ impl AppState {
     pub fn new(storage_paths: StoragePaths) -> Self {
         Self {
             active_profile: Mutex::new(None),
-            logged_in_profile: Mutex::new(None),
             storage_paths: Mutex::new(storage_paths),
 
-            vault_keeper_conn: Mutex::new(None),
-            vault_key: Mutex::new(None),
+            vault_session: Mutex::new(None),
             vault_persist_guard: Mutex::new(()),
             backup_guard: Mutex::new(()),
         }
@@ -66,15 +68,7 @@ impl AppState {
     }
 
     pub fn logout_and_cleanup(self: &Arc<Self>) -> Result<()> {
-        let is_logged_in = self
-            .logged_in_profile
-            .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-            .is_some();
-
-        if is_logged_in {
-            crate::services::security_service::lock_vault(self)?;
-        }
+        crate::services::security_service::lock_vault(self)?;
 
         crate::data::sqlite::pool::clear_all_pools();
 
@@ -92,25 +86,11 @@ impl AppState {
             *active = None;
         }
         {
-            let mut logged_in = self
-                .logged_in_profile
+            let mut session = self
+                .vault_session
                 .lock()
                 .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-            *logged_in = None;
-        }
-        {
-            let mut keeper = self
-                .vault_keeper_conn
-                .lock()
-                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-            *keeper = None;
-        }
-        {
-            let mut key = self
-                .vault_key
-                .lock()
-                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-            *key = None;
+            *session = None;
         }
         Ok(())
     }

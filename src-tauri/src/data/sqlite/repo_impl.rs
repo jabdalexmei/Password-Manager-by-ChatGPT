@@ -24,17 +24,14 @@ fn with_connection<T>(
     f: impl FnOnce(&Connection) -> Result<T>,
 ) -> Result<T> {
     {
-        let active = state
-            .logged_in_profile
+        let session = state
+            .vault_session
             .lock()
             .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
-        if active.as_deref() == Some(profile_id) {
-            let keeper = state
-                .vault_keeper_conn
-                .lock()
-                .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
-            if let Some(conn) = keeper.as_ref() {
-                return f(conn);
+
+        if let Some(s) = session.as_ref() {
+            if s.profile_id == profile_id {
+                return f(&s.conn);
             }
         }
     }

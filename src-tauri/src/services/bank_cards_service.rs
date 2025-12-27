@@ -11,24 +11,6 @@ use crate::types::{
     UpdateBankCardInput,
 };
 
-fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
-    let active_profile = state
-        .active_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-    let logged_in_profile = state
-        .logged_in_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-
-    match (active_profile, logged_in_profile) {
-        (Some(active), Some(logged)) if active == logged => Ok(active),
-        _ => Err(ErrorCodeString::new("VAULT_LOCKED")),
-    }
-}
-
 fn normalize_tags(tags: Vec<String>) -> Vec<String> {
     let mut result: Vec<String> = Vec::new();
     for tag in tags {
@@ -44,7 +26,7 @@ fn normalize_tags(tags: Vec<String>) -> Vec<String> {
 }
 
 pub fn list_bank_cards_summary(state: &Arc<AppState>) -> Result<Vec<BankCardSummary>> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let storage_paths = state.get_storage_paths()?;
     let settings = get_settings(&storage_paths, &profile_id)?;
     repo_impl::list_bank_cards_summary(
@@ -56,17 +38,17 @@ pub fn list_bank_cards_summary(state: &Arc<AppState>) -> Result<Vec<BankCardSumm
 }
 
 pub fn list_deleted_bank_cards_summary(state: &Arc<AppState>) -> Result<Vec<BankCardSummary>> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::list_deleted_bank_cards_summary(state, &profile_id)
 }
 
 pub fn get_bank_card(id: String, state: &Arc<AppState>) -> Result<BankCardItem> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::get_bank_card(state, &profile_id, &id)
 }
 
 pub fn create_bank_card(input: CreateBankCardInput, state: &Arc<AppState>) -> Result<BankCardItem> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
     if sanitized.title.is_empty() {
@@ -80,7 +62,7 @@ pub fn create_bank_card(input: CreateBankCardInput, state: &Arc<AppState>) -> Re
 }
 
 pub fn update_bank_card(input: UpdateBankCardInput, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
     if sanitized.title.is_empty() {
@@ -94,7 +76,7 @@ pub fn update_bank_card(input: UpdateBankCardInput, state: &Arc<AppState>) -> Re
 }
 
 pub fn delete_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let storage_paths = state.get_storage_paths()?;
     let settings = get_settings(&storage_paths, &profile_id)?;
     if settings.soft_delete_enabled {
@@ -108,14 +90,14 @@ pub fn delete_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
 }
 
 pub fn restore_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::restore_bank_card(state, &profile_id, &id)?;
     security_service::persist_active_vault(state)?;
     Ok(true)
 }
 
 pub fn purge_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     purge_bank_card_internal(state, &profile_id, &id)
 }
 
@@ -129,7 +111,7 @@ pub fn set_bank_card_favorite(
     input: SetBankCardFavoriteInput,
     state: &Arc<AppState>,
 ) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let updated = repo_impl::set_bank_card_favorite(state, &profile_id, &input)?;
     security_service::persist_active_vault(state)?;
     Ok(updated)

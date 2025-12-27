@@ -42,11 +42,12 @@ pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Resu
     tauri::async_runtime::spawn_blocking(move || {
         let storage_paths = app_state.get_storage_paths()?;
         let should_lock = app_state
-            .logged_in_profile
+            .vault_session
             .lock()
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-            .as_deref()
-            == Some(&id);
+            .as_ref()
+            .map(|s| s.profile_id == id)
+            .unwrap_or(false);
         crate::data::sqlite::pool::clear_pool(&id);
         if should_lock {
             app_state.logout_and_cleanup()?;

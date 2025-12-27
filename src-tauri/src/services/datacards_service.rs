@@ -13,24 +13,6 @@ use crate::types::{
     UpdateDataCardInput,
 };
 
-fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
-    let active_profile = state
-        .active_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-    let logged_in_profile = state
-        .logged_in_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-
-    match (active_profile, logged_in_profile) {
-        (Some(active), Some(logged)) if active == logged => Ok(active),
-        _ => Err(ErrorCodeString::new("VAULT_LOCKED")),
-    }
-}
-
 fn normalize_tags(tags: Vec<String>) -> Vec<String> {
     let mut result: Vec<String> = Vec::new();
     for tag in tags {
@@ -46,7 +28,7 @@ fn normalize_tags(tags: Vec<String>) -> Vec<String> {
 }
 
 pub fn list_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let storage_paths = state.get_storage_paths()?;
     let settings = get_settings(&storage_paths, &profile_id)?;
     repo_impl::list_datacards(
@@ -59,7 +41,7 @@ pub fn list_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
 }
 
 pub fn list_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataCardSummary>> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let storage_paths = state.get_storage_paths()?;
     let settings = get_settings(&storage_paths, &profile_id)?;
     repo_impl::list_datacards_summary(
@@ -71,12 +53,12 @@ pub fn list_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataCardSumma
 }
 
 pub fn get_datacard(id: String, state: &Arc<AppState>) -> Result<DataCard> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::get_datacard(state, &profile_id, &id)
 }
 
 pub fn create_datacard(input: CreateDataCardInput, state: &Arc<AppState>) -> Result<DataCard> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
     if sanitized.title.is_empty() {
@@ -100,7 +82,7 @@ pub fn create_datacard(input: CreateDataCardInput, state: &Arc<AppState>) -> Res
 }
 
 pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
     if sanitized.title.is_empty() {
@@ -124,14 +106,14 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
 }
 
 pub fn move_datacard_to_folder(input: MoveDataCardInput, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let moved = repo_impl::move_datacard(state, &profile_id, &input.id, &input.folder_id)?;
     security_service::persist_active_vault(state)?;
     Ok(moved)
 }
 
 pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let storage_paths = state.get_storage_paths()?;
     let settings = get_settings(&storage_paths, &profile_id)?;
     if settings.soft_delete_enabled {
@@ -146,17 +128,17 @@ pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
 }
 
 pub fn list_deleted_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::list_deleted_datacards(state, &profile_id)
 }
 
 pub fn list_deleted_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataCardSummary>> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::list_deleted_datacards_summary(state, &profile_id)
 }
 
 pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::restore_datacard(state, &profile_id, &id)?;
     repo_impl::restore_attachments_by_datacard(state, &profile_id, &id)?;
     security_service::persist_active_vault(state)?;

@@ -95,24 +95,6 @@ struct BackupResult {
     bytes: i64,
 }
 
-fn require_logged_in(state: &Arc<AppState>) -> Result<String> {
-    let active_profile = state
-        .active_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-    let logged_in_profile = state
-        .logged_in_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-
-    match (active_profile, logged_in_profile) {
-        (Some(active), Some(logged)) if active == logged => Ok(active),
-        _ => Err(ErrorCodeString::new("VAULT_LOCKED")),
-    }
-}
-
 fn load_registry(sp: &StoragePaths, profile_id: &str) -> Result<BackupRegistry> {
     let path = backup_registry_path(sp, profile_id)?;
     if !path.exists() {
@@ -494,7 +476,7 @@ fn create_backup_internal(
     use_default_path: bool,
 ) -> Result<BackupResult> {
     let _guard = ensure_backup_guard(state)?;
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let sp = state.get_storage_paths()?;
 
     let (backup_id, destination) = resolve_destination_path(&sp, &profile_id, destination_path, use_default_path)?;
@@ -522,7 +504,7 @@ pub fn backup_create(
     destination_path: Option<String>,
     use_default_path: bool,
 ) -> Result<String> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let sp = state.get_storage_paths()?;
     let settings = settings_service::get_settings(&sp, &profile_id)?;
     let managed_root = backups_dir(&sp, &profile_id)?;
@@ -545,7 +527,7 @@ pub fn backup_create(
 }
 
 pub fn backup_list(state: &Arc<AppState>) -> Result<Vec<BackupListItem>> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let sp = state.get_storage_paths()?;
     let mut registry = load_registry(&sp, &profile_id)?;
     prune_registry(&mut registry);
@@ -555,7 +537,7 @@ pub fn backup_list(state: &Arc<AppState>) -> Result<Vec<BackupListItem>> {
 
 pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
     let _guard = ensure_backup_guard(state)?;
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let sp = state.get_storage_paths()?;
 
     let backup_path = PathBuf::from(&backup_path);
@@ -744,7 +726,7 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
 }
 
 pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let sp = state.get_storage_paths()?;
     let settings = settings_service::get_settings(&sp, &profile_id)?;
     if !settings.backups_enabled {

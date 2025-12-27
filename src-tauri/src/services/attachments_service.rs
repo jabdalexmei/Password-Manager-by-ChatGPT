@@ -32,35 +32,14 @@ struct ActiveSession {
 fn require_logged_in(app: &AppHandle) -> Result<ActiveSession> {
     let app_state = app.state::<Arc<AppState>>().inner().clone();
     let storage_paths = app_state.get_storage_paths()?;
-    let active_profile = app_state
-        .active_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-    let logged_in_profile = app_state
-        .logged_in_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
+    let info = security_service::require_unlocked_active_profile(&app_state)?;
 
-    match (active_profile, logged_in_profile) {
-        (Some(active), Some(logged)) if active == logged => {
-            let vault_key = app_state
-                .vault_key
-                .lock()
-                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-                .as_ref()
-                .map(|k| **k);
-
-            Ok(ActiveSession {
-                state: app_state,
-                storage_paths,
-                profile_id: active,
-                vault_key,
-            })
-        }
-        _ => Err(ErrorCodeString::new("VAULT_LOCKED")),
-    }
+    Ok(ActiveSession {
+        state: app_state,
+        storage_paths,
+        profile_id: info.profile_id,
+        vault_key: info.vault_key,
+    })
 }
 
 fn read_source_file(path: &Path) -> Result<Vec<u8>> {
