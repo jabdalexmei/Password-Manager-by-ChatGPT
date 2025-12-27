@@ -429,15 +429,17 @@ pub fn list_deleted_datacards_summary(
     })
 }
 
-pub fn get_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<DataCard> {
-    with_connection(state, profile_id, |conn| {
-        let mut stmt = conn
-            .prepare("SELECT * FROM datacards WHERE id = ?1")
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+fn get_datacard_by_id_conn(conn: &Connection, id: &str) -> Result<DataCard> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM datacards WHERE id = ?1")
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-        stmt.query_row(params![id], map_datacard)
-            .map_err(|_| ErrorCodeString::new("DATACARD_NOT_FOUND"))
-    })
+    stmt.query_row(params![id], map_datacard)
+        .map_err(|_| ErrorCodeString::new("DATACARD_NOT_FOUND"))
+}
+
+pub fn get_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<DataCard> {
+    with_connection(state, profile_id, |conn| get_datacard_by_id_conn(conn, id))
 }
 
 pub fn create_datacard(
@@ -471,7 +473,7 @@ pub fn create_datacard(
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-        get_datacard(state, profile_id, &id)
+        get_datacard_by_id_conn(conn, &id)
     })
 }
 
