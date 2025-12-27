@@ -273,7 +273,7 @@ fn build_backup_source(
             .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
         let mut dest_conn = rusqlite::Connection::open(&vault_path)
             .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
-        let mut backup = rusqlite::backup::Backup::new(&src_conn, &mut dest_conn)
+        let backup = rusqlite::backup::Backup::new(&src_conn, &mut dest_conn)
             .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
         backup
             .run_to_completion(5, std::time::Duration::from_millis(250), None)

@@ -165,6 +165,11 @@ export function DataCards({
           }
         } catch (err) {
           console.error(err);
+          try {
+            await clipboardClearAll();
+          } catch (wipeErr) {
+            console.error(wipeErr);
+          }
         } finally {
           genPwdTimeoutRef.current = null;
           genPwdLastCopiedRef.current = null;

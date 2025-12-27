@@ -84,6 +84,11 @@ export function useBankCardDetails({
               }
             } catch (err) {
               console.error(err);
+              try {
+                await clipboardClearAll();
+              } catch (wipeErr) {
+                console.error(wipeErr);
+              }
             }
             timeoutRef.current = null;
             lastCopiedValueRef.current = null;

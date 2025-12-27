@@ -2,11 +2,9 @@
 use std::time::Duration;
 
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::Foundation::{GetLastError, BOOL};
+use windows_sys::Win32::Foundation::GetLastError;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard};
-#[cfg(target_os = "windows")]
-use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
 /// Clears the entire Windows clipboard (all formats).
 /// Uses OpenClipboard -> EmptyClipboard -> CloseClipboard.
@@ -18,8 +16,8 @@ pub fn clear_clipboard_all() -> Result<(), String> {
 
     for attempt in 0..ATTEMPTS {
         unsafe {
-            let hwnd = GetForegroundWindow();
-            let opened: BOOL = OpenClipboard(hwnd);
+            // Pass NULL owner handle (current task). This is allowed by WinAPI.
+            let opened = OpenClipboard(0);
 
             if opened == 0 {
                 if attempt + 1 < ATTEMPTS {
@@ -30,7 +28,7 @@ pub fn clear_clipboard_all() -> Result<(), String> {
                 return Err(format!("OPENCLIPBOARD_FAILED ({})", err));
             }
 
-            let emptied: BOOL = EmptyClipboard();
+            let emptied = EmptyClipboard();
             CloseClipboard();
 
             if emptied == 0 {

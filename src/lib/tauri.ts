@@ -51,10 +51,6 @@ export async function isLoggedIn(): Promise<boolean> {
   return invoke('is_logged_in');
 }
 
-export async function autoLockCleanup(): Promise<boolean> {
-  return invoke('auto_lock_cleanup');
-}
-
 export async function healthCheck(): Promise<boolean> {
   return invoke('health_check');
 }

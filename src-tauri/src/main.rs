@@ -99,7 +99,6 @@ fn main() {
             login_vault,
             lock_vault,
             is_logged_in,
-            auto_lock_cleanup,
             health_check,
             list_attachments,
             add_attachment_from_path,
