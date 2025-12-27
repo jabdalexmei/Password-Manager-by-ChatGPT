@@ -12,7 +12,6 @@ type ToasterContextValue = {
 const ToasterContext = createContext<ToasterContextValue | undefined>(undefined);
 
 export const ToasterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { t: tCommon } = useTranslation('Common');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextIdRef = useRef(0);
 
