@@ -146,7 +146,7 @@ pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
 }
 
 pub fn purge_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     purge_datacard_with_attachments(state, &profile_id, &id)
 }
 
@@ -177,7 +177,7 @@ pub fn set_datacard_favorite(
     input: SetDataCardFavoriteInput,
     state: &Arc<AppState>,
 ) -> Result<bool> {
-    let profile_id = require_logged_in(state)?;
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let updated = repo_impl::set_datacard_favorite(state, &profile_id, &input)?;
     security_service::persist_active_vault(state)?;
     Ok(updated)
