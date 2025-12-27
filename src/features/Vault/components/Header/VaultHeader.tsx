@@ -33,10 +33,10 @@ export function VaultHeader({
 
       <div className="vault-actions">
         <button className="vault-action-button" type="button" aria-label={t('export')} onClick={onExportBackup}>
-          <IconImport />
+          <IconDownload />
         </button>
         <button className="vault-action-button" type="button" aria-label={t('import')} onClick={onImportBackup}>
-          <IconDownload />
+          <IconImport />
         </button>
         <button className="vault-action-button" type="button" aria-label={t('settings')} onClick={onOpenSettings}>
           <IconSettings />

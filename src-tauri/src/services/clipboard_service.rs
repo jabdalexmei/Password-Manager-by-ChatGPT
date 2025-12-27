@@ -26,7 +26,7 @@ impl Drop for ClipboardGuard {
 /// Retries because clipboard may be temporarily locked by other processes.
 #[cfg(target_os = "windows")]
 pub fn clear_clipboard_all() -> Result<(), String> {
-    const ATTEMPTS: usize = 10;
+    const ATTEMPTS: usize = 60;
     const SLEEP_MS: u64 = 25;
 
     for attempt in 0..ATTEMPTS {
