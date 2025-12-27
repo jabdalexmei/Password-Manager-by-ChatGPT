@@ -13,6 +13,7 @@ export type BankCardDetailsProps = {
   onPurge: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   isTrashMode: boolean;
+  clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
 };
 
@@ -31,6 +32,7 @@ export function BankCardDetails({
   onPurge,
   onToggleFavorite,
   isTrashMode,
+  clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
 }: BankCardDetailsProps) {
   const { t } = useTranslation('BankCards');
@@ -44,6 +46,7 @@ export function BankCardDetails({
     onPurge,
     onToggleFavorite,
     isTrashMode,
+    clipboardAutoClearEnabled,
     clipboardClearTimeoutSeconds,
   });
 

@@ -229,7 +229,12 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
         <section className="vault-datacards">
           {selectedCategory === 'data_cards' ? (
-            <DataCards viewModel={dataCardsViewModel} sectionTitle={vault.currentSectionTitle} />
+            <DataCards
+              viewModel={dataCardsViewModel}
+              sectionTitle={vault.currentSectionTitle}
+              clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+              clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+            />
           ) : (
             <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} />
           )}
@@ -246,6 +251,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
               onPurge={vault.purgeCard}
               onToggleFavorite={vault.toggleFavorite}
               isTrashMode={vault.isTrashMode}
+              clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
               clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
             />
           ) : (
@@ -257,6 +263,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
               onPurge={bankCards.purgeCard}
               onToggleFavorite={bankCards.toggleFavorite}
               isTrashMode={bankCards.isTrashMode}
+              clipboardAutoClearEnabled={bankCards.settings?.clipboard_auto_clear_enabled}
               clipboardClearTimeoutSeconds={bankCards.settings?.clipboard_clear_timeout_seconds}
             />
           )}

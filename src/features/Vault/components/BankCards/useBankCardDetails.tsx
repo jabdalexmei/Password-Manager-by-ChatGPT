@@ -3,7 +3,7 @@ import { useTranslation } from '../../../../lib/i18n';
 import { useToaster } from '../../../../components/Toaster';
 import { BankCardItem } from '../../types/ui';
 
-const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 30;
+const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 20;
 
 type UseBankCardDetailsParams = {
   card: BankCardItem | null;
@@ -13,6 +13,7 @@ type UseBankCardDetailsParams = {
   onRestore: (id: string) => void;
   onPurge: (id: string) => void;
   isTrashMode: boolean;
+  clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
 };
 
@@ -37,6 +38,7 @@ export function useBankCardDetails({
   onRestore,
   onPurge,
   isTrashMode,
+  clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
 }: UseBankCardDetailsParams): UseBankCardDetailsResult {
   const [showNumber, setShowNumber] = useState(false);
@@ -69,7 +71,8 @@ export function useBankCardDetails({
       try {
         await navigator.clipboard.writeText(value);
         showToast(t('toast.copySuccess'), 'success');
-        if (opts.isSecret) {
+        const autoClearEnabled = clipboardAutoClearEnabled ?? true;
+        if (opts.isSecret && autoClearEnabled) {
           lastCopiedValueRef.current = value;
           const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
           timeoutRef.current = window.setTimeout(async () => {
@@ -91,7 +94,7 @@ export function useBankCardDetails({
         lastCopiedValueRef.current = null;
       }
     },
-    [clearPendingTimeout, clipboardClearTimeoutSeconds, showToast, t]
+    [clearPendingTimeout, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
   );
 
   const deleteCard = useCallback(() => {

@@ -20,9 +20,16 @@ import { open } from '@tauri-apps/plugin-dialog';
 export type DataCardsProps = {
   viewModel: DataCardsViewModel;
   sectionTitle: string;
+  clipboardAutoClearEnabled?: boolean;
+  clipboardClearTimeoutSeconds?: number;
 };
 
-export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
+export function DataCards({
+  viewModel,
+  sectionTitle,
+  clipboardAutoClearEnabled,
+  clipboardClearTimeoutSeconds,
+}: DataCardsProps) {
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
   const { show: showToast } = useToaster();
@@ -66,6 +73,8 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   const [twoFactorTargetDialogId, setTwoFactorTargetDialogId] = useState<
     'datacard-create-dialog' | 'datacard-edit-dialog' | null
   >(null);
+  const genPwdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const genPwdLastCopiedRef = useRef<string | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -108,6 +117,16 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
     setGeneratorOpen(false);
   };
 
+  const clearGenPwdTimer = useCallback(() => {
+    if (genPwdTimeoutRef.current) {
+      clearTimeout(genPwdTimeoutRef.current);
+      genPwdTimeoutRef.current = null;
+    }
+    genPwdLastCopiedRef.current = null;
+  }, []);
+
+  useEffect(() => clearGenPwdTimer, [clearGenPwdTimer]);
+
   const handleUseGeneratedPassword = () => {
     if (generatedPassword) {
       if (viewModel.isCreateOpen) {
@@ -124,14 +143,36 @@ export function DataCards({ viewModel, sectionTitle }: DataCardsProps) {
   };
 
   const handleCopyGeneratedPassword = async () => {
+    const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 20;
     if (!generatedPassword || !generatedPassword.trim()) return;
+    clearGenPwdTimer();
 
     try {
       await navigator.clipboard.writeText(generatedPassword);
       showToast(t('toast.copySuccess'), 'success');
+
+      const enabled = clipboardAutoClearEnabled ?? true;
+      if (!enabled) return;
+
+      genPwdLastCopiedRef.current = generatedPassword;
+      const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
+      genPwdTimeoutRef.current = window.setTimeout(async () => {
+        try {
+          const current = await navigator.clipboard.readText();
+          if (current === genPwdLastCopiedRef.current) {
+            await navigator.clipboard.writeText('');
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          genPwdTimeoutRef.current = null;
+          genPwdLastCopiedRef.current = null;
+        }
+      }, timeoutMs);
     } catch (error) {
       console.error(error);
       showToast(t('toast.copyError'), 'error');
+      clearGenPwdTimer();
     }
   };
 

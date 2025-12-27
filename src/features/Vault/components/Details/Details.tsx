@@ -25,6 +25,7 @@ export type DetailsProps = {
   onPurge: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   isTrashMode: boolean;
+  clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
 };
 
@@ -37,6 +38,7 @@ export function Details({
   onPurge,
   onToggleFavorite,
   isTrashMode,
+  clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
 }: DetailsProps) {
   const { t } = useTranslation('Details');
@@ -50,6 +52,7 @@ export function Details({
     onPurge,
     onToggleFavorite,
     isTrashMode,
+    clipboardAutoClearEnabled,
     clipboardClearTimeoutSeconds,
   });
 
@@ -527,6 +530,8 @@ export function Details({
         isOpen={historyOpen}
         datacardId={card.id}
         onClose={() => setHistoryOpen(false)}
+        clipboardAutoClearEnabled={clipboardAutoClearEnabled}
+        clipboardClearTimeoutSeconds={clipboardClearTimeoutSeconds}
       />
     </>
   );
