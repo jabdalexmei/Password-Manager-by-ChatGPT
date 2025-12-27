@@ -1,4 +1,5 @@
 use std::ptr::NonNull;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use rusqlite::ffi;
@@ -145,19 +146,70 @@ pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
     Ok(None)
 }
 
-pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
-    if let Some(id) = persist_active_vault(state)? {
-        attachments_service::clear_previews_for_profile(state, &id)?;
+pub fn request_persist_active_vault(state: Arc<AppState>) {
+    state.vault_persist_requested.store(true, Ordering::SeqCst);
 
-        {
-            let mut session = state
-                .vault_session
-                .lock()
-                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-            *session = None;
+    if state.vault_persist_in_flight.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    tauri::async_runtime::spawn_blocking(move || {
+        loop {
+            state.vault_persist_requested.store(false, Ordering::SeqCst);
+
+            if let Err(error) = persist_active_vault(&state) {
+                log::error!("[SECURITY][persist_active_vault] failed: {error:?}");
+            }
+
+            if !state.vault_persist_requested.load(Ordering::SeqCst) {
+                break;
+            }
         }
 
-        clear_pool(&id);
+        state.vault_persist_in_flight.store(false, Ordering::SeqCst);
+
+        if state.vault_persist_requested.load(Ordering::SeqCst) {
+            request_persist_active_vault(state);
+        }
+    });
+}
+
+pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
+    let persisted_id = persist_active_vault(state)?;
+
+    let active_id = {
+        let active = state
+            .active_profile
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+            .clone();
+        active
+    };
+
+    let cleanup_id = persisted_id.clone().or(active_id.clone());
+
+    if let Some(id) = cleanup_id.as_ref() {
+        attachments_service::clear_previews_for_profile(state, id)?;
+    }
+
+    {
+        let mut session = state
+            .vault_session
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        *session = None;
+    }
+
+    {
+        let mut active = state
+            .active_profile
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        *active = None;
+    }
+
+    if let Some(id) = cleanup_id.as_ref() {
+        clear_pool(id);
     }
 
     Ok(true)

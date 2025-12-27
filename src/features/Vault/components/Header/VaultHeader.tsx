@@ -22,6 +22,7 @@ export function VaultHeader({
   onOpenSettings,
 }: Props) {
   const { t } = useTranslation('Vault');
+  const { t: tCommon } = useTranslation('Common');
   const lockLabel = isPasswordless ? t('logout') : t('lock');
 
   return (
@@ -32,10 +33,22 @@ export function VaultHeader({
       </div>
 
       <div className="vault-actions">
-        <button className="vault-action-button" type="button" aria-label={t('export')} onClick={onExportBackup}>
+        <button
+          type="button"
+          className="vault-header__icon-button"
+          onClick={onExportBackup}
+          aria-label={tCommon('backup.export')}
+          title={tCommon('backup.export')}
+        >
           <IconDownload />
         </button>
-        <button className="vault-action-button" type="button" aria-label={t('import')} onClick={onImportBackup}>
+        <button
+          type="button"
+          className="vault-header__icon-button"
+          onClick={onImportBackup}
+          aria-label={tCommon('backup.import')}
+          title={tCommon('backup.import')}
+        >
           <IconImport />
         </button>
         <button className="vault-action-button" type="button" aria-label={t('settings')} onClick={onOpenSettings}>

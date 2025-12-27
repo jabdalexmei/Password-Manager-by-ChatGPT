@@ -115,7 +115,7 @@ pub fn add_attachment_from_path(
 
     repo_impl::insert_attachment(&session.state, &session.profile_id, &meta)?;
 
-    security_service::persist_active_vault(&session.state)?;
+    security_service::request_persist_active_vault(session.state.clone());
 
     Ok(meta)
 }
@@ -129,7 +129,7 @@ pub fn remove_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
     let session = require_logged_in(app)?;
     let now = Utc::now().to_rfc3339();
     repo_impl::soft_delete_attachment(&session.state, &session.profile_id, &attachment_id, &now)?;
-    security_service::persist_active_vault(&session.state)?;
+    security_service::request_persist_active_vault(session.state.clone());
     Ok(())
 }
 
@@ -141,7 +141,7 @@ pub fn purge_attachment(app: &AppHandle, attachment_id: String) -> Result<()> {
     let file_path = attachment_file_path(&session.storage_paths, &session.profile_id, &meta.id)?;
     let _ = fs::remove_file(file_path);
     repo_impl::purge_attachment(&session.state, &session.profile_id, &attachment_id)?;
-    security_service::persist_active_vault(&session.state)?;
+    security_service::request_persist_active_vault(session.state.clone());
     Ok(())
 }
 

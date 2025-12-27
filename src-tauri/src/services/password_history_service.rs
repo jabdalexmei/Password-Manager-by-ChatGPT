@@ -14,6 +14,6 @@ pub fn list_history(state: &Arc<AppState>, datacard_id: &str) -> Result<Vec<Pass
 pub fn clear_history(state: &Arc<AppState>, datacard_id: &str) -> Result<()> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::clear_password_history(state, &profile_id, datacard_id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(())
 }

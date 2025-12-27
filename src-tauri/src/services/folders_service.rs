@@ -23,7 +23,7 @@ pub fn create_folder(input: CreateFolderInput, state: &Arc<AppState>) -> Result<
         return Err(ErrorCodeString::new("FOLDER_NAME_REQUIRED"));
     }
     let folder = repo_impl::create_folder(state, &profile_id, name, &input.parent_id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(folder)
 }
 
@@ -34,14 +34,14 @@ pub fn rename_folder(input: RenameFolderInput, state: &Arc<AppState>) -> Result<
         return Err(ErrorCodeString::new("FOLDER_NAME_REQUIRED"));
     }
     let renamed = repo_impl::rename_folder(state, &profile_id, &input.id, name)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(renamed)
 }
 
 pub fn move_folder(input: MoveFolderInput, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let moved = repo_impl::move_folder(state, &profile_id, &input.id, &input.parent_id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(moved)
 }
 
@@ -54,7 +54,7 @@ pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
 
     repo_impl::move_datacards_to_root(state, &profile_id, &id)?;
     let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(deleted)
 }
 
@@ -98,6 +98,6 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
     }
 
     let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(deleted)
 }

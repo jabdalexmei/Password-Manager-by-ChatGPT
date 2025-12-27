@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use crate::data::storage_paths::StoragePaths;
@@ -17,6 +18,8 @@ pub struct AppState {
 
     pub vault_session: Mutex<Option<VaultSession>>,
     pub vault_persist_guard: Mutex<()>,
+    pub vault_persist_requested: AtomicBool,
+    pub vault_persist_in_flight: AtomicBool,
     pub backup_guard: Mutex<()>,
 }
 
@@ -28,6 +31,8 @@ impl AppState {
 
             vault_session: Mutex::new(None),
             vault_persist_guard: Mutex::new(()),
+            vault_persist_requested: AtomicBool::new(false),
+            vault_persist_in_flight: AtomicBool::new(false),
             backup_guard: Mutex::new(()),
         }
     }

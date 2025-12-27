@@ -77,7 +77,7 @@ pub fn create_datacard(input: CreateDataCardInput, state: &Arc<AppState>) -> Res
         });
 
     let created = repo_impl::create_datacard(state, &profile_id, &sanitized)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(created)
 }
 
@@ -101,14 +101,14 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
         });
 
     let updated = repo_impl::update_datacard(state, &profile_id, &sanitized)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(updated)
 }
 
 pub fn move_datacard_to_folder(input: MoveDataCardInput, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let moved = repo_impl::move_datacard(state, &profile_id, &input.id, &input.folder_id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(moved)
 }
 
@@ -120,7 +120,7 @@ pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
         let now = Utc::now().to_rfc3339();
         repo_impl::soft_delete_datacard(state, &profile_id, &id, &now)?;
         repo_impl::soft_delete_attachments_by_datacard(state, &profile_id, &id, &now)?;
-        security_service::persist_active_vault(state)?;
+        security_service::request_persist_active_vault(state.clone());
         Ok(true)
     } else {
         purge_datacard_with_attachments(state, &profile_id, &id)
@@ -141,7 +141,7 @@ pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::restore_datacard(state, &profile_id, &id)?;
     repo_impl::restore_attachments_by_datacard(state, &profile_id, &id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(true)
 }
 
@@ -169,7 +169,7 @@ fn purge_datacard_with_attachments(
     }
 
     let purged = repo_impl::purge_datacard(state, profile_id, id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(purged)
 }
 
@@ -179,6 +179,6 @@ pub fn set_datacard_favorite(
 ) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let updated = repo_impl::set_datacard_favorite(state, &profile_id, &input)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(updated)
 }
