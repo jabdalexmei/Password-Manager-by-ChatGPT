@@ -26,15 +26,20 @@ export const Add2FAModal: React.FC<Props> = ({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [qrFileName, setQrFileName] = useState<string>(t('twoFactor.qr.noFileChosen'));
+  const wasOpenRef = React.useRef(false);
 
   const canRemove = useMemo(() => (existingUri ?? '').trim().length > 0, [existingUri]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    setTextValue(existingUri ?? '');
-    setError(null);
-    setTab('text');
-    setQrFileName(t('twoFactor.qr.noFileChosen'));
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = isOpen;
+
+    if (!wasOpen && isOpen) {
+      setTextValue(existingUri ?? '');
+      setError(null);
+      setTab('text');
+      setQrFileName(t('twoFactor.qr.noFileChosen'));
+    }
   }, [existingUri, isOpen]);
 
   if (!isOpen) return null;

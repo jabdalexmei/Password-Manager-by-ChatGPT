@@ -151,12 +151,42 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
             let mut session = state
                 .vault_session
                 .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
             *session = None;
         }
 
         clear_pool(&id);
     }
+
+    Ok(true)
+}
+
+pub fn drop_active_session_without_persist(state: &Arc<AppState>) -> Result<bool> {
+    let storage_paths = state.get_storage_paths()?;
+
+    let active_id = state
+        .active_profile
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+        .clone();
+
+    let Some(profile_id) = active_id else {
+        return Ok(true);
+    };
+
+    attachments_service::clear_previews_for_profile(state, &profile_id)?;
+
+    {
+        let mut session = state
+            .vault_session
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        *session = None;
+    }
+
+    clear_pool(&profile_id);
+
+    let _ = registry::get_profile(&storage_paths, &profile_id)?;
 
     Ok(true)
 }

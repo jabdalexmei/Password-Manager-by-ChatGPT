@@ -18,7 +18,7 @@ pub fn init_database_passwordless(sp: &StoragePaths, profile_id: &str) -> Result
     migrations::migrate_to_latest(&conn)?;
 
     // Set WAL ONCE (DB-file persistent) and avoid doing it in pool connections.
-    // WAL persistence is documented by SQLite. :contentReference[oaicite:1]{index=1}
+    // WAL persistence is documented by SQLite.
     let current: String = conn
         .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
