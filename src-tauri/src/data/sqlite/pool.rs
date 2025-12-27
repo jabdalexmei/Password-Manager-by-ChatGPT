@@ -16,7 +16,6 @@ const DB_BUSY_TIMEOUT_SECS_FILE: u64 = 15;
 #[derive(Clone, Debug)]
 pub enum DbTarget {
     File(std::path::PathBuf),
-    Uri(String),
 }
 
 static POOLS: Lazy<Mutex<HashMap<String, r2d2::Pool<SqliteConnectionManager>>>> =
@@ -40,25 +39,6 @@ impl r2d2::CustomizeConnection<rusqlite::Connection, rusqlite::Error> for FilePr
     }
 }
 
-#[derive(Debug)]
-struct MemoryPragmas;
-
-impl r2d2::CustomizeConnection<rusqlite::Connection, rusqlite::Error> for MemoryPragmas {
-    fn on_acquire(
-        &self,
-        conn: &mut rusqlite::Connection,
-    ) -> std::result::Result<(), rusqlite::Error> {
-        conn.busy_timeout(Duration::from_secs(5))?;
-        conn.execute_batch(
-            r#"
-            PRAGMA foreign_keys = ON;
-            PRAGMA journal_mode = MEMORY;
-            PRAGMA synchronous = NORMAL;
-            "#,
-        )
-    }
-}
-
 fn get_or_create_pool(
     profile_id: &str,
     target: DbTarget,
@@ -67,10 +47,7 @@ fn get_or_create_pool(
         .lock()
         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
 
-    let key = match &target {
-        DbTarget::File(_) => format!("{profile_id}::file"),
-        DbTarget::Uri(uri) => format!("{profile_id}::uri::{uri}"),
-    };
+    let key = format!("{profile_id}::file");
 
     log::info!("[DB][pool] profile_id={profile_id} target={target:?} key={key}");
 
@@ -86,23 +63,6 @@ fn get_or_create_pool(
                 .min_idle(Some(DB_POOL_MIN_IDLE_FILE))
                 .connection_timeout(Duration::from_secs(DB_POOL_CONNECTION_TIMEOUT_SECS_FILE))
                 .connection_customizer(Box::new(FilePragmas))
-                .build(manager)
-                .map_err(|e| {
-                    log::error!("[DB][pool] build failed: {e:?}");
-                    ErrorCodeString::new("DB_OPEN_FAILED")
-                })?
-        }
-        DbTarget::Uri(uri) => {
-            let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
-                | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
-                | rusqlite::OpenFlags::SQLITE_OPEN_URI
-                | rusqlite::OpenFlags::SQLITE_OPEN_SHARED_CACHE;
-            let manager = SqliteConnectionManager::file(uri).with_flags(flags);
-            r2d2::Pool::builder()
-                .max_size(DB_POOL_MAX_SIZE_FILE)
-                .min_idle(Some(DB_POOL_MIN_IDLE_FILE))
-                .connection_timeout(Duration::from_secs(DB_POOL_CONNECTION_TIMEOUT_SECS_FILE))
-                .connection_customizer(Box::new(MemoryPragmas))
                 .build(manager)
                 .map_err(|e| {
                     log::error!("[DB][pool] build failed: {e:?}");

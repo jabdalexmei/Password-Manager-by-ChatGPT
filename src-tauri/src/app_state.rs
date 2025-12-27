@@ -11,7 +11,6 @@ pub struct AppState {
     pub storage_paths: Mutex<StoragePaths>,
 
     pub vault_keeper_conn: Mutex<Option<rusqlite::Connection>>,
-    pub vault_db_uri: Mutex<Option<String>>,
     pub vault_key: Mutex<Option<Zeroizing<[u8; 32]>>>,
     pub vault_persist_guard: Mutex<()>,
     pub backup_guard: Mutex<()>,
@@ -25,7 +24,6 @@ impl AppState {
             storage_paths: Mutex::new(storage_paths),
 
             vault_keeper_conn: Mutex::new(None),
-            vault_db_uri: Mutex::new(None),
             vault_key: Mutex::new(None),
             vault_persist_guard: Mutex::new(()),
             backup_guard: Mutex::new(()),
@@ -106,13 +104,6 @@ impl AppState {
                 .lock()
                 .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
             *keeper = None;
-        }
-        {
-            let mut uri = self
-                .vault_db_uri
-                .lock()
-                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-            *uri = None;
         }
         {
             let mut key = self
