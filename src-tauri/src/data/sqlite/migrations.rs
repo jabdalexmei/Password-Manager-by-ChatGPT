@@ -1,4 +1,5 @@
 use rusqlite::Connection;
+use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
@@ -42,4 +43,23 @@ DROP TABLE IF EXISTS bank_cards;",
         CURRENT_SCHEMA_VERSION => Ok(()),
         _ => Err(ErrorCodeString::new("DB_MIGRATION_FAILED")),
     }
+}
+
+fn has_table(conn: &Connection, name: &str) -> Result<bool> {
+    let sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1 LIMIT 1";
+    let exists: Option<i32> = conn
+        .query_row(sql, [name], |row| row.get(0))
+        .optional()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    Ok(exists.is_some())
+}
+
+pub fn validate_core_schema(conn: &Connection) -> Result<()> {
+    let required = ["folders", "datacards", "bank_cards"];
+    for table in required {
+        if !has_table(conn, table)? {
+            return Err(ErrorCodeString::new("DB_SCHEMA_MISSING"));
+        }
+    }
+    Ok(())
 }
