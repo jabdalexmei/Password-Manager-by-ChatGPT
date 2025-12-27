@@ -90,6 +90,11 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
             }
           } catch (err) {
             console.error(err);
+            try {
+              await clipboardClearAll();
+            } catch (wipeErr) {
+              console.error(wipeErr);
+            }
           } finally {
             timeoutRef.current = null;
             lastCopiedValueRef.current = null;
