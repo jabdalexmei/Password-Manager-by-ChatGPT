@@ -73,6 +73,8 @@ fn open_protected_vault_session(
         .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
     migrations::migrate_to_latest(&conn)?;
+    migrations::validate_core_schema(&conn)
+        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
     if let Ok(mut keeper) = state.vault_keeper_conn.lock() {
         *keeper = Some(conn);
