@@ -16,7 +16,6 @@ type WorkspaceProps = {
 const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const { t } = useTranslation('Workspace');
   const { workspaces, loading, error, selectedId, setSelectedId, refresh, remove } = useWorkspace();
-  const [useDefaultPath, setUseDefaultPath] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const selectedWorkspace = useMemo(
@@ -40,26 +39,35 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
     [onWorkspaceReady, refresh]
   );
 
+  // Create: always pick a folder and initialize it as workspace
   const handleCreate = useCallback(async () => {
     setBusy(true);
     try {
-      if (useDefaultPath) {
-        await workspaceCreateDefault();
-      } else {
-        const selected = await open({
-          directory: true,
-          multiple: false,
-          title: t('chooseFolder'),
-        });
-        if (typeof selected !== 'string') return;
-        await workspaceCreate(selected);
-      }
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t('chooseFolder'),
+      });
+      if (typeof selected !== 'string') return;
+      await workspaceCreate(selected);
       await refresh();
       onWorkspaceReady();
     } finally {
       setBusy(false);
     }
-  }, [onWorkspaceReady, refresh, t, useDefaultPath]);
+  }, [onWorkspaceReady, refresh, t]);
+
+  // Create in default path: no picker
+  const handleCreateDefault = useCallback(async () => {
+    setBusy(true);
+    try {
+      await workspaceCreateDefault();
+      await refresh();
+      onWorkspaceReady();
+    } finally {
+      setBusy(false);
+    }
+  }, [onWorkspaceReady, refresh]);
 
   // IMPORTANT: this button acts as:
   // - browse/select folder (always opens picker)
@@ -215,22 +223,21 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
 
             <button
               type="button"
+              className="btn btn-primary workspace-cta"
+              onClick={handleCreateDefault}
+              disabled={busy}
+            >
+              {t('createDefaultPath')}
+            </button>
+
+            <button
+              type="button"
               className="btn btn-secondary workspace-cta-secondary"
               onClick={handleOpenDataFolder}
               disabled={busy}
             >
               {t('openDataFolder')}
             </button>
-
-            <label className="workspace-default-path">
-              <input
-                type="checkbox"
-                checked={useDefaultPath}
-                onChange={(event) => setUseDefaultPath(event.target.checked)}
-                disabled={busy}
-              />
-              <span>{t('useDefaultPath')}</span>
-            </label>
 
             <div className="workspace-selection-hint" aria-hidden="true">
               {selectedWorkspace ? selectedWorkspace.display_name : ''}
