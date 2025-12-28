@@ -46,49 +46,59 @@ const LogIn: React.FC<LogInProps> = ({
           <p className="login-subtitle">{t('subtitle')}</p>
         </header>
 
-        {/* выбранный профиль */}
-        <div className="profile-card login-selected-profile">
-          <div className="profile-meta">
-            <p className="muted" style={{ marginBottom: 4 }}>
-              {t('selectedProfile')}
-            </p>
-            <p className="profile-name">
-              {profileName || t('unnamedProfile')}
-            </p>
-            <p className="profile-id">{t('label.profileId', { id: profileId })}</p>
+        <div className="auth-body">
+          <div className="auth-content">
+            <div className="auth-panel">
+              <div className="profile-card login-selected-profile">
+                <div className="profile-meta">
+                  <p className="muted" style={{ marginBottom: 4 }}>
+                    {t('selectedProfile')}
+                  </p>
+                  <p className="profile-name">
+                    {profileName || t('unnamedProfile')}
+                  </p>
+                  <p className="profile-id">
+                    {t('label.profileId', { id: profileId })}
+                  </p>
+                </div>
+              </div>
+
+              <form
+                className="login-form form-grid"
+                onSubmit={handleSubmit}
+                style={{ marginTop: 14 }}
+              >
+                <div className="form-field">
+                  <label className="form-label" htmlFor="login-password">
+                    {t('passwordLabel')}
+                  </label>
+                  <input
+                    id="login-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t('passwordPlaceholder')}
+                  />
+                </div>
+
+                {error && <div className="form-error">{t('error')}</div>}
+
+                <div className="auth-footer">
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={onBack}
+                  >
+                    {t('back')}
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    {t('submit')}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
-
-        {/* форма логина */}
-        <form className="login-form form-grid" onSubmit={handleSubmit}>
-          <div className="form-field">
-            <label className="form-label" htmlFor="login-password">
-              {t('passwordLabel')}
-            </label>
-            <input
-              id="login-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t('passwordPlaceholder')}
-            />
-          </div>
-
-          {error && <div className="form-error">{t('error')}</div>}
-
-          <div className="login-actions button-row">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={onBack}
-            >
-              {t('back')}
-            </button>
-            <button type="submit" className="btn btn-primary">
-              {t('submit')}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );

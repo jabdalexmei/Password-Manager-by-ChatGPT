@@ -1,58 +1,70 @@
-/* Обёртка экрана создания профиля */
+/* Screen wrapper */
 .profile-create-screen {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: var(--bg-profile-create-screen);
+  background: var(--bg-startup-screen);
 }
 
-/* Карточка формы */
+/* Main card: same size rules as Select profile */
 .profile-create-card {
-  width: min(520px, 100%);
+  width: min(980px, 100%);
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
-  padding: 28px 30px 24px;
+  padding: 32px 36px 28px;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Шапка карточки */
+/* Header */
 .profile-create-header {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .profile-create-title {
   margin: 0;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--color-text);
 }
 
 .profile-create-subtitle {
   margin: 6px 0 0 0;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--color-text-muted);
 }
 
-/* Тело формы — использует .form-grid / .form-field из ui.css */
+/* Form should fill card width like Select profile */
 .profile-create-form {
-  margin-top: 16px;
+  width: 100%;
 }
 
-/* Нижняя панель с кнопками */
-.profile-create-actions {
-  margin-top: 22px;
+/* Full-width inner panel (the important part) */
+.profile-create-panel {
+  width: 100%;
+   background: var(--surface-tint-02);
+    border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 22px 22px;
+}
+
+/* Footer row: Back left, Create right */
+.profile-create-footer {
+  margin-top: 18px;
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-/* Мелкая подпись под формой */
+/* Footnote stays centered like on Select profile */
 .profile-create-footnote {
-  margin-top: 16px;
+  margin-top: 18px;
   text-align: center;
   font-size: 12px;
   color: var(--color-text-muted);
@@ -64,10 +76,10 @@
   }
 
   .profile-create-card {
-    padding: 22px 18px 18px;
+    padding: 24px;
   }
 
-  .profile-create-actions {
-    flex-direction: column;
+  .profile-create-panel {
+    padding: 18px;
   }
 }
