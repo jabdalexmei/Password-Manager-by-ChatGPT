@@ -64,7 +64,8 @@
 
 /* Keep focus visible, but neutral (non-blue) */
 .profile-create-card .form-field input:focus-visible {
-  outline: 2px solid rgba(229, 231, 235, 0.35); /* neutral light */
+  /* Use the same blue as the rest of the app (primary). Fallback keeps it blue even if token is missing. */
+  outline: 2px solid var(--color-primary, #2D6CDF);
   outline-offset: 2px;
 }
 

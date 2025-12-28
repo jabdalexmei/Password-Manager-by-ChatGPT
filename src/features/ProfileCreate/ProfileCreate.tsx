@@ -76,7 +76,7 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({ onCreated, onProfileCreat
           </div>
 
           <div className="profile-create-footer">
-            <button type="button" className="btn btn-ghost" onClick={onBack}>
+            <button type="button" className="btn btn-secondary" onClick={onBack}>
               {t('back')}
             </button>
 
