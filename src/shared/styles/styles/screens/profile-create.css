@@ -44,13 +44,35 @@
   width: 100%;
 }
 
-/* Full-width inner panel (the important part) */
+/* Full-width inner wrapper for form fields.
+   IMPORTANT: It must NOT look like a separate panel (no border/box). */
 .profile-create-panel {
   width: 100%;
-   background: var(--surface-tint-02);
-    border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 22px 22px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* ---- Inputs in Create profile must be neutral and borderless (not blue) ---- */
+/* Limit changes to this screen only (do NOT touch global input styles in ui.css). */
+.profile-create-card .form-field input {
+  background: var(--surface-tint-02);
+  border: none;
+  box-shadow: none;
+}
+
+/* Keep focus visible, but neutral (non-blue) */
+.profile-create-card .form-field input:focus-visible {
+  /* Use the same blue as the rest of the app (primary). Fallback keeps it blue even if token is missing. */
+  outline: 2px solid var(--color-primary, #2D6CDF);
+  outline-offset: 2px;
+}
+
+/* Optional: disabled styling remains readable */
+.profile-create-card .form-field input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 /* Footer row: Back left, Create right */
@@ -79,7 +101,5 @@
     padding: 24px;
   }
 
-  .profile-create-panel {
-    padding: 18px;
-  }
+  /* no panel padding anymore */
 }
