@@ -42,63 +42,66 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({
           <p className="profile-create-subtitle">{t('subtitle')}</p>
         </header>
 
-        <form className="profile-create-form form-grid" onSubmit={handleSubmit}>
-          <div className="form-field">
-            <label className="form-label" htmlFor="profile-name">
-              {t('name')}
-            </label>
-            <input
-              id="profile-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('namePlaceholder')}
-            />
-          </div>
+        <div className="auth-body">
+          <div className="auth-content">
+            <form className="profile-create-form" onSubmit={handleSubmit}>
+              <div className="auth-panel form-grid">
+                <div className="form-field">
+                  <label className="form-label" htmlFor="profile-name">
+                    {t('name')}
+                  </label>
+                  <input
+                    id="profile-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t('namePlaceholder')}
+                  />
+                </div>
 
-          <div className="form-field">
-            <label className="form-label" htmlFor="profile-password">
-              {t('passwordLabel')}
-            </label>
-            <input
-              id="profile-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t('passwordPlaceholder')}
-            />
-          </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="profile-password">
+                    {t('passwordLabel')}
+                  </label>
+                  <input
+                    id="profile-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t('passwordPlaceholder')}
+                  />
+                </div>
 
-          <div className="form-field">
-            <label className="form-label" htmlFor="profile-password-confirm">
-              {t('confirmPassword')}
-            </label>
-            <input
-              id="profile-password-confirm"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder={t('confirmPasswordPlaceholder')}
-            />
-          </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="profile-password-confirm">
+                    {t('confirmPassword')}
+                  </label>
+                  <input
+                    id="profile-password-confirm"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder={t('confirmPasswordPlaceholder')}
+                  />
+                </div>
 
-          {error && <div className="form-error">{t(error)}</div>}
+                {error && <div className="form-error">{t(error)}</div>}
+              </div>
 
-          <div className="profile-create-actions button-row">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={onBack}
-            >
-              {t('back')}
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-            >
-              {t('submit')}
-            </button>
+              <div className="auth-footer">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={onBack}
+                >
+                  {t('back')}
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {t('submit')}
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
 
         <p className="profile-create-footnote">{t('footnote')}</p>
       </div>
