@@ -1,5 +1,5 @@
 import React from 'react';
-import { IconDownload, IconImport, IconLock, IconSettings } from '@/components/lucide/icons';
+import { IconExport, IconImport, IconLock, IconSettings } from '@/components/lucide/icons';
 import { useTranslation } from '../../../../lib/i18n';
 
 type Props = {
@@ -35,16 +35,16 @@ export function VaultHeader({
       <div className="vault-actions">
         <button
           type="button"
-          className="vault-header__icon-button"
+          className="vault-action-button"
           onClick={onExportBackup}
           aria-label={tTip('backup.export')}
           title={tTip('backup.export')}
         >
-          <IconDownload />
+          <IconExport />
         </button>
         <button
           type="button"
-          className="vault-header__icon-button"
+          className="vault-action-button"
           onClick={onImportBackup}
           aria-label={tTip('backup.import')}
           title={tTip('backup.import')}
