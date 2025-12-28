@@ -4,8 +4,10 @@ export {
   Eye as IconPreview,
   EyeOff as IconPreviewOff,
 
-  Download as IconDownload,
-  Upload as IconImport,
+  // Down arrow = Import (download into the app)
+  Download as IconImport,
+  // Up arrow = Export (upload / send out of the app)
+  Upload as IconExport,
 
   SquarePen as IconRename,
   Trash2 as IconDelete,

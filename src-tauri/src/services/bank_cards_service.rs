@@ -57,7 +57,7 @@ pub fn create_bank_card(input: CreateBankCardInput, state: &Arc<AppState>) -> Re
     sanitized.tags = normalize_tags(sanitized.tags);
 
     let created = repo_impl::create_bank_card(state, &profile_id, &sanitized)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(created)
 }
 
@@ -71,7 +71,7 @@ pub fn update_bank_card(input: UpdateBankCardInput, state: &Arc<AppState>) -> Re
     sanitized.tags = normalize_tags(sanitized.tags);
 
     let updated = repo_impl::update_bank_card(state, &profile_id, &sanitized)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(updated)
 }
 
@@ -82,7 +82,7 @@ pub fn delete_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
     if settings.soft_delete_enabled {
         let now = Utc::now().to_rfc3339();
         repo_impl::soft_delete_bank_card(state, &profile_id, &id, &now)?;
-        security_service::persist_active_vault(state)?;
+        security_service::request_persist_active_vault(state.clone());
         Ok(true)
     } else {
         purge_bank_card_internal(state, &profile_id, &id)
@@ -92,7 +92,7 @@ pub fn delete_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
 pub fn restore_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::restore_bank_card(state, &profile_id, &id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(true)
 }
 
@@ -103,7 +103,7 @@ pub fn purge_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
 
 fn purge_bank_card_internal(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
     let purged = repo_impl::purge_bank_card(state, profile_id, id)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(purged)
 }
 
@@ -113,6 +113,6 @@ pub fn set_bank_card_favorite(
 ) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let updated = repo_impl::set_bank_card_favorite(state, &profile_id, &input)?;
-    security_service::persist_active_vault(state)?;
+    security_service::request_persist_active_vault(state.clone());
     Ok(updated)
 }

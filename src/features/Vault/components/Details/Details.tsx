@@ -7,8 +7,8 @@ import {
   IconAttachment,
   IconCopy,
   IconDelete,
-  IconDownload,
   IconHistory,
+  IconImport,
   IconPreview,
   IconPreviewOff,
 } from '@/components/lucide/icons';
@@ -498,7 +498,7 @@ export function Details({
                     }
                     aria-label={t('attachments.download')}
                   >
-                    <IconDownload />
+                    <IconImport />
                   </button>
                   <button
                     className="icon-button icon-button-danger"

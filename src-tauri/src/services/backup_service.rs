@@ -146,14 +146,17 @@ fn validate_zip_entry_rel_path_windows(rel: &Path) -> bool {
 fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::time::Duration;
 
+    const ATTEMPTS: usize = 60;
+    const SLEEP_MS: u64 = 25;
+
     let mut last_err: Option<std::io::Error> = None;
-    for _ in 0..25 {
+    for _ in 0..ATTEMPTS {
         match fs::rename(src, dst) {
             Ok(()) => return Ok(()),
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
                     last_err = Some(e);
-                    std::thread::sleep(Duration::from_millis(80));
+                    std::thread::sleep(Duration::from_millis(SLEEP_MS));
                     continue;
                 }
                 return Err(e);
@@ -537,7 +540,9 @@ pub fn backup_list(state: &Arc<AppState>) -> Result<Vec<BackupListItem>> {
 
 pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
     let _guard = ensure_backup_guard(state)?;
+
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    security_service::drop_active_session_without_persist(state)?;
     let sp = state.get_storage_paths()?;
 
     let backup_path = PathBuf::from(&backup_path);
@@ -595,8 +600,6 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
     if !has_vault {
         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
     }
-
-    security_service::lock_vault(state)?;
 
     for entry in &manifest.files {
         let rel_path = Path::new(&entry.path);

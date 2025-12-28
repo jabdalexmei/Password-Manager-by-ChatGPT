@@ -464,19 +464,34 @@ export function useVault(profileId: string, onLocked: () => void) {
   );
 
   const lock = useCallback(async () => {
+    let shouldNavigate = false;
     try {
-      await lockVault();
+      try {
+        await lockVault();
+        shouldNavigate = true;
+      } catch (err) {
+        const code = (err as any)?.code ?? 'UNKNOWN';
+        if (code === 'VAULT_LOCKED') {
+          shouldNavigate = true;
+        } else {
+          throw err;
+        }
+      }
     } catch (err) {
       const code = (err as any)?.code ?? 'UNKNOWN';
       const message = mapErrorMessage(code, (err as any)?.message ?? undefined);
       showToast(message, 'error');
       console.error(err);
+      return;
     } finally {
       try {
         await clipboardClearAll();
       } catch (err) {
         console.error(err);
       }
+    }
+    if (!shouldNavigate) {
+      return;
     }
     setFolders([]);
     setCards([]);

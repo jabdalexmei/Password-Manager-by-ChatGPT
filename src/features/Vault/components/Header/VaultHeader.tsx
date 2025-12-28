@@ -1,5 +1,5 @@
 import React from 'react';
-import { IconDownload, IconImport, IconLock, IconSettings } from '@/components/lucide/icons';
+import { IconExport, IconImport, IconLock, IconSettings } from '@/components/lucide/icons';
 import { useTranslation } from '../../../../lib/i18n';
 
 type Props = {
@@ -21,24 +21,43 @@ export function VaultHeader({
   onImportBackup,
   onOpenSettings,
 }: Props) {
-  const { t } = useTranslation('Vault');
-  const lockLabel = isPasswordless ? t('logout') : t('lock');
+  const { t: tVault } = useTranslation('Vault');
+  const { t: tTip } = useTranslation('Tooltips');
+  const lockLabel = isPasswordless ? tVault('logout') : tVault('lock');
 
   return (
     <header className="vault-appbar">
       <div className="vault-profile">
-        <div className="vault-title">{t('title')}</div>
-        <div className="vault-subtitle">{t('active_profile', { name: profileName, id: profileId })}</div>
+        <div className="vault-title">{tVault('title')}</div>
+        <div className="vault-subtitle">{tVault('active_profile', { name: profileName, id: profileId })}</div>
       </div>
 
       <div className="vault-actions">
-        <button className="vault-action-button" type="button" aria-label={t('export')} onClick={onExportBackup}>
-          <IconDownload />
+        <button
+          type="button"
+          className="vault-action-button"
+          onClick={onExportBackup}
+          aria-label={tTip('backup.export')}
+          title={tTip('backup.export')}
+        >
+          <IconExport />
         </button>
-        <button className="vault-action-button" type="button" aria-label={t('import')} onClick={onImportBackup}>
+        <button
+          type="button"
+          className="vault-action-button"
+          onClick={onImportBackup}
+          aria-label={tTip('backup.import')}
+          title={tTip('backup.import')}
+        >
           <IconImport />
         </button>
-        <button className="vault-action-button" type="button" aria-label={t('settings')} onClick={onOpenSettings}>
+        <button
+          className="vault-action-button"
+          type="button"
+          aria-label={tTip('vault.settings')}
+          title={tTip('vault.settings')}
+          onClick={onOpenSettings}
+        >
           <IconSettings />
         </button>
         <button className="vault-action-button" type="button" aria-label={lockLabel} title={lockLabel} onClick={onLock}>

@@ -1,4 +1,5 @@
 use std::ptr::NonNull;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use rusqlite::ffi;
@@ -119,10 +120,12 @@ pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
 
         if let Some(session) = session_guard.as_ref() {
-            let bytes = session
+            let serialized = session
                 .conn
                 .serialize(DatabaseName::Main)
                 .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+            let bytes: Vec<u8> = serialized.to_vec();
 
             let profile_id = session.profile_id.clone();
             let key_material: [u8; 32] = *session.key;
@@ -135,7 +138,7 @@ pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
 
     if let Some((profile_id, key_material, bytes)) = maybe_bytes_and_meta {
         let storage_paths = state.get_storage_paths()?;
-        let encrypted = cipher::encrypt_vault_blob(&profile_id, &key_material, &bytes)?;
+        let encrypted = cipher::encrypt_vault_blob(&profile_id, &key_material, bytes.as_slice())?;
         cipher::write_encrypted_file(&vault_db_path(&storage_paths, &profile_id)?, &encrypted)?;
         return Ok(Some(profile_id));
     }
@@ -143,20 +146,101 @@ pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
     Ok(None)
 }
 
-pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
-    if let Some(id) = persist_active_vault(state)? {
-        attachments_service::clear_previews_for_profile(state, &id)?;
+pub fn request_persist_active_vault(state: Arc<AppState>) {
+    state.vault_persist_requested.store(true, Ordering::SeqCst);
 
-        {
-            let mut session = state
-                .vault_session
-                .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-            *session = None;
+    if state.vault_persist_in_flight.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    tauri::async_runtime::spawn_blocking(move || {
+        loop {
+            state.vault_persist_requested.store(false, Ordering::SeqCst);
+
+            if let Err(error) = persist_active_vault(&state) {
+                log::error!("[SECURITY][persist_active_vault] failed: {error:?}");
+            }
+
+            if !state.vault_persist_requested.load(Ordering::SeqCst) {
+                break;
+            }
         }
 
-        clear_pool(&id);
+        state.vault_persist_in_flight.store(false, Ordering::SeqCst);
+
+        if state.vault_persist_requested.load(Ordering::SeqCst) {
+            request_persist_active_vault(state);
+        }
+    });
+}
+
+pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
+    let persisted_id = persist_active_vault(state)?;
+
+    let active_id = {
+        let active = state
+            .active_profile
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+            .clone();
+        active
+    };
+
+    let cleanup_id = persisted_id.clone().or(active_id.clone());
+
+    if let Some(id) = cleanup_id.as_ref() {
+        attachments_service::clear_previews_for_profile(state, id)?;
     }
+
+    {
+        let mut session = state
+            .vault_session
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        *session = None;
+    }
+
+    {
+        let mut active = state
+            .active_profile
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        *active = None;
+    }
+
+    if let Some(id) = cleanup_id.as_ref() {
+        clear_pool(id);
+    }
+
+    Ok(true)
+}
+
+pub fn drop_active_session_without_persist(state: &Arc<AppState>) -> Result<bool> {
+    let storage_paths = state.get_storage_paths()?;
+
+    let active_id = state
+        .active_profile
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+        .clone();
+
+    let Some(profile_id) = active_id else {
+        return Ok(true);
+    };
+
+    attachments_service::clear_previews_for_profile(state, &profile_id)?;
+
+    {
+        let mut session = state
+            .vault_session
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        *session = None;
+    }
+
+    clear_pool(&profile_id);
+
+    let _ = registry::get_profile(&storage_paths, &profile_id)?;
 
     Ok(true)
 }
