@@ -18,7 +18,6 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState('60');
   const [maxCopies, setMaxCopies] = useState('10');
-  const [retentionDays, setRetentionDays] = useState('30');
 
   useEffect(() => {
     if (!open || !settings) return;
@@ -29,7 +28,6 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     setAutoBackupEnabled(settings.backups_enabled);
     setIntervalMinutes(String(settings.auto_backup_interval_minutes));
     setMaxCopies(String(settings.backup_max_copies));
-    setRetentionDays(String(settings.backup_retention_days));
   }, [open, settings]);
 
   const busy = isSaving;
@@ -39,13 +37,11 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     const clipTimeout = Number(clipboardClearTimeoutSeconds);
     const interval = Number(intervalMinutes);
     const max = Number(maxCopies);
-    const retention = Number(retentionDays);
     if (
       !Number.isFinite(lockTimeout) ||
       !Number.isFinite(clipTimeout) ||
       !Number.isFinite(interval) ||
-      !Number.isFinite(max) ||
-      !Number.isFinite(retention)
+      !Number.isFinite(max)
     ) {
       return false;
     }
@@ -53,7 +49,6 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     if (clipTimeout < 1 || clipTimeout > 600) return false;
     if (autoBackupEnabled && (interval < 5 || interval > 1440)) return false;
     if (max < 1 || max > 500) return false;
-    if (retention < 1 || retention > 3650) return false;
     return true;
   }, [
     autoBackupEnabled,
@@ -62,7 +57,6 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     clipboardClearTimeoutSeconds,
     intervalMinutes,
     maxCopies,
-    retentionDays,
   ]);
 
   const handleSave = () => {
@@ -72,7 +66,6 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     const clipTimeout = Number(clipboardClearTimeoutSeconds);
     const interval = Number(intervalMinutes);
     const max = Number(maxCopies);
-    const retention = Number(retentionDays);
 
     if (!Number.isFinite(lockTimeout)) return;
     if (autoLockEnabled && (lockTimeout < 30 || lockTimeout > 86400)) return;
@@ -80,7 +73,6 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     if (!Number.isFinite(interval) || !Number.isFinite(max)) return;
     if (autoBackupEnabled && (interval < 5 || interval > 1440)) return;
     if (max < 1 || max > 500) return;
-    if (!Number.isFinite(retention) || retention < 1 || retention > 3650) return;
 
     const nextSettings: BackendUserSettings = {
       ...settings,
@@ -91,7 +83,6 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
       backups_enabled: autoBackupEnabled,
       auto_backup_interval_minutes: interval,
       backup_max_copies: max,
-      backup_retention_days: retention,
     };
 
     onSave(nextSettings);
@@ -373,23 +364,6 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
                 disabled={busy}
                 inputMode="numeric"
                 onChange={(event) => setMaxCopies(event.target.value)}
-                style={fullWidthInputStyle}
-              />
-            </div>
-
-            <div className="form-field">
-              <label className="form-label" htmlFor="backup-retention-days">
-                Retention days
-              </label>
-              <input
-                id="backup-retention-days"
-                type="number"
-                min={1}
-                max={3650}
-                value={retentionDays}
-                disabled={busy}
-                inputMode="numeric"
-                onChange={(event) => setRetentionDays(event.target.value)}
                 style={fullWidthInputStyle}
               />
             </div>

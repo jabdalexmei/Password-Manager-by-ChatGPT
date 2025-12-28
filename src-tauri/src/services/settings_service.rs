@@ -17,7 +17,6 @@ fn validate_settings(settings: &UserSettings) -> Result<()> {
         in_range(settings.clipboard_clear_timeout_seconds, 1, 600),
         in_range(settings.auto_lock_timeout, 30, 86_400),
         in_range(settings.trash_retention_days, 1, 3_650),
-        in_range(settings.backup_retention_days, 1, 3_650),
     ]
     .into_iter()
     .all(|v| v);

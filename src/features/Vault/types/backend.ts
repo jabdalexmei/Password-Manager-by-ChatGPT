@@ -148,7 +148,6 @@ export type BackendUserSettings = {
   auto_backup_interval_minutes: number;
   backup_max_copies: number;
   backup_frequency: "daily" | "weekly" | "monthly";
-  backup_retention_days: number;
   default_sort_field: "created_at" | "updated_at" | "title";
   default_sort_direction: "ASC" | "DESC";
   mask_password_by_default: boolean;
