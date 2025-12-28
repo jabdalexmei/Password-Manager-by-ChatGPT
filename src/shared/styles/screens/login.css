@@ -20,6 +20,12 @@
   flex-direction: column;
 }
 
+/* On Log in, the auth content must stretch across the card (match reference UI). */
+.login-card .auth-content {
+  width: 100%;
+  max-width: none;
+}
+
 /* Шапка */
 .login-header {
   text-align: center;

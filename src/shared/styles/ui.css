@@ -220,7 +220,7 @@
 .form-field textarea,
 .form-textarea {
   width: 100%;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-input-bg);
   color: var(--color-text);
@@ -551,16 +551,6 @@
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-/* Dialog inputs: match Information field rounding */
-.dialog .input,
-.dialog .textarea,
-.dialog .form-field input,
-.dialog .form-field select,
-.dialog .form-field textarea,
-.dialog .form-textarea {
-  border-radius: var(--radius-sm);
 }
 
 /* Attachments block inside a dialog (list of attached files) */
