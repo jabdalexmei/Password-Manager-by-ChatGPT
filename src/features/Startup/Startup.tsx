@@ -34,8 +34,8 @@ const Startup: React.FC<StartupProps> = ({ onCreate, onOpen, onBack }) => {
 
     if (!profiles.length) {
       return (
-        <div className="empty-state">
-          <p>{t('noProfiles')}</p>
+        <div className="empty empty--dashed">
+          <p className="empty-text">{t('noProfiles')}</p>
         </div>
       );
     }

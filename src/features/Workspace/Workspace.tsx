@@ -113,8 +113,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
 
     if (!workspaces.length) {
       return (
-        <div className="workspace-empty">
-          <p className="workspace-empty-text">{t('empty')}</p>
+        <div className="workspace-empty empty empty--dashed">
+          <p className="workspace-empty-text empty-text">{t('empty')}</p>
         </div>
       );
     }
