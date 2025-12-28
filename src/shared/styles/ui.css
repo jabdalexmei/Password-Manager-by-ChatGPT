@@ -103,12 +103,12 @@
    Empty state (unified)
    --------------------------------------------------------------------------
    Used across screens/lists when there is no data to show.
-   - Keep legacy class .empty-state working (backwards-compatible).
-   - Allow screen-specific wrappers to opt-in without duplicating styles.
+   Canonical API:
+   - .empty
+   - .empty-text
+   - modifiers: .empty--dashed / .empty--solid / .empty--borderless
    ========================================================================== */
-.empty,
-.empty-state,
-.workspace-empty {
+.empty {
   padding: 18px;
   text-align: center;
   color: var(--color-text-muted);
@@ -129,8 +129,7 @@
   border-color: transparent;
 }
 
-.empty-text,
-.workspace-empty-text {
+.empty-text {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 14px;
