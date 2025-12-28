@@ -1,7 +1,9 @@
 {
   "title": "Select profile",
   "subtitle": "Choose an existing profile or create a new one to continue.",
+  "noProfiles": "No profiles",
   "create": "Create new profile",
+  "back": "Back",
   "delete": "Delete",
   "open": "Choose",
   "cancel": "Cancel",
