@@ -1,6 +1,6 @@
 import React, { FormEvent, useEffect } from 'react';
 import { useTranslation } from '../../lib/i18n';
-import { useLogIn } from './useLogIn';
+import { useLogIn } from './hooks/useLogIn';
 
 type LogInProps = {
   profileId: string;

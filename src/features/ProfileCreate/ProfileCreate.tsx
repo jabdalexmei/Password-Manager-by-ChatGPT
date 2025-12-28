@@ -1,7 +1,7 @@
 import React, { FormEvent } from 'react';
 import { useTranslation } from '../../lib/i18n';
 import { ProfileMeta } from '../../lib/tauri';
-import { useProfileCreate } from './useProfileCreate';
+import { useProfileCreate } from './hooks/useProfileCreate';
 
 type ProfileCreateProps = {
   onCreated: () => void;

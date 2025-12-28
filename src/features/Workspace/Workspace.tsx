@@ -7,7 +7,7 @@ import {
   workspaceOpenInExplorer,
   workspaceSelect,
 } from '../../lib/tauri';
-import { useWorkspace } from './useWorkspace';
+import { useWorkspace } from './hooks/useWorkspace';
 
 type WorkspaceProps = {
   onWorkspaceReady: () => void;
