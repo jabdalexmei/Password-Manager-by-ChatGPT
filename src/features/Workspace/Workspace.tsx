@@ -128,7 +128,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
           return (
             <div
               key={workspace.id}
-              className={`workspace-tile ${isSelected ? 'selected' : ''}`}
+              className={`workspace-tile tile tile--selectable ${isSelected ? 'tile--selected' : ''}`}
               onClick={() => setSelectedId(workspace.id)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') setSelectedId(workspace.id);

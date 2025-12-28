@@ -102,21 +102,7 @@
 }
 
 .workspace-tile {
-  border-radius: 18px;
-  border: 1px solid transparent;
-  background: var(--surface-block, rgba(15, 23, 42, 0.55));
   padding: 16px 16px 14px;
-  cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.workspace-tile:hover {
-  border-color: var(--color-primary, rgba(59, 130, 246, 0.45));
-}
-
-.workspace-tile.selected {
-  border-color: var(--color-primary, rgba(59, 130, 246, 0.75));
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.20);
 }
 
 .workspace-tile-top {
