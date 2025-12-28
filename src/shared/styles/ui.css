@@ -99,14 +99,41 @@
   background: var(--primary-soft-bg);
 }
 
-/* Empty state (when no profiles / no data to show) */
-.empty-state {
+/* ==========================================================================
+   Empty state (unified)
+   --------------------------------------------------------------------------
+   Used across screens/lists when there is no data to show.
+   - Keep legacy class .empty-state working (backwards-compatible).
+   - Allow screen-specific wrappers to opt-in without duplicating styles.
+   ========================================================================== */
+.empty,
+.empty-state,
+.workspace-empty {
   padding: 18px;
   text-align: center;
   color: var(--color-text-muted);
   border: 1px dashed var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-block);
+}
+
+.empty--dashed {
+  border-style: dashed;
+}
+
+.empty--solid {
+  border-style: solid;
+}
+
+.empty--borderless {
+  border-color: transparent;
+}
+
+.empty-text,
+.workspace-empty-text {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
 }
 
 /* ==========================================================================

@@ -78,18 +78,8 @@
   display: none;
 }
 
-.workspace-empty {
-  border-radius: 18px;
-  border: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.10));
-  padding: 18px;
-  background: var(--surface-block, rgba(15, 23, 42, 0.35));
-}
-
-.workspace-empty-text {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 14px;
-}
+/* Empty state visuals are unified in ui.css (.empty / .empty-state).
+   Keep workspace.css focused on layout-only rules. */
 
 /* List */
 .workspace-list {
