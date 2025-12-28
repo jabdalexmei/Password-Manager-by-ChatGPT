@@ -251,7 +251,6 @@ pub struct UserSettings {
     #[serde(default = "default_backup_max_copies")]
     pub backup_max_copies: i64,
     pub backup_frequency: String,
-    pub backup_retention_days: i64,
 
     pub default_sort_field: String,
     pub default_sort_direction: String,
@@ -274,7 +273,6 @@ impl Default for UserSettings {
             auto_backup_interval_minutes: default_auto_backup_interval_minutes(),
             backup_max_copies: default_backup_max_copies(),
             backup_frequency: "weekly".to_string(),
-            backup_retention_days: 30,
             default_sort_field: "updated_at".to_string(),
             default_sort_direction: "DESC".to_string(),
             mask_password_by_default: true,

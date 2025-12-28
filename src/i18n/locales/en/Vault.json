@@ -30,7 +30,6 @@
   "backup.settings.title": "Backups",
   "backup.settings.autoEnabled": "Auto backup enabled",
   "backup.settings.intervalMinutes": "Interval (minutes)",
-  "backup.settings.retentionDays": "Retention days",
   "backup.settings.save": "Save",
   "backup.auto.success": "Auto-backup created"
 }

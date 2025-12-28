@@ -380,24 +380,6 @@ fn prune_registry(registry: &mut BackupRegistry) {
     registry.backups.retain(|item| PathBuf::from(&item.path).exists());
 }
 
-fn apply_retention(settings: &UserSettings, managed_root: &Path, registry: &mut BackupRegistry) {
-    let retention_days = settings.backup_retention_days;
-    let cutoff = Utc::now() - chrono::Duration::days(retention_days);
-    registry.backups.retain(|entry| {
-        let path = PathBuf::from(&entry.path);
-        if !path.starts_with(managed_root) {
-            return true;
-        }
-        let keep = chrono::DateTime::parse_from_rfc3339(&entry.created_at_utc)
-            .map(|dt| dt.with_timezone(&Utc) >= cutoff)
-            .unwrap_or(true);
-        if !keep {
-            let _ = fs::remove_file(&entry.path);
-        }
-        keep
-    });
-}
-
 fn apply_max_copies(settings: &UserSettings, managed_root: &Path, registry: &mut BackupRegistry) {
     let mut max_copies = settings.backup_max_copies;
     if max_copies < 1 {
@@ -522,7 +504,6 @@ pub fn backup_create(
             bytes: result.bytes,
         });
         prune_registry(registry);
-        apply_retention(&settings, &managed_root, registry);
         apply_max_copies(&settings, &managed_root, registry);
     })?;
 
@@ -761,7 +742,6 @@ pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>
     });
     registry.last_auto_backup_at_utc = Some(now_utc_string());
     prune_registry(&mut registry);
-    apply_retention(&settings, &managed_root, &mut registry);
     apply_max_copies(&settings, &managed_root, &mut registry);
     save_registry(&sp, &profile_id, &registry)?;
 
