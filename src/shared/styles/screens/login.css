@@ -1,4 +1,3 @@
-/* Обёртка экрана входа в профиль */
 .login-screen {
   min-height: 100vh;
   display: flex;
@@ -8,68 +7,103 @@
   background: var(--bg-startup-screen);
 }
 
-/* Карточка логина */
+/* Outer card (the only real "card") */
 .login-card {
   width: min(980px, 100%);
   background: var(--color-surface);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
+  border: none; /* no extra frame */
   box-shadow: var(--shadow-card);
-  padding: 32px 36px 28px;
+  padding: 34px 40px 30px;
   display: flex;
   flex-direction: column;
 }
 
-/* On Log in, the auth content must stretch across the card (match reference UI). */
-.login-card .auth-content {
-  width: 100%;
-  max-width: none;
-}
-
-/* Шапка */
+/* Header */
 .login-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 26px;
 }
 
 .login-title {
   margin: 0;
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
   color: var(--color-text);
 }
 
 .login-subtitle {
-  margin: 6px 0 0 0;
-  font-size: 15px;
+  margin: 8px 0 0 0;
+  font-size: 14px;
   color: var(--color-text-muted);
 }
 
-/* login-actions is removed from markup (footer is now .auth-footer) */
-
-/* Помощный текст: подсказка, линк "Back" и т.д. */
-.login-footer {
-  margin-top: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-  color: var(--color-text-muted);
+/* Stretch content across card (no 640px auth-content limit) */
+.login-card .auth-content {
+  width: 100%;
+  max-width: none;
 }
 
-.login-footer a,
-.login-footer button.link-button {
-  font-size: 13px;
+/* IMPORTANT: remove the "inner card" look for Log in */
+.login-card .auth-panel {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Give spacing similar to reference */
+.login-card .auth-body {
+  margin-top: 26px;
+}
+
+/* Selected profile block: surface only, no border */
+.login-card .login-selected-profile.profile-card {
+  width: 100%;
+  justify-content: flex-start;
+  align-items: flex-start;
+
+  background: var(--surface-tint-02);
+  border: 1px solid transparent; /* visually no border, stable layout */
+  border-radius: var(--radius-md);
+
+  padding: 18px 20px;
+  gap: 0;
+}
+
+/* Keep muted label exactly as-is (no color overrides) */
+.login-card .login-selected-profile .muted {
+  margin-bottom: 6px !important;
+}
+
+/* Form spacing (override inline style marginTop without TSX edits) */
+.login-card form.login-form {
+  margin-top: 18px !important;
+}
+
+/* Inputs on Log in: surface only, no borders */
+.login-card .login-form .form-field input,
+.login-card .login-form .form-field select,
+.login-card .login-form .form-field textarea {
+  background: var(--surface-tint-02);
+  border: 1px solid transparent; /* no visible border */
+}
+
+/* Buttons */
+.login-card .auth-footer {
+  margin-top: 22px;
 }
 
 @media (max-width: 720px) {
+  .login-screen {
+    padding: 18px;
+  }
+
   .login-card {
     padding: 24px;
   }
 
-  .login-footer {
-    flex-direction: column;
-    gap: 6px;
-    text-align: center;
+  .login-title {
+    font-size: 28px;
   }
 }
