@@ -1,4 +1,4 @@
-/* Обёртка экрана создания профиля */
+/* Screen wrapper */
 .profile-create-screen {
   min-height: 100vh;
   display: flex;
@@ -8,7 +8,7 @@
   background: var(--bg-startup-screen);
 }
 
-/* Карточка формы */
+/* Main card: same size rules as Select profile */
 .profile-create-card {
   width: min(980px, 100%);
   background: var(--color-surface);
@@ -20,7 +20,7 @@
   flex-direction: column;
 }
 
-/* Шапка карточки */
+/* Header */
 .profile-create-header {
   text-align: center;
   margin-bottom: 24px;
@@ -39,18 +39,47 @@
   color: var(--color-text-muted);
 }
 
-/* profile-create-actions is removed from markup (footer is now .auth-footer) */
+/* Form should fill card width like Select profile */
+.profile-create-form {
+  width: 100%;
+}
 
-/* Мелкая подпись под формой */
+/* Full-width inner panel (the important part) */
+.profile-create-panel {
+  width: 100%;
+   background: var(--surface-tint-02);
+    border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 22px 22px;
+}
+
+/* Footer row: Back left, Create right */
+.profile-create-footer {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Footnote stays centered like on Select profile */
 .profile-create-footnote {
-  margin-top: 16px;
+  margin-top: 18px;
   text-align: center;
   font-size: 12px;
   color: var(--color-text-muted);
 }
 
 @media (max-width: 720px) {
+  .profile-create-screen {
+    padding: 16px;
+  }
+
   .profile-create-card {
     padding: 24px;
+  }
+
+  .profile-create-panel {
+    padding: 18px;
   }
 }
