@@ -75,4 +75,26 @@
   /* Стили для опасных действий */
   --danger-border-weak: rgba(239, 68, 68, 0.4);
   --danger-hover-bg: rgba(239, 68, 68, 0.1);
+
+  /* ==========================================================================
+     Unified semantic design tokens (single source of truth)
+     --------------------------------------------------------------------------
+     Screens should use these tokens; legacy variables remain as aliases.
+     ========================================================================== */
+  --bg-screen: var(--bg-startup-screen);
+
+  --surface-page: var(--color-surface);
+  --surface-container: var(--color-surface-2);
+  --surface-block: var(--surface-tint-02);
+
+  --input-surface: var(--surface-block);
+
+  --border-subtle: var(--surface-tint-08);
+
+  --focus-ring: 2px solid var(--color-primary);
+  --focus-ring-offset: 2px;
+
+  /* Backwards-compatible aliases */
+  --color-border: var(--border-subtle);
+  --color-input-bg: var(--input-surface);
 }

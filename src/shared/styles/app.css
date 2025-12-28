@@ -1,8 +1,10 @@
-@import "./themes/blueTheme.css";
-@import "./base.css";
-@import "./ui.css";
-@import "./screens/startup.css";
-@import "./screens/workspace.css";
-@import "./screens/profile-create.css";
-@import "./screens/login.css";
-@import "./screens/vault.css";
+@layer tokens, base, ui, screens;
+
+@import "./themes/blueTheme.css" layer(tokens);
+@import "./base.css" layer(base);
+@import "./ui.css" layer(ui);
+@import "./screens/startup.css" layer(screens);
+@import "./screens/workspace.css" layer(screens);
+@import "./screens/profile-create.css" layer(screens);
+@import "./screens/login.css" layer(screens);
+@import "./screens/vault.css" layer(screens);

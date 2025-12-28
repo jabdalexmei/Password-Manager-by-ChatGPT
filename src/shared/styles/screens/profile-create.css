@@ -5,13 +5,13 @@
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: var(--bg-startup-screen);
+  background: var(--bg-screen);
 }
 
 /* Main card: same size rules as Select profile */
 .profile-create-card {
   width: min(980px, 100%);
-  background: var(--color-surface);
+  background: var(--surface-page);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
@@ -57,7 +57,7 @@
 /* ---- Inputs in Create profile must be neutral and borderless (not blue) ---- */
 /* Limit changes to this screen only (do NOT touch global input styles in ui.css). */
 .profile-create-card .form-field input {
-  background: var(--surface-tint-02);
+  background: var(--surface-block);
   border: none;
   box-shadow: none;
 }
