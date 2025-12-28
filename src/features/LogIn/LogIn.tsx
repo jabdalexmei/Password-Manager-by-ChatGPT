@@ -75,6 +75,7 @@ const LogIn: React.FC<LogInProps> = ({
                   <input
                     id="login-password"
                     type="password"
+                    className="input"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={t('passwordPlaceholder')}
@@ -86,7 +87,7 @@ const LogIn: React.FC<LogInProps> = ({
                 <div className="auth-footer">
                   <button
                     type="button"
-                    className="btn btn-ghost"
+                    className="btn btn-secondary"
                     onClick={onBack}
                   >
                     {t('back')}
