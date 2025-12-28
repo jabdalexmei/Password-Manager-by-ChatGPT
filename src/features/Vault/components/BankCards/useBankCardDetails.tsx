@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from '../../../../lib/i18n';
-import { useToaster } from '../../../../components/Toaster';
+import { useTranslation } from '../../../../shared/lib/i18n';
+import { useToaster } from '../../../../shared/components/Toaster';
 import { BankCardItem } from '../../types/ui';
-import { clipboardClearAll } from '../../../../lib/tauri';
+import { clipboardClearAll } from '../../../../shared/lib/tauri';
 
 const DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS = 20;
 

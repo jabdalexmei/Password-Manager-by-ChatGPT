@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ConfirmDialog from '../../../../components/ConfirmDialog';
-import { useTranslation } from '../../../../lib/i18n';
-import { useToaster } from '../../../../components/Toaster';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
+import { useTranslation } from '../../../../shared/lib/i18n';
+import { useToaster } from '../../../../shared/components/Toaster';
 import { clearPasswordHistory, getPasswordHistory } from '../../api/vaultApi';
 import { PasswordHistoryEntry } from '../../types/ui';
-import { IconCopy, IconHistory, IconPreview, IconPreviewOff } from '@/components/lucide/icons';
-import { clipboardClearAll } from '../../../../lib/tauri';
+import { IconCopy, IconHistory, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
+import { clipboardClearAll } from '../../../../shared/lib/tauri';
 
 type PasswordHistoryDialogProps = {
   isOpen: boolean;

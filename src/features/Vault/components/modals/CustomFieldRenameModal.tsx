@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTranslation } from '../../../../lib/i18n';
+import { useTranslation } from '../../../../shared/lib/i18n';
 
 type CustomFieldRenameModalProps = {
   isOpen: boolean;

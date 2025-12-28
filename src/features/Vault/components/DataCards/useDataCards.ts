@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useTranslation } from '../../../../lib/i18n';
-import { useToaster } from '../../../../components/Toaster';
+import { useTranslation } from '../../../../shared/lib/i18n';
+import { useToaster } from '../../../../shared/components/Toaster';
 import {
   CreateDataCardInput,
   CustomField,

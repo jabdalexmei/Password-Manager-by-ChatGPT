@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { loginVault } from '../../lib/tauri';
+import { loginVault } from '../../../shared/lib/tauri';
 
 export const useLogIn = (id: string, onSuccess: () => void) => {
   const [password, setPassword] = useState('');

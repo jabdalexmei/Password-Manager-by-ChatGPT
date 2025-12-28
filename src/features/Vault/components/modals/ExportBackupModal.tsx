@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { save } from '@tauri-apps/plugin-dialog';
-import { useTranslation } from '../../../../lib/i18n';
-import { useToaster } from '../../../../components/Toaster';
+import { useTranslation } from '../../../../shared/lib/i18n';
+import { useToaster } from '../../../../shared/components/Toaster';
 import { createBackup } from '../../api/vaultApi';
 
 export type ExportBackupModalProps = {

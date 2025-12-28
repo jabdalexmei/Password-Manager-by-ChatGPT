@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Attachment, DataCard } from '../../types/ui';
-import { useTranslation } from '../../../../lib/i18n';
-import { useToaster } from '../../../../components/Toaster';
+import { useTranslation } from '../../../../shared/lib/i18n';
+import { useToaster } from '../../../../shared/components/Toaster';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { clipboardClearAll } from '../../../../lib/tauri';
+import { clipboardClearAll } from '../../../../shared/lib/tauri';
 import {
   addAttachmentFromPath,
   getAttachmentBytesBase64,

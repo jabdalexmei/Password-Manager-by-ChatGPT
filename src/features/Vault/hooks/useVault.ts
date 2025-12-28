@@ -18,8 +18,8 @@ import {
   restoreDataCard,
   setDataCardFavorite,
   updateDataCard,
-} from './api/vaultApi';
-import { clipboardClearAll, lockVault } from '../../lib/tauri';
+} from '../api/vaultApi';
+import { clipboardClearAll, lockVault } from '../../../shared/lib/tauri';
 import {
   mapCardFromBackend,
   mapCardSummaryFromBackend,
@@ -27,13 +27,13 @@ import {
   mapCreateCardToBackend,
   mapFolderFromBackend,
   mapUpdateCardToBackend,
-} from './types/mappers';
-import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput } from './types/ui';
-import { BackendUserSettings } from './types/backend';
-import { useToaster } from '../../components/Toaster';
-import { useTranslation } from '../../lib/i18n';
+} from '../types/mappers';
+import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput } from '../types/ui';
+import { BackendUserSettings } from '../types/backend';
+import { useToaster } from '../../../shared/components/Toaster';
+import { useTranslation } from '../../../shared/lib/i18n';
 import { useDebouncedValue } from './useDebouncedValue';
-import { sortCards, sortFolders } from './types/sort';
+import { sortCards, sortFolders } from '../types/sort';
 
 export type SelectedNav = 'all' | 'favorites' | 'archive' | 'deleted' | { folderId: string };
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Folder } from '../../types/ui';
 import { SelectedNav } from '../../hooks/useVault';
-import { useTranslation } from '../../../../lib/i18n';
+import { useTranslation } from '../../../../shared/lib/i18n';
 import { FolderDialogState } from './useFolders';
 
 type Counts = {

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { createProfile, ProfileMeta } from '../../lib/tauri';
+import { createProfile, ProfileMeta } from '../../../shared/lib/tauri';
 
 export const useProfileCreate = (onCreated: (profile: ProfileMeta) => void) => {
   const [name, setName] = useState('');
