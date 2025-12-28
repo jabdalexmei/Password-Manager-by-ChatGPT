@@ -109,6 +109,8 @@ fn main() {
             save_attachment_to_path,
             backup_create,
             backup_restore,
+            backup_inspect,
+            backup_restore_workflow,
             backup_list,
             backup_create_if_due_auto,
             list_folders,

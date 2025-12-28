@@ -14,8 +14,8 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 use crate::app_state::AppState;
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
-    backup_registry_path, backups_dir, profile_config_path, profile_dir, user_settings_path,
-    vault_db_path,
+    backup_registry_path, backups_dir, kdf_salt_path, key_check_path, profile_config_path,
+    profile_dir, user_settings_path, vault_db_path,
 };
 use crate::data::profiles::registry;
 use crate::data::storage_paths::StoragePaths;
@@ -69,8 +69,19 @@ struct BackupManifest {
     created_at_utc: String,
     app_version: String,
     profile_id: String,
+    #[serde(default)]
+    profile_name: Option<String>,
     vault_mode: String,
     files: Vec<BackupManifestFile>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BackupInspectResult {
+    pub profile_id: String,
+    pub profile_name: String,
+    pub created_at_utc: String,
+    pub vault_mode: String,
+    pub will_overwrite: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -85,6 +96,8 @@ struct BackupSource {
     attachments_path: PathBuf,
     config_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
+    kdf_salt_path: Option<PathBuf>,
+    key_check_path: Option<PathBuf>,
     _temp_dir: Option<tempfile::TempDir>,
 }
 
@@ -230,9 +243,10 @@ fn build_backup_source(
     state: &Arc<AppState>,
     sp: &StoragePaths,
     profile_id: &str,
-) -> Result<(BackupSource, String)> {
+) -> Result<(BackupSource, String, String)> {
     let profile = registry::get_profile(sp, profile_id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+    let profile_name = profile.name.clone();
     let vault_mode = if profile.has_password {
         security_service::persist_active_vault(state)?;
         "protected".to_string()
@@ -244,6 +258,8 @@ fn build_backup_source(
     let attachments_path = profile_root.join("attachments");
     let config_path = profile_config_path(sp, profile_id).ok();
     let settings_path = user_settings_path(sp, profile_id).ok();
+    let salt_path = kdf_salt_path(sp, profile_id).ok();
+    let key_check = key_check_path(sp, profile_id).ok();
 
     if !profile.has_password {
         fs::create_dir_all(profile_root.join("tmp"))
@@ -270,9 +286,12 @@ fn build_backup_source(
                 attachments_path,
                 config_path,
                 settings_path,
+                kdf_salt_path: salt_path,
+                key_check_path: key_check,
                 _temp_dir: Some(temp_dir),
             },
             vault_mode,
+            profile_name,
         ))
     } else {
         let vault_path = vault_db_path(sp, profile_id)?;
@@ -282,9 +301,12 @@ fn build_backup_source(
                 attachments_path,
                 config_path,
                 settings_path,
+                kdf_salt_path: salt_path,
+                key_check_path: key_check,
                 _temp_dir: None,
             },
             vault_mode,
+            profile_name,
         ))
     }
 }
@@ -293,6 +315,7 @@ fn create_archive(
     destination: &Path,
     source: BackupSource,
     profile_id: &str,
+    profile_name: &str,
     vault_mode: &str,
     created_at_utc: &str,
 ) -> Result<i64> {
@@ -327,12 +350,15 @@ fn create_archive(
         "user_settings.json",
         &mut manifest_entries,
     )?;
+    add_optional_file(&mut writer, source.kdf_salt_path, "kdf_salt.bin", &mut manifest_entries)?;
+    add_optional_file(&mut writer, source.key_check_path, "key_check.bin", &mut manifest_entries)?;
 
     let manifest = BackupManifest {
         format_version: 1,
         created_at_utc: created_at_utc.to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         profile_id: profile_id.to_string(),
+        profile_name: Some(profile_name.to_string()),
         vault_mode: vault_mode.to_string(),
         files: manifest_entries,
     };
@@ -473,8 +499,15 @@ fn create_backup_internal(
     }
 
     let created_at_utc = now_utc_string();
-    let (source, vault_mode) = build_backup_source(state, &sp, &profile_id)?;
-    let bytes = create_archive(&destination_path, source, &profile_id, &vault_mode, &created_at_utc)?;
+    let (source, vault_mode, profile_name) = build_backup_source(state, &sp, &profile_id)?;
+    let bytes = create_archive(
+        &destination_path,
+        source,
+        &profile_id,
+        &profile_name,
+        &vault_mode,
+        &created_at_utc,
+    )?;
 
     Ok(BackupResult {
         id: backup_id,
@@ -519,19 +552,78 @@ pub fn backup_list(state: &Arc<AppState>) -> Result<Vec<BackupListItem>> {
     Ok(registry.backups)
 }
 
-pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
-    let _guard = ensure_backup_guard(state)?;
-
-    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-    security_service::drop_active_session_without_persist(state)?;
-    let sp = state.get_storage_paths()?;
-
-    let backup_path = PathBuf::from(&backup_path);
+fn read_backup_manifest_and_name(backup_path: &Path) -> Result<(BackupManifest, String)> {
     if !backup_path.exists() {
         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
     }
 
-    let profile_root = profile_dir(&sp, &profile_id)?;
+    let archive_file = fs::File::open(backup_path)
+        .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
+    let mut archive = ZipArchive::new(archive_file)
+        .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
+
+    let mut manifest_contents = String::new();
+    {
+        let mut manifest_file = archive
+            .by_name("manifest.json")
+            .map_err(|_| ErrorCodeString::new("BACKUP_MANIFEST_MISSING"))?;
+        manifest_file
+            .read_to_string(&mut manifest_contents)
+            .map_err(|_| ErrorCodeString::new("BACKUP_MANIFEST_INVALID"))?;
+    }
+
+    let manifest: BackupManifest =
+        serde_json::from_str(&manifest_contents).map_err(|_| ErrorCodeString::new("BACKUP_MANIFEST_INVALID"))?;
+
+    if manifest.format_version != 1 {
+        return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));
+    }
+
+    if let Some(name) = manifest.profile_name.clone() {
+        return Ok((manifest, name));
+    }
+
+    if let Ok(mut cfg_file) = archive.by_name("config.json") {
+        let mut cfg_contents = String::new();
+        if cfg_file.read_to_string(&mut cfg_contents).is_ok() {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&cfg_contents) {
+                if let Some(name) = v.get("name").and_then(|n| n.as_str()) {
+                    return Ok((manifest, name.to_string()));
+                }
+            }
+        }
+    }
+
+    Ok((manifest, "Restored profile".to_string()))
+}
+
+pub fn backup_inspect(state: &Arc<AppState>, backup_path: String) -> Result<BackupInspectResult> {
+    let sp = state.get_storage_paths()?;
+    let backup_path = PathBuf::from(&backup_path);
+    let (manifest, profile_name) = read_backup_manifest_and_name(&backup_path)?;
+    let will_overwrite = registry::get_profile(&sp, &manifest.profile_id)?.is_some();
+
+    Ok(BackupInspectResult {
+        profile_id: manifest.profile_id,
+        profile_name,
+        created_at_utc: manifest.created_at_utc,
+        vault_mode: manifest.vault_mode,
+        will_overwrite,
+    })
+}
+
+fn restore_archive_to_profile(
+    _state: &Arc<AppState>,
+    sp: &StoragePaths,
+    target_profile_id: &str,
+    backup_path: &Path,
+) -> Result<bool> {
+    let backup_path = PathBuf::from(backup_path);
+    if !backup_path.exists() {
+        return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+    }
+
+    let profile_root = profile_dir(sp, target_profile_id)?;
     fs::create_dir_all(profile_root.join("tmp"))
         .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
     let temp_dir = tempfile::Builder::new()
@@ -561,7 +653,7 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
         return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));
     }
 
-    if manifest.profile_id != profile_id {
+    if manifest.profile_id != target_profile_id {
         return Err(ErrorCodeString::new("BACKUP_PROFILE_MISMATCH"));
     }
 
@@ -623,7 +715,7 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
         }
     }
 
-    let vault_path = vault_db_path(&sp, &profile_id)?;
+    let vault_path = vault_db_path(sp, target_profile_id)?;
     let extracted_vault = temp_dir.path().join("vault.db");
     if !extracted_vault.exists() {
         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
@@ -663,7 +755,7 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
         }
 
-        for file_name in ["config.json", "user_settings.json"] {
+        for file_name in ["config.json", "user_settings.json", "kdf_salt.bin", "key_check.bin"] {
             let extracted_file = temp_dir.path().join(file_name);
             if extracted_file.exists() {
                 let target = profile_root.join(file_name);
@@ -707,6 +799,34 @@ pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool
     let _ = fs::remove_file(&shm_path);
 
     Ok(true)
+}
+
+pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
+    let _guard = ensure_backup_guard(state)?;
+
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    security_service::drop_active_session_without_persist(state)?;
+    let sp = state.get_storage_paths()?;
+
+    let backup_path = PathBuf::from(&backup_path);
+    restore_archive_to_profile(state, &sp, &profile_id, &backup_path)
+}
+
+pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
+    let _guard = ensure_backup_guard(state)?;
+    security_service::drop_active_session_without_persist(state)?;
+    let sp = state.get_storage_paths()?;
+
+    let backup_path = PathBuf::from(&backup_path);
+    let (manifest, profile_name) = read_backup_manifest_and_name(&backup_path)?;
+
+    let exists = registry::get_profile(&sp, &manifest.profile_id)?.is_some();
+    if !exists {
+        let has_password = manifest.vault_mode == "protected";
+        registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password)?;
+    }
+
+    restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)
 }
 
 pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {

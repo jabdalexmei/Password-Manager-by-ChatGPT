@@ -132,6 +132,58 @@ pub fn create_profile(
     Ok(record.into())
 }
 
+/// Create (or update) a profile record using a caller-provided profile_id.
+/// This is used by restore-from-backup: encrypted data is bound to profile_id via AEAD AAD,
+/// so we must recreate the same id to be able to decrypt restored vault/attachments.
+pub fn upsert_profile_with_id(
+    sp: &StoragePaths,
+    id: &str,
+    name: &str,
+    has_password: bool,
+) -> Result<ProfileMeta> {
+    ensure_profiles_dir(sp)?;
+
+    // Ensure profile dirs exist (id is used as folder name).
+    let profile_dir = crate::data::profiles::paths::profile_dir(sp, id)?;
+    crate::data::profiles::paths::ensure_profile_dirs(sp, id)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+    // Write config.json with the name (keeps UI consistent).
+    let config_path: PathBuf = profile_config_path(sp, id)?;
+    let config = serde_json::json!({ "name": name });
+    let serialized_config = serde_json::to_string_pretty(&config)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    if let Err(err) = write_atomic(&config_path, &serialized_config) {
+        let _ = fs::remove_dir_all(&profile_dir);
+        return Err(err);
+    }
+
+    let mut registry = load_registry(sp)?;
+    if let Some(existing) = registry.profiles.iter_mut().find(|p| p.id == id) {
+        existing.name = name.to_string();
+        existing.has_password = has_password;
+        save_registry(sp, &registry)?;
+        return Ok(ProfileMeta {
+            id: id.to_string(),
+            name: name.to_string(),
+            has_password,
+        });
+    }
+
+    registry.profiles.push(ProfileRecord {
+        id: id.to_string(),
+        name: name.to_string(),
+        has_password,
+    });
+    save_registry(sp, &registry)?;
+
+    Ok(ProfileMeta {
+        id: id.to_string(),
+        name: name.to_string(),
+        has_password,
+    })
+}
+
 pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
     ensure_profiles_dir(sp)?;
     let mut registry = load_registry(sp)?;
