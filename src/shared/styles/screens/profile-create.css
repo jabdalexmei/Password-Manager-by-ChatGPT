@@ -1,24 +1,6 @@
-/* Screen wrapper */
-.profile-create-screen {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  background: var(--bg-screen);
-}
-
-/* Main card: same size rules as Select profile */
-.profile-create-card {
-  width: min(980px, 100%);
-  background: var(--surface-page);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-card);
-  padding: 32px 36px 28px;
-  display: flex;
-  flex-direction: column;
-}
+/* NOTE:
+   Base screen wrapper + card now come from ui.css (.screen-shell/.screen-card).
+   This file keeps ONLY ProfileCreate-specific layout/typography. */
 
 /* Header */
 .profile-create-header {
@@ -54,27 +36,6 @@
   padding: 0;
 }
 
-/* ---- Inputs in Create profile must be neutral and borderless (not blue) ---- */
-/* Limit changes to this screen only (do NOT touch global input styles in ui.css). */
-.profile-create-card .form-field input {
-  background: var(--surface-block);
-  border: none;
-  box-shadow: none;
-}
-
-/* Keep focus visible, but neutral (non-blue) */
-.profile-create-card .form-field input:focus-visible {
-  /* Use the same blue as the rest of the app (primary). Fallback keeps it blue even if token is missing. */
-  outline: 2px solid var(--color-primary, #2D6CDF);
-  outline-offset: 2px;
-}
-
-/* Optional: disabled styling remains readable */
-.profile-create-card .form-field input:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
 /* Footer row: Back left, Create right */
 .profile-create-footer {
   margin-top: 18px;
@@ -93,13 +54,5 @@
 }
 
 @media (max-width: 720px) {
-  .profile-create-screen {
-    padding: 16px;
-  }
-
-  .profile-create-card {
-    padding: 24px;
-  }
-
-  /* no panel padding anymore */
+  /* Base padding handled by .screen-shell/.screen-card */
 }
