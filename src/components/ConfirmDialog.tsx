@@ -1,4 +1,5 @@
 import React from 'react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 
 export type ConfirmDialogProps = {
   open: boolean;
@@ -19,28 +20,37 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  if (!open) return null;
+  const titleId = 'confirm-dialog-title';
+  const descId = 'confirm-dialog-desc';
+
   return (
-    <div className="dialog-backdrop">
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
-        <div className="dialog-header">
-          <h3 id="confirm-dialog-title" className="dialog-title">
-            {title}
-          </h3>
-        </div>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onCancel();
+      }}
+    >
+      <DialogContent aria-labelledby={titleId} aria-describedby={descId}>
+        <DialogHeader>
+          <DialogTitle id={titleId}>{title}</DialogTitle>
+        </DialogHeader>
+
         <div className="dialog-body">
-          <p className="dialog-description">{description}</p>
+          <p id={descId} className="dialog-description">
+            {description}
+          </p>
         </div>
-        <div className="dialog-footer">
+
+        <DialogFooter className="dialog-footer">
           <button type="button" className="btn btn-secondary" onClick={onCancel}>
             {cancelLabel}
           </button>
           <button type="button" className="btn btn-danger" onClick={onConfirm}>
             {confirmLabel}
           </button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

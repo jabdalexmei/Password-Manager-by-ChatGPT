@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { useVault } from './useVault';
+import { useVault } from './hooks/useVault';
 import { VaultHeader } from './components/Header/VaultHeader';
 import { Search } from './components/Search/Search';
 import { Folders } from './components/Folders/Folders';
@@ -13,7 +13,7 @@ import { BankCardDetails } from './components/BankCards/BankCardDetails';
 import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewModel';
 import { useTranslation } from '../../lib/i18n';
 import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
-import { useBankCards } from './useBankCards';
+import { useBankCards } from './hooks/useBankCards';
 import { useToaster } from '../../components/Toaster';
 import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
 import { ExportBackupModal } from './components/modals/ExportBackupModal';

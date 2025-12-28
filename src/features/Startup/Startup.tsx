@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useTranslation } from '../../lib/i18n';
 import { ProfileMeta, setActiveProfile } from '../../lib/tauri';
-import { useStartup } from './useStartup';
+import { useStartup } from './hooks/useStartup';
 
 type StartupProps = {
   onCreate: () => void;

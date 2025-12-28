@@ -32,7 +32,7 @@ import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardI
 import { BackendUserSettings } from './types/backend';
 import { useToaster } from '../../components/Toaster';
 import { useTranslation } from '../../lib/i18n';
-import { useDebouncedValue } from './components/Search/useDebouncedValue';
+import { useDebouncedValue } from './useDebouncedValue';
 import { sortCards, sortFolders } from './types/sort';
 
 export type SelectedNav = 'all' | 'favorites' | 'archive' | 'deleted' | { folderId: string };
