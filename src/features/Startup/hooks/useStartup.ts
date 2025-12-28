@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { deleteProfile, listProfiles, ProfileMeta } from '../../shared/lib/tauri';
+import { deleteProfile, listProfiles, ProfileMeta } from '../../../shared/lib/tauri';
 
 export const useStartup = () => {
   const [profiles, setProfiles] = useState<ProfileMeta[]>([]);

@@ -11,21 +11,21 @@ import {
   restoreBankCard,
   setBankCardFavorite,
   updateBankCard,
-} from './api/vaultApi';
+} from '../api/vaultApi';
 import { useDebouncedValue } from './useDebouncedValue';
-import { useTranslation } from '../../shared/lib/i18n';
-import { useToaster } from '../../shared/components/Toaster';
+import { useTranslation } from '../../../shared/lib/i18n';
+import { useToaster } from '../../../shared/components/Toaster';
 import {
   mapBankCardFromBackend,
   mapBankCardSummaryFromBackend,
   mapBankCardToSummary,
   mapCreateBankCardToBackend,
   mapUpdateBankCardToBackend,
-} from './types/mappers';
-import { BankCardItem, BankCardSummary, CreateBankCardInput, UpdateBankCardInput } from './types/ui';
-import { sortCards } from './types/sort';
+} from '../types/mappers';
+import { BankCardItem, BankCardSummary, CreateBankCardInput, UpdateBankCardInput } from '../types/ui';
+import { sortCards } from '../types/sort';
 import { SelectedNav } from './useVault';
-import { BackendUserSettings } from './types/backend';
+import { BackendUserSettings } from '../types/backend';
 
 export type BankCardsError = { code: string; message?: string } | null;
 
