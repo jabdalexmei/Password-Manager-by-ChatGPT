@@ -6,6 +6,7 @@ import vault from '../i18n/English/Vault.json';
 import dataCards from '../i18n/English/DataCards.json';
 import bankCards from '../i18n/English/BankCards.json';
 import common from '../i18n/English/Common.json';
+import tooltips from '../i18n/English/Tooltips.json';
 import search from '../i18n/English/Search.json';
 import folders from '../i18n/English/Folders.json';
 import details from '../i18n/English/Details.json';
@@ -13,6 +14,7 @@ import workspace from '../i18n/English/Workspace.json';
 
 type Dictionaries = {
   Common: typeof common;
+  Tooltips: typeof tooltips;
   Startup: typeof startup;
   ProfileCreate: typeof profileCreate;
   LogIn: typeof login;
@@ -51,6 +53,7 @@ const resolveI18nValue = (dict: unknown, key: string): unknown => {
 
 const dictionaries: Dictionaries = {
   Common: common,
+  Tooltips: tooltips,
   Startup: startup,
   ProfileCreate: profileCreate,
   LogIn: login,

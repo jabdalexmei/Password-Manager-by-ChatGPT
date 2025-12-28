@@ -21,15 +21,15 @@ export function VaultHeader({
   onImportBackup,
   onOpenSettings,
 }: Props) {
-  const { t } = useTranslation('Vault');
-  const { t: tCommon } = useTranslation('Common');
-  const lockLabel = isPasswordless ? t('logout') : t('lock');
+  const { t: tVault } = useTranslation('Vault');
+  const { t: tTip } = useTranslation('Tooltips');
+  const lockLabel = isPasswordless ? tVault('logout') : tVault('lock');
 
   return (
     <header className="vault-appbar">
       <div className="vault-profile">
-        <div className="vault-title">{t('title')}</div>
-        <div className="vault-subtitle">{t('active_profile', { name: profileName, id: profileId })}</div>
+        <div className="vault-title">{tVault('title')}</div>
+        <div className="vault-subtitle">{tVault('active_profile', { name: profileName, id: profileId })}</div>
       </div>
 
       <div className="vault-actions">
@@ -37,8 +37,8 @@ export function VaultHeader({
           type="button"
           className="vault-header__icon-button"
           onClick={onExportBackup}
-          aria-label={tCommon('backup.export')}
-          title={tCommon('backup.export')}
+          aria-label={tTip('backup.export')}
+          title={tTip('backup.export')}
         >
           <IconDownload />
         </button>
@@ -46,12 +46,18 @@ export function VaultHeader({
           type="button"
           className="vault-header__icon-button"
           onClick={onImportBackup}
-          aria-label={tCommon('backup.import')}
-          title={tCommon('backup.import')}
+          aria-label={tTip('backup.import')}
+          title={tTip('backup.import')}
         >
           <IconImport />
         </button>
-        <button className="vault-action-button" type="button" aria-label={t('settings')} onClick={onOpenSettings}>
+        <button
+          className="vault-action-button"
+          type="button"
+          aria-label={tTip('vault.settings')}
+          title={tTip('vault.settings')}
+          onClick={onOpenSettings}
+        >
           <IconSettings />
         </button>
         <button className="vault-action-button" type="button" aria-label={lockLabel} title={lockLabel} onClick={onLock}>
