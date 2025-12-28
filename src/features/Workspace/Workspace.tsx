@@ -193,8 +193,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   }, [busy, error, handleSelect, loading, remove, selectedId, setSelectedId, t, workspaces]);
 
   return (
-    <div className="workspace-shell">
-      <div className="workspace-card workspace-card-mock">
+    <div className="screen-shell">
+      <div className="screen-card screen-card--xl workspace-card-mock">
         <header className="workspace-header">
           <h1 className="workspace-title">{t('title')}</h1>
           <p className="workspace-subtitle">{t('subtitle')}</p>

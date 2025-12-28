@@ -1,22 +1,10 @@
-.login-screen {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  background: var(--bg-screen);
-}
+/* NOTE:
+   Base screen wrapper + card now come from ui.css (.screen-shell/.screen-card).
+   This file keeps ONLY LogIn-specific layout/typography overrides. */
 
-/* Outer card (the only real "card") */
+/* Log in wants slightly roomier padding than the default screen-card. */
 .login-card {
-  width: min(980px, 100%);
-  background: var(--surface-page);
-  border-radius: var(--radius-lg);
-  border: none; /* no extra frame */
-  box-shadow: var(--shadow-card);
   padding: 34px 40px 30px;
-  display: flex;
-  flex-direction: column;
 }
 
 /* Header */
@@ -95,10 +83,6 @@
 }
 
 @media (max-width: 720px) {
-  .login-screen {
-    padding: 18px;
-  }
-
   .login-card {
     padding: 24px;
   }

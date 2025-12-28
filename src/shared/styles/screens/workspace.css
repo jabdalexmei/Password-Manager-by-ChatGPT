@@ -1,22 +1,5 @@
-.workspace-shell {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 42px;
-  background: var(--bg-screen);
-}
-
-/* Use THEME colors. Keep fallbacks so it still looks ok even if a variable is missing. */
-.workspace-card.workspace-card-mock {
-  width: min(1180px, 100%);
-  border-radius: 28px;
-  padding: 34px 36px;
-
-  background: var(--surface-page, rgba(2, 6, 23, 0.72));
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  box-shadow: var(--shadow-card, 0 18px 60px rgba(0, 0, 0, 0.55));
-
+/* Workspace card specifics only (base card comes from .screen-card/.screen-card--xl) */
+.workspace-card-mock {
   /* IMPORTANT: remove glass effect that makes theme look “different” */
   backdrop-filter: none;
   -webkit-backdrop-filter: none;

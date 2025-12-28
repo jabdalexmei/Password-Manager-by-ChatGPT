@@ -81,8 +81,8 @@ const Startup: React.FC<StartupProps> = ({ onCreate, onOpen, onBack }) => {
   }, [error, loading, onOpen, profiles, t]);
 
   return (
-    <div className="startup-shell">
-      <div className="startup-card">
+    <div className="screen-shell">
+      <div className="screen-card">
         <header className="startup-header">
           <h1 className="startup-title">{t('title')}</h1>
           <p className="startup-subtitle">{t('subtitle')}</p>
