@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useTranslation } from '../../../../lib/i18n';
+import { useTranslation } from '../../../../shared/lib/i18n';
 import { BankCardItem } from '../../types/ui';
 import { useBankCardDetails } from './useBankCardDetails';
-import { IconCopy, IconPreview, IconPreviewOff } from '@/components/lucide/icons';
-import ConfirmDialog from '../../../../components/ConfirmDialog';
+import { IconCopy, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 
 export type BankCardDetailsProps = {
   card: BankCardItem | null;

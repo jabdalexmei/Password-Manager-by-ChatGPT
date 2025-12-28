@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from '../../../../lib/i18n';
+import { useTranslation } from '../../../../shared/lib/i18n';
 import {
   IconAttachment,
   IconPreview,
@@ -7,16 +7,16 @@ import {
   IconRename,
   IconRegenerate,
   IconTrash,
-} from '@/components/lucide/icons';
+} from '@/shared/icons/lucide/icons';
 import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
 import { CustomFieldModal } from '../modals/CustomFieldModal';
 import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
 import { Add2FAModal } from '../modals/Add2FAModal';
-import { useToaster } from '../../../../components/Toaster';
+import { useToaster } from '../../../../shared/components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 import { open } from '@tauri-apps/plugin-dialog';
-import { clipboardClearAll } from '../../../../lib/tauri';
+import { clipboardClearAll } from '../../../../shared/lib/tauri';
 
 export type DataCardsProps = {
   viewModel: DataCardsViewModel;

@@ -1,6 +1,6 @@
 import React from 'react';
-import { IconExport, IconImport, IconLock, IconSettings } from '@/components/lucide/icons';
-import { useTranslation } from '../../../../lib/i18n';
+import { IconExport, IconImport, IconLock, IconSettings } from '@/shared/icons/lucide/icons';
+import { useTranslation } from '../../../../shared/lib/i18n';
 
 type Props = {
   profileName: string;

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useTranslation } from '../../../../lib/i18n';
+import { useTranslation } from '../../../../shared/lib/i18n';
 
 interface AttachmentPreviewModalProps {
   open: boolean;

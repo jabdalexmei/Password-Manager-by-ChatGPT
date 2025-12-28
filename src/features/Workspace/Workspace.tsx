@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { useTranslation } from '../../lib/i18n';
+import { useTranslation } from '../../shared/lib/i18n';
 import {
   workspaceCreate,
   workspaceCreateDefault,
   workspaceOpenInExplorer,
   workspaceSelect,
-} from '../../lib/tauri';
+} from '../../shared/lib/tauri';
 import { useWorkspace } from './hooks/useWorkspace';
 
 type WorkspaceProps = {

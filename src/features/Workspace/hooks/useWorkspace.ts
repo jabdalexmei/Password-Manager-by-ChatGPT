@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { WorkspaceItem, workspaceList, workspaceRemove } from '../../lib/tauri';
+import { WorkspaceItem, workspaceList, workspaceRemove } from '../../shared/lib/tauri';
 
 export const useWorkspace = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);

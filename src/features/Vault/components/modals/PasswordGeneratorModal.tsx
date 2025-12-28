@@ -1,7 +1,7 @@
 import React from 'react';
-import { useTranslation } from '../../../../lib/i18n';
+import { useTranslation } from '../../../../shared/lib/i18n';
 import { calculateStrengthBits, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
-import { IconCopy, IconRegenerate } from '@/components/lucide/icons';
+import { IconCopy, IconRegenerate } from '@/shared/icons/lucide/icons';
 
 type PasswordGeneratorModalProps = {
   isOpen: boolean;

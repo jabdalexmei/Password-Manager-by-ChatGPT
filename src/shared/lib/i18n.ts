@@ -1,16 +1,16 @@
 import { useCallback, useMemo } from 'react';
-import startup from '../i18n/English/Startup.json';
-import profileCreate from '../i18n/English/ProfileCreate.json';
-import login from '../i18n/English/LogIn.json';
-import vault from '../i18n/English/Vault.json';
-import dataCards from '../i18n/English/DataCards.json';
-import bankCards from '../i18n/English/BankCards.json';
-import common from '../i18n/English/Common.json';
-import tooltips from '../i18n/English/Tooltips.json';
-import search from '../i18n/English/Search.json';
-import folders from '../i18n/English/Folders.json';
-import details from '../i18n/English/Details.json';
-import workspace from '../i18n/English/Workspace.json';
+import startup from '../../i18n/locales/en/Startup.json';
+import profileCreate from '../../i18n/locales/en/ProfileCreate.json';
+import login from '../../i18n/locales/en/LogIn.json';
+import vault from '../../i18n/locales/en/Vault.json';
+import dataCards from '../../i18n/locales/en/DataCards.json';
+import bankCards from '../../i18n/locales/en/BankCards.json';
+import common from '../../i18n/locales/en/Common.json';
+import tooltips from '../../i18n/locales/en/Tooltips.json';
+import search from '../../i18n/locales/en/Search.json';
+import folders from '../../i18n/locales/en/Folders.json';
+import details from '../../i18n/locales/en/Details.json';
+import workspace from '../../i18n/locales/en/Workspace.json';
 
 type Dictionaries = {
   Common: typeof common;

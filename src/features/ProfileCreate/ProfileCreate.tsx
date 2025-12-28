@@ -1,6 +1,6 @@
 import React, { FormEvent } from 'react';
-import { useTranslation } from '../../lib/i18n';
-import { ProfileMeta } from '../../lib/tauri';
+import { useTranslation } from '../../shared/lib/i18n';
+import { ProfileMeta } from '../../shared/lib/tauri';
 import { useProfileCreate } from './hooks/useProfileCreate';
 
 type ProfileCreateProps = {

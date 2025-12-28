@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CustomField, DataCard, Folder } from '../../types/ui';
-import { useTranslation } from '../../../../lib/i18n';
+import { useTranslation } from '../../../../shared/lib/i18n';
 import { useDetails } from './useDetails';
 import { generateTotpCode } from '../../utils/totp';
 import {
@@ -11,8 +11,8 @@ import {
   IconImport,
   IconPreview,
   IconPreviewOff,
-} from '@/components/lucide/icons';
-import ConfirmDialog from '../../../../components/ConfirmDialog';
+} from '@/shared/icons/lucide/icons';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 import AttachmentPreviewModal from '../modals/AttachmentPreviewModal';
 import PasswordHistoryDialog from '../modals/PasswordHistoryDialog';
 

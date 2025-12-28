@@ -19,7 +19,7 @@ import {
   setDataCardFavorite,
   updateDataCard,
 } from './api/vaultApi';
-import { clipboardClearAll, lockVault } from '../../lib/tauri';
+import { clipboardClearAll, lockVault } from '../../shared/lib/tauri';
 import {
   mapCardFromBackend,
   mapCardSummaryFromBackend,
@@ -30,8 +30,8 @@ import {
 } from './types/mappers';
 import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput } from './types/ui';
 import { BackendUserSettings } from './types/backend';
-import { useToaster } from '../../components/Toaster';
-import { useTranslation } from '../../lib/i18n';
+import { useToaster } from '../../shared/components/Toaster';
+import { useTranslation } from '../../shared/lib/i18n';
 import { useDebouncedValue } from './useDebouncedValue';
 import { sortCards, sortFolders } from './types/sort';
 

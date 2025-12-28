@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import ConfirmDialog from '../../components/ConfirmDialog';
-import { useTranslation } from '../../lib/i18n';
-import { ProfileMeta, setActiveProfile } from '../../lib/tauri';
+import ConfirmDialog from '../../shared/components/ConfirmDialog';
+import { useTranslation } from '../../shared/lib/i18n';
+import { ProfileMeta, setActiveProfile } from '../../shared/lib/tauri';
 import { useStartup } from './hooks/useStartup';
 
 type StartupProps = {

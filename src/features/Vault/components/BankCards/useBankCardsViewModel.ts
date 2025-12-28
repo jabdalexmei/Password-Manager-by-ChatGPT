@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useTranslation } from '../../../../lib/i18n';
+import { useTranslation } from '../../../../shared/lib/i18n';
 import { BankCardItem, BankCardSummary, CreateBankCardInput, UpdateBankCardInput } from '../../types/ui';
 
 export type BankCardFieldErrorKey = 'title' | 'expiryMmYy' | 'cvc';

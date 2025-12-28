@@ -1,11 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import LogIn from './features/LogIn/LogIn';
-import ProfileCreate from './features/ProfileCreate/ProfileCreate';
-import Startup from './features/Startup/Startup';
-import Vault from './features/Vault/Vault';
-import Workspace from './features/Workspace/Workspace';
-import { ToasterProvider } from './components/Toaster';
-import { ProfileMeta, loginVault, setActiveProfile } from './lib/tauri';
+import LogIn from '../features/LogIn/LogIn';
+import ProfileCreate from '../features/ProfileCreate/ProfileCreate';
+import Startup from '../features/Startup/Startup';
+import Vault from '../features/Vault/Vault';
+import Workspace from '../features/Workspace/Workspace';
+import { ToasterProvider } from '../shared/components/Toaster';
+import { ProfileMeta, loginVault, setActiveProfile } from '../shared/lib/tauri';
 
 type View = 'workspace' | 'startup' | 'create' | 'login' | 'vault';
 
