@@ -7,9 +7,10 @@ import { useStartup } from './hooks/useStartup';
 type StartupProps = {
   onCreate: () => void;
   onOpen: (profile: ProfileMeta) => void;
+  onBack: () => void;
 };
 
-const Startup: React.FC<StartupProps> = ({ onCreate, onOpen }) => {
+const Startup: React.FC<StartupProps> = ({ onCreate, onOpen, onBack }) => {
   const { profiles, loading, error, removeProfile } = useStartup();
   const { t } = useTranslation('Startup');
   const [pendingDelete, setPendingDelete] = useState<ProfileMeta | null>(null);
@@ -89,32 +90,32 @@ const Startup: React.FC<StartupProps> = ({ onCreate, onOpen }) => {
 
         {content}
 
-        <div className="centered">
-          <button
-            type="button"
-            className="link-button"
-            onClick={onCreate}
-          >
+        <div className="startup-footer">
+          <button type="button" className="btn btn-secondary" onClick={onBack}>
+            {t('back')}
+          </button>
+
+          <button type="button" className="btn btn-primary" onClick={onCreate}>
             {t('create')}
           </button>
-          <p className="startup-footnote">{t('footnote')}</p>
         </div>
+        <p className="startup-footnote">{t('footnote')}</p>
       </div>
 
       <ConfirmDialog
-  open={Boolean(pendingDelete)}
-  title={t('confirmDeleteTitle')}
-  description={t('confirmDelete')}
-  cancelLabel={t('cancel')}
-  confirmLabel={t('delete')}
-  onCancel={() => setPendingDelete(null)}
-  onConfirm={async () => {
-    if (pendingDelete) {
-      await removeProfile(pendingDelete.id);
-    }
-    setPendingDelete(null);
-  }}
-/>
+        open={Boolean(pendingDelete)}
+        title={t('confirmDeleteTitle')}
+        description={t('confirmDelete')}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('delete')}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (pendingDelete) {
+            await removeProfile(pendingDelete.id);
+          }
+          setPendingDelete(null);
+        }}
+      />
 
     </div>
   );

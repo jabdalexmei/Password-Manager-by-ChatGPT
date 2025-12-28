@@ -34,7 +34,16 @@ const App: React.FC = () => {
   const content = useMemo(() => {
     switch (view) {
       case 'startup':
-        return <Startup onCreate={() => setView('create')} onOpen={openProfile} />;
+        return (
+          <Startup
+            onCreate={() => setView('create')}
+            onOpen={openProfile}
+            onBack={() => {
+              setProfile(null);
+              setView('workspace');
+            }}
+          />
+        );
       case 'workspace':
         return (
           <Workspace
