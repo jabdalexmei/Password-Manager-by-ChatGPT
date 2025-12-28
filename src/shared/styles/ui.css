@@ -25,11 +25,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
+  background: var(--surface-block);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   padding: 14px 16px;
   gap: 16px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.profile-card:hover {
+  border-color: var(--border-subtle);
 }
 
 .profile-meta {
@@ -67,9 +72,9 @@
   padding: 18px;
   text-align: center;
   color: var(--color-text-muted);
-  border: 1px dashed var(--color-border);
+  border: 1px dashed var(--border-subtle);
   border-radius: var(--radius-md);
-  background: var(--surface-tint-02);
+  background: var(--surface-block);
 }
 
 /* ==========================================================================
@@ -112,10 +117,11 @@
 }
 
 .auth-panel {
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 18px 18px;
+  /* Layout container only (no “card within card” look). */
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .auth-footer {
@@ -221,8 +227,8 @@
 .form-textarea {
   width: 100%;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-input-bg);
+  border: 1px solid transparent; /* reduce “border noise” globally */
+  background: var(--input-surface);
   color: var(--color-text);
   padding: 10px 12px;
 }
@@ -242,8 +248,8 @@
 .form-field select:focus-visible,
 .form-field textarea:focus-visible,
 .form-textarea:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
   border-color: transparent;
 }
 
@@ -278,9 +284,9 @@
 
 /* Selected profile info block (summary panel) */
 .profile-selected {
-  border: 1px solid var(--color-border);
+  border: none;
   border-radius: var(--radius-md);
-  background: var(--color-surface-2);
+  background: var(--surface-block);
   padding: 12px;
 }
 
@@ -340,9 +346,9 @@
 /* Secondary action button (neutral) */
 .btn-secondary {
   /* Solid fill (no gradient) — matches the old/demo look */
-  background: var(--btn-secondary-bg, var(--color-surface-2));
+  background: var(--btn-secondary-bg, var(--surface-container));
   color: var(--btn-secondary-text, var(--color-text));
-  border-color: var(--btn-secondary-border, var(--color-border));
+  border-color: var(--btn-secondary-border, var(--border-subtle));
 }
 
 .btn-secondary:not(:disabled):hover {
@@ -362,9 +368,9 @@
 
 /* Ghost button (looks like secondary now; keep name for semantic usage) */
 .btn-ghost {
-  background: var(--color-surface-2);
+  background: var(--surface-container);
   color: var(--color-text);
-  border-color: var(--color-border);
+  border-color: var(--border-subtle);
 }
 
 .btn-ghost:not(:disabled):hover {
@@ -375,7 +381,7 @@
 .btn-outline {
   background: transparent;
   color: var(--color-text);
-  border-color: var(--color-border);
+  border-color: var(--border-subtle);
 }
 
 /* Link-styled button (text-only action) */
@@ -419,7 +425,7 @@
   width: min(520px, calc(100vw - 32px));
   border-radius: var(--radius-lg);
   background: var(--color-surface-1);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-lg);
 }
 
@@ -467,7 +473,7 @@
   min-width: 160px;
   padding: 6px;
   border-radius: 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-subtle);
   background: var(--color-surface);
   box-shadow: var(--shadow-popover);
   z-index: 2;
@@ -497,7 +503,7 @@
   width: 34px;
   height: 34px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-subtle);
   background: var(--color-surface-2);
   color: var(--color-text);
   cursor: pointer;

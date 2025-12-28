@@ -4,7 +4,7 @@
   align-items: center;
   justify-content: center;
   padding: 42px;
-  background: var(--bg-startup-screen);
+  background: var(--bg-screen);
 }
 
 /* Use THEME colors. Keep fallbacks so it still looks ok even if a variable is missing. */
@@ -13,8 +13,8 @@
   border-radius: 28px;
   padding: 34px 36px;
 
-  background: var(--color-surface, rgba(2, 6, 23, 0.72));
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  background: var(--surface-page, rgba(2, 6, 23, 0.72));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   box-shadow: var(--shadow-card, 0 18px 60px rgba(0, 0, 0, 0.55));
 
   /* IMPORTANT: remove glass effect that makes theme look “different” */
@@ -97,9 +97,9 @@
 
 .workspace-empty {
   border-radius: 18px;
-  border: 1px dashed var(--color-border, rgba(255, 255, 255, 0.10));
+  border: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.10));
   padding: 18px;
-  background: var(--color-surface-alt, rgba(15, 23, 42, 0.35));
+  background: var(--surface-block, rgba(15, 23, 42, 0.35));
 }
 
 .workspace-empty-text {
@@ -120,8 +120,8 @@
 
 .workspace-tile {
   border-radius: 18px;
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.10));
-  background: var(--color-surface-alt, rgba(15, 23, 42, 0.55));
+  border: 1px solid transparent;
+  background: var(--surface-block, rgba(15, 23, 42, 0.55));
   padding: 16px 16px 14px;
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
@@ -174,7 +174,7 @@
   border-radius: 999px;
   color: var(--color-text, rgba(255, 255, 255, 0.9));
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
 }
 
 /* Action bar: keep it subtle and theme-ish */

@@ -20,6 +20,6 @@ body,
 
 /* общий фон приложения */
 body {
-  background: var(--bg-app);
+  background: var(--bg-screen, var(--bg-app));
   color: var(--color-text);
 }
