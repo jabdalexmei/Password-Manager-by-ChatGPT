@@ -1,4 +1,16 @@
-/* Обёртка экрана входа в профиль */
+/* ==========================================================================
+   login.css
+   --------------------------------------------------------------------------
+   Goal: Match "Log in" reference UI 1:1 (single clean panel, soft borders,
+   no extra heavy outlines, consistent inner surfaces).
+   This file intentionally overrides global ui.css blocks for THIS screen only:
+   - .auth-content width limit (640px)
+   - .auth-panel border/background
+   - .profile-card (selected profile block) border/background
+   - form inputs border/background inside login panel
+   ========================================================================== */
+
+/* Screen wrapper */
 .login-screen {
   min-height: 100vh;
   display: flex;
@@ -8,68 +20,102 @@
   background: var(--bg-startup-screen);
 }
 
-/* Карточка логина */
+/* Outer card */
 .login-card {
   width: min(980px, 100%);
   background: var(--color-surface);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--surface-tint-08);
   box-shadow: var(--shadow-card);
-  padding: 32px 36px 28px;
+  padding: 34px 40px 30px;
   display: flex;
   flex-direction: column;
 }
 
-/* On Log in, the auth content must stretch across the card (match reference UI). */
-.login-card .auth-content {
-  width: 100%;
-  max-width: none;
-}
-
-/* Шапка */
+/* Header */
 .login-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 26px;
 }
 
 .login-title {
   margin: 0;
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
   color: var(--color-text);
 }
 
 .login-subtitle {
-  margin: 6px 0 0 0;
-  font-size: 15px;
+  margin: 8px 0 0 0;
+  font-size: 14px;
   color: var(--color-text-muted);
 }
 
-/* login-actions is removed from markup (footer is now .auth-footer) */
-
-/* Помощный текст: подсказка, линк "Back" и т.д. */
-.login-footer {
-  margin-top: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-  color: var(--color-text-muted);
+/* Make auth content stretch across the card (reference UI is not 640px-limited) */
+.login-card .auth-content {
+  width: 100%;
+  max-width: none;
 }
 
-.login-footer a,
-.login-footer button.link-button {
-  font-size: 13px;
+/* Slightly bigger separation between header and panel */
+.login-card .auth-body {
+  margin-top: 28px;
+}
+
+/* Main inner panel (single clean panel) */
+.login-card .auth-panel {
+  background: transparent;
+  border: 1px solid var(--surface-tint-08);
+  border-radius: var(--radius-lg);
+  padding: 26px 26px;
+}
+
+/* Selected profile block: soft surface + soft border (no "double-border" feel) */
+.login-card .login-selected-profile.profile-card {
+  width: 100%;
+  justify-content: flex-start;
+  align-items: flex-start;
+  background: var(--surface-tint-02);
+  border: 1px solid var(--surface-tint-08);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  gap: 0;
+}
+
+/* Override inline margin in markup (keep layout stable even if markup uses style=...) */
+.login-card .login-selected-profile .muted {
+  margin-bottom: 6px !important;
+}
+
+/* Form spacing: override inline style={{ marginTop: 14 }} for reference match
+   NOTE: author !important can override inline non-important declarations. */
+.login-card form.login-form {
+  margin-top: 18px !important;
+}
+
+/* Inputs inside login: soften borders and remove "bright blue" blocks */
+.login-card .login-form .form-field input,
+.login-card .login-form .form-field select,
+.login-card .login-form .form-field textarea {
+  background: var(--surface-tint-02);
+  border-color: var(--surface-tint-08);
+}
+
+/* Footer stays exactly: Back left, Log in right (global .auth-footer already does it) */
+.login-card .auth-footer {
+  margin-top: 22px;
 }
 
 @media (max-width: 720px) {
+  .login-screen {
+    padding: 18px;
+  }
+
   .login-card {
     padding: 24px;
   }
 
-  .login-footer {
-    flex-direction: column;
-    gap: 6px;
-    text-align: center;
+  .login-title {
+    font-size: 28px;
   }
 }
