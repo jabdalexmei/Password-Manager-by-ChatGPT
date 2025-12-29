@@ -54,6 +54,8 @@ export function mapCardFromBackend(card: BackendDataCard): DataCard {
     deletedAt: card.deleted_at,
     password: card.password,
     totpUri: card.totp_uri,
+    seedPhrase: card.seed_phrase,
+    seedPhraseWords: card.seed_phrase_words,
     customFields: (card.custom_fields || []).map((field) => ({
       key: field.key,
       value: field.value,
@@ -87,6 +89,8 @@ export function mapCardSummaryFromBackend(
     deletedAt: card.deleted_at,
     password: null,
     totpUri: null,
+    seedPhrase: null,
+    seedPhraseWords: null,
     customFields: [],
     isFavorite: card.is_favorite,
     hasTotp: card.has_totp,
@@ -143,6 +147,8 @@ export function mapCreateCardToBackend(input: CreateDataCardInput): BackendCreat
     tags: input.tags ?? [],
     password: input.password ?? null,
     totp_uri: input.totpUri ?? null,
+    seed_phrase: input.seedPhrase ?? null,
+    seed_phrase_words: input.seedPhraseWords ?? null,
     custom_fields: (input.customFields ?? []).map((field) => ({
       key: field.key,
       value: field.value,

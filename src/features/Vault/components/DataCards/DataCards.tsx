@@ -36,8 +36,6 @@ export function DataCards({
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
   const { show: showToast } = useToaster();
-  const SEED_PHRASE_FIELD_KEY = 'Seed phrase';
-  const SEED_PHRASE_COUNT_KEY = '__seed_phrase_count';
   const {
     cards,
     selectedCardId,
@@ -319,24 +317,8 @@ export function DataCards({
 
     const titleElementId = 'dialog-title';
     const isCreateDialog = dialogId === 'datacard-create-dialog';
-    const seedPhraseRow = form.customFields.find(
-      (row) => row.key.trim().toLowerCase() === SEED_PHRASE_FIELD_KEY.toLowerCase()
-    );
-    const seedPhraseCountRow = form.customFields.find(
-      (row) => row.key.trim().toLowerCase() === SEED_PHRASE_COUNT_KEY.toLowerCase()
-    );
-    const seedPhraseWordCount =
-      (seedPhraseCountRow?.value ? Number(seedPhraseCountRow.value) : 0) ||
-      (seedPhraseRow?.value
-        ? seedPhraseRow.value
-            .trim()
-            .split(/\\s+/)
-            .filter(Boolean).length
-        : 0);
-    const visibleCustomFields = form.customFields.filter((row) => {
-      const key = row.key.trim().toLowerCase();
-      return key !== SEED_PHRASE_FIELD_KEY.toLowerCase() && key !== SEED_PHRASE_COUNT_KEY.toLowerCase();
-    });
+    const seedPhraseWordCount = form.seedPhraseWords;
+    const visibleCustomFields = form.customFields;
 
     const totpUri = (form.totpUri ?? '').trim();
     let totpData: { token: string; remaining: number } | null = null;
@@ -410,7 +392,7 @@ export function DataCards({
                       setIsSeedPhraseModalOpen(true);
                     }}
                   >
-                    {t('seedPhrase.addAction')}
+                    {seedPhraseWordCount > 0 ? t('seedPhrase.editAction') : t('seedPhrase.addAction')}
                   </button>
                   {visibleCustomFields.length > 0 && (
                     <button
@@ -922,12 +904,8 @@ export function DataCards({
         isOpen={isSeedPhraseModalOpen}
         existingPhrase={
           seedPhraseTargetDialogId === 'datacard-create-dialog'
-            ? (viewModel.createForm.customFields.find(
-                (row) => row.key.trim().toLowerCase() === SEED_PHRASE_FIELD_KEY.toLowerCase()
-              )?.value ?? null)
-            : (viewModel.editForm?.customFields.find(
-                (row) => row.key.trim().toLowerCase() === SEED_PHRASE_FIELD_KEY.toLowerCase()
-              )?.value ?? null)
+            ? (viewModel.createForm.seedPhrase.trim() ? viewModel.createForm.seedPhrase : null)
+            : (viewModel.editForm?.seedPhrase?.trim() ? viewModel.editForm.seedPhrase : null)
         }
         onCancel={() => {
           setIsSeedPhraseModalOpen(false);
@@ -936,11 +914,9 @@ export function DataCards({
         onSave={(words, wordCount) => {
           const phrase = words.join(' ').trim();
           if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
-            viewModel.setCreateCustomFieldByKey(SEED_PHRASE_FIELD_KEY, phrase, 'secret');
-            viewModel.setCreateCustomFieldByKey(SEED_PHRASE_COUNT_KEY, String(wordCount), 'text');
+            viewModel.setCreateSeedPhrase(phrase, wordCount);
           } else {
-            viewModel.setEditCustomFieldByKey(SEED_PHRASE_FIELD_KEY, phrase, 'secret');
-            viewModel.setEditCustomFieldByKey(SEED_PHRASE_COUNT_KEY, String(wordCount), 'text');
+            viewModel.setEditSeedPhrase(phrase, wordCount);
           }
           setIsSeedPhraseModalOpen(false);
           setSeedPhraseTargetDialogId(null);

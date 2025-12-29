@@ -82,6 +82,8 @@ pub struct DataCard {
 
     pub password: Option<String>,
     pub totp_uri: Option<String>,
+    pub seed_phrase: Option<String>,
+    pub seed_phrase_words: Option<i32>,
     pub custom_fields: Vec<CustomField>,
 }
 
@@ -138,6 +140,8 @@ pub struct CreateDataCardInput {
     pub tags: Vec<String>,
     pub password: Option<String>,
     pub totp_uri: Option<String>,
+    pub seed_phrase: Option<String>,
+    pub seed_phrase_words: Option<i32>,
     pub custom_fields: Vec<CustomField>,
     pub folder_id: Option<String>,
 }
@@ -154,6 +158,8 @@ pub struct UpdateDataCardInput {
     pub tags: Vec<String>,
     pub password: Option<String>,
     pub totp_uri: Option<String>,
+    pub seed_phrase: Option<String>,
+    pub seed_phrase_words: Option<i32>,
     pub custom_fields: Vec<CustomField>,
     pub folder_id: Option<String>,
 }
