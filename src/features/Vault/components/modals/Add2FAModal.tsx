@@ -165,11 +165,9 @@ export const Add2FAModal: React.FC<Props> = ({
 
               </div>
               {error && <div className="form-error">{error}</div>}
-              {busy && (
-                <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-                  {t('twoFactor.qr.loading')}
-                </div>
-              )}
+              <div className="file-picker__status muted" aria-live="polite">
+                {busy ? t('twoFactor.qr.loading') : '\u00A0'}
+              </div>
             </div>
           )}
         </div>
