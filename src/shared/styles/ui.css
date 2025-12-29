@@ -664,6 +664,63 @@
   font-weight: 700;
 }
 
+.seedphrase-select {
+  position: relative;
+}
+
+.seedphrase-select__button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.seedphrase-select__button:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-color: transparent;
+}
+
+.seedphrase-select__chevron {
+  opacity: 0.8;
+}
+
+.seedphrase-select__menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--color-surface-1);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.seedphrase-select__option {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--color-text);
+  border: 0;
+}
+
+.seedphrase-select__option:hover {
+  background: var(--surface-tint-02);
+}
+
+.seedphrase-select__option.is-selected {
+  background: var(--surface-tint-03);
+}
+
 /* "X" close button inside dialogs */
 .dialog-close {
   width: 34px;

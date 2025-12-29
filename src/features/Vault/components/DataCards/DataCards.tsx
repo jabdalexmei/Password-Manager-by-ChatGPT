@@ -37,6 +37,7 @@ export function DataCards({
   const { t: tCommon } = useTranslation('Common');
   const { show: showToast } = useToaster();
   const SEED_PHRASE_FIELD_KEY = 'Seed phrase';
+  const SEED_PHRASE_COUNT_KEY = '__seed_phrase_count';
   const {
     cards,
     selectedCardId,
@@ -321,15 +322,21 @@ export function DataCards({
     const seedPhraseRow = form.customFields.find(
       (row) => row.key.trim().toLowerCase() === SEED_PHRASE_FIELD_KEY.toLowerCase()
     );
-    const seedPhraseWordCount = seedPhraseRow
-      ? seedPhraseRow.value
-          .trim()
-          .split(/\\s+/)
-          .filter(Boolean).length
-      : 0;
-    const visibleCustomFields = form.customFields.filter(
-      (row) => row.key.trim().toLowerCase() !== SEED_PHRASE_FIELD_KEY.toLowerCase()
+    const seedPhraseCountRow = form.customFields.find(
+      (row) => row.key.trim().toLowerCase() === SEED_PHRASE_COUNT_KEY.toLowerCase()
     );
+    const seedPhraseWordCount =
+      (seedPhraseCountRow?.value ? Number(seedPhraseCountRow.value) : 0) ||
+      (seedPhraseRow?.value
+        ? seedPhraseRow.value
+            .trim()
+            .split(/\\s+/)
+            .filter(Boolean).length
+        : 0);
+    const visibleCustomFields = form.customFields.filter((row) => {
+      const key = row.key.trim().toLowerCase();
+      return key !== SEED_PHRASE_FIELD_KEY.toLowerCase() && key !== SEED_PHRASE_COUNT_KEY.toLowerCase();
+    });
 
     const totpUri = (form.totpUri ?? '').trim();
     let totpData: { token: string; remaining: number } | null = null;
@@ -405,7 +412,7 @@ export function DataCards({
                   >
                     {t('seedPhrase.addAction')}
                   </button>
-                  {(form?.customFields?.length ?? 0) > 0 && (
+                  {visibleCustomFields.length > 0 && (
                     <button
                       type="button"
                       className="dialog-actionmenu-item"
@@ -543,9 +550,26 @@ export function DataCards({
             {seedPhraseWordCount > 0 && (
               <div className="form-field">
                 <label className="form-label">{t('seedPhrase.title')}</label>
-                <div className="seedphrase-summary">
-                  <span className="seedphrase-summary-count">{seedPhraseWordCount} words</span>
-                  <span className="muted">{t('seedPhrase.addAction')}</span>
+                <div
+                  className="seedphrase-summary"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    setSeedPhraseTargetDialogId(dialogId as 'datacard-create-dialog' | 'datacard-edit-dialog');
+                    setIsSeedPhraseModalOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSeedPhraseTargetDialogId(dialogId as 'datacard-create-dialog' | 'datacard-edit-dialog');
+                      setIsSeedPhraseModalOpen(true);
+                    }
+                  }}
+                >
+                  <span className="seedphrase-summary-count">
+                    {t('seedPhrase.wordsCount', { count: seedPhraseWordCount })}
+                  </span>
+                  <span className="muted">{t('seedPhrase.editAction')}</span>
                 </div>
               </div>
             )}
@@ -909,12 +933,14 @@ export function DataCards({
           setIsSeedPhraseModalOpen(false);
           setSeedPhraseTargetDialogId(null);
         }}
-        onSave={(words) => {
+        onSave={(words, wordCount) => {
           const phrase = words.join(' ').trim();
           if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
             viewModel.setCreateCustomFieldByKey(SEED_PHRASE_FIELD_KEY, phrase, 'secret');
+            viewModel.setCreateCustomFieldByKey(SEED_PHRASE_COUNT_KEY, String(wordCount), 'text');
           } else {
             viewModel.setEditCustomFieldByKey(SEED_PHRASE_FIELD_KEY, phrase, 'secret');
+            viewModel.setEditCustomFieldByKey(SEED_PHRASE_COUNT_KEY, String(wordCount), 'text');
           }
           setIsSeedPhraseModalOpen(false);
           setSeedPhraseTargetDialogId(null);

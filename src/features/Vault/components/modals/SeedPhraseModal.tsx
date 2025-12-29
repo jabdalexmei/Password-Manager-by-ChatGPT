@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 
 type WordCount = 12 | 18 | 24;
@@ -7,7 +7,7 @@ type SeedPhraseModalProps = {
   isOpen: boolean;
   existingPhrase: string | null;
   onCancel: () => void;
-  onSave: (words: string[]) => void;
+  onSave: (words: string[], wordCount: WordCount) => void;
 };
 
 const WORD_COUNTS: WordCount[] = [12, 18, 24];
@@ -31,6 +31,9 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
   const [wordCount, setWordCount] = useState<WordCount>(12);
   const [words, setWords] = useState<string[]>(Array.from({ length: 12 }, () => ''));
   const [error, setError] = useState<string | null>(null);
+  const [isCountMenuOpen, setIsCountMenuOpen] = useState(false);
+  const countButtonRef = useRef<HTMLButtonElement | null>(null);
+  const countMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -59,6 +62,29 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
     setError(null);
   };
 
+  useEffect(() => {
+    if (!isCountMenuOpen) return;
+
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (countMenuRef.current?.contains(target)) return;
+      if (countButtonRef.current?.contains(target)) return;
+      setIsCountMenuOpen(false);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsCountMenuOpen(false);
+    };
+
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isCountMenuOpen]);
+
   const handleChangeWord = (index: number, value: string) => {
     const tokens = splitWords(value);
     setWords((prev) => {
@@ -84,7 +110,7 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
       setError(t('seedPhrase.errorIncomplete'));
       return;
     }
-    onSave(words.map((w) => w.trim()));
+    onSave(words.map((w) => w.trim()), wordCount);
   };
 
   return (
@@ -101,16 +127,56 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
             <label className="form-label" htmlFor="seedphrase-count">
               {t('seedPhrase.wordCount')}
             </label>
-            <select
-              id="seedphrase-count"
-              className="input"
-              value={wordCount}
-              onChange={(e) => handleChangeCount(Number(e.target.value) as WordCount)}
-            >
-              <option value={12}>{t('seedPhrase.words12')}</option>
-              <option value={18}>{t('seedPhrase.words18')}</option>
-              <option value={24}>{t('seedPhrase.words24')}</option>
-            </select>
+            <div className="seedphrase-select">
+              <button
+                ref={countButtonRef}
+                id="seedphrase-count"
+                type="button"
+                className="seedphrase-select__button"
+                aria-haspopup="listbox"
+                aria-expanded={isCountMenuOpen}
+                onClick={() => setIsCountMenuOpen((prev) => !prev)}
+              >
+                <span>
+                  {wordCount === 12
+                    ? t('seedPhrase.words12')
+                    : wordCount === 18
+                      ? t('seedPhrase.words18')
+                      : t('seedPhrase.words24')}
+                </span>
+                <span className="seedphrase-select__chevron" aria-hidden="true">
+                  ▾
+                </span>
+              </button>
+              {isCountMenuOpen && (
+                <div
+                  ref={countMenuRef}
+                  className="seedphrase-select__menu"
+                  role="listbox"
+                  aria-labelledby="seedphrase-count"
+                >
+                  {WORD_COUNTS.map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      role="option"
+                      aria-selected={count === wordCount}
+                      className={`seedphrase-select__option ${count === wordCount ? 'is-selected' : ''}`}
+                      onClick={() => {
+                        handleChangeCount(count);
+                        setIsCountMenuOpen(false);
+                      }}
+                    >
+                      {count === 12
+                        ? t('seedPhrase.words12')
+                        : count === 18
+                          ? t('seedPhrase.words18')
+                          : t('seedPhrase.words24')}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="seedphrase-grid" aria-label={t('seedPhrase.gridAria')}>
