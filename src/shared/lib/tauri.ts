@@ -79,6 +79,22 @@ export function workspaceOpenInExplorer(): Promise<boolean> {
   return invoke('workspace_open_in_explorer');
 }
 
+export type BackupInspectResult = {
+  profile_id: string;
+  profile_name: string;
+  created_at_utc: string;
+  vault_mode: string;
+  will_overwrite: boolean;
+};
+
+export function backupInspect(backupPath: string): Promise<BackupInspectResult> {
+  return invoke('backup_inspect', { backupPath });
+}
+
+export function backupRestoreWorkflow(backupPath: string): Promise<boolean> {
+  return invoke('backup_restore_workflow', { backupPath });
+}
+
 export async function clipboardClearAll(): Promise<void> {
   await invoke('clipboard_clear_all');
 }

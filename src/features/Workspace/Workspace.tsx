@@ -2,11 +2,15 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from '../../shared/lib/i18n';
 import {
+  backupInspect,
+  backupRestoreWorkflow,
   workspaceCreate,
   workspaceCreateDefault,
   workspaceOpenInExplorer,
   workspaceSelect,
 } from '../../shared/lib/tauri';
+import ConfirmDialog from '../../shared/components/ConfirmDialog';
+import { useToaster } from '../../shared/components/Toaster';
 import { useWorkspace } from './hooks/useWorkspace';
 
 type WorkspaceProps = {
@@ -15,8 +19,12 @@ type WorkspaceProps = {
 
 const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const { t } = useTranslation('Workspace');
+  const { show: showToast } = useToaster();
   const { workspaces, loading, error, selectedId, setSelectedId, refresh, remove } = useWorkspace();
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingBackupPath, setPendingBackupPath] = useState<string | null>(null);
+  const [pendingProfileName, setPendingProfileName] = useState<string>('');
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((w) => w.id === selectedId) ?? null,
@@ -68,6 +76,45 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
       setBusy(false);
     }
   }, [onWorkspaceReady, refresh]);
+
+  const handleRestoreFromBackup = useCallback(async () => {
+    setBusy(true);
+    try {
+      const backup = await open({
+        directory: false,
+        multiple: false,
+        title: t('chooseBackupFile'),
+        filters: [{ name: 'Backup', extensions: ['zip'] }],
+      });
+      if (typeof backup !== 'string') return;
+
+      const targetFolder = await open({
+        directory: true,
+        multiple: false,
+        title: t('chooseFolder'),
+      });
+      if (typeof targetFolder !== 'string') return;
+
+      await workspaceCreate(targetFolder);
+      await refresh();
+
+      const info = await backupInspect(backup);
+      setPendingBackupPath(backup);
+      setPendingProfileName(info.profile_name);
+
+      if (info.will_overwrite) {
+        setConfirmOpen(true);
+        return;
+      }
+
+      showToast(t('restoreInfoCreate', { name: info.profile_name }), 'success');
+      await backupRestoreWorkflow(backup);
+      showToast(t('restoreSuccess'), 'success');
+      onWorkspaceReady();
+    } finally {
+      setBusy(false);
+    }
+  }, [onWorkspaceReady, refresh, showToast, t]);
 
   // IMPORTANT: this button acts as:
   // - browse/select folder (always opens picker)
@@ -232,6 +279,15 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
 
             <button
               type="button"
+              className="btn btn-primary workspace-cta"
+              onClick={handleRestoreFromBackup}
+              disabled={busy}
+            >
+              {t('restoreFromBackup')}
+            </button>
+
+            <button
+              type="button"
               className="btn btn-secondary workspace-cta-secondary"
               onClick={handleOpenDataFolder}
               disabled={busy}
@@ -245,6 +301,32 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
           </section>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t('restoreConfirmTitle')}
+        description={t('restoreConfirmOverwrite', { name: pendingProfileName })}
+        confirmLabel={t('restoreFromBackup')}
+        cancelLabel="Cancel"
+        onCancel={() => {
+          setConfirmOpen(false);
+          setPendingBackupPath(null);
+        }}
+        onConfirm={async () => {
+          const path = pendingBackupPath;
+          setConfirmOpen(false);
+          setPendingBackupPath(null);
+          if (!path) return;
+          setBusy(true);
+          try {
+            await backupRestoreWorkflow(path);
+            showToast(t('restoreSuccess'), 'success');
+            onWorkspaceReady();
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
     </div>
   );
 };
