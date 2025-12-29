@@ -48,9 +48,8 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
       return next.length ? next : prev;
     });
     setError(null);
+    setIsCountMenuOpen(false);
   }, [existingWords, isOpen]);
-
-  if (!isOpen) return null;
 
   const handleChangeCount = (next: WordCount) => {
     setWordCount(next);
@@ -63,7 +62,7 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
   };
 
   useEffect(() => {
-    if (!isCountMenuOpen) return;
+    if (!isOpen || !isCountMenuOpen) return;
 
     const onMouseDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
@@ -83,7 +82,7 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [isCountMenuOpen]);
+  }, [isCountMenuOpen, isOpen]);
 
   const handleChangeWord = (index: number, value: string) => {
     const tokens = splitWords(value);
@@ -112,6 +111,8 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
     }
     onSave(words.map((w) => w.trim()), wordCount);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="dialog-backdrop dialog-backdrop--inner">
