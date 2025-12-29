@@ -14,6 +14,7 @@ import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
 import { Add2FAModal } from '../modals/Add2FAModal';
 import { useToaster } from '../../../../shared/components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
+import { generateTotpCode } from '../../utils/totp';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 import { open } from '@tauri-apps/plugin-dialog';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
@@ -78,6 +79,8 @@ export function DataCards({
   const genPwdLastCopiedRef = useRef<string | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const [totpNow, setTotpNow] = useState(() => Date.now());
 
   const regeneratePassword = useCallback((options: PasswordGeneratorOptions) => {
     const { password, charsetSize: size } = generatePassword(options);
@@ -192,6 +195,16 @@ export function DataCards({
   }, [isCreateOpen, isEditOpen]);
 
   useEffect(() => {
+    const activeUri = (
+      isCreateOpen ? viewModel.createForm?.totpUri : isEditOpen ? viewModel.editForm?.totpUri : null
+    ) ?? '';
+    if (!activeUri.trim()) return;
+
+    const id = window.setInterval(() => setTotpNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [isCreateOpen, isEditOpen, viewModel.createForm?.totpUri, viewModel.editForm?.totpUri]);
+
+  useEffect(() => {
     if (isCreateOpen || isEditOpen) return;
     setIsActionMenuOpen(false);
     setIsCustomFieldModalOpen(false);
@@ -291,6 +304,16 @@ export function DataCards({
 
     const titleElementId = 'dialog-title';
     const isCreateDialog = dialogId === 'datacard-create-dialog';
+
+    const totpUri = (form.totpUri ?? '').trim();
+    let totpData: { token: string; remaining: number } | null = null;
+    if (totpUri) {
+      try {
+        totpData = generateTotpCode(totpUri, totpNow);
+      } catch {
+        totpData = null;
+      }
+    }
 
     return (
       <div className="dialog-backdrop">
@@ -457,6 +480,26 @@ export function DataCards({
                 </div>
               </div>
             </div>
+
+            {totpUri && (
+              <div className="form-field">
+                <label className="form-label">{t('label.totp')}</label>
+
+                <div className="detail-value-box">
+                  <div className="detail-value-text" style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                    <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: 2 }}>
+                      {totpData ? totpData.token : t('totp.invalid')}
+                    </span>
+
+                    {totpData && (
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        {t('totp.expiresIn', { seconds: totpData.remaining })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {form.customFields.map((row) => (
               <div className="form-field" key={row.id}>
