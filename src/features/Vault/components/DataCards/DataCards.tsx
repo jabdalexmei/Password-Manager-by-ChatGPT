@@ -12,6 +12,7 @@ import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
 import { CustomFieldModal } from '../modals/CustomFieldModal';
 import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
 import { Add2FAModal } from '../modals/Add2FAModal';
+import { SeedPhraseModal } from '../modals/SeedPhraseModal';
 import { useToaster } from '../../../../shared/components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { generateTotpCode } from '../../utils/totp';
@@ -35,6 +36,7 @@ export function DataCards({
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
   const { show: showToast } = useToaster();
+  const SEED_PHRASE_FIELD_KEY = 'Seed phrase';
   const {
     cards,
     selectedCardId,
@@ -73,6 +75,10 @@ export function DataCards({
   const [renameError, setRenameError] = useState<string | null>(null);
   const [is2faModalOpen, setIs2faModalOpen] = useState(false);
   const [twoFactorTargetDialogId, setTwoFactorTargetDialogId] = useState<
+    'datacard-create-dialog' | 'datacard-edit-dialog' | null
+  >(null);
+  const [isSeedPhraseModalOpen, setIsSeedPhraseModalOpen] = useState(false);
+  const [seedPhraseTargetDialogId, setSeedPhraseTargetDialogId] = useState<
     'datacard-create-dialog' | 'datacard-edit-dialog' | null
   >(null);
   const genPwdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,6 +223,8 @@ export function DataCards({
     setRenameError(null);
     setIs2faModalOpen(false);
     setTwoFactorTargetDialogId(null);
+    setIsSeedPhraseModalOpen(false);
+    setSeedPhraseTargetDialogId(null);
   }, [isCreateOpen, isEditOpen]);
 
   useEffect(() => {
@@ -231,6 +239,11 @@ export function DataCards({
         if (is2faModalOpen) {
           setIs2faModalOpen(false);
           setTwoFactorTargetDialogId(null);
+          return;
+        }
+        if (isSeedPhraseModalOpen) {
+          setIsSeedPhraseModalOpen(false);
+          setSeedPhraseTargetDialogId(null);
           return;
         }
         if (isCustomFieldModalOpen) {
@@ -254,6 +267,7 @@ export function DataCards({
     handleCloseEditModal,
     isActionMenuOpen,
     is2faModalOpen,
+    isSeedPhraseModalOpen,
     isCreateOpen,
     isCustomFieldModalOpen,
     isEditOpen,
@@ -304,6 +318,18 @@ export function DataCards({
 
     const titleElementId = 'dialog-title';
     const isCreateDialog = dialogId === 'datacard-create-dialog';
+    const seedPhraseRow = form.customFields.find(
+      (row) => row.key.trim().toLowerCase() === SEED_PHRASE_FIELD_KEY.toLowerCase()
+    );
+    const seedPhraseWordCount = seedPhraseRow
+      ? seedPhraseRow.value
+          .trim()
+          .split(/\\s+/)
+          .filter(Boolean).length
+      : 0;
+    const visibleCustomFields = form.customFields.filter(
+      (row) => row.key.trim().toLowerCase() !== SEED_PHRASE_FIELD_KEY.toLowerCase()
+    );
 
     const totpUri = (form.totpUri ?? '').trim();
     let totpData: { token: string; remaining: number } | null = null;
@@ -365,6 +391,19 @@ export function DataCards({
                     }}
                   >
                     {t('customFields.add')}
+                  </button>
+                  <button
+                    type="button"
+                    className="dialog-actionmenu-item"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setSeedPhraseTargetDialogId(
+                        dialogId === 'datacard-create-dialog' ? 'datacard-create-dialog' : 'datacard-edit-dialog'
+                      );
+                      setIsSeedPhraseModalOpen(true);
+                    }}
+                  >
+                    {t('seedPhrase.addAction')}
                   </button>
                   {(form?.customFields?.length ?? 0) > 0 && (
                     <button
@@ -501,7 +540,17 @@ export function DataCards({
               </div>
             )}
 
-            {form.customFields.map((row) => (
+            {seedPhraseWordCount > 0 && (
+              <div className="form-field">
+                <label className="form-label">{t('seedPhrase.title')}</label>
+                <div className="seedphrase-summary">
+                  <span className="seedphrase-summary-count">{seedPhraseWordCount} words</span>
+                  <span className="muted">{t('seedPhrase.addAction')}</span>
+                </div>
+              </div>
+            )}
+
+            {visibleCustomFields.map((row) => (
               <div className="form-field" key={row.id}>
                 <label className="form-label" htmlFor={`${dialogId}-cf-${row.id}`}>
                   {row.key}
@@ -842,6 +891,33 @@ export function DataCards({
           }
           setIs2faModalOpen(false);
           setTwoFactorTargetDialogId(null);
+        }}
+      />
+
+      <SeedPhraseModal
+        isOpen={isSeedPhraseModalOpen}
+        existingPhrase={
+          seedPhraseTargetDialogId === 'datacard-create-dialog'
+            ? (viewModel.createForm.customFields.find(
+                (row) => row.key.trim().toLowerCase() === SEED_PHRASE_FIELD_KEY.toLowerCase()
+              )?.value ?? null)
+            : (viewModel.editForm?.customFields.find(
+                (row) => row.key.trim().toLowerCase() === SEED_PHRASE_FIELD_KEY.toLowerCase()
+              )?.value ?? null)
+        }
+        onCancel={() => {
+          setIsSeedPhraseModalOpen(false);
+          setSeedPhraseTargetDialogId(null);
+        }}
+        onSave={(words) => {
+          const phrase = words.join(' ').trim();
+          if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
+            viewModel.setCreateCustomFieldByKey(SEED_PHRASE_FIELD_KEY, phrase, 'secret');
+          } else {
+            viewModel.setEditCustomFieldByKey(SEED_PHRASE_FIELD_KEY, phrase, 'secret');
+          }
+          setIsSeedPhraseModalOpen(false);
+          setSeedPhraseTargetDialogId(null);
         }}
       />
     </div>

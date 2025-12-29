@@ -94,6 +94,8 @@ export type DataCardsViewModel = {
     nextName: string
   ) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
   removeEditCustomFieldById: (rowId: string) => void;
+  setCreateCustomFieldByKey: (key: string, value: string, type: CustomFieldType) => void;
+  setEditCustomFieldByKey: (key: string, value: string, type: CustomFieldType) => void;
 };
 
 type PendingAttachment = {
@@ -119,6 +121,8 @@ const normalizeTags = (value: string) => {
 
 const makeRowId = () =>
   globalThis.crypto?.randomUUID?.() ?? `cf_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+const normalizeKey = (value: string) => value.trim().toLowerCase();
 
 const buildCreateInput = (form: DataCardFormState): CreateDataCardInput => ({
   folderId: form.folderId,
@@ -343,6 +347,27 @@ export function useDataCards({
     }));
   }, []);
 
+  const setCreateCustomFieldByKey = useCallback((key: string, value: string, type: CustomFieldType) => {
+    const trimmedKey = key.trim();
+    if (!trimmedKey) return;
+    const matchKey = normalizeKey(trimmedKey);
+
+    setCreateForm((prev) => {
+      const idx = prev.customFields.findIndex((row) => normalizeKey(row.key) === matchKey);
+      if (idx >= 0) {
+        return {
+          ...prev,
+          customFields: prev.customFields.map((row, i) => (i === idx ? { ...row, value, type } : row)),
+        };
+      }
+
+      return {
+        ...prev,
+        customFields: [...prev.customFields, { id: makeRowId(), key: trimmedKey, value, type }],
+      };
+    });
+  }, []);
+
   const addEditCustomFieldByName = useCallback(
     (name: string) => {
       const trimmed = name.trim();
@@ -407,6 +432,28 @@ export function useDataCards({
       return {
         ...prev,
         customFields: prev.customFields.filter((row) => row.id !== rowId),
+      };
+    });
+  }, []);
+
+  const setEditCustomFieldByKey = useCallback((key: string, value: string, type: CustomFieldType) => {
+    const trimmedKey = key.trim();
+    if (!trimmedKey) return;
+    const matchKey = normalizeKey(trimmedKey);
+
+    setEditForm((prev) => {
+      if (!prev) return prev;
+      const idx = prev.customFields.findIndex((row) => normalizeKey(row.key) === matchKey);
+      if (idx >= 0) {
+        return {
+          ...prev,
+          customFields: prev.customFields.map((row, i) => (i === idx ? { ...row, value, type } : row)),
+        };
+      }
+
+      return {
+        ...prev,
+        customFields: [...prev.customFields, { id: makeRowId(), key: trimmedKey, value, type }],
       };
     });
   }, []);
@@ -581,5 +628,7 @@ export function useDataCards({
     updateEditCustomFieldValue,
     renameEditCustomFieldById,
     removeEditCustomFieldById,
+    setCreateCustomFieldByKey,
+    setEditCustomFieldByKey,
   };
 }

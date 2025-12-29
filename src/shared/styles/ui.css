@@ -616,6 +616,54 @@
   width: min(420px, calc(100vw - 40px));
 }
 
+.seedphrase-dialog {
+  width: min(720px, calc(100vw - 40px));
+}
+
+.seedphrase-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.seedphrase-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.seedphrase-index {
+  flex: 0 0 auto;
+  width: 26px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.seedphrase-input {
+  width: 100%;
+}
+
+.seedphrase-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.seedphrase-summary-count {
+  font-weight: 700;
+}
+
 /* "X" close button inside dialogs */
 .dialog-close {
   width: 34px;
