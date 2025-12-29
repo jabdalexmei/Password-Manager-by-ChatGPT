@@ -145,6 +145,7 @@ pub fn upsert_profile_with_id(
 
     // Ensure profile dirs exist (id is used as folder name).
     let profile_dir = crate::data::profiles::paths::profile_dir(sp, id)?;
+    let existed_before = profile_dir.exists();
     crate::data::profiles::paths::ensure_profile_dirs(sp, id)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
@@ -154,7 +155,10 @@ pub fn upsert_profile_with_id(
     let serialized_config = serde_json::to_string_pretty(&config)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     if let Err(err) = write_atomic(&config_path, &serialized_config) {
-        let _ = fs::remove_dir_all(&profile_dir);
+        // Never delete an existing profile directory on config write failure.
+        if !existed_before && profile_dir.exists() {
+            let _ = fs::remove_dir_all(&profile_dir);
+        }
         return Err(err);
     }
 
