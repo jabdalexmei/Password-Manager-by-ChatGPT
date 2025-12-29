@@ -258,8 +258,22 @@ fn build_backup_source(
     let attachments_path = profile_root.join("attachments");
     let config_path = profile_config_path(sp, profile_id).ok();
     let settings_path = user_settings_path(sp, profile_id).ok();
-    let salt_path = kdf_salt_path(sp, profile_id).ok();
-    let key_check = key_check_path(sp, profile_id).ok();
+    let (salt_path, key_check) = if profile.has_password {
+        let salt = kdf_salt_path(sp, profile_id)?;
+        if !salt.exists() {
+            return Err(ErrorCodeString::new("KDF_SALT_MISSING"));
+        }
+        let key_check = key_check_path(sp, profile_id)?;
+        if !key_check.exists() {
+            return Err(ErrorCodeString::new("KEY_CHECK_MISSING"));
+        }
+        (Some(salt), Some(key_check))
+    } else {
+        (
+            kdf_salt_path(sp, profile_id).ok().filter(|path| path.exists()),
+            key_check_path(sp, profile_id).ok().filter(|path| path.exists()),
+        )
+    };
 
     if !profile.has_password {
         fs::create_dir_all(profile_root.join("tmp"))
@@ -313,7 +327,7 @@ fn build_backup_source(
 
 fn create_archive(
     destination: &Path,
-    source: BackupSource,
+    mut source: BackupSource,
     profile_id: &str,
     profile_name: &str,
     vault_mode: &str,
@@ -350,8 +364,38 @@ fn create_archive(
         "user_settings.json",
         &mut manifest_entries,
     )?;
-    add_optional_file(&mut writer, source.kdf_salt_path, "kdf_salt.bin", &mut manifest_entries)?;
-    add_optional_file(&mut writer, source.key_check_path, "key_check.bin", &mut manifest_entries)?;
+    if vault_mode == "protected" {
+        let salt_path = source
+            .kdf_salt_path
+            .as_ref()
+            .ok_or_else(|| ErrorCodeString::new("KDF_SALT_MISSING"))?;
+        if !salt_path.exists() {
+            return Err(ErrorCodeString::new("KDF_SALT_MISSING"));
+        }
+        add_file_to_zip(&mut writer, salt_path, "kdf_salt.bin", &mut manifest_entries)?;
+
+        let key_check_path = source
+            .key_check_path
+            .as_ref()
+            .ok_or_else(|| ErrorCodeString::new("KEY_CHECK_MISSING"))?;
+        if !key_check_path.exists() {
+            return Err(ErrorCodeString::new("KEY_CHECK_MISSING"));
+        }
+        add_file_to_zip(&mut writer, key_check_path, "key_check.bin", &mut manifest_entries)?;
+    } else {
+        add_optional_file(
+            &mut writer,
+            source.kdf_salt_path.take(),
+            "kdf_salt.bin",
+            &mut manifest_entries,
+        )?;
+        add_optional_file(
+            &mut writer,
+            source.key_check_path.take(),
+            "key_check.bin",
+            &mut manifest_entries,
+        )?;
+    }
 
     let manifest = BackupManifest {
         format_version: 1,
@@ -660,6 +704,8 @@ fn restore_archive_to_profile(
     use std::collections::HashSet;
     let mut seen = HashSet::new();
     let mut has_vault = false;
+    let mut has_kdf_salt = false;
+    let mut has_key_check = false;
 
     for f in &manifest.files {
         if !seen.insert(&f.path) {
@@ -668,10 +714,23 @@ fn restore_archive_to_profile(
         if f.path == "vault.db" {
             has_vault = true;
         }
+        if f.path == "kdf_salt.bin" {
+            has_kdf_salt = true;
+        }
+        if f.path == "key_check.bin" {
+            has_key_check = true;
+        }
     }
 
     if !has_vault {
         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+    }
+    if manifest.vault_mode == "protected" {
+        if !has_kdf_salt || !has_key_check {
+            return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+        }
+    } else if manifest.vault_mode != "passwordless" {
+        return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
     }
 
     for entry in &manifest.files {
@@ -723,11 +782,13 @@ fn restore_archive_to_profile(
 
     let attachments_path = profile_root.join("attachments");
     let extracted_attachments = temp_dir.path().join("attachments");
+    let attachments_existed_before = attachments_path.exists();
 
     let vault_backup_path = vault_path.with_extension(format!("old.{}", Uuid::new_v4()));
     let attachments_backup_path = profile_root.join(format!("attachments.old.{}", Uuid::new_v4()));
     let mut moved_vault = false;
     let mut moved_attachments = false;
+    let mut restored_attachments_created = false;
     let restore_result: Result<()> = (|| {
         if vault_path.exists() {
             rename_with_retry(&vault_path, &vault_backup_path)
@@ -750,9 +811,13 @@ fn restore_archive_to_profile(
         if extracted_attachments.exists() {
             rename_with_retry(&extracted_attachments, &attachments_path)
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+            restored_attachments_created = true;
         } else {
-            fs::create_dir_all(&attachments_path)
-                .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+            if !attachments_path.exists() {
+                fs::create_dir_all(&attachments_path)
+                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                restored_attachments_created = true;
+            }
         }
 
         for file_name in ["config.json", "user_settings.json", "kdf_salt.bin", "key_check.bin"] {
@@ -777,11 +842,16 @@ fn restore_archive_to_profile(
         if moved_vault && vault_backup_path.exists() {
             let _ = fs::rename(&vault_backup_path, &vault_path);
         }
-        if attachments_path.exists() && !moved_attachments {
-            let _ = fs::remove_dir_all(&attachments_path);
-        }
         if moved_attachments && attachments_backup_path.exists() {
+            if attachments_path.exists() {
+                let _ = fs::remove_dir_all(&attachments_path);
+            }
             let _ = fs::rename(&attachments_backup_path, &attachments_path);
+        } else if !attachments_existed_before
+            && restored_attachments_created
+            && attachments_path.exists()
+        {
+            let _ = fs::remove_dir_all(&attachments_path);
         }
         return Err(ErrorCodeString::new("BACKUP_RESTORE_FAILED"));
     }
@@ -819,6 +889,22 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
 
     let backup_path = PathBuf::from(&backup_path);
     let (manifest, profile_name) = read_backup_manifest_and_name(&backup_path)?;
+
+    if manifest.vault_mode == "protected" {
+        let mut has_kdf_salt = false;
+        let mut has_key_check = false;
+        for f in &manifest.files {
+            if f.path == "kdf_salt.bin" {
+                has_kdf_salt = true;
+            }
+            if f.path == "key_check.bin" {
+                has_key_check = true;
+            }
+        }
+        if !has_kdf_salt || !has_key_check {
+            return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+        }
+    }
 
     let exists = registry::get_profile(&sp, &manifest.profile_id)?.is_some();
     if !exists {

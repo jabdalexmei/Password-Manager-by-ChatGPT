@@ -307,7 +307,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
         title={t('restoreConfirmTitle')}
         description={t('restoreConfirmOverwrite', { name: pendingProfileName })}
         confirmLabel={t('restoreFromBackup')}
-        cancelLabel="Cancel"
+        cancelLabel={t('cancel')}
         onCancel={() => {
           setConfirmOpen(false);
           setPendingBackupPath(null);
