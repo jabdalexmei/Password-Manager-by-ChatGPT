@@ -318,6 +318,13 @@
   white-space: nowrap;
 }
 
+.file-picker__status {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  min-height: 16px; /* reserve space to prevent layout shift when status text appears */
+}
+
 .form-label {
   font-size: 12px;
   line-height: 16px;
