@@ -88,11 +88,11 @@ export type BackupInspectResult = {
 };
 
 export function backupInspect(backupPath: string): Promise<BackupInspectResult> {
-  return invoke('backup_inspect', { backupPath });
+  return invoke('backup_inspect', { backup_path: backupPath });
 }
 
 export function backupRestoreWorkflow(backupPath: string): Promise<boolean> {
-  return invoke('backup_restore_workflow', { backupPath });
+  return invoke('backup_restore_workflow', { backup_path: backupPath });
 }
 
 export async function clipboardClearAll(): Promise<void> {
