@@ -142,11 +142,11 @@
   width: auto;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 10px;
+  padding: 12px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-1);
-  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-container);
+  box-shadow: var(--shadow-popover);
   z-index: 50;
 
   /* Prevent popover from going outside the app window on small heights */
@@ -163,7 +163,7 @@
 .vault-filter-popover-grid {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .vault-filter-toggle.btn-compact {
