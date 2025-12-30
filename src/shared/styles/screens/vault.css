@@ -159,7 +159,8 @@
   left: 0;
   right: 0;
   z-index: 40;
-  background: var(--color-surface-2);
+  /* Make popover slightly darker than chips so "secondary" is visible */
+  background: var(--color-surface-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-popover);
@@ -181,7 +182,8 @@
   padding: 0 10px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background: var(--color-surface-2); /* secondary look */
+  /* Secondary (off) */
+  background: var(--color-surface-2);
   color: var(--color-text);
   font-size: 12px;
   line-height: 1;
@@ -194,7 +196,8 @@
 }
 
 .vault-filter-chip:hover {
-  background: var(--color-surface-1);
+  background: var(--color-surface-2);
+  border-color: var(--focus-border);
 }
 
 .vault-filter-chip:focus-visible {
@@ -206,7 +209,7 @@
 .vault-filter-chip[aria-pressed="true"] {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: var(--color-on-primary);
+  color: var(--color-on-primary, #fff);
 }
 
 .vault-filter-chip[aria-pressed="true"]:hover {
