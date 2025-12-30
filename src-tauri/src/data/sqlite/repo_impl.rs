@@ -80,6 +80,8 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
         deleted_at: row.get("deleted_at")?,
         password: row.get("password_value")?,
         totp_uri: row.get("totp_uri")?,
+        seed_phrase: row.get("seed_phrase_value")?,
+        seed_phrase_words: row.get("seed_phrase_words")?,
         custom_fields: deserialize_json(row.get::<_, String>("custom_fields_json")?)?,
     })
 }
@@ -453,7 +455,7 @@ pub fn create_datacard(
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, custom_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, NULL)",
+            "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_words, custom_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, NULL)",
             params![
                 id,
                 input.folder_id,
@@ -466,6 +468,8 @@ pub fn create_datacard(
                 tags_json,
                 input.password,
                 input.totp_uri,
+                input.seed_phrase,
+                input.seed_phrase_words,
                 custom_fields_json,
                 now,
                 now
@@ -518,7 +522,7 @@ pub fn update_datacard(
         }
         let rows = conn
             .execute(
-                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, username = ?4, mobile_phone = ?5, note = ?6, tags_json = ?7, password_value = ?8, totp_uri = ?9, custom_fields_json = ?10, folder_id = ?11, updated_at = ?12 WHERE id = ?13",
+                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, username = ?4, mobile_phone = ?5, note = ?6, tags_json = ?7, password_value = ?8, totp_uri = ?9, seed_phrase_value = ?10, seed_phrase_words = ?11, custom_fields_json = ?12, folder_id = ?13, updated_at = ?14 WHERE id = ?15",
                 params![
                     input.title,
                     input.url,
@@ -529,6 +533,8 @@ pub fn update_datacard(
                     tags_json,
                     input.password,
                     input.totp_uri,
+                    input.seed_phrase,
+                    input.seed_phrase_words,
                     custom_fields_json,
                     input.folder_id,
                     now,

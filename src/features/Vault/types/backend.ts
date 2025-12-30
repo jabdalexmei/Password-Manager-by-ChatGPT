@@ -39,6 +39,8 @@ export type BackendDataCard = {
   deleted_at: string | null;
   password: string | null;
   totp_uri: string | null;
+  seed_phrase: string | null;
+  seed_phrase_words: number | null;
   custom_fields: BackendCustomField[];
 };
 
@@ -68,6 +70,8 @@ export type BackendCreateDataCardInput = {
   tags: string[];
   password: string | null;
   totp_uri: string | null;
+  seed_phrase: string | null;
+  seed_phrase_words: number | null;
   custom_fields: BackendCustomField[];
 };
 

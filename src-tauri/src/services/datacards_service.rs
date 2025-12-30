@@ -75,6 +75,10 @@ pub fn create_datacard(input: CreateDataCardInput, state: &Arc<AppState>) -> Res
                 Some(trimmed)
             }
         });
+    let (seed_phrase, seed_phrase_words) =
+        normalize_seed_phrase(sanitized.seed_phrase, sanitized.seed_phrase_words)?;
+    sanitized.seed_phrase = seed_phrase;
+    sanitized.seed_phrase_words = seed_phrase_words;
 
     let created = repo_impl::create_datacard(state, &profile_id, &sanitized)?;
     security_service::request_persist_active_vault(state.clone());
@@ -99,6 +103,10 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
                 Some(trimmed)
             }
         });
+    let (seed_phrase, seed_phrase_words) =
+        normalize_seed_phrase(sanitized.seed_phrase, sanitized.seed_phrase_words)?;
+    sanitized.seed_phrase = seed_phrase;
+    sanitized.seed_phrase_words = seed_phrase_words;
 
     let updated = repo_impl::update_datacard(state, &profile_id, &sanitized)?;
     security_service::request_persist_active_vault(state.clone());
@@ -181,4 +189,27 @@ pub fn set_datacard_favorite(
     let updated = repo_impl::set_datacard_favorite(state, &profile_id, &input)?;
     security_service::request_persist_active_vault(state.clone());
     Ok(updated)
+}
+
+fn normalize_seed_phrase(
+    seed_phrase: Option<String>,
+    seed_phrase_words: Option<i32>,
+) -> Result<(Option<String>, Option<i32>)> {
+    let normalized = seed_phrase.unwrap_or_default().trim().to_string();
+    if normalized.is_empty() {
+        return Ok((None, None));
+    }
+
+    let words =
+        seed_phrase_words.ok_or_else(|| ErrorCodeString::new("SEED_PHRASE_WORD_COUNT_MISSING"))?;
+    if words != 12 && words != 18 && words != 24 {
+        return Err(ErrorCodeString::new("SEED_PHRASE_WORD_COUNT_INVALID"));
+    }
+
+    let actual = normalized.split_whitespace().count() as i32;
+    if actual != words {
+        return Err(ErrorCodeString::new("SEED_PHRASE_WORD_COUNT_MISMATCH"));
+    }
+
+    Ok((Some(normalized), Some(words)))
 }

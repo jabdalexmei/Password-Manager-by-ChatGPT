@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 6;
+const CURRENT_SCHEMA_VERSION: i32 = 7;
 
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
@@ -17,7 +17,17 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
         "[DB][migrate] user_version={version}, current={CURRENT_SCHEMA_VERSION}"
     );
 
-    if version < CURRENT_SCHEMA_VERSION {
+    // Fresh DB (or reset state): create full schema at latest version.
+    if version == 0 {
+        conn.execute_batch(include_str!("schema.sql"))
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        return Ok(());
+    }
+
+    // Legacy versions: easiest/safest is rebuild (you said old data is not important).
+    if version < 6 {
         conn.execute_batch(
             "PRAGMA foreign_keys = OFF;
 DROP TABLE IF EXISTS attachments;
@@ -39,6 +49,22 @@ DROP TABLE IF EXISTS bank_cards;",
         return Ok(());
     }
 
+    // v6 -> v7: add seed phrase columns (idempotent).
+    if version == 6 {
+        if !has_column(conn, "datacards", "seed_phrase_value")? {
+            conn.execute_batch("ALTER TABLE datacards ADD COLUMN seed_phrase_value TEXT NULL;")
+                .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        }
+        if !has_column(conn, "datacards", "seed_phrase_words")? {
+            conn.execute_batch("ALTER TABLE datacards ADD COLUMN seed_phrase_words INTEGER NULL;")
+                .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        }
+
+        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        return Ok(());
+    }
+
     match version {
         CURRENT_SCHEMA_VERSION => Ok(()),
         _ => Err(ErrorCodeString::new("DB_MIGRATION_FAILED")),
@@ -49,6 +75,15 @@ fn has_table(conn: &Connection, name: &str) -> Result<bool> {
     let sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1 LIMIT 1";
     let exists: Option<i32> = conn
         .query_row(sql, [name], |row| row.get(0))
+        .optional()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    Ok(exists.is_some())
+}
+
+fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let sql = "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2 LIMIT 1";
+    let exists: Option<i32> = conn
+        .query_row(sql, [table, column], |row| row.get(0))
         .optional()
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     Ok(exists.is_some())

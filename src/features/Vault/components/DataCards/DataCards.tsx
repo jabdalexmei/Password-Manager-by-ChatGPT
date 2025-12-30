@@ -12,6 +12,7 @@ import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
 import { CustomFieldModal } from '../modals/CustomFieldModal';
 import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
 import { Add2FAModal } from '../modals/Add2FAModal';
+import { SeedPhraseModal } from '../modals/SeedPhraseModal';
 import { useToaster } from '../../../../shared/components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { generateTotpCode } from '../../utils/totp';
@@ -73,6 +74,10 @@ export function DataCards({
   const [renameError, setRenameError] = useState<string | null>(null);
   const [is2faModalOpen, setIs2faModalOpen] = useState(false);
   const [twoFactorTargetDialogId, setTwoFactorTargetDialogId] = useState<
+    'datacard-create-dialog' | 'datacard-edit-dialog' | null
+  >(null);
+  const [isSeedPhraseModalOpen, setIsSeedPhraseModalOpen] = useState(false);
+  const [seedPhraseTargetDialogId, setSeedPhraseTargetDialogId] = useState<
     'datacard-create-dialog' | 'datacard-edit-dialog' | null
   >(null);
   const genPwdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,6 +222,8 @@ export function DataCards({
     setRenameError(null);
     setIs2faModalOpen(false);
     setTwoFactorTargetDialogId(null);
+    setIsSeedPhraseModalOpen(false);
+    setSeedPhraseTargetDialogId(null);
   }, [isCreateOpen, isEditOpen]);
 
   useEffect(() => {
@@ -231,6 +238,11 @@ export function DataCards({
         if (is2faModalOpen) {
           setIs2faModalOpen(false);
           setTwoFactorTargetDialogId(null);
+          return;
+        }
+        if (isSeedPhraseModalOpen) {
+          setIsSeedPhraseModalOpen(false);
+          setSeedPhraseTargetDialogId(null);
           return;
         }
         if (isCustomFieldModalOpen) {
@@ -254,6 +266,7 @@ export function DataCards({
     handleCloseEditModal,
     isActionMenuOpen,
     is2faModalOpen,
+    isSeedPhraseModalOpen,
     isCreateOpen,
     isCustomFieldModalOpen,
     isEditOpen,
@@ -304,6 +317,8 @@ export function DataCards({
 
     const titleElementId = 'dialog-title';
     const isCreateDialog = dialogId === 'datacard-create-dialog';
+    const seedPhraseWordCount = form.seedPhraseWords;
+    const visibleCustomFields = form.customFields;
 
     const totpUri = (form.totpUri ?? '').trim();
     let totpData: { token: string; remaining: number } | null = null;
@@ -366,7 +381,20 @@ export function DataCards({
                   >
                     {t('customFields.add')}
                   </button>
-                  {(form?.customFields?.length ?? 0) > 0 && (
+                  <button
+                    type="button"
+                    className="dialog-actionmenu-item"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setSeedPhraseTargetDialogId(
+                        dialogId === 'datacard-create-dialog' ? 'datacard-create-dialog' : 'datacard-edit-dialog'
+                      );
+                      setIsSeedPhraseModalOpen(true);
+                    }}
+                  >
+                    {seedPhraseWordCount > 0 ? t('seedPhrase.editAction') : t('seedPhrase.addAction')}
+                  </button>
+                  {visibleCustomFields.length > 0 && (
                     <button
                       type="button"
                       className="dialog-actionmenu-item"
@@ -501,7 +529,34 @@ export function DataCards({
               </div>
             )}
 
-            {form.customFields.map((row) => (
+            {seedPhraseWordCount > 0 && (
+              <div className="form-field">
+                <label className="form-label">{t('seedPhrase.title')}</label>
+                <div
+                  className="seedphrase-summary"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    setSeedPhraseTargetDialogId(dialogId as 'datacard-create-dialog' | 'datacard-edit-dialog');
+                    setIsSeedPhraseModalOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSeedPhraseTargetDialogId(dialogId as 'datacard-create-dialog' | 'datacard-edit-dialog');
+                      setIsSeedPhraseModalOpen(true);
+                    }
+                  }}
+                >
+                  <span className="seedphrase-summary-count">
+                    {t('seedPhrase.wordsCount', { count: seedPhraseWordCount })}
+                  </span>
+                  <span className="muted">{t('seedPhrase.editAction')}</span>
+                </div>
+              </div>
+            )}
+
+            {visibleCustomFields.map((row) => (
               <div className="form-field" key={row.id}>
                 <label className="form-label" htmlFor={`${dialogId}-cf-${row.id}`}>
                   {row.key}
@@ -842,6 +897,29 @@ export function DataCards({
           }
           setIs2faModalOpen(false);
           setTwoFactorTargetDialogId(null);
+        }}
+      />
+
+      <SeedPhraseModal
+        isOpen={isSeedPhraseModalOpen}
+        existingPhrase={
+          seedPhraseTargetDialogId === 'datacard-create-dialog'
+            ? (viewModel.createForm.seedPhrase.trim() ? viewModel.createForm.seedPhrase : null)
+            : (viewModel.editForm?.seedPhrase?.trim() ? viewModel.editForm.seedPhrase : null)
+        }
+        onCancel={() => {
+          setIsSeedPhraseModalOpen(false);
+          setSeedPhraseTargetDialogId(null);
+        }}
+        onSave={(words, wordCount) => {
+          const phrase = words.join(' ').trim();
+          if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
+            viewModel.setCreateSeedPhrase(phrase, wordCount);
+          } else {
+            viewModel.setEditSeedPhrase(phrase, wordCount);
+          }
+          setIsSeedPhraseModalOpen(false);
+          setSeedPhraseTargetDialogId(null);
         }}
       />
     </div>

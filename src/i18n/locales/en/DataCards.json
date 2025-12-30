@@ -73,6 +73,18 @@
   "customFields.renameTitle": "Rename field",
   "customFields.errorEmpty": "Field name is required",
   "customFields.errorDuplicate": "Field with this name already exists",
+  "seedPhrase": {
+    "addAction": "Add seed phrase",
+    "editAction": "Edit seed phrase",
+    "title": "Seed phrase",
+    "wordCount": "Word count",
+    "words12": "12 words",
+    "words18": "18 words",
+    "words24": "24 words",
+    "gridAria": "Seed phrase words",
+    "errorIncomplete": "Please fill all words",
+    "wordsCount": "{{count}} words"
+  },
   "twoFactor": {
     "pill": "2FA",
     "addAction": "Add 2FA",

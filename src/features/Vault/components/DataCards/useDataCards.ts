@@ -30,6 +30,8 @@ export type DataCardFormState = {
   note: string;
   tagsText: string;
   totpUri: string;
+  seedPhrase: string;
+  seedPhraseWords: number;
   customFields: CustomFieldFormRow[];
 };
 
@@ -70,8 +72,8 @@ export type DataCardsViewModel = {
   editFolderError: string | null;
   isCreateSubmitting: boolean;
   isEditSubmitting: boolean;
-  updateCreateField: (field: keyof DataCardFormState, value: string | boolean | null) => void;
-  updateEditField: (field: keyof DataCardFormState, value: string | boolean | null) => void;
+  updateCreateField: (field: keyof DataCardFormState, value: string | boolean | number | null) => void;
+  updateEditField: (field: keyof DataCardFormState, value: string | boolean | number | null) => void;
   submitCreate: () => Promise<void>;
   submitEdit: () => Promise<void>;
   folders: Folder[];
@@ -94,6 +96,8 @@ export type DataCardsViewModel = {
     nextName: string
   ) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
   removeEditCustomFieldById: (rowId: string) => void;
+  setCreateSeedPhrase: (phrase: string, words: number) => void;
+  setEditSeedPhrase: (phrase: string, words: number) => void;
 };
 
 type PendingAttachment = {
@@ -131,6 +135,8 @@ const buildCreateInput = (form: DataCardFormState): CreateDataCardInput => ({
   note: normalizeOptional(form.note),
   tags: normalizeTags(form.tagsText),
   totpUri: normalizeOptional(form.totpUri),
+  seedPhrase: normalizeOptional(form.seedPhrase),
+  seedPhraseWords: form.seedPhraseWords > 0 ? form.seedPhraseWords : null,
   customFields: form.customFields.map((row) => ({
     key: row.key,
     value: row.value,
@@ -155,6 +161,8 @@ const buildInitialForm = (defaultFolderId: string | null, folderName: string): D
   note: '',
   tagsText: '',
   totpUri: '',
+  seedPhrase: '',
+  seedPhraseWords: 0,
   customFields: [],
 });
 
@@ -237,6 +245,8 @@ export function useDataCards({
       username: card.username || '',
       password: card.password || '',
       totpUri: card.totpUri || '',
+      seedPhrase: card.seedPhrase || '',
+      seedPhraseWords: card.seedPhraseWords ?? 0,
       mobilePhone: card.mobilePhone || '',
       note: card.note || '',
       tagsText: (card.tags || []).join(', '),
@@ -411,8 +421,16 @@ export function useDataCards({
     });
   }, []);
 
+  const setCreateSeedPhrase = useCallback((phrase: string, words: number) => {
+    setCreateForm((prev) => ({ ...prev, seedPhrase: phrase, seedPhraseWords: words }));
+  }, []);
+
+  const setEditSeedPhrase = useCallback((phrase: string, words: number) => {
+    setEditForm((prev) => (prev ? { ...prev, seedPhrase: phrase, seedPhraseWords: words } : prev));
+  }, []);
+
   const updateCreateField = useCallback(
-    (field: keyof DataCardFormState, value: string | boolean | null) => {
+    (field: keyof DataCardFormState, value: string | boolean | number | null) => {
       if (field === 'title') {
         setCreateError(null);
       }
@@ -430,6 +448,10 @@ export function useDataCards({
           return { ...prev, folderName: name, folderId: matchedId };
         }
 
+        if (field === 'seedPhraseWords') {
+          return { ...prev, seedPhraseWords: typeof value === 'number' ? value : Number(value ?? 0) };
+        }
+
         return { ...prev, [field]: (value ?? '') as string };
       });
     },
@@ -437,7 +459,7 @@ export function useDataCards({
   );
 
   const updateEditField = useCallback(
-    (field: keyof DataCardFormState, value: string | boolean | null) => {
+    (field: keyof DataCardFormState, value: string | boolean | number | null) => {
       setEditForm((prev) => {
         if (!prev) return prev;
 
@@ -456,6 +478,10 @@ export function useDataCards({
           const name = (value ?? '') as string;
           const matchedId = name.trim() ? findFolderIdByName(name, folders) : null;
           return { ...prev, folderName: name, folderId: matchedId };
+        }
+
+        if (field === 'seedPhraseWords') {
+          return { ...prev, seedPhraseWords: typeof value === 'number' ? value : Number(value ?? 0) };
         }
 
         return { ...prev, [field]: (value ?? '') as string };
@@ -581,5 +607,7 @@ export function useDataCards({
     updateEditCustomFieldValue,
     renameEditCustomFieldById,
     removeEditCustomFieldById,
+    setCreateSeedPhrase,
+    setEditSeedPhrase,
   };
 }
