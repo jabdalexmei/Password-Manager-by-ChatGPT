@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useVault } from './hooks/useVault';
+import { VaultSearchFilterKey } from './types/searchFilters';
 import { VaultHeader } from './components/Header/VaultHeader';
 import { Search } from './components/Search/Search';
 import { Folders } from './components/Folders/Folders';
@@ -194,6 +195,15 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             <Search
               query={selectedCategory === 'data_cards' ? vault.searchQuery : bankCards.searchQuery}
               onChange={selectedCategory === 'data_cards' ? vault.setSearchQuery : bankCards.setSearchQuery}
+              filters={selectedCategory === 'data_cards' ? vault.searchFilters : bankCards.searchFilters}
+              onChangeFilters={
+                selectedCategory === 'data_cards' ? vault.setSearchFilters : bankCards.setSearchFilters
+              }
+              filterKeys={
+                (selectedCategory === 'data_cards'
+                  ? (['has2fa', 'hasSeedPhrase', 'hasPhone', 'hasNotes', 'hasAttachments'] as VaultSearchFilterKey[])
+                  : (['hasNotes'] as VaultSearchFilterKey[]))
+              }
             />
           </div>
           <div className="vault-sidebar-actions">

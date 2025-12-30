@@ -1,6 +1,7 @@
 // Centralized semantic icon mapping.
 // Only this file should import directly from "lucide-react".
 export {
+  SlidersHorizontal as IconSliders,
   Eye as IconPreview,
   EyeOff as IconPreviewOff,
 

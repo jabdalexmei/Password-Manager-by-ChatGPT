@@ -109,6 +109,10 @@ pub struct DataCardSummary {
     pub deleted_at: Option<String>,
     pub is_favorite: bool,
     pub has_totp: bool,
+    pub has_seed_phrase: bool,
+    pub has_phone: bool,
+    pub has_note: bool,
+    pub has_attachments: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -203,6 +207,7 @@ pub struct BankCardSummary {
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
+    pub has_note: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

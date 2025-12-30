@@ -26,6 +26,7 @@ import { BankCardItem, BankCardSummary, CreateBankCardInput, UpdateBankCardInput
 import { sortCards } from '../types/sort';
 import { SelectedNav } from './useVault';
 import { BackendUserSettings } from '../types/backend';
+import { defaultVaultSearchFilters, VaultSearchFilters } from '../types/searchFilters';
 
 export type BankCardsError = { code: string; message?: string } | null;
 
@@ -42,6 +43,7 @@ export function useBankCards(profileId: string, onLocked: () => void) {
   const [selectedNav, setSelectedNav] = useState<SelectedNav>('all');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
+  const [searchFilters, setSearchFilters] = useState<VaultSearchFilters>(defaultVaultSearchFilters);
   const debouncedSearchQuery = useDebouncedValue(searchInput, 200);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<BankCardsError>(null);
@@ -57,6 +59,7 @@ export function useBankCards(profileId: string, onLocked: () => void) {
     setDeletedCards([]);
     setSelectedNav('all');
     setSelectedCardId(null);
+    setSearchFilters(defaultVaultSearchFilters);
     setTrashLoaded(false);
   }, [profileId]);
 
@@ -332,6 +335,8 @@ export function useBankCards(profileId: string, onLocked: () => void) {
       pool = activeCards;
     }
 
+    if (searchFilters.hasNotes) pool = pool.filter((card) => card.hasNotes);
+
     if (!debouncedSearchQuery.trim()) return pool;
 
     const query = debouncedSearchQuery.toLowerCase();
@@ -339,7 +344,7 @@ export function useBankCards(profileId: string, onLocked: () => void) {
       const fields = [card.title, card.holder, card.number, card.metaLine, ...(card.tags || [])];
       return fields.some((field) => field && field.toLowerCase().includes(query));
     });
-  }, [cards, debouncedSearchQuery, deletedCards, selectedNav]);
+  }, [cards, debouncedSearchQuery, deletedCards, searchFilters, selectedNav]);
 
   const selectedCard = useMemo(() => {
     if (selectedCardId && cardDetailsById[selectedCardId]) {
@@ -415,6 +420,8 @@ export function useBankCards(profileId: string, onLocked: () => void) {
     currentSectionTitle,
     searchQuery: searchInput,
     setSearchQuery: setSearchInput,
+    searchFilters,
+    setSearchFilters,
     loading,
     error,
     visibleCards,

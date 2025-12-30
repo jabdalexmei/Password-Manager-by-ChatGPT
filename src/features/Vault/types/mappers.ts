@@ -94,6 +94,10 @@ export function mapCardSummaryFromBackend(
     customFields: [],
     isFavorite: card.is_favorite,
     hasTotp: card.has_totp,
+    hasSeedPhrase: card.has_seed_phrase,
+    hasPhone: card.has_phone,
+    hasNotes: card.has_note,
+    hasAttachments: card.has_attachments,
     updatedAtLabel,
     createdAtLabel,
     metaLine: metaFromCard(card, ''),
@@ -110,6 +114,10 @@ export function mapCardToSummary(card: DataCard, formatter: Intl.DateTimeFormat)
     createdAtLabel,
     metaLine: metaFromCard(card, ''),
     hasTotp: (card.totpUri ?? null) !== null,
+    hasSeedPhrase: (card.seedPhrase ?? null) !== null,
+    hasPhone: (card.mobilePhone ?? null) !== null,
+    hasNotes: (card.note ?? null) !== null,
+    hasAttachments: false,
   };
 }
 
@@ -211,6 +219,7 @@ export function mapBankCardSummaryFromBackend(
     updatedAtLabel,
     createdAtLabel,
     metaLine,
+    hasNotes: card.has_note,
   };
 }
 
@@ -224,6 +233,7 @@ export function mapBankCardToSummary(card: BankCardItem, formatter: Intl.DateTim
     updatedAtLabel,
     createdAtLabel,
     metaLine,
+    hasNotes: (card.note ?? null) !== null,
   };
 }
 

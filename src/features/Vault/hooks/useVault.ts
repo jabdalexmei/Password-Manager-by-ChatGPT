@@ -34,6 +34,7 @@ import { useToaster } from '../../../shared/components/Toaster';
 import { useTranslation } from '../../../shared/lib/i18n';
 import { useDebouncedValue } from './useDebouncedValue';
 import { sortCards, sortFolders } from '../types/sort';
+import { defaultVaultSearchFilters, VaultSearchFilters } from '../types/searchFilters';
 
 export type SelectedNav = 'all' | 'favorites' | 'archive' | 'deleted' | { folderId: string };
 
@@ -53,6 +54,7 @@ export function useVault(profileId: string, onLocked: () => void) {
   const [selectedNav, setSelectedNav] = useState<SelectedNav>('all');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
+  const [searchFilters, setSearchFilters] = useState<VaultSearchFilters>(defaultVaultSearchFilters);
   const debouncedSearchQuery = useDebouncedValue(searchInput, 200);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<VaultError>(null);
@@ -69,6 +71,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     setDeletedCards([]);
     setSelectedNav('all');
     setSelectedCardId(null);
+    setSearchFilters(defaultVaultSearchFilters);
     setTrashLoaded(false);
   }, [profileId]);
 
@@ -167,9 +170,14 @@ export function useVault(profileId: string, onLocked: () => void) {
   const loadCard = useCallback(
     async (id: string) => {
       try {
+        const existingSummary =
+          cards.find((card) => card.id === id) ?? deletedCards.find((card) => card.id === id) ?? null;
         const card = await getDataCard(id);
         const mapped = mapCardFromBackend(card);
-        const summary = mapCardToSummary(mapped, dtf);
+        const summary = {
+          ...mapCardToSummary(mapped, dtf),
+          hasAttachments: existingSummary?.hasAttachments ?? false,
+        };
 
         setCardDetailsById((prev) => ({ ...prev, [id]: mapped }));
 
@@ -190,7 +198,7 @@ export function useVault(profileId: string, onLocked: () => void) {
         handleError(err);
       }
     },
-    [dtf, handleError, sortCardsWithSettings]
+    [cards, deletedCards, dtf, handleError, sortCardsWithSettings]
   );
 
   useEffect(() => {
@@ -346,13 +354,22 @@ export function useVault(profileId: string, onLocked: () => void) {
   const uploadAttachments = useCallback(
     async (cardId: string, paths: string[]) => {
       const failed: string[] = [];
+      let uploadedAny = false;
       for (const path of paths) {
         try {
           await addAttachmentFromPath(cardId, path);
+          uploadedAny = true;
         } catch (err) {
           failed.push(path);
           handleError(err);
         }
+      }
+
+      if (uploadedAny) {
+        setCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, hasAttachments: true } : card)));
+        setDeletedCards((prev) =>
+          prev.map((card) => (card.id === cardId ? { ...card, hasAttachments: true } : card))
+        );
       }
 
       return failed;
@@ -378,9 +395,10 @@ export function useVault(profileId: string, onLocked: () => void) {
       try {
         await deleteDataCard(id);
         const softDeleteEnabled = settings?.soft_delete_enabled ?? true;
-        const cachedSummary = cardDetailsById[id]
-          ? mapCardToSummary(cardDetailsById[id], dtf)
-          : cards.find((card) => card.id === id) || deletedCards.find((card) => card.id === id);
+        const cachedSummary =
+          cards.find((card) => card.id === id) ||
+          deletedCards.find((card) => card.id === id) ||
+          (cardDetailsById[id] ? mapCardToSummary(cardDetailsById[id], dtf) : null);
 
         setCards((prev) => prev.filter((card) => card.id !== id));
         setSelectedCardId((prev) => (prev === id ? null : prev));
@@ -556,6 +574,12 @@ export function useVault(profileId: string, onLocked: () => void) {
       pool = activeCards.filter((card) => card.folderId === selectedNav.folderId && !isArchived(card));
     }
 
+    if (searchFilters.has2fa) pool = pool.filter((card) => card.hasTotp);
+    if (searchFilters.hasSeedPhrase) pool = pool.filter((card) => card.hasSeedPhrase);
+    if (searchFilters.hasPhone) pool = pool.filter((card) => card.hasPhone);
+    if (searchFilters.hasNotes) pool = pool.filter((card) => card.hasNotes);
+    if (searchFilters.hasAttachments) pool = pool.filter((card) => card.hasAttachments);
+
     if (!debouncedSearchQuery.trim()) return pool;
 
     const query = debouncedSearchQuery.toLowerCase();
@@ -563,7 +587,7 @@ export function useVault(profileId: string, onLocked: () => void) {
       const fields = [card.title, card.username, card.email, card.url, card.metaLine, ...(card.tags || [])];
       return fields.some((field) => field && field.toLowerCase().includes(query));
     });
-  }, [cards, debouncedSearchQuery, deletedCards, selectedNav]);
+  }, [cards, debouncedSearchQuery, deletedCards, searchFilters, selectedNav]);
 
   const selectedCard = useMemo(() => {
     if (selectedCardId && cardDetailsById[selectedCardId]) {
@@ -651,6 +675,8 @@ export function useVault(profileId: string, onLocked: () => void) {
     currentSectionTitle,
     searchQuery: searchInput,
     setSearchQuery: setSearchInput,
+    searchFilters,
+    setSearchFilters,
     loading,
     error,
     visibleCards,
