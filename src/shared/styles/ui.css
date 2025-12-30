@@ -444,6 +444,14 @@
   min-height: 34px;
 }
 
+/* Extra-compact button (used for dense tool panels like Vault filters) */
+.btn-compact-xs {
+  padding: 6px 10px;
+  min-height: 28px; /* keep >= 24px target size (WCAG 2.5.8) */
+  font-size: 12.5px;
+  line-height: 1.1;
+}
+
 /* Disabled buttons: dimmed + no pointer/transform */
 .btn:disabled {
   opacity: 0.6;

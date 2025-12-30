@@ -16,6 +16,17 @@ export function Search({ query, onChange, filters, onChangeFilters, filterKeys }
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
+  const orderedFilterKeys = useMemo<VaultSearchFilterKey[]>(() => {
+    const priority: Record<VaultSearchFilterKey, number> = {
+      has2fa: 0,
+      hasAttachments: 1,
+      hasSeedPhrase: 2,
+      hasPhone: 3,
+      hasNotes: 4,
+    };
+    return [...filterKeys].sort((a, b) => (priority[a] ?? 999) - (priority[b] ?? 999));
+  }, [filterKeys]);
+
   const labelByKey = useMemo<Record<VaultSearchFilterKey, string>>(
     () => ({
       has2fa: t('filters.has2fa'),
@@ -78,13 +89,13 @@ export function Search({ query, onChange, filters, onChangeFilters, filterKeys }
         <div className="vault-filter-popover" role="dialog" aria-label={t('filters.title')}>
           <div className="vault-filter-popover-title">{t('filters.title')}</div>
           <div className="vault-filter-popover-grid">
-            {filterKeys.map((key) => {
+            {orderedFilterKeys.map((key) => {
               const active = filters[key];
               return (
                 <button
                   key={key}
                   type="button"
-                  className={`btn btn-compact vault-filter-toggle ${active ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn btn-compact-xs vault-filter-toggle ${active ? 'btn-primary' : 'btn-secondary'}`}
                   aria-pressed={active}
                   onClick={() => toggle(key)}
                 >
