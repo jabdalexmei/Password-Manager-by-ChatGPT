@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 7;
+const CURRENT_SCHEMA_VERSION: i32 = 8;
 
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
@@ -49,15 +49,37 @@ DROP TABLE IF EXISTS bank_cards;",
         return Ok(());
     }
 
-    // v6 -> v7: add seed phrase columns (idempotent).
+    // v6 -> v8: add seed phrase columns (idempotent).
     if version == 6 {
         if !has_column(conn, "datacards", "seed_phrase_value")? {
             conn.execute_batch("ALTER TABLE datacards ADD COLUMN seed_phrase_value TEXT NULL;")
                 .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
         }
-        if !has_column(conn, "datacards", "seed_phrase_words")? {
-            conn.execute_batch("ALTER TABLE datacards ADD COLUMN seed_phrase_words INTEGER NULL;")
-                .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        if !has_column(conn, "datacards", "seed_phrase_word_count")? {
+            conn.execute_batch(
+                "ALTER TABLE datacards ADD COLUMN seed_phrase_word_count INTEGER NULL;",
+            )
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        }
+
+        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        return Ok(());
+    }
+
+    // v7 -> v8: rename seed phrase word count column.
+    if version == 7 {
+        if !has_column(conn, "datacards", "seed_phrase_word_count")? {
+            conn.execute_batch(
+                "ALTER TABLE datacards ADD COLUMN seed_phrase_word_count INTEGER NULL;",
+            )
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        }
+        if has_column(conn, "datacards", "seed_phrase_words")? {
+            conn.execute_batch(
+                "UPDATE datacards SET seed_phrase_word_count = seed_phrase_words WHERE seed_phrase_word_count IS NULL;",
+            )
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
         }
 
         conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))

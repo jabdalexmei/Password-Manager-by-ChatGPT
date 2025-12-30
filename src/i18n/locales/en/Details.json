@@ -56,5 +56,14 @@
   "toast.attachmentLoadError": "Unable to load attachments",
   "dialog.passwordHistoryTitle": "Password history",
   "dialog.clearHistoryConfirm": "Clear password history?",
-  "label.passwordHistoryEmpty": "No password history yet"
+  "label.passwordHistoryEmpty": "No password history yet",
+  "label.seedPhrase": "Seed phrase",
+  "action.open": "Open",
+  "action.back": "Back",
+  "seedPhrase.title": "Seed phrase",
+  "seedPhrase.reveal": "Reveal seed phrase",
+  "seedPhrase.hide": "Hide seed phrase",
+  "seedPhrase.wordsCount": "{{count}} words",
+  "seedPhrase.gridAria": "Seed phrase words",
+  "seedPhrase.wordAria": "Seed phrase word {{index}}"
 }

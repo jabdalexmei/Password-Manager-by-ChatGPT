@@ -40,7 +40,7 @@ export type BackendDataCard = {
   password: string | null;
   totp_uri: string | null;
   seed_phrase: string | null;
-  seed_phrase_words: number | null;
+  seed_phrase_word_count: number | null;
   custom_fields: BackendCustomField[];
 };
 
@@ -71,7 +71,7 @@ export type BackendCreateDataCardInput = {
   password: string | null;
   totp_uri: string | null;
   seed_phrase: string | null;
-  seed_phrase_words: number | null;
+  seed_phrase_word_count: number | null;
   custom_fields: BackendCustomField[];
 };
 

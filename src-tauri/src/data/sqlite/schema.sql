@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS datacards (
   password_value      TEXT NULL,
   totp_uri            TEXT NULL,
   seed_phrase_value   TEXT NULL,
-  seed_phrase_words   INTEGER NULL,
+  seed_phrase_word_count   INTEGER NULL,
   custom_fields_json  TEXT NOT NULL DEFAULT '[]',
 
   created_at   TEXT NOT NULL,

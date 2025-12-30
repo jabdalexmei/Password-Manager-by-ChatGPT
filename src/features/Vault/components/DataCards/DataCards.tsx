@@ -317,7 +317,7 @@ export function DataCards({
 
     const titleElementId = 'dialog-title';
     const isCreateDialog = dialogId === 'datacard-create-dialog';
-    const seedPhraseWordCount = form.seedPhraseWords;
+    const seedPhraseWordCount = form.seedPhraseWordCount;
     const visibleCustomFields = form.customFields;
 
     const totpUri = (form.totpUri ?? '').trim();

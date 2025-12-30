@@ -15,6 +15,7 @@ import {
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 import AttachmentPreviewModal from '../modals/AttachmentPreviewModal';
 import PasswordHistoryDialog from '../modals/PasswordHistoryDialog';
+import { SeedPhraseViewModal } from '../modals/SeedPhraseViewModal';
 
 export type DetailsProps = {
   card: DataCard | null;
@@ -65,6 +66,7 @@ export function Details({
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const [attachmentToDelete, setAttachmentToDelete] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [seedPhraseViewOpen, setSeedPhraseViewOpen] = useState(false);
   const [revealedCustomFields, setRevealedCustomFields] = useState<Record<string, boolean>>({});
   const [totpNow, setTotpNow] = useState(() => Date.now());
 
@@ -129,6 +131,14 @@ export function Details({
   const hasNote = hasValue(card.note);
   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
   const hasFolderName = hasValue(folderName);
+  const seedPhraseRaw = hasValue(card.seedPhrase) ? (card.seedPhrase as string) : null;
+  const seedPhraseWordCount =
+    typeof card.seedPhraseWordCount === 'number' && card.seedPhraseWordCount > 0
+      ? card.seedPhraseWordCount
+      : seedPhraseRaw
+        ? seedPhraseRaw.trim().split(/\s+/).filter(Boolean).length
+        : 0;
+  const hasSeedPhrase = seedPhraseWordCount > 0;
   const passwordDisplay = hasPassword
     ? detailActions.showPassword
       ? card.password
@@ -233,6 +243,24 @@ export function Details({
           <div className="detail-value-text">{card.title}</div>
         </div>
       </div>
+
+      {hasSeedPhrase && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.seedPhrase')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{t('seedPhrase.wordsCount', { count: seedPhraseWordCount })}</div>
+            <div className="detail-value-actions">
+              <button
+                className="btn btn-secondary btn-compact"
+                type="button"
+                onClick={() => setSeedPhraseViewOpen(true)}
+              >
+                {t('action.open')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {hasFolderName && (
         <div className="detail-field">
@@ -516,6 +544,17 @@ export function Details({
       </div>
       </div>
     </div>
+
+      <SeedPhraseViewModal
+        isOpen={seedPhraseViewOpen}
+        phrase={seedPhraseRaw}
+        wordCount={
+          seedPhraseWordCount === 12 || seedPhraseWordCount === 18 || seedPhraseWordCount === 24
+            ? (seedPhraseWordCount as 12 | 18 | 24)
+            : null
+        }
+        onClose={() => setSeedPhraseViewOpen(false)}
+      />
 
       <AttachmentPreviewModal
         open={detailActions.previewOpen}

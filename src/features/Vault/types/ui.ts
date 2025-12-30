@@ -33,7 +33,7 @@ export type DataCard = {
   password: string | null;
   totpUri: string | null;
   seedPhrase: string | null;
-  seedPhraseWords: number | null;
+  seedPhraseWordCount: number | null;
   customFields: CustomField[];
 };
 
@@ -74,7 +74,7 @@ export type CreateDataCardInput = {
   password?: string | null;
   totpUri?: string | null;
   seedPhrase?: string | null;
-  seedPhraseWords?: number | null;
+  seedPhraseWordCount?: number | null;
   customFields?: CustomField[];
 };
 

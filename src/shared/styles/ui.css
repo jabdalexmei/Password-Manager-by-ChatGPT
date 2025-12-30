@@ -438,6 +438,12 @@
   padding: 0;
 }
 
+/* Compact button (used for small inline actions like "Open" in Details) */
+.btn-compact {
+  padding: 8px 12px;
+  min-height: 34px;
+}
+
 /* Disabled buttons: dimmed + no pointer/transform */
 .btn:disabled {
   opacity: 0.6;
@@ -647,6 +653,28 @@
 
 .seedphrase-input {
   width: 100%;
+}
+
+.seedphrase-wordbox {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seedphrase-view-footer {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .seedphrase-summary {

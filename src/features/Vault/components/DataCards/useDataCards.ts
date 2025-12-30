@@ -31,7 +31,7 @@ export type DataCardFormState = {
   tagsText: string;
   totpUri: string;
   seedPhrase: string;
-  seedPhraseWords: number;
+  seedPhraseWordCount: number;
   customFields: CustomFieldFormRow[];
 };
 
@@ -136,7 +136,7 @@ const buildCreateInput = (form: DataCardFormState): CreateDataCardInput => ({
   tags: normalizeTags(form.tagsText),
   totpUri: normalizeOptional(form.totpUri),
   seedPhrase: normalizeOptional(form.seedPhrase),
-  seedPhraseWords: form.seedPhraseWords > 0 ? form.seedPhraseWords : null,
+  seedPhraseWordCount: form.seedPhraseWordCount > 0 ? form.seedPhraseWordCount : null,
   customFields: form.customFields.map((row) => ({
     key: row.key,
     value: row.value,
@@ -162,7 +162,7 @@ const buildInitialForm = (defaultFolderId: string | null, folderName: string): D
   tagsText: '',
   totpUri: '',
   seedPhrase: '',
-  seedPhraseWords: 0,
+  seedPhraseWordCount: 0,
   customFields: [],
 });
 
@@ -246,7 +246,7 @@ export function useDataCards({
       password: card.password || '',
       totpUri: card.totpUri || '',
       seedPhrase: card.seedPhrase || '',
-      seedPhraseWords: card.seedPhraseWords ?? 0,
+      seedPhraseWordCount: card.seedPhraseWordCount ?? 0,
       mobilePhone: card.mobilePhone || '',
       note: card.note || '',
       tagsText: (card.tags || []).join(', '),
@@ -422,11 +422,11 @@ export function useDataCards({
   }, []);
 
   const setCreateSeedPhrase = useCallback((phrase: string, words: number) => {
-    setCreateForm((prev) => ({ ...prev, seedPhrase: phrase, seedPhraseWords: words }));
+    setCreateForm((prev) => ({ ...prev, seedPhrase: phrase, seedPhraseWordCount: words }));
   }, []);
 
   const setEditSeedPhrase = useCallback((phrase: string, words: number) => {
-    setEditForm((prev) => (prev ? { ...prev, seedPhrase: phrase, seedPhraseWords: words } : prev));
+    setEditForm((prev) => (prev ? { ...prev, seedPhrase: phrase, seedPhraseWordCount: words } : prev));
   }, []);
 
   const updateCreateField = useCallback(
@@ -448,8 +448,8 @@ export function useDataCards({
           return { ...prev, folderName: name, folderId: matchedId };
         }
 
-        if (field === 'seedPhraseWords') {
-          return { ...prev, seedPhraseWords: typeof value === 'number' ? value : Number(value ?? 0) };
+        if (field === 'seedPhraseWordCount') {
+          return { ...prev, seedPhraseWordCount: typeof value === 'number' ? value : Number(value ?? 0) };
         }
 
         return { ...prev, [field]: (value ?? '') as string };
@@ -480,8 +480,8 @@ export function useDataCards({
           return { ...prev, folderName: name, folderId: matchedId };
         }
 
-        if (field === 'seedPhraseWords') {
-          return { ...prev, seedPhraseWords: typeof value === 'number' ? value : Number(value ?? 0) };
+        if (field === 'seedPhraseWordCount') {
+          return { ...prev, seedPhraseWordCount: typeof value === 'number' ? value : Number(value ?? 0) };
         }
 
         return { ...prev, [field]: (value ?? '') as string };

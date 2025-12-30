@@ -75,10 +75,10 @@ pub fn create_datacard(input: CreateDataCardInput, state: &Arc<AppState>) -> Res
                 Some(trimmed)
             }
         });
-    let (seed_phrase, seed_phrase_words) =
-        normalize_seed_phrase(sanitized.seed_phrase, sanitized.seed_phrase_words)?;
+    let (seed_phrase, seed_phrase_word_count) =
+        normalize_seed_phrase(sanitized.seed_phrase, sanitized.seed_phrase_word_count)?;
     sanitized.seed_phrase = seed_phrase;
-    sanitized.seed_phrase_words = seed_phrase_words;
+    sanitized.seed_phrase_word_count = seed_phrase_word_count;
 
     let created = repo_impl::create_datacard(state, &profile_id, &sanitized)?;
     security_service::request_persist_active_vault(state.clone());
@@ -103,10 +103,10 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
                 Some(trimmed)
             }
         });
-    let (seed_phrase, seed_phrase_words) =
-        normalize_seed_phrase(sanitized.seed_phrase, sanitized.seed_phrase_words)?;
+    let (seed_phrase, seed_phrase_word_count) =
+        normalize_seed_phrase(sanitized.seed_phrase, sanitized.seed_phrase_word_count)?;
     sanitized.seed_phrase = seed_phrase;
-    sanitized.seed_phrase_words = seed_phrase_words;
+    sanitized.seed_phrase_word_count = seed_phrase_word_count;
 
     let updated = repo_impl::update_datacard(state, &profile_id, &sanitized)?;
     security_service::request_persist_active_vault(state.clone());
@@ -193,15 +193,15 @@ pub fn set_datacard_favorite(
 
 fn normalize_seed_phrase(
     seed_phrase: Option<String>,
-    seed_phrase_words: Option<i32>,
+    seed_phrase_word_count: Option<i32>,
 ) -> Result<(Option<String>, Option<i32>)> {
     let normalized = seed_phrase.unwrap_or_default().trim().to_string();
     if normalized.is_empty() {
         return Ok((None, None));
     }
 
-    let words =
-        seed_phrase_words.ok_or_else(|| ErrorCodeString::new("SEED_PHRASE_WORD_COUNT_MISSING"))?;
+    let words = seed_phrase_word_count
+        .ok_or_else(|| ErrorCodeString::new("SEED_PHRASE_WORD_COUNT_MISSING"))?;
     if words != 12 && words != 18 && words != 24 {
         return Err(ErrorCodeString::new("SEED_PHRASE_WORD_COUNT_INVALID"));
     }
