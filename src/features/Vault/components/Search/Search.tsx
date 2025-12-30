@@ -107,7 +107,7 @@ export function Search({ query, onChange, filters, onChangeFilters, filterKeys }
                 <button
                   key={key}
                   type="button"
-                  className={`vault-filter-chip${active ? ' is-active' : ''}`}
+                  className="vault-filter-chip"
                   aria-pressed={active}
                   onClick={() => toggle(key)}
                 >
