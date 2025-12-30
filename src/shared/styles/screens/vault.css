@@ -166,6 +166,15 @@
   gap: 6px;
 }
 
+.btn.btn-filter-toggle {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
 .vault-filter-toggle.btn-compact {
   border-radius: var(--radius-sm);
   width: 100%;

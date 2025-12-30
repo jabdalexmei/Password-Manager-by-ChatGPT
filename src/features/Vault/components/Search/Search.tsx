@@ -96,7 +96,7 @@ export function Search({ query, onChange, filters, onChangeFilters, filterKeys }
                 <button
                   key={key}
                   type="button"
-                  className={`btn btn-compact vault-filter-toggle ${active ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn btn-compact btn-filter-toggle vault-filter-toggle ${active ? 'btn-primary' : 'btn-secondary'}`}
                   aria-pressed={active}
                   onClick={() => toggle(key)}
                 >
