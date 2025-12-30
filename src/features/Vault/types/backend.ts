@@ -57,6 +57,10 @@ export type BackendDataCardSummary = {
   deleted_at: string | null;
   is_favorite: boolean;
   has_totp: boolean;
+  has_attachments: boolean;
+  has_seed_phrase: boolean;
+  has_phone: boolean;
+  has_note: boolean;
 };
 
 export type BackendCreateDataCardInput = {
@@ -104,6 +108,7 @@ export type BackendBankCardSummary = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  has_note: boolean;
 };
 
 export type BackendCreateBankCardInput = {

@@ -104,6 +104,10 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
         deleted_at: row.get("deleted_at")?,
         is_favorite,
         has_totp,
+        has_attachments: row.get::<_, i64>("has_attachments")? != 0,
+        has_seed_phrase: row.get::<_, i64>("has_seed_phrase")? != 0,
+        has_phone: row.get::<_, i64>("has_phone")? != 0,
+        has_note: row.get::<_, i64>("has_note")? != 0,
     })
 }
 
@@ -138,6 +142,7 @@ fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummar
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
+        has_note: row.get::<_, i64>("has_note")? != 0,
     })
 }
 
@@ -371,7 +376,14 @@ pub fn list_datacards_summary(
         let clause = order_clause(sort_field, sort_dir)
             .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         let query = format!(
-            "SELECT id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NULL {clause}"
+            "SELECT \
+              id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at, \
+              EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = datacards.id AND a.deleted_at IS NULL) AS has_attachments, \
+              CASE WHEN seed_phrase_word_count IS NULL THEN 0 ELSE 1 END AS has_seed_phrase, \
+              CASE WHEN mobile_phone IS NULL OR TRIM(mobile_phone) = '' THEN 0 ELSE 1 END AS has_phone, \
+              CASE WHEN note IS NULL OR TRIM(note) = '' THEN 0 ELSE 1 END AS has_note \
+            FROM datacards \
+            WHERE deleted_at IS NULL {clause}"
         );
         let mut stmt = conn.prepare(&query).map_err(|e| {
             log_sqlite_err("list_datacards_summary.prepare", &query, &e);
@@ -417,7 +429,15 @@ pub fn list_deleted_datacards_summary(
     with_connection(state, profile_id, |conn| {
         let mut stmt = conn
             .prepare(
-                "SELECT id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                "SELECT \
+                  id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at, \
+                  EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = datacards.id AND a.deleted_at IS NULL) AS has_attachments, \
+                  CASE WHEN seed_phrase_word_count IS NULL THEN 0 ELSE 1 END AS has_seed_phrase, \
+                  CASE WHEN mobile_phone IS NULL OR TRIM(mobile_phone) = '' THEN 0 ELSE 1 END AS has_phone, \
+                  CASE WHEN note IS NULL OR TRIM(note) = '' THEN 0 ELSE 1 END AS has_note \
+                FROM datacards \
+                WHERE deleted_at IS NOT NULL \
+                ORDER BY deleted_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -696,7 +716,11 @@ pub fn list_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let clause = order_clause(sort_field, sort_dir).unwrap_or("ORDER BY updated_at DESC");
         let query = format!(
-            "SELECT id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
+            "SELECT \
+              id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at, \
+              CASE WHEN note IS NULL OR TRIM(note) = '' THEN 0 ELSE 1 END AS has_note \
+            FROM bank_cards \
+            WHERE deleted_at IS NULL {clause}"
         );
         let mut stmt = conn.prepare(&query).map_err(|e| {
             log_sqlite_err("list_bank_cards_summary.prepare", &query, &e);
@@ -726,7 +750,12 @@ pub fn list_deleted_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let mut stmt = conn
             .prepare(
-                "SELECT id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                "SELECT \
+                  id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at, \
+                  CASE WHEN note IS NULL OR TRIM(note) = '' THEN 0 ELSE 1 END AS has_note \
+                FROM bank_cards \
+                WHERE deleted_at IS NOT NULL \
+                ORDER BY deleted_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 

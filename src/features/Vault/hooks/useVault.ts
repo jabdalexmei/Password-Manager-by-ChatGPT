@@ -30,6 +30,7 @@ import {
 } from '../types/mappers';
 import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput } from '../types/ui';
 import { BackendUserSettings } from '../types/backend';
+import { defaultVaultSearchFilters, VaultSearchFilters } from '../types/searchFilters';
 import { useToaster } from '../../../shared/components/Toaster';
 import { useTranslation } from '../../../shared/lib/i18n';
 import { useDebouncedValue } from './useDebouncedValue';
@@ -53,6 +54,7 @@ export function useVault(profileId: string, onLocked: () => void) {
   const [selectedNav, setSelectedNav] = useState<SelectedNav>('all');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
+  const [searchFilters, setSearchFilters] = useState<VaultSearchFilters>(defaultVaultSearchFilters);
   const debouncedSearchQuery = useDebouncedValue(searchInput, 200);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<VaultError>(null);
@@ -169,7 +171,8 @@ export function useVault(profileId: string, onLocked: () => void) {
       try {
         const card = await getDataCard(id);
         const mapped = mapCardFromBackend(card);
-        const summary = mapCardToSummary(mapped, dtf);
+        const prevSummary = cards.find((c) => c.id === id) || deletedCards.find((c) => c.id === id) || null;
+        const summary = { ...mapCardToSummary(mapped, dtf), hasAttachments: prevSummary?.hasAttachments ?? false };
 
         setCardDetailsById((prev) => ({ ...prev, [id]: mapped }));
 
@@ -190,7 +193,7 @@ export function useVault(profileId: string, onLocked: () => void) {
         handleError(err);
       }
     },
-    [dtf, handleError, sortCardsWithSettings]
+    [cards, deletedCards, dtf, handleError, sortCardsWithSettings]
   );
 
   useEffect(() => {
@@ -349,6 +352,7 @@ export function useVault(profileId: string, onLocked: () => void) {
       for (const path of paths) {
         try {
           await addAttachmentFromPath(cardId, path);
+          setCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, hasAttachments: true } : card)));
         } catch (err) {
           failed.push(path);
           handleError(err);
@@ -556,6 +560,13 @@ export function useVault(profileId: string, onLocked: () => void) {
       pool = activeCards.filter((card) => card.folderId === selectedNav.folderId && !isArchived(card));
     }
 
+    if (searchFilters.favorites) pool = pool.filter((card) => card.isFavorite);
+    if (searchFilters.has2fa) pool = pool.filter((card) => card.hasTotp);
+    if (searchFilters.hasAttachments) pool = pool.filter((card) => card.hasAttachments);
+    if (searchFilters.hasSeedPhrase) pool = pool.filter((card) => card.hasSeedPhrase);
+    if (searchFilters.hasPhone) pool = pool.filter((card) => card.hasPhone);
+    if (searchFilters.hasNotes) pool = pool.filter((card) => card.hasNote);
+
     if (!debouncedSearchQuery.trim()) return pool;
 
     const query = debouncedSearchQuery.toLowerCase();
@@ -563,7 +574,7 @@ export function useVault(profileId: string, onLocked: () => void) {
       const fields = [card.title, card.username, card.email, card.url, card.metaLine, ...(card.tags || [])];
       return fields.some((field) => field && field.toLowerCase().includes(query));
     });
-  }, [cards, debouncedSearchQuery, deletedCards, selectedNav]);
+  }, [cards, debouncedSearchQuery, deletedCards, searchFilters, selectedNav]);
 
   const selectedCard = useMemo(() => {
     if (selectedCardId && cardDetailsById[selectedCardId]) {
@@ -651,6 +662,8 @@ export function useVault(profileId: string, onLocked: () => void) {
     currentSectionTitle,
     searchQuery: searchInput,
     setSearchQuery: setSearchInput,
+    searchFilters,
+    setSearchFilters,
     loading,
     error,
     visibleCards,

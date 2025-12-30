@@ -60,6 +60,10 @@ export type DataCardSummary = DataCard & {
   createdAtLabel: string;
   metaLine: string;
   hasTotp: boolean;
+  hasAttachments: boolean;
+  hasSeedPhrase: boolean;
+  hasPhone: boolean;
+  hasNote: boolean;
 };
 
 export type CreateDataCardInput = {
@@ -101,6 +105,7 @@ export type BankCardSummary = BankCardItem & {
   updatedAtLabel: string;
   createdAtLabel: string;
   metaLine: string;
+  hasNote: boolean;
 };
 
 export type CreateBankCardInput = {

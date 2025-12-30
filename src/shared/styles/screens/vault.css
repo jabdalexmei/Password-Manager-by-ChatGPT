@@ -108,7 +108,8 @@
 }
 
 .vault-search {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 12px 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
@@ -119,6 +120,46 @@
 .vault-search:focus-visible {
   outline: 2px solid var(--color-primary);
   border-color: transparent;
+}
+
+.vault-searchbar {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.vault-filter-button.btn-icon {
+  width: 44px;
+  height: 44px;
+}
+
+.vault-filter-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 320px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-1);
+  box-shadow: var(--shadow-card);
+  z-index: 50;
+}
+
+.vault-filter-popover-title {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.vault-filter-popover-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vault-filter-toggle.btn-compact {
+  border-radius: var(--radius-sm);
 }
 
 .vault-sidebar-actions {

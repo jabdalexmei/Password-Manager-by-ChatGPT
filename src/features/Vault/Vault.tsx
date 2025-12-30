@@ -194,6 +194,13 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             <Search
               query={selectedCategory === 'data_cards' ? vault.searchQuery : bankCards.searchQuery}
               onChange={selectedCategory === 'data_cards' ? vault.setSearchQuery : bankCards.setSearchQuery}
+              filters={selectedCategory === 'data_cards' ? vault.searchFilters : bankCards.searchFilters}
+              onChangeFilters={selectedCategory === 'data_cards' ? vault.setSearchFilters : bankCards.setSearchFilters}
+              filterKeys={
+                selectedCategory === 'data_cards'
+                  ? ['favorites', 'has2fa', 'hasAttachments', 'hasSeedPhrase', 'hasPhone', 'hasNotes']
+                  : ['favorites', 'hasNotes']
+              }
             />
           </div>
           <div className="vault-sidebar-actions">

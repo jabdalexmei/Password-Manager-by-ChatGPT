@@ -22,4 +22,5 @@ export {
 
   RefreshCw as IconRegenerate,
   History as IconHistory,
+  SlidersHorizontal as IconFilters,
 } from "lucide-react";
