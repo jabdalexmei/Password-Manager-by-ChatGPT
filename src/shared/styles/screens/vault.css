@@ -142,7 +142,7 @@
   width: auto;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 12px;
+  padding: 10px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: var(--surface-container);
@@ -163,7 +163,7 @@
 .vault-filter-popover-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .vault-filter-toggle.btn-compact {
