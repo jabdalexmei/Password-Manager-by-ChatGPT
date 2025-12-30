@@ -137,14 +137,22 @@
 .vault-filter-popover {
   position: absolute;
   top: calc(100% + 10px);
+  left: 0;
   right: 0;
-  width: 320px;
+  width: auto;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 12px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   background: var(--color-surface-1);
   box-shadow: var(--shadow-card);
   z-index: 50;
+
+  /* Prevent popover from going outside the app window on small heights */
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .vault-filter-popover-title {
@@ -154,12 +162,14 @@
 
 .vault-filter-popover-grid {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .vault-filter-toggle.btn-compact {
   border-radius: var(--radius-sm);
+  width: 100%;
+  justify-content: flex-start;
 }
 
 .vault-sidebar-actions {
