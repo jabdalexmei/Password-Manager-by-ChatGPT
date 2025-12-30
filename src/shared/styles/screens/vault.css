@@ -166,10 +166,16 @@
   gap: 6px;
 }
 
-.vault-filter-toggle.btn-compact-xs {
+.vault-filter-toggle.btn-compact {
   border-radius: var(--radius-sm);
   width: 100%;
   justify-content: flex-start;
+
+  /* Make filter toggles denser without affecting other .btn-compact usages */
+  padding: 4px 10px;
+  min-height: 26px;
+  font-size: 12px;
+  line-height: 1.1;
 }
 
 .vault-sidebar-actions {

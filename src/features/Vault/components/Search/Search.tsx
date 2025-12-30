@@ -17,14 +17,15 @@ export function Search({ query, onChange, filters, onChangeFilters, filterKeys }
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const orderedFilterKeys = useMemo<VaultSearchFilterKey[]>(() => {
-    const priority: Record<VaultSearchFilterKey, number> = {
-      has2fa: 0,
-      hasAttachments: 1,
-      hasSeedPhrase: 2,
-      hasPhone: 3,
-      hasNotes: 4,
-    };
-    return [...filterKeys].sort((a, b) => (priority[a] ?? 999) - (priority[b] ?? 999));
+    const desiredOrder: VaultSearchFilterKey[] = [
+      'has2fa',
+      'hasAttachments',
+      'hasSeedPhrase',
+      'hasPhone',
+      'hasNotes',
+    ];
+    const allowed = new Set(filterKeys);
+    return desiredOrder.filter((key) => allowed.has(key));
   }, [filterKeys]);
 
   const labelByKey = useMemo<Record<VaultSearchFilterKey, string>>(
@@ -95,7 +96,7 @@ export function Search({ query, onChange, filters, onChangeFilters, filterKeys }
                 <button
                   key={key}
                   type="button"
-                  className={`btn btn-compact-xs vault-filter-toggle ${active ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn btn-compact vault-filter-toggle ${active ? 'btn-primary' : 'btn-secondary'}`}
                   aria-pressed={active}
                   onClick={() => toggle(key)}
                 >
