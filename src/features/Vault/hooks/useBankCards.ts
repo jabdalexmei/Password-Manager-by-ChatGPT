@@ -334,7 +334,6 @@ export function useBankCards(profileId: string, onLocked: () => void) {
       pool = activeCards;
     }
 
-    if (searchFilters.favorites) pool = pool.filter((card) => card.isFavorite);
     if (searchFilters.hasNotes) pool = pool.filter((card) => card.hasNote);
 
     if (!debouncedSearchQuery.trim()) return pool;

@@ -560,7 +560,6 @@ export function useVault(profileId: string, onLocked: () => void) {
       pool = activeCards.filter((card) => card.folderId === selectedNav.folderId && !isArchived(card));
     }
 
-    if (searchFilters.favorites) pool = pool.filter((card) => card.isFavorite);
     if (searchFilters.has2fa) pool = pool.filter((card) => card.hasTotp);
     if (searchFilters.hasAttachments) pool = pool.filter((card) => card.hasAttachments);
     if (searchFilters.hasSeedPhrase) pool = pool.filter((card) => card.hasSeedPhrase);

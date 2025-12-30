@@ -1,5 +1,4 @@
 export type VaultSearchFilters = {
-  favorites: boolean;
   has2fa: boolean;
   hasAttachments: boolean;
   hasSeedPhrase: boolean;
@@ -8,7 +7,6 @@ export type VaultSearchFilters = {
 };
 
 export const defaultVaultSearchFilters: VaultSearchFilters = {
-  favorites: false,
   has2fa: false,
   hasAttachments: false,
   hasSeedPhrase: false,

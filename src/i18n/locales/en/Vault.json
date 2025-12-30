@@ -9,7 +9,6 @@
   "search.placeholder": "Search",
   "filters.button": "Filters",
   "filters.title": "Filters",
-  "filters.favorites": "Favorites",
   "filters.has2fa": "Has 2FA",
   "filters.hasAttachments": "Has attachments",
   "filters.hasSeedPhrase": "Has seed phrase",

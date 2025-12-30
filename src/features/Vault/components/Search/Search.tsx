@@ -18,7 +18,6 @@ export function Search({ query, onChange, filters, onChangeFilters, filterKeys }
 
   const labelByKey = useMemo<Record<VaultSearchFilterKey, string>>(
     () => ({
-      favorites: t('filters.favorites'),
       has2fa: t('filters.has2fa'),
       hasAttachments: t('filters.hasAttachments'),
       hasSeedPhrase: t('filters.hasSeedPhrase'),

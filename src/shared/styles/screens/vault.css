@@ -142,7 +142,7 @@
   width: auto;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 12px;
+  padding: 10px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   background: var(--color-surface-1);
@@ -157,19 +157,25 @@
 
 .vault-filter-popover-title {
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .vault-filter-popover-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .vault-filter-toggle.btn-compact {
   border-radius: var(--radius-sm);
   width: 100%;
   justify-content: flex-start;
+
+  /* Make filter toggles denser without affecting other .btn-compact usages */
+  padding: 6px 10px;
+  min-height: 30px;
+  font-size: 13px;
+  line-height: 1.1;
 }
 
 .vault-sidebar-actions {
