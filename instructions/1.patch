@@ -1,43 +1,30 @@
---- a/src/features/Vault/components/Search/Search.tsx
-+++ b/src/features/Vault/components/Search/Search.tsx
-@@ -68,7 +68,7 @@
-           <div className="vault-filter-backdrop" onClick={close} />
-           <div className="vault-filter-panel" role="dialog" aria-label={t('filters.title')}>
-             <div className="vault-filter-panel__title">{t('filters.title')}</div>
--            <div className="vault-filter-chips" aria-label={t('filters.title')}>
-+            <div className="vault-filter-list" aria-label={t('filters.title')}>
-               {FILTER_ORDER.map(({ key, labelKey }) => {
-                 const active = Boolean(filters?.[key]);
-                 return (
-                   <button
-                     key={key}
-                     type="button"
-                     className={`filter-chip${active ? ' is-active' : ''}`}
-                     aria-pressed={active}
-                     onClick={() => {
-                       if (!filters || !onChangeFilters) return;
-                       onChangeFilters({ ...filters, [key]: !filters[key] });
-                     }}
-                   >
-                     {t(labelKey)}
-                   </button>
-                 );
-               })}
-             </div>
-           </div>
-         </>
-       )}
-     </div>
-   );
- }
 --- a/src/shared/styles/screens/vault.css
 +++ b/src/shared/styles/screens/vault.css
-@@ -196,9 +196,10 @@
+@@ -179,16 +179,18 @@
+ .vault-filter-panel {
+   position: absolute;
+   z-index: 41;
+   top: calc(100% + 8px);
+   right: 0;
+-  min-width: 220px;
+-  padding: 12px;
++  min-width: 180px;
++  padding: 10px;
+   border-radius: var(--radius-md);
+   border: 1px solid var(--color-border);
+   background: var(--color-surface-2);
+   box-shadow: var(--shadow-popover);
+ }
+ 
+ .vault-filter-panel__title {
+   font-size: 12px;
+   font-weight: 600;
+-  color: var(--color-text-muted);
++  color: var(--color-text);
    margin-bottom: 10px;
  }
  
--.vault-filter-chips {
-+.vault-filter-list {
+ .vault-filter-chips {
    display: flex;
 -  flex-wrap: wrap;
 +  flex-direction: column;
