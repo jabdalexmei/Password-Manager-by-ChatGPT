@@ -1,0 +1,599 @@
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/Vault.tsx /mnt/data/proj_mod/src/features/Vault/Vault.tsx
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/Vault.tsx	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/features/Vault/Vault.tsx	2025-12-31 00:06:57.709815455 +0000
+@@ -194,6 +194,8 @@
+             <Search
+               query={selectedCategory === 'data_cards' ? vault.searchQuery : bankCards.searchQuery}
+               onChange={selectedCategory === 'data_cards' ? vault.setSearchQuery : bankCards.setSearchQuery}
++              filters={selectedCategory === 'data_cards' ? vault.filters : undefined}
++              onChangeFilters={selectedCategory === 'data_cards' ? vault.setFilters : undefined}
+             />
+           </div>
+           <div className="vault-sidebar-actions">
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/components/Search/Search.tsx /mnt/data/proj_mod/src/features/Vault/components/Search/Search.tsx
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/components/Search/Search.tsx	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/features/Vault/components/Search/Search.tsx	2025-12-31 00:08:54.533169055 +0000
+@@ -1,21 +1,95 @@
+-import React from 'react';
++import React, { useCallback, useEffect, useMemo, useState } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
++import { IconFilter } from '../../../../shared/icons/lucide/icons';
++import type { VaultFilters } from '../../hooks/useVault';
+ 
+ type Props = {
+   query: string;
+   onChange: (value: string) => void;
++  filters?: VaultFilters;
++  onChangeFilters?: (next: VaultFilters) => void;
+ };
+ 
+-export function Search({ query, onChange }: Props) {
++const FILTER_ORDER: Array<{ key: keyof VaultFilters; labelKey: string }> = [
++  { key: 'totp', labelKey: 'filters.2fa' },
++  { key: 'seedPhrase', labelKey: 'filters.seedPhrase' },
++  { key: 'phone', labelKey: 'filters.phone' },
++  { key: 'notes', labelKey: 'filters.notes' },
++  { key: 'attachments', labelKey: 'filters.attachments' },
++];
++
++export function Search({ query, onChange, filters, onChangeFilters }: Props) {
+   const { t } = useTranslation('Vault');
++  const [isOpen, setIsOpen] = useState(false);
++
++  const hasFiltersUi = Boolean(filters && onChangeFilters);
++
++  const hasActiveFilters = useMemo(() => {
++    if (!filters) return false;
++    return Object.values(filters).some(Boolean);
++  }, [filters]);
++
++  const close = useCallback(() => setIsOpen(false), []);
++
++  useEffect(() => {
++    if (!isOpen) return;
++    const onKeyDown = (e: KeyboardEvent) => {
++      if (e.key === 'Escape') close();
++    };
++    window.addEventListener('keydown', onKeyDown);
++    return () => window.removeEventListener('keydown', onKeyDown);
++  }, [close, isOpen]);
+ 
+   return (
+-    <input
+-      type="search"
+-      className="vault-search"
+-      placeholder={t('search.placeholder')}
+-      value={query}
+-      onChange={(e) => onChange(e.target.value)}
+-    />
++    <div className="vault-search-wrapper">
++      <div className="vault-search-row">
++        <input
++          type="search"
++          className="vault-search"
++          placeholder={t('search.placeholder')}
++          value={query}
++          onChange={(e) => onChange(e.target.value)}
++        />
++        {hasFiltersUi && (
++          <button
++            type="button"
++            className={`vault-filter-btn${hasActiveFilters ? ' is-active' : ''}`}
++            aria-label={t('filters.title')}
++            aria-expanded={isOpen}
++            onClick={() => setIsOpen((v) => !v)}
++          >
++            <IconFilter size={18} />
++          </button>
++        )}
++      </div>
++
++      {hasFiltersUi && isOpen && (
++        <>
++          <div className="vault-filter-backdrop" onClick={close} />
++          <div className="vault-filter-panel" role="dialog" aria-label={t('filters.title')}>
++            <div className="vault-filter-panel__title">{t('filters.title')}</div>
++            <div className="vault-filter-chips" aria-label={t('filters.title')}>
++              {FILTER_ORDER.map(({ key, labelKey }) => {
++                const active = Boolean(filters?.[key]);
++                return (
++                  <button
++                    key={key}
++                    type="button"
++                    className={`filter-chip${active ? ' is-active' : ''}`}
++                    aria-pressed={active}
++                    onClick={() => {
++                      if (!filters || !onChangeFilters) return;
++                      onChangeFilters({ ...filters, [key]: !filters[key] });
++                    }}
++                  >
++                    {t(labelKey)}
++                  </button>
++                );
++              })}
++            </div>
++          </div>
++        </>
++      )}
++    </div>
+   );
+ }
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/hooks/useVault.ts /mnt/data/proj_mod/src/features/Vault/hooks/useVault.ts
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/hooks/useVault.ts	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/features/Vault/hooks/useVault.ts	2025-12-31 00:06:22.272296647 +0000
+@@ -37,6 +37,14 @@
+ 
+ export type SelectedNav = 'all' | 'favorites' | 'archive' | 'deleted' | { folderId: string };
+ 
++export type VaultFilters = {
++  totp: boolean;
++  seedPhrase: boolean;
++  phone: boolean;
++  notes: boolean;
++  attachments: boolean;
++};
++
+ export type VaultError = { code: string; message?: string } | null;
+ 
+ export function useVault(profileId: string, onLocked: () => void) {
+@@ -54,6 +62,13 @@
+   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+   const [searchInput, setSearchInput] = useState('');
+   const debouncedSearchQuery = useDebouncedValue(searchInput, 200);
++  const [filters, setFilters] = useState<VaultFilters>({
++    totp: false,
++    seedPhrase: false,
++    phone: false,
++    notes: false,
++    attachments: false,
++  });
+   const [loading, setLoading] = useState(false);
+   const [error, setError] = useState<VaultError>(null);
+   const dtf = useMemo(
+@@ -70,6 +85,7 @@
+     setSelectedNav('all');
+     setSelectedCardId(null);
+     setTrashLoaded(false);
++    setFilters({ totp: false, seedPhrase: false, phone: false, notes: false, attachments: false });
+   }, [profileId]);
+ 
+   const isTrashMode = selectedNav === 'deleted';
+@@ -175,14 +191,25 @@
+ 
+         if (mapped.deletedAt) {
+           setDeletedCards((prev) => {
++            const existing = prev.find((c) => c.id === id) ?? cards.find((c) => c.id === id);
++            const merged = {
++              ...summary,
++              hasAttachments: existing?.hasAttachments ?? summary.hasAttachments,
++              deletedAt: mapped.deletedAt,
++            };
+             const filtered = prev.filter((c) => c.id !== id);
+-            return sortCardsWithSettings([...filtered, { ...summary, deletedAt: mapped.deletedAt }]);
++            return sortCardsWithSettings([...filtered, merged]);
+           });
+           setCards((prev) => prev.filter((c) => c.id !== id));
+         } else {
+           setCards((prev) => {
++            const existing = prev.find((c) => c.id === id) ?? deletedCards.find((c) => c.id === id);
++            const merged = {
++              ...summary,
++              hasAttachments: existing?.hasAttachments ?? summary.hasAttachments,
++            };
+             const filtered = prev.filter((c) => c.id !== id);
+-            return sortCardsWithSettings([...filtered, summary]);
++            return sortCardsWithSettings([...filtered, merged]);
+           });
+           setDeletedCards((prev) => prev.filter((c) => c.id !== id));
+         }
+@@ -190,7 +217,7 @@
+         handleError(err);
+       }
+     },
+-    [dtf, handleError, sortCardsWithSettings]
++    [cards, deletedCards, dtf, handleError, sortCardsWithSettings]
+   );
+ 
+   useEffect(() => {
+@@ -378,9 +405,17 @@
+       try {
+         await deleteDataCard(id);
+         const softDeleteEnabled = settings?.soft_delete_enabled ?? true;
+-        const cachedSummary = cardDetailsById[id]
+-          ? mapCardToSummary(cardDetailsById[id], dtf)
+-          : cards.find((card) => card.id === id) || deletedCards.find((card) => card.id === id);
++        const existingSummary =
++          cards.find((card) => card.id === id) || deletedCards.find((card) => card.id === id) || null;
++
++        const cachedSummary = existingSummary
++          ? existingSummary
++          : cardDetailsById[id]
++            ? {
++                ...mapCardToSummary(cardDetailsById[id], dtf),
++                hasAttachments: false,
++              }
++            : null;
+ 
+         setCards((prev) => prev.filter((card) => card.id !== id));
+         setSelectedCardId((prev) => (prev === id ? null : prev));
+@@ -556,6 +591,18 @@
+       pool = activeCards.filter((card) => card.folderId === selectedNav.folderId && !isArchived(card));
+     }
+ 
++    const hasAnyFilter = Object.values(filters).some(Boolean);
++    if (hasAnyFilter) {
++      pool = pool.filter((card) => {
++        if (filters.totp && !card.hasTotp) return false;
++        if (filters.seedPhrase && !card.hasSeedPhrase) return false;
++        if (filters.phone && !card.hasPhone) return false;
++        if (filters.notes && !card.hasNotes) return false;
++        if (filters.attachments && !card.hasAttachments) return false;
++        return true;
++      });
++    }
++
+     if (!debouncedSearchQuery.trim()) return pool;
+ 
+     const query = debouncedSearchQuery.toLowerCase();
+@@ -563,7 +610,7 @@
+       const fields = [card.title, card.username, card.email, card.url, card.metaLine, ...(card.tags || [])];
+       return fields.some((field) => field && field.toLowerCase().includes(query));
+     });
+-  }, [cards, debouncedSearchQuery, deletedCards, selectedNav]);
++  }, [cards, debouncedSearchQuery, deletedCards, filters, selectedNav]);
+ 
+   const selectedCard = useMemo(() => {
+     if (selectedCardId && cardDetailsById[selectedCardId]) {
+@@ -651,6 +698,8 @@
+     currentSectionTitle,
+     searchQuery: searchInput,
+     setSearchQuery: setSearchInput,
++    filters,
++    setFilters,
+     loading,
+     error,
+     visibleCards,
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/types/backend.ts /mnt/data/proj_mod/src/features/Vault/types/backend.ts
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/types/backend.ts	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/features/Vault/types/backend.ts	2025-12-31 00:02:37.689613299 +0000
+@@ -57,6 +57,10 @@
+   deleted_at: string | null;
+   is_favorite: boolean;
+   has_totp: boolean;
++  has_seed_phrase: boolean;
++  has_phone: boolean;
++  has_note: boolean;
++  has_attachments: boolean;
+ };
+ 
+ export type BackendCreateDataCardInput = {
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/types/mappers.ts /mnt/data/proj_mod/src/features/Vault/types/mappers.ts
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/types/mappers.ts	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/features/Vault/types/mappers.ts	2025-12-31 00:02:58.523108799 +0000
+@@ -94,6 +94,10 @@
+     customFields: [],
+     isFavorite: card.is_favorite,
+     hasTotp: card.has_totp,
++    hasSeedPhrase: card.has_seed_phrase,
++    hasPhone: card.has_phone,
++    hasNotes: card.has_note,
++    hasAttachments: card.has_attachments,
+     updatedAtLabel,
+     createdAtLabel,
+     metaLine: metaFromCard(card, ''),
+@@ -110,6 +114,11 @@
+     createdAtLabel,
+     metaLine: metaFromCard(card, ''),
+     hasTotp: (card.totpUri ?? null) !== null,
++    hasSeedPhrase: (card.seedPhrase ?? '').trim().length > 0,
++    hasPhone: (card.mobilePhone ?? '').trim().length > 0,
++    hasNotes: (card.note ?? '').trim().length > 0,
++    // attachments are not present in DataCard payload; caller should preserve/override
++    hasAttachments: false,
+   };
+ }
+ 
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/types/ui.ts /mnt/data/proj_mod/src/features/Vault/types/ui.ts
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/features/Vault/types/ui.ts	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/features/Vault/types/ui.ts	2025-12-31 00:02:23.585759396 +0000
+@@ -60,6 +60,10 @@
+   createdAtLabel: string;
+   metaLine: string;
+   hasTotp: boolean;
++  hasSeedPhrase: boolean;
++  hasPhone: boolean;
++  hasNotes: boolean;
++  hasAttachments: boolean;
+ };
+ 
+ export type CreateDataCardInput = {
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/i18n/locales/en/Vault.json /mnt/data/proj_mod/src/i18n/locales/en/Vault.json
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/i18n/locales/en/Vault.json	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/i18n/locales/en/Vault.json	2025-12-31 00:02:09.020001083 +0000
+@@ -7,6 +7,13 @@
+   "lock": "Lock",
+   "logout": "Log out",
+   "search.placeholder": "Search",
++
++  "filters.title": "Filters",
++  "filters.2fa": "2FA",
++  "filters.seedPhrase": "Seed phrase",
++  "filters.phone": "Phone",
++  "filters.notes": "Notes",
++  "filters.attachments": "Attachments",
+   "nav.all_items": "All items",
+   "nav.favorites": "Favorites",
+   "nav.archive": "Archive",
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/shared/icons/lucide/icons.ts /mnt/data/proj_mod/src/shared/icons/lucide/icons.ts
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/shared/icons/lucide/icons.ts	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/shared/icons/lucide/icons.ts	2025-12-31 00:01:31.110811351 +0000
+@@ -20,6 +20,8 @@
+ 
+   Paperclip as IconAttachment,
+ 
++  SlidersHorizontal as IconFilter,
++
+   RefreshCw as IconRegenerate,
+   History as IconHistory,
+ } from "lucide-react";
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/shared/styles/base.css /mnt/data/proj_mod/src/shared/styles/base.css
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/shared/styles/base.css	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/shared/styles/base.css	2025-12-31 00:01:48.721521526 +0000
+@@ -3,6 +3,15 @@
+   color: var(--color-text);
+   background-color: var(--color-bg);
+   font-family: var(--font-body);
++
++  /* -----------------------------------------------------------------------
++     Extra semantic tokens for custom UI controls (filters chips, etc.)
++     - keep them as aliases so themes can override in one place
++     --------------------------------------------------------------------- */
++  --greycolorsecondary: var(--btn-secondary-bg, var(--surface-container, var(--color-surface-2)));
++  --greycolorsecondaryborder: var(--btn-secondary-border, var(--border-subtle, var(--color-border)));
++  --blueprimarycolor: var(--color-primary);
++  --blueprimarycolorstrong: var(--color-primary-strong);
+ }
+ 
+ /* нормальный box-sizing для всего */
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/shared/styles/screens/vault.css /mnt/data/proj_mod/src/shared/styles/screens/vault.css
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src/shared/styles/screens/vault.css	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src/shared/styles/screens/vault.css	2025-12-31 00:12:15.434653069 +0000
+@@ -107,6 +107,21 @@
+   margin-bottom: 14px;
+ }
+ 
++.vault-search-wrapper {
++  position: relative;
++}
++
++.vault-search-row {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++}
++
++.vault-search-row .vault-search {
++  width: auto;
++  flex: 1 1 auto;
++}
++
+ .vault-search {
+   width: 100%;
+   padding: 12px 12px;
+@@ -121,6 +136,118 @@
+   border-color: transparent;
+ }
+ 
++.vault-filter-btn {
++  width: 44px;
++  height: 44px;
++  border-radius: var(--radius-md);
++  border: 1px solid var(--greycolorsecondaryborder);
++  background: var(--greycolorsecondary);
++  color: var(--color-text);
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  cursor: pointer;
++  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
++}
++
++.vault-filter-btn:hover {
++  border-color: var(--focus-border);
++}
++
++.vault-filter-btn:active {
++  transform: translateY(1px);
++}
++
++.vault-filter-btn.is-active {
++  background: var(--blueprimarycolor);
++  border-color: var(--blueprimarycolor);
++  color: var(--color-on-primary);
++}
++
++.vault-filter-btn:focus-visible {
++  outline: var(--focus-ring);
++  outline-offset: var(--focus-ring-offset);
++}
++
++.vault-filter-backdrop {
++  position: fixed;
++  inset: 0;
++  z-index: 40;
++  background: transparent;
++}
++
++.vault-filter-panel {
++  position: absolute;
++  z-index: 41;
++  top: calc(100% + 8px);
++  right: 0;
++  min-width: 220px;
++  padding: 12px;
++  border-radius: var(--radius-md);
++  border: 1px solid var(--color-border);
++  background: var(--color-surface-2);
++  box-shadow: var(--shadow-popover);
++}
++
++.vault-filter-panel__title {
++  font-size: 12px;
++  font-weight: 600;
++  color: var(--color-text-muted);
++  margin-bottom: 10px;
++}
++
++.vault-filter-chips {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 8px;
++  align-items: flex-start;
++}
++
++.filter-chip {
++  /* customizable knobs */
++  --filter-chip-pad-y: 7px;
++  --filter-chip-pad-x: 12px;
++  --filter-chip-font-size: 13px;
++
++  flex: 0 0 auto;
++  width: auto;
++  align-self: flex-start;
++
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++
++  padding: var(--filter-chip-pad-y) var(--filter-chip-pad-x);
++  border-radius: var(--radius-pill);
++  border: 1px solid var(--greycolorsecondaryborder);
++  background: var(--greycolorsecondary);
++  color: var(--color-text);
++  font-size: var(--filter-chip-font-size);
++  line-height: 1;
++  cursor: pointer;
++  user-select: none;
++  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
++}
++
++.filter-chip:hover {
++  border-color: var(--focus-border);
++}
++
++.filter-chip:active {
++  transform: translateY(1px);
++}
++
++.filter-chip.is-active {
++  background: var(--blueprimarycolor);
++  border-color: var(--blueprimarycolor);
++  color: var(--color-on-primary);
++}
++
++.filter-chip:focus-visible {
++  outline: var(--focus-ring);
++  outline-offset: var(--focus-ring-offset);
++}
++
+ .vault-sidebar-actions {
+   display: flex;
+   gap: 10px;
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src-tauri/src/data/sqlite/repo_impl.rs /mnt/data/proj_mod/src-tauri/src/data/sqlite/repo_impl.rs
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src-tauri/src/data/sqlite/repo_impl.rs	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src-tauri/src/data/sqlite/repo_impl.rs	2025-12-31 00:17:03.128710630 +0000
+@@ -90,6 +90,10 @@
+     let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
+     let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
+     let has_totp = row.get::<_, Option<String>>("totp_uri")?.is_some();
++    let has_seed_phrase = row.get::<_, i64>("has_seed_phrase")? != 0;
++    let has_phone = row.get::<_, i64>("has_phone")? != 0;
++    let has_note = row.get::<_, i64>("has_note")? != 0;
++    let has_attachments = row.get::<_, i64>("has_attachments")? != 0;
+ 
+     Ok(DataCardSummary {
+         id: row.get("id")?,
+@@ -104,6 +108,10 @@
+         deleted_at: row.get("deleted_at")?,
+         is_favorite,
+         has_totp,
++        has_seed_phrase,
++        has_phone,
++        has_note,
++        has_attachments,
+     })
+ }
+ 
+@@ -371,7 +379,27 @@
+         let clause = order_clause(sort_field, sort_dir)
+             .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+         let query = format!(
+-            "SELECT id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NULL {clause}"
++            r#"
++            SELECT
++                d.id,
++                d.folder_id,
++                d.title,
++                d.url,
++                d.email,
++                d.username,
++                d.totp_uri,
++                CASE WHEN d.seed_phrase_value IS NOT NULL AND TRIM(d.seed_phrase_value) <> '' THEN 1 ELSE 0 END AS has_seed_phrase,
++                CASE WHEN d.mobile_phone IS NOT NULL AND TRIM(d.mobile_phone) <> '' THEN 1 ELSE 0 END AS has_phone,
++                CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
++                EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
++                d.tags_json,
++                d.is_favorite,
++                d.created_at,
++                d.updated_at,
++                d.deleted_at
++            FROM datacards d
++            WHERE d.deleted_at IS NULL {clause}
++            "#
+         );
+         let mut stmt = conn.prepare(&query).map_err(|e| {
+             log_sqlite_err("list_datacards_summary.prepare", &query, &e);
+@@ -417,7 +445,28 @@
+     with_connection(state, profile_id, |conn| {
+         let mut stmt = conn
+             .prepare(
+-                "SELECT id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
++                r#"
++                SELECT
++                    d.id,
++                    d.folder_id,
++                    d.title,
++                    d.url,
++                    d.email,
++                    d.username,
++                    d.totp_uri,
++                    CASE WHEN d.seed_phrase_value IS NOT NULL AND TRIM(d.seed_phrase_value) <> '' THEN 1 ELSE 0 END AS has_seed_phrase,
++                    CASE WHEN d.mobile_phone IS NOT NULL AND TRIM(d.mobile_phone) <> '' THEN 1 ELSE 0 END AS has_phone,
++                    CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
++                    EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
++                    d.tags_json,
++                    d.is_favorite,
++                    d.created_at,
++                    d.updated_at,
++                    d.deleted_at
++                FROM datacards d
++                WHERE d.deleted_at IS NOT NULL
++                ORDER BY d.deleted_at DESC
++                "#,
+             )
+             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+ 
+diff -ruN /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src-tauri/src/types.rs /mnt/data/proj_mod/src-tauri/src/types.rs
+--- /mnt/data/proj/Password-Manager-by-ChatGPT-working-before-filter/src-tauri/src/types.rs	2025-12-30 19:21:40.000000000 +0000
++++ /mnt/data/proj_mod/src-tauri/src/types.rs	2025-12-31 00:13:01.780444725 +0000
+@@ -109,6 +109,10 @@
+     pub deleted_at: Option<String>,
+     pub is_favorite: bool,
+     pub has_totp: bool,
++    pub has_seed_phrase: bool,
++    pub has_phone: bool,
++    pub has_note: bool,
++    pub has_attachments: bool,
+ }
+ 
+ #[derive(Debug, Serialize, Deserialize, Clone)]
