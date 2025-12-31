@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { IconFilter } from '../../../../shared/icons/lucide/icons';
 import type { VaultFilters } from '../../hooks/useVault';
@@ -24,11 +24,6 @@ export function Search({ query, onChange, filters, onChangeFilters }: Props) {
 
   const hasFiltersUi = Boolean(filters && onChangeFilters);
 
-  const hasActiveFilters = useMemo(() => {
-    if (!filters) return false;
-    return Object.values(filters).some(Boolean);
-  }, [filters]);
-
   const close = useCallback(() => setIsOpen(false), []);
 
   useEffect(() => {
@@ -53,7 +48,7 @@ export function Search({ query, onChange, filters, onChangeFilters }: Props) {
         {hasFiltersUi && (
           <button
             type="button"
-            className={`vault-filter-btn${hasActiveFilters ? ' is-active' : ''}`}
+            className="vault-filter-btn"
             aria-label={t('filters.title')}
             aria-expanded={isOpen}
             onClick={() => setIsOpen((v) => !v)}
