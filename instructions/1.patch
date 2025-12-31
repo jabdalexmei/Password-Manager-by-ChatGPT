@@ -1,34 +1,43 @@
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -179,16 +179,18 @@
- .vault-filter-panel {
-   position: absolute;
-   z-index: 41;
-   top: calc(100% + 8px);
-   right: 0;
--  min-width: 220px;
--  padding: 12px;
-+  min-width: 180px;
-+  padding: 10px;
-   border-radius: var(--radius-md);
-   border: 1px solid var(--color-border);
-   background: var(--color-surface-2);
-   box-shadow: var(--shadow-popover);
- }
+Это происходит потому, что у кнопки рядом с поиском ты **сам добавляешь** класс `is-active`, когда включён хотя бы один фильтр:
+
+```tsx
+className={`vault-filter-btn${hasActiveFilters ? ' is-active' : ''}`}
+```
+
+А в CSS `.vault-filter-btn.is-active` красит её в `--blueprimarycolor`.
+
+Ниже TS Diff, который **полностью убирает “синеву” у кнопки фильтра**, оставляя синими только сами выбранные фильтры:
+
+```diff
+--- a/src/features/Vault/components/Search/Search.tsx
++++ b/src/features/Vault/components/Search/Search.tsx
+@@ -1,4 +1,4 @@
+-import React, { useCallback, useEffect, useMemo, useState } from 'react';
++import React, { useCallback, useEffect, useState } from 'react';
+@@
+   const [isOpen, setIsOpen] = useState(false);
  
- .vault-filter-panel__title {
-   font-size: 12px;
-   font-weight: 600;
--  color: var(--color-text-muted);
-+  color: var(--color-text);
-   margin-bottom: 10px;
- }
- 
- .vault-filter-chips {
-   display: flex;
--  flex-wrap: wrap;
-+  flex-direction: column;
-+  flex-wrap: nowrap;
-   gap: 8px;
-   align-items: flex-start;
- }
+   const hasFiltersUi = Boolean(filters && onChangeFilters);
+-
+-  const hasActiveFilters = useMemo(() => {
+-    if (!filters) return false;
+-    return Object.values(filters).some(Boolean);
+-  }, [filters]);
+@@
+         {hasFiltersUi && (
+           <button
+             type="button"
+-            className={`vault-filter-btn${hasActiveFilters ? ' is-active' : ''}`}
++            className="vault-filter-btn"
+             aria-label={t('filters.title')}
+             aria-expanded={isOpen}
+             onClick={() => setIsOpen((v) => !v)}
+           >
+             <IconFilter size={18} />
+           </button>
+         )}
+```
+
+`aria-expanded` оставляем — это корректно для кнопки, которая раскрывает/сворачивает панель. ([developer.mozilla.org][1])
+
+[1]: https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-expanded?utm_source=chatgpt.com "ARIA: aria-expanded attribute - MDN - Mozilla"
