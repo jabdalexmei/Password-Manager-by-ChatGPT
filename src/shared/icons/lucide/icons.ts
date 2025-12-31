@@ -20,6 +20,8 @@ export {
 
   Paperclip as IconAttachment,
 
+  SlidersHorizontal as IconFilter,
+
   RefreshCw as IconRegenerate,
   History as IconHistory,
 } from "lucide-react";

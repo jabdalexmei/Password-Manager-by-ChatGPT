@@ -3,6 +3,15 @@
   color: var(--color-text);
   background-color: var(--color-bg);
   font-family: var(--font-body);
+
+  /* -----------------------------------------------------------------------
+     Extra semantic tokens for custom UI controls (filters chips, etc.)
+     - keep them as aliases so themes can override in one place
+     --------------------------------------------------------------------- */
+  --greycolorsecondary: var(--btn-secondary-bg, var(--surface-container, var(--color-surface-2)));
+  --greycolorsecondaryborder: var(--btn-secondary-border, var(--border-subtle, var(--color-border)));
+  --blueprimarycolor: var(--color-primary);
+  --blueprimarycolorstrong: var(--color-primary-strong);
 }
 
 /* нормальный box-sizing для всего */
