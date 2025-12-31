@@ -94,6 +94,10 @@ export function mapCardSummaryFromBackend(
     customFields: [],
     isFavorite: card.is_favorite,
     hasTotp: card.has_totp,
+    hasSeedPhrase: card.has_seed_phrase,
+    hasPhone: card.has_phone,
+    hasNotes: card.has_note,
+    hasAttachments: card.has_attachments,
     updatedAtLabel,
     createdAtLabel,
     metaLine: metaFromCard(card, ''),
@@ -110,6 +114,11 @@ export function mapCardToSummary(card: DataCard, formatter: Intl.DateTimeFormat)
     createdAtLabel,
     metaLine: metaFromCard(card, ''),
     hasTotp: (card.totpUri ?? null) !== null,
+    hasSeedPhrase: (card.seedPhrase ?? '').trim().length > 0,
+    hasPhone: (card.mobilePhone ?? '').trim().length > 0,
+    hasNotes: (card.note ?? '').trim().length > 0,
+    // attachments are not present in DataCard payload; caller should preserve/override
+    hasAttachments: false,
   };
 }
 

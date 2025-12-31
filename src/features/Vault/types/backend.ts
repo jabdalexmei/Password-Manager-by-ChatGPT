@@ -57,6 +57,10 @@ export type BackendDataCardSummary = {
   deleted_at: string | null;
   is_favorite: boolean;
   has_totp: boolean;
+  has_seed_phrase: boolean;
+  has_phone: boolean;
+  has_note: boolean;
+  has_attachments: boolean;
 };
 
 export type BackendCreateDataCardInput = {

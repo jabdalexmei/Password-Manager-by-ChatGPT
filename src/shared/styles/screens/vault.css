@@ -107,6 +107,21 @@
   margin-bottom: 14px;
 }
 
+.vault-search-wrapper {
+  position: relative;
+}
+
+.vault-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vault-search-row .vault-search {
+  width: auto;
+  flex: 1 1 auto;
+}
+
 .vault-search {
   width: 100%;
   padding: 12px 12px;
@@ -119,6 +134,119 @@
 .vault-search:focus-visible {
   outline: 2px solid var(--color-primary);
   border-color: transparent;
+}
+
+.vault-filter-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--greycolorsecondaryborder);
+  background: var(--greycolorsecondary);
+  color: var(--color-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.vault-filter-btn:hover {
+  border-color: var(--focus-border);
+}
+
+.vault-filter-btn:active {
+  transform: translateY(1px);
+}
+
+.vault-filter-btn.is-active {
+  background: var(--blueprimarycolor);
+  border-color: var(--blueprimarycolor);
+  color: var(--color-on-primary);
+}
+
+.vault-filter-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.vault-filter-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+}
+
+.vault-filter-panel {
+  position: absolute;
+  z-index: 41;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  box-shadow: var(--shadow-popover);
+}
+
+.vault-filter-panel__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 10px;
+}
+
+.vault-filter-list {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.filter-chip {
+  /* customizable knobs */
+  --filter-chip-pad-y: 7px;
+  --filter-chip-pad-x: 12px;
+  --filter-chip-font-size: 13px;
+
+  flex: 0 0 auto;
+  width: auto;
+  align-self: flex-start;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: var(--filter-chip-pad-y) var(--filter-chip-pad-x);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--greycolorsecondaryborder);
+  background: var(--greycolorsecondary);
+  color: var(--color-text);
+  font-size: var(--filter-chip-font-size);
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.filter-chip:hover {
+  border-color: var(--focus-border);
+}
+
+.filter-chip:active {
+  transform: translateY(1px);
+}
+
+.filter-chip.is-active {
+  background: var(--blueprimarycolor);
+  border-color: var(--blueprimarycolor);
+  color: var(--color-on-primary);
+}
+
+.filter-chip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .vault-sidebar-actions {

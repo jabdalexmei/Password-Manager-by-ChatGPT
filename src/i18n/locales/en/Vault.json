@@ -7,6 +7,13 @@
   "lock": "Lock",
   "logout": "Log out",
   "search.placeholder": "Search",
+
+  "filters.title": "Filters",
+  "filters.2fa": "2FA",
+  "filters.seedPhrase": "Seed phrase",
+  "filters.phone": "Phone",
+  "filters.notes": "Notes",
+  "filters.attachments": "Attachments",
   "nav.all_items": "All items",
   "nav.favorites": "Favorites",
   "nav.archive": "Archive",

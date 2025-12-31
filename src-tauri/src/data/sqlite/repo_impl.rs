@@ -90,6 +90,10 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
     let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
     let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
     let has_totp = row.get::<_, Option<String>>("totp_uri")?.is_some();
+    let has_seed_phrase = row.get::<_, i64>("has_seed_phrase")? != 0;
+    let has_phone = row.get::<_, i64>("has_phone")? != 0;
+    let has_note = row.get::<_, i64>("has_note")? != 0;
+    let has_attachments = row.get::<_, i64>("has_attachments")? != 0;
 
     Ok(DataCardSummary {
         id: row.get("id")?,
@@ -104,6 +108,10 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
         deleted_at: row.get("deleted_at")?,
         is_favorite,
         has_totp,
+        has_seed_phrase,
+        has_phone,
+        has_note,
+        has_attachments,
     })
 }
 
@@ -371,7 +379,27 @@ pub fn list_datacards_summary(
         let clause = order_clause(sort_field, sort_dir)
             .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         let query = format!(
-            "SELECT id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NULL {clause}"
+            r#"
+            SELECT
+                d.id,
+                d.folder_id,
+                d.title,
+                d.url,
+                d.email,
+                d.username,
+                d.totp_uri,
+                CASE WHEN d.seed_phrase_value IS NOT NULL AND TRIM(d.seed_phrase_value) <> '' THEN 1 ELSE 0 END AS has_seed_phrase,
+                CASE WHEN d.mobile_phone IS NOT NULL AND TRIM(d.mobile_phone) <> '' THEN 1 ELSE 0 END AS has_phone,
+                CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
+                EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
+                d.tags_json,
+                d.is_favorite,
+                d.created_at,
+                d.updated_at,
+                d.deleted_at
+            FROM datacards d
+            WHERE d.deleted_at IS NULL {clause}
+            "#
         );
         let mut stmt = conn.prepare(&query).map_err(|e| {
             log_sqlite_err("list_datacards_summary.prepare", &query, &e);
@@ -417,7 +445,28 @@ pub fn list_deleted_datacards_summary(
     with_connection(state, profile_id, |conn| {
         let mut stmt = conn
             .prepare(
-                "SELECT id, folder_id, title, url, email, username, totp_uri, tags_json, is_favorite, created_at, updated_at, deleted_at FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                r#"
+                SELECT
+                    d.id,
+                    d.folder_id,
+                    d.title,
+                    d.url,
+                    d.email,
+                    d.username,
+                    d.totp_uri,
+                    CASE WHEN d.seed_phrase_value IS NOT NULL AND TRIM(d.seed_phrase_value) <> '' THEN 1 ELSE 0 END AS has_seed_phrase,
+                    CASE WHEN d.mobile_phone IS NOT NULL AND TRIM(d.mobile_phone) <> '' THEN 1 ELSE 0 END AS has_phone,
+                    CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
+                    EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
+                    d.tags_json,
+                    d.is_favorite,
+                    d.created_at,
+                    d.updated_at,
+                    d.deleted_at
+                FROM datacards d
+                WHERE d.deleted_at IS NOT NULL
+                ORDER BY d.deleted_at DESC
+                "#,
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 

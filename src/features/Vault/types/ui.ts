@@ -60,6 +60,10 @@ export type DataCardSummary = DataCard & {
   createdAtLabel: string;
   metaLine: string;
   hasTotp: boolean;
+  hasSeedPhrase: boolean;
+  hasPhone: boolean;
+  hasNotes: boolean;
+  hasAttachments: boolean;
 };
 
 export type CreateDataCardInput = {
