@@ -68,7 +68,7 @@ export function Search({ query, onChange, filters, onChangeFilters }: Props) {
           <div className="vault-filter-backdrop" onClick={close} />
           <div className="vault-filter-panel" role="dialog" aria-label={t('filters.title')}>
             <div className="vault-filter-panel__title">{t('filters.title')}</div>
-            <div className="vault-filter-chips" aria-label={t('filters.title')}>
+            <div className="vault-filter-list" aria-label={t('filters.title')}>
               {FILTER_ORDER.map(({ key, labelKey }) => {
                 const active = Boolean(filters?.[key]);
                 return (

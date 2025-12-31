@@ -196,9 +196,10 @@
   margin-bottom: 10px;
 }
 
-.vault-filter-chips {
+.vault-filter-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  flex-wrap: nowrap;
   gap: 8px;
   align-items: flex-start;
 }
