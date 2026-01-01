@@ -42,8 +42,7 @@
 }
 
 .vault-action-button,
-.vault-header__icon-button,
-.vault-filter-btn {
+.vault-header__icon-button {
   width: 40px;
   height: 40px;
   display: inline-flex;
@@ -58,36 +57,31 @@
 }
 
 .vault-action-button:hover,
-.vault-header__icon-button:hover,
-.vault-filter-btn:hover {
+.vault-header__icon-button:hover {
   background: var(--color-surface-2);
   border-color: var(--color-primary);
   transform: translateY(-1px);
 }
 
 .vault-action-button:active,
-.vault-header__icon-button:active,
-.vault-filter-btn:active {
+.vault-header__icon-button:active {
   transform: translateY(0);
 }
 
 .vault-action-button:disabled,
-.vault-header__icon-button:disabled,
-.vault-filter-btn:disabled {
+.vault-header__icon-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
 .vault-action-button svg,
-.vault-header__icon-button svg,
-.vault-filter-btn svg {
+.vault-header__icon-button svg {
   width: 20px;
   height: 20px;
 }
 
 .vault-action-button:focus-visible,
-.vault-header__icon-button:focus-visible,
-.vault-filter-btn:focus-visible {
+.vault-header__icon-button:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
@@ -146,6 +140,36 @@
 .vault-search:focus-visible {
   outline: 2px solid var(--color-primary);
   border-color: transparent;
+}
+
+.vault-filter-btn {
+  /* only shape matches top buttons */
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+
+  /* keep existing colors/behavior */
+  border: 1px solid var(--greycolorsecondaryborder);
+  background: var(--greycolorsecondary);
+  color: var(--color-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.vault-filter-btn:hover {
+  border-color: var(--focus-border);
+}
+
+.vault-filter-btn:active {
+  transform: translateY(1px);
+}
+
+.vault-filter-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .vault-filter-backdrop {
