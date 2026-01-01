@@ -1,109 +1,22 @@
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -41,15 +41,13 @@
- /* ===== Top actions ===== */
- 
- .vault-actions {
-   display: flex;
-   align-items: center;
-   gap: 8px;
+--- a/src-tauri/src/types.rs
++++ b/src-tauri/src/types.rs
+@@ -270,7 +270,7 @@ impl Default for UserSettings {
+             clipboard_clear_timeout_seconds: default_clipboard_clear_timeout_seconds(),
+             soft_delete_enabled: true,
+             trash_retention_days: 30,
+-            backups_enabled: false,
++            backups_enabled: true,
+             auto_backup_interval_minutes: default_auto_backup_interval_minutes(),
+             backup_max_copies: default_backup_max_copies(),
+             backup_frequency: "weekly".to_string(),
+             default_sort_field: "updated_at".to_string(),
+             default_sort_direction: "DESC".to_string(),
+             mask_password_by_default: true,
+         }
+     }
  }
  
- .vault-action-button,
--.vault-header__icon-button,
--.vault-filter-btn {
-+.vault-header__icon-button {
-   width: 40px;
-   height: 40px;
-   display: inline-flex;
-   align-items: center;
-   justify-content: center;
-   border-radius: var(--radius-sm);
-   border: 1px solid var(--color-border);
-   background: var(--color-surface-1);
-   color: var(--color-text);
-   cursor: pointer;
-   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
- }
- 
- .vault-action-button:hover,
--.vault-header__icon-button:hover,
--.vault-filter-btn:hover {
-+.vault-header__icon-button:hover {
-   background: var(--color-surface-2);
-   border-color: var(--color-primary);
-   transform: translateY(-1px);
- }
- 
- .vault-action-button:active,
--.vault-header__icon-button:active,
--.vault-filter-btn:active {
-+.vault-header__icon-button:active {
-   transform: translateY(0);
- }
- 
- .vault-action-button:disabled,
--.vault-header__icon-button:disabled,
--.vault-filter-btn:disabled {
-+.vault-header__icon-button:disabled {
-   opacity: 0.6;
-   cursor: not-allowed;
- }
- 
- .vault-action-button svg,
--.vault-header__icon-button svg,
--.vault-filter-btn svg {
-+.vault-header__icon-button svg {
-   width: 20px;
-   height: 20px;
- }
- 
- .vault-action-button:focus-visible,
--.vault-header__icon-button:focus-visible,
--.vault-filter-btn:focus-visible {
-+.vault-header__icon-button:focus-visible {
-   outline: 2px solid var(--color-primary);
-   outline-offset: 2px;
- }
-@@ -120,6 +118,33 @@
- .vault-search:focus-visible {
-   outline: 2px solid var(--color-primary);
-   border-color: transparent;
- }
- 
-+.vault-filter-btn {
-+  /* only shape matches top buttons */
-+  width: 40px;
-+  height: 40px;
-+  border-radius: var(--radius-sm);
-+
-+  /* keep existing colors/behavior */
-+  border: 1px solid var(--greycolorsecondaryborder);
-+  background: var(--greycolorsecondary);
-+  color: var(--color-text);
-+  display: inline-flex;
-+  align-items: center;
-+  justify-content: center;
-+  cursor: pointer;
-+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
-+}
-+
-+.vault-filter-btn:hover {
-+  border-color: var(--focus-border);
-+}
-+
-+.vault-filter-btn:active {
-+  transform: translateY(1px);
-+}
-+
-+.vault-filter-btn:focus-visible {
-+  outline: var(--focus-ring);
-+  outline-offset: var(--focus-ring-offset);
-+}
-+
- .vault-filter-backdrop {
-   position: fixed;
-   inset: 0;
-   z-index: 40;
-   background: transparent;
+ fn default_auto_backup_interval_minutes() -> i64 {
+-    60
++    5
  }
