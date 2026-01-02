@@ -201,25 +201,25 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
         {isTrashMode && (
           <div className="datacards-actions">
             <button
-              className="btn btn-secondary btn-icon vault-trash-actions-button"
+              className="btn btn-icon vault-actionbar"
               type="button"
               aria-label={t('trash.actions')}
               aria-haspopup="menu"
               aria-expanded={isTrashActionsOpen}
               onClick={() => setIsTrashActionsOpen((prev) => !prev)}
             >
-              <IconMoreHorizontal size={18} />
+              <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
             </button>
 
             {isTrashActionsOpen && (
               <>
                 <div
-                  className="datacards-actions-backdrop"
+                  className="vault-actionmenu-backdrop"
                   onClick={() => setIsTrashActionsOpen(false)}
                 />
-                <div className="datacards-menu" role="menu">
+                <div className="vault-actionmenu-panel" role="menu">
                   <button
-                    className="datacards-menu-item"
+                    className="vault-actionmenu-item"
                     type="button"
                     disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
                     onClick={async () => {
@@ -231,7 +231,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
                   </button>
 
                   <button
-                    className="datacards-menu-item datacards-menu-danger"
+                    className="vault-actionmenu-item vault-actionmenu-danger"
                     type="button"
                     disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
                     onClick={async () => {
