@@ -1,19 +1,66 @@
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 8f2cc2c..9b0b8a1 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -742,10 +742,12 @@ export function DataCards({
+         )}
+       </div>
+ 
+       {cards.length === 0 ? (
+-        <div className="vault-empty">{t('label.empty')}</div>
++        <div className="vault-datacard-list vault-datacard-list--empty">
++          <div className="vault-empty">{t('label.empty')}</div>
++        </div>
+       ) : (
+         <div className="vault-datacard-list">
+           {cards.map((card) => {
+             const isActive = selectedCardId === card.id;
+
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+index f0f11c8..3f9b7e2 100644
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -234,10 +234,12 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+         )}
+       </div>
+ 
+       {cards.length === 0 ? (
+-        <div className="vault-empty">{t('label.empty')}</div>
++        <div className="vault-datacard-list vault-datacard-list--empty">
++          <div className="vault-empty">{t('label.empty')}</div>
++        </div>
+       ) : (
+         <div className="vault-datacard-list">
+           {cards.map((card) => {
+             const isActive = selectedCardId === card.id;
+
 diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index f4b9b71..2c9a8d0 100644
+index 65be388..e2c0f9c 100644
 --- a/src/shared/styles/screens/vault.css
 +++ b/src/shared/styles/screens/vault.css
-@@ -508,10 +508,15 @@
+@@ -488,14 +488,10 @@
+ 
+ /* Cards list */
  .vault-datacard-list {
--  overflow: auto;
--  /* Reserve scrollbar gutter to avoid layout shift between empty/non-empty lists */
--  scrollbar-gutter: stable;
-+  /* Always reserve the scrollbar space to prevent "Empty" shifting by a few px */
-+  overflow-x: hidden;
-+  overflow-y: scroll;
-+  /* Progressive enhancement: keep centering stable even with classic scrollbars */
-+  scrollbar-gutter: stable both-edges;
+   background: transparent; /* remove panel fill */
+   border: none; /* remove stroke */
+   border-radius: 0; /* avoid “panel shape” */
+ 
+   /* prevent clipping of hover transform + focus-visible outline */
+   padding: 4px;
+-  /* Always reserve the scrollbar space to prevent "Empty" shifting by a few px */
+-  overflow-x: hidden;
+-  overflow-y: scroll;
+-  /* Progressive enhancement: keep centering stable even with classic scrollbars */
+-  scrollbar-gutter: stable both-edges;
++  overflow: auto;
++  scrollbar-gutter: stable;
    flex: 1;
    display: flex;
    flex-direction: column;
    gap: 8px;
+ }
+ 
+ .vault-datacard-list--empty {
+   justify-content: center;
  }
