@@ -25,6 +25,8 @@ type UseBankCardsParams = {
   onDeleteCard: (id: string) => Promise<void> | void;
   onRestoreCard: (id: string) => Promise<void> | void;
   onPurgeCard: (id: string) => Promise<void> | void;
+  onRestoreAllTrash?: () => Promise<void> | void;
+  onPurgeAllTrash?: () => Promise<void> | void;
 };
 
 export type BankCardsViewModel = {
@@ -35,6 +37,9 @@ export type BankCardsViewModel = {
   deleteCard: (id: string) => void;
   restoreCard: (id: string) => void;
   purgeCard: (id: string) => void;
+  restoreAllTrash: () => Promise<void>;
+  purgeAllTrash: () => Promise<void>;
+  isTrashBulkSubmitting: boolean;
   openCreateModal: () => void;
   closeCreateModal: () => void;
   openEditModal: (card: BankCardItem) => void;
@@ -115,6 +120,8 @@ export function useBankCardsViewModel({
   onDeleteCard,
   onRestoreCard,
   onPurgeCard,
+  onRestoreAllTrash,
+  onPurgeAllTrash,
 }: UseBankCardsParams): BankCardsViewModel {
   const { t } = useTranslation('BankCards');
   const [createForm, setCreateForm] = useState<BankCardFormState>(buildInitialForm);
@@ -126,6 +133,7 @@ export function useBankCardsViewModel({
   const [editErrors, setEditErrors] = useState<BankCardFieldErrors>({});
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [isTrashBulkSubmitting, setIsTrashBulkSubmitting] = useState(false);
 
   const resetCreateForm = useCallback(() => {
     setCreateForm(buildInitialForm());
@@ -294,6 +302,32 @@ export function useBankCardsViewModel({
     [isTrashMode, onPurgeCard]
   );
 
+  const restoreAllTrash = useCallback(async () => {
+    if (!isTrashMode) return;
+    if (!onRestoreAllTrash) return;
+    if (isTrashBulkSubmitting) return;
+
+    setIsTrashBulkSubmitting(true);
+    try {
+      await onRestoreAllTrash();
+    } finally {
+      setIsTrashBulkSubmitting(false);
+    }
+  }, [isTrashBulkSubmitting, isTrashMode, onRestoreAllTrash]);
+
+  const purgeAllTrash = useCallback(async () => {
+    if (!isTrashMode) return;
+    if (!onPurgeAllTrash) return;
+    if (isTrashBulkSubmitting) return;
+
+    setIsTrashBulkSubmitting(true);
+    try {
+      await onPurgeAllTrash();
+    } finally {
+      setIsTrashBulkSubmitting(false);
+    }
+  }, [isTrashBulkSubmitting, isTrashMode, onPurgeAllTrash]);
+
   return {
     cards,
     selectedCardId,
@@ -302,6 +336,9 @@ export function useBankCardsViewModel({
     deleteCard,
     restoreCard,
     purgeCard,
+    restoreAllTrash,
+    purgeAllTrash,
+    isTrashBulkSubmitting,
     openCreateModal,
     closeCreateModal,
     openEditModal,

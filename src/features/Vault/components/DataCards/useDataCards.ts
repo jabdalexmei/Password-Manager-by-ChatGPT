@@ -48,6 +48,8 @@ type UseDataCardsParams = {
   onDeleteCard: (id: string) => Promise<void> | void;
   onRestoreCard: (id: string) => Promise<void> | void;
   onPurgeCard: (id: string) => Promise<void> | void;
+  onRestoreAllTrash?: () => Promise<void> | void;
+  onPurgeAllTrash?: () => Promise<void> | void;
 };
 
 export type DataCardsViewModel = {
@@ -58,6 +60,9 @@ export type DataCardsViewModel = {
   deleteCard: (id: string) => void;
   restoreCard: (id: string) => void;
   purgeCard: (id: string) => void;
+  restoreAllTrash: () => Promise<void>;
+  purgeAllTrash: () => Promise<void>;
+  isTrashBulkSubmitting: boolean;
   openCreateModal: () => void;
   closeCreateModal: () => void;
   openEditModal: (card: DataCard) => void;
@@ -191,6 +196,8 @@ export function useDataCards({
   onDeleteCard,
   onRestoreCard,
   onPurgeCard,
+  onRestoreAllTrash,
+  onPurgeAllTrash,
 }: UseDataCardsParams): DataCardsViewModel {
   const { t } = useTranslation('DataCards');
   const { show: showToast } = useToaster();
@@ -207,6 +214,7 @@ export function useDataCards({
   const [editFolderError, setEditFolderError] = useState<string | null>(null);
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [isTrashBulkSubmitting, setIsTrashBulkSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [createAttachments, setCreateAttachments] = useState<PendingAttachment[]>([]);
 
@@ -557,6 +565,32 @@ export function useDataCards({
     }
   }, [editCardId, editForm, isEditSubmitting, onUpdateCard, t]);
 
+  const restoreAllTrash = useCallback(async () => {
+    if (!isTrashMode) return;
+    if (!onRestoreAllTrash) return;
+    if (isTrashBulkSubmitting) return;
+
+    setIsTrashBulkSubmitting(true);
+    try {
+      await onRestoreAllTrash();
+    } finally {
+      setIsTrashBulkSubmitting(false);
+    }
+  }, [isTrashBulkSubmitting, isTrashMode, onRestoreAllTrash]);
+
+  const purgeAllTrash = useCallback(async () => {
+    if (!isTrashMode) return;
+    if (!onPurgeAllTrash) return;
+    if (isTrashBulkSubmitting) return;
+
+    setIsTrashBulkSubmitting(true);
+    try {
+      await onPurgeAllTrash();
+    } finally {
+      setIsTrashBulkSubmitting(false);
+    }
+  }, [isTrashBulkSubmitting, isTrashMode, onPurgeAllTrash]);
+
   return {
     cards,
     selectedCardId,
@@ -565,6 +599,9 @@ export function useDataCards({
     deleteCard: onDeleteCard,
     restoreCard: onRestoreCard,
     purgeCard: onPurgeCard,
+    restoreAllTrash,
+    purgeAllTrash,
+    isTrashBulkSubmitting,
     openCreateModal,
     closeCreateModal,
     openEditModal,

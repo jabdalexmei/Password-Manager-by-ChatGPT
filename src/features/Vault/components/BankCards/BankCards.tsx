@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
 import { wasActuallyUpdated } from '../../utils/updatedAt';
+import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
 
 export type BankCardsProps = {
   viewModel: BankCardsViewModel;
@@ -14,12 +15,14 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
   const {
     cards,
     selectedCardId,
+    isTrashMode,
     isCreateOpen,
     isEditOpen,
     isCreateSubmitting,
     isEditSubmitting,
     closeCreateModal,
   } = viewModel;
+  const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
   const createTitleRef = useRef<HTMLInputElement | null>(null);
   const editTitleRef = useRef<HTMLInputElement | null>(null);
 
@@ -194,6 +197,55 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
     <div className="vault-panel-wrapper">
       <div className="datacards-header">
         <div className="vault-section-header">{sectionTitle}</div>
+
+        {isTrashMode && (
+          <div className="datacards-actions">
+            <button
+              className="btn btn-secondary btn-icon vault-trash-actions-button"
+              type="button"
+              aria-label={t('trash.actions')}
+              aria-haspopup="menu"
+              aria-expanded={isTrashActionsOpen}
+              onClick={() => setIsTrashActionsOpen((prev) => !prev)}
+            >
+              <IconMoreHorizontal size={18} />
+            </button>
+
+            {isTrashActionsOpen && (
+              <>
+                <div
+                  className="datacards-actions-backdrop"
+                  onClick={() => setIsTrashActionsOpen(false)}
+                />
+                <div className="datacards-menu" role="menu">
+                  <button
+                    className="datacards-menu-item"
+                    type="button"
+                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+                    onClick={async () => {
+                      setIsTrashActionsOpen(false);
+                      await viewModel.restoreAllTrash();
+                    }}
+                  >
+                    {t('trash.restoreAll')}
+                  </button>
+
+                  <button
+                    className="datacards-menu-item datacards-menu-danger"
+                    type="button"
+                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+                    onClick={async () => {
+                      setIsTrashActionsOpen(false);
+                      await viewModel.purgeAllTrash();
+                    }}
+                  >
+                    {t('trash.removeAll')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {cards.length === 0 ? (
