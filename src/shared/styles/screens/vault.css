@@ -204,7 +204,7 @@
   flex-direction: column;
   flex-wrap: nowrap;
   gap: 8px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .filter-chip {
@@ -214,12 +214,13 @@
   --filter-chip-font-size: 13px;
 
   flex: 0 0 auto;
-  width: auto;
-  align-self: flex-start;
+  width: 100%;
+  align-self: stretch;
 
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
 
   padding: var(--filter-chip-pad-y) var(--filter-chip-pad-x);
   border-radius: var(--radius-pill);
