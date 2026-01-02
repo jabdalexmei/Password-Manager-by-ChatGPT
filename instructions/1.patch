@@ -1,22 +1,63 @@
+Прыжок “Empty” — это **не отступы Navigation**, а **скроллбар**: когда список не пустой, рендерится `.vault-datacard-list { overflow: auto; }` и появляется gutter скроллбара (ширина меняется). Когда список пустой — рендерится просто `.vault-empty` без scroll-container, gutter пропадает → текст “Empty” визуально “прыгает”. Фикс: **всегда рендерить один и тот же scroll-container** и включить `scrollbar-gutter: stable`. ([MDN Web Docs][1])
+
+Вот патч:
+
+```diff
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index f1a2b22..7f5a8e1 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -744,10 +744,12 @@ export function DataCards({
+         )}
+       </div>
+ 
+       {cards.length === 0 ? (
+-        <div className="vault-empty">{t('label.empty')}</div>
++        <div className="vault-datacard-list vault-datacard-list--empty">
++          <div className="vault-empty">{t('label.empty')}</div>
++        </div>
+       ) : (
+         <div className="vault-datacard-list">
+           {cards.map((card) => {
+             const isActive = selectedCardId === card.id;
+
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+index f0f11c8..0d8e55d 100644
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -236,10 +236,12 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+         )}
+       </div>
+ 
+       {cards.length === 0 ? (
+-        <div className="vault-empty">{t('label.empty')}</div>
++        <div className="vault-datacard-list vault-datacard-list--empty">
++          <div className="vault-empty">{t('label.empty')}</div>
++        </div>
+       ) : (
+         <div className="vault-datacard-list">
+           {cards.map((card) => {
+             const isActive = selectedCardId === card.id;
+
 diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 9f2a7c4..a7c6d21 100644
+index a7c6d21..f4b9b71 100644
 --- a/src/shared/styles/screens/vault.css
 +++ b/src/shared/styles/screens/vault.css
-@@ -286,10 +286,12 @@
- .vault-folder-list {
-   list-style: none;
--  padding: 0;
-+  padding: 0;
-+  padding-left: 6px;
-   margin: 0;
+@@ -512,6 +512,12 @@
+   overflow: auto;
++  /* Reserve scrollbar gutter to avoid layout shift between empty/non-empty lists */
++  scrollbar-gutter: stable;
+   flex: 1;
    display: flex;
    flex-direction: column;
-   gap: 6px;
+   gap: 8px;
  }
-@@ -357,8 +359,6 @@
- .vault-folder-list li.active .vault-folder {
-   background: linear-gradient(90deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
-   border-color: var(--color-primary);
--  
--  margin-left: 6px;
- }
+ 
++.vault-datacard-list--empty {
++  justify-content: center;
++}
+```
+
+Применяешь — и “Empty” перестанет прыгать вообще (и между Deleted/All items, и между пусто/не пусто).
+
+[1]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/scrollbar-gutter?utm_source=chatgpt.com "scrollbar-gutter - CSS - MDN Web Docs"
