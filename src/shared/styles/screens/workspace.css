@@ -156,6 +156,61 @@
   transform: translateY(-1px);
 }
 
+.workspace-actionmenu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: transparent;
+}
+
+.workspace-actionmenu-panel {
+  position: fixed;
+  z-index: 61;
+  min-width: 240px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--greycolorsecondaryborder);
+  /* base bg for this panel; hover border derives from it */
+  --panel-bg: var(--greycolorsecondary);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-popover);
+}
+
+.workspace-actionmenu-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.workspace-actionmenu-item:hover {
+  background: var(--color-surface-1);
+  /* fallback: neutral (no blue) */
+  border-color: var(--greycolorsecondaryborder);
+}
+
+@supports (color: color-mix(in srgb, black 50%, white 50%)) {
+  .workspace-actionmenu-item:hover {
+    /* Obsidian-like: subtle border shift based on the panel background */
+    border-color: color-mix(in srgb, var(--panel-bg) 78%, var(--color-text) 22%);
+  }
+}
+
+.workspace-actionmenu-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.workspace-actionmenu-item:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 /* Bottom buttons */
 .workspace-tile-bottom {
   margin-top: 14px;
