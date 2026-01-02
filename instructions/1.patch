@@ -1,22 +1,97 @@
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 7d3a2c1..2a6b0c9 100644
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -175,12 +175,16 @@
- .vault-filter-panel {
-   position: absolute;
-   z-index: 41;
-   top: calc(100% + 8px);
-   right: 0;
--  min-width: 180px;
--  padding: 10px;
-+  /* shrink popover to content */
-+  min-width: 0;
-+  width: fit-content;
-+  max-width: 100%;
-+  padding: 8px;
-   border-radius: var(--radius-md);
-   border: 1px solid var(--color-border);
-   background: var(--color-surface-2);
-   box-shadow: var(--shadow-popover);
- }
+Ок, без миграций: в дев-сборке это делается просто — **снимаем валидацию на фронте/бэке**, и **в `schema.sql` убираем `NOT NULL`** (для новых vault/БД).
+Важно: даже с `NOT NULL` в SQLite **пустая строка `''` не является `NULL`**, поэтому сама “фишка пустого title” уже возможна, но ты просишь именно снять constraint — делаем. ([SQLite][1])
+
+### Diff patch
+
+```diff
+diff --git a/src-tauri/src/data/sqlite/schema.sql b/src-tauri/src/data/sqlite/schema.sql
+index 6f42a2b..f7d4b2c 100644
+--- a/src-tauri/src/data/sqlite/schema.sql
++++ b/src-tauri/src/data/sqlite/schema.sql
+@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS datacards (
+   id           TEXT PRIMARY KEY,
+   folder_id    TEXT NULL,
+ 
+-  title        TEXT NOT NULL,
++  title        TEXT,
+   url          TEXT NULL,
+   email        TEXT NULL,
+   username     TEXT NULL,
+   mobile_phone TEXT NULL,
+   note         TEXT NULL,
+diff --git a/src-tauri/src/services/datacards_service.rs b/src-tauri/src/services/datacards_service.rs
+index 3a0c6e8..a94d6bd 100644
+--- a/src-tauri/src/services/datacards_service.rs
++++ b/src-tauri/src/services/datacards_service.rs
+@@ -60,10 +60,6 @@ pub fn create_datacard(input: CreateDataCardInput, state: &Arc<AppState>) -> Resu
+     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+     let mut sanitized = input;
+     sanitized.title = sanitized.title.trim().to_string();
+-    if sanitized.title.is_empty() {
+-        return Err(ErrorCodeString::new("DATACARD_TITLE_REQUIRED"));
+-    }
+     sanitized.tags = normalize_tags(sanitized.tags);
+     sanitized.totp_uri = sanitized
+         .totp_uri
+@@ -89,10 +85,6 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Resu
+     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+     let mut sanitized = input;
+     sanitized.title = sanitized.title.trim().to_string();
+-    if sanitized.title.is_empty() {
+-        return Err(ErrorCodeString::new("DATACARD_TITLE_REQUIRED"));
+-    }
+     sanitized.tags = normalize_tags(sanitized.tags);
+     sanitized.totp_uri = sanitized
+         .totp_uri
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 5a6d5e8..b7b8d1a 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -415,7 +415,7 @@ export function DataCards({
+             <div className="form-field">
+               <label className="form-label" htmlFor={`${dialogId}-title`}>
+-                {t('label.title')}*
++                {t('label.title')}
+               </label>
+               <input
+                 id={`${dialogId}-title`}
+diff --git a/src/features/Vault/components/DataCards/useDataCards.ts b/src/features/Vault/components/DataCards/useDataCards.ts
+index 6c2f6a1..ab5ab73 100644
+--- a/src/features/Vault/components/DataCards/useDataCards.ts
++++ b/src/features/Vault/components/DataCards/useDataCards.ts
+@@ -493,13 +493,6 @@ export function useDataCards({
+ 
+   const submitCreate = useCallback(async () => {
+     if (isCreateSubmitting) return;
+-    const trimmedTitle = createForm.title.trim();
+-    if (!trimmedTitle) {
+-      setCreateError(t('validation.titleRequired'));
+-      return;
+-    }
+ 
+     setCreateFolderError(null);
+     const hasFolderName = createForm.folderName.trim() !== '';
+@@ -541,13 +534,6 @@ export function useDataCards({
+   const submitEdit = useCallback(async () => {
+     if (isEditSubmitting) return;
+     if (!editForm) return;
+-    const trimmedTitle = editForm.title.trim();
+-    if (!trimmedTitle) {
+-      setEditError(t('validation.titleRequired'));
+-      return;
+-    }
+ 
+     if (!editCardId) return;
+ 
+     setEditFolderError(null);
+```
+
+### Что нужно сделать у тебя локально (без миграций)
+
+Так как БД уже создана со старой схемой, чтобы применилось снятие `NOT NULL`:
+
+* просто **удали текущий vault/SQLite файл** (или весь workspace папку) и создай новый vault заново.
+
+Если не удалять БД — фишка “пустой title” всё равно заработает (потому что `''` не `NULL`), но ты просил именно снять constraint — это применится только на новой БД. ([SQLite][1])
+
+[1]: https://www.sqlite.org/lang_createtable.html?utm_source=chatgpt.com "CREATE TABLE"
