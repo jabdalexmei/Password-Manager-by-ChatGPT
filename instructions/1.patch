@@ -1,350 +1,433 @@
-part 1
+У тебя “не работает” по очень банальной причине: **PATCH 3 — это только backend (Rust команды + сервисы)**.
+UI/ViewModel **ещё не вызывает** `restoreAllTrash/purgeAllTrash`, поэтому в приложении ничего не меняется (или ты кликаешь — а вызвать нечего). В Tauri команда начнёт вызываться только если её **реально дернуть из фронта** и она есть в `generate_handler!`.
 
-diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
---- a/src-tauri/src/data/sqlite/repo_impl.rs
-+++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -475,7 +475,9 @@
- 
-         Ok(cards)
-     })
-+}
-+
- pub fn list_deleted_datacard_ids(
-     state: &Arc<AppState>,
-     profile_id: &str,
-@@ -497,9 +499,6 @@
- 
-         Ok(ids)
-     })
--}
--
--
- }
- 
- fn get_datacard_by_id_conn(conn: &Connection, id: &str) -> Result<DataCard> {
----------------------------------------------------------------------------------
-pert 2
+Ниже даю **PATCH 4** и **PATCH 5** (отдельно), которые подключают bulk-действия в ViewModel и добавляют кнопку **Actions (⋯)** в заголовок списка **только когда открыт Deleted**.
 
-diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
-index 0000000..0000000 100644
---- a/src/features/Vault/hooks/useVault.ts
-+++ b/src/features/Vault/hooks/useVault.ts
-@@ -736,6 +736,8 @@ export function useVault(profileId: string, onLocked: () => void) {
-     restoreCard: restoreCardAction,
-     purgeCard: purgeCardAction,
-+    restoreAllTrash: restoreAllTrashAction,
-+    purgeAllTrash: purgeAllTrashAction,
-     moveCardToFolder: moveCardAction,
-     lock,
-     loadCard,
-diff --git a/src/features/Vault/hooks/useBankCards.ts b/src/features/Vault/hooks/useBankCards.ts
-index 0000000..0000000 100644
---- a/src/features/Vault/hooks/useBankCards.ts
-+++ b/src/features/Vault/hooks/useBankCards.ts
-@@ -521,6 +521,8 @@ export function useBankCards(profileId: string, onLocked: () => void) {
-     restoreCard: restoreCardAction,
-     purgeCard: purgeCardAction,
-+    restoreAllTrash: restoreAllTrashAction,
-+    purgeAllTrash: purgeAllTrashAction,
-     lock,
-     loadCard,
-     toggleFavorite,
---------------------------------------------------------------------------------------
-part 3
+---
 
-diff --git a/src/shared/icons/lucide/icons.ts b/src/shared/icons/lucide/icons.ts
-index 0000000..0000000 100644
---- a/src/shared/icons/lucide/icons.ts
-+++ b/src/shared/icons/lucide/icons.ts
-@@ -19,6 +19,7 @@ export {
- 
-   SlidersHorizontal as IconFilter,
-+  MoreHorizontal as IconMoreHorizontal,
- 
-   RefreshCw as IconRegenerate,
-   History as IconHistory,
- } from "lucide-react";
-----------------------------------------------------------------------------------------
+## PATCH 4 — прокинуть bulk restore/purge в ViewModel + wiring из Vault.tsx
 
-part 4
+```diff
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+index 61f2a2b..b6a8f62 100644
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -53,6 +53,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+     onDeleteCard: vault.deleteCard,
+     onRestoreCard: vault.restoreCard,
+     onPurgeCard: vault.purgeCard,
++    onRestoreAllTrash: vault.restoreAllTrash,
++    onPurgeAllTrash: vault.purgeAllTrash,
+   });
+   const folderDialogs = useFolders({ onCreateFolder: (name) => vault.createFolder(name, null) });
+   const bankCardsViewModel = useBankCardsViewModel({
+@@ -65,6 +67,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+     onUpdateCard: bankCards.updateCard,
+     onDeleteCard: bankCards.deleteCard,
+     onRestoreCard: bankCards.restoreCard,
+     onPurgeCard: bankCards.purgeCard,
++    onRestoreAllTrash: bankCards.restoreAllTrash,
++    onPurgeAllTrash: bankCards.purgeAllTrash,
+   });
+ 
+   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
 
-diff --git a/src-tauri/src/commands/bank_cards.rs b/src-tauri/src/commands/bank_cards.rs
-index 28a3522..2e2dfc4 100644
---- a/src-tauri/src/commands/bank_cards.rs
-+++ b/src-tauri/src/commands/bank_cards.rs
-@@ -98,3 +98,22 @@ pub async fn purge_bank_card(id: String, state: State<'_, Arc<AppState>>) -> Res
-         .await
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
-+
-+
-+#[tauri::command]
-+pub async fn restore_all_deleted_bank_cards(state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || {
-+        bank_cards_service::restore_all_deleted_bank_cards(&app)
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn purge_all_deleted_bank_cards(state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || bank_cards_service::purge_all_deleted_bank_cards(&app))
-+        .await
-+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-diff --git a/src-tauri/src/commands/datacards.rs b/src-tauri/src/commands/datacards.rs
-index 1ea0752..9a23760 100644
---- a/src-tauri/src/commands/datacards.rs
-+++ b/src-tauri/src/commands/datacards.rs
-@@ -93,6 +93,24 @@ pub async fn purge_datacard(id: String, state: State<'_, Arc<AppState>>) -> Resu
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
+diff --git a/src/features/Vault/components/DataCards/useDataCards.ts b/src/features/Vault/components/DataCards/useDataCards.ts
+index 2d9ad27..b0d4f4c 100644
+--- a/src/features/Vault/components/DataCards/useDataCards.ts
++++ b/src/features/Vault/components/DataCards/useDataCards.ts
+@@ -53,6 +53,8 @@ type UseDataCardsParams = {
+   onDeleteCard: (id: string) => Promise<void> | void;
+   onRestoreCard: (id: string) => Promise<void> | void;
+   onPurgeCard: (id: string) => Promise<void> | void;
++  onRestoreAllTrash?: () => Promise<void> | void;
++  onPurgeAllTrash?: () => Promise<void> | void;
+ };
  
-+
-+#[tauri::command]
-+pub async fn restore_all_deleted_datacards(state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || {
-+        datacards_service::restore_all_deleted_datacards(&app)
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn purge_all_deleted_datacards(state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || datacards_service::purge_all_deleted_datacards(&app))
-+        .await
-+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
- #[tauri::command]
- pub async fn set_datacard_favorite(
-     input: SetDataCardFavoriteInput,
-diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
-index 68e493a..13bf8d7 100644
---- a/src-tauri/src/data/sqlite/repo_impl.rs
-+++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -480,6 +480,28 @@ pub fn list_deleted_datacards_summary(
-     })
- }
- 
-+
-+
-+pub fn list_deleted_datacard_ids(
-+    state: &Arc<AppState>,
-+    profile_id: &str,
-+) -> Result<Vec<String>> {
-+    with_connection(state, profile_id, |conn| {
-+        let mut stmt = conn
-+            .prepare(
-+                "SELECT id FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-+            )
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+        let ids = stmt
-+            .query_map([], |row| row.get::<_, String>(0))
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-+            .collect::<rusqlite::Result<Vec<_>>>()
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+        Ok(ids)
-+    })
-+}
- fn get_datacard_by_id_conn(conn: &Connection, id: &str) -> Result<DataCard> {
-     let mut stmt = conn
-         .prepare("SELECT * FROM datacards WHERE id = ?1")
-@@ -789,6 +811,28 @@ pub fn list_deleted_bank_cards_summary(
-     })
- }
- 
-+
-+
-+pub fn list_deleted_bank_card_ids(
-+    state: &Arc<AppState>,
-+    profile_id: &str,
-+) -> Result<Vec<String>> {
-+    with_connection(state, profile_id, |conn| {
-+        let mut stmt = conn
-+            .prepare(
-+                "SELECT id FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-+            )
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+        let ids = stmt
-+            .query_map([], |row| row.get::<_, String>(0))
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-+            .collect::<rusqlite::Result<Vec<_>>>()
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+        Ok(ids)
-+    })
-+}
- pub fn get_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<BankCardItem> {
-     with_connection(state, profile_id, |conn| {
-         let mut stmt = conn
-diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
-index f090c47..3b2f679 100644
---- a/src-tauri/src/main.rs
-+++ b/src-tauri/src/main.rs
-@@ -128,6 +128,8 @@ fn main() {
-             delete_bank_card,
-             restore_bank_card,
-             purge_bank_card,
-+            restore_all_deleted_bank_cards,
-+            purge_all_deleted_bank_cards,
-             list_datacards,
-             list_datacards_summary_command,
-             get_datacard,
-@@ -140,6 +142,8 @@ fn main() {
-             list_deleted_datacards_summary_command,
-             restore_datacard,
-             purge_datacard,
-+            restore_all_deleted_datacards,
-+            purge_all_deleted_datacards,
-             get_datacard_password_history,
-             clear_datacard_password_history,
-             get_settings,
-diff --git a/src-tauri/src/services/bank_cards_service.rs b/src-tauri/src/services/bank_cards_service.rs
-index 4688cce..4546539 100644
---- a/src-tauri/src/services/bank_cards_service.rs
-+++ b/src-tauri/src/services/bank_cards_service.rs
-@@ -42,6 +42,36 @@ pub fn list_deleted_bank_cards_summary(state: &Arc<AppState>) -> Result<Vec<Bank
-     repo_impl::list_deleted_bank_cards_summary(state, &profile_id)
- }
- 
-+
-+pub fn restore_all_deleted_bank_cards(state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let ids = repo_impl::list_deleted_bank_card_ids(state, &profile_id)?;
-+    if ids.is_empty() {
-+        return Ok(true);
-+    }
-+
-+    for id in ids {
-+        repo_impl::restore_bank_card(state, &profile_id, &id)?;
-+    }
-+
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(true)
-+}
-+
-+pub fn purge_all_deleted_bank_cards(state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let ids = repo_impl::list_deleted_bank_card_ids(state, &profile_id)?;
-+    if ids.is_empty() {
-+        return Ok(true);
-+    }
-+
-+    for id in ids {
-+        purge_bank_card_internal(state, &profile_id, &id)?;
-+    }
-+
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(true)
-+}
- pub fn get_bank_card(id: String, state: &Arc<AppState>) -> Result<BankCardItem> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-     repo_impl::get_bank_card(state, &profile_id, &id)
-@@ -85,7 +115,9 @@ pub fn delete_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
-         security_service::request_persist_active_vault(state.clone());
-         Ok(true)
-     } else {
--        purge_bank_card_internal(state, &profile_id, &id)
-+        let purged = purge_bank_card_internal(state, &profile_id, &id)?;
-+        security_service::request_persist_active_vault(state.clone());
-+        Ok(purged)
+ export type DataCardsViewModel = {
+@@ -63,6 +65,9 @@ export type DataCardsViewModel = {
+   deleteCard: (id: string) => void;
+   restoreCard: (id: string) => void;
+   purgeCard: (id: string) => void;
++  restoreAllTrash: () => Promise<void>;
++  purgeAllTrash: () => Promise<void>;
++  isTrashBulkSubmitting: boolean;
+   openCreateModal: () => void;
+   closeCreateModal: () => void;
+   openEditModal: (card: DataCard) => void;
+@@ -191,6 +196,8 @@ export function useDataCards({
+   onDeleteCard,
+   onRestoreCard,
+   onPurgeCard,
++  onRestoreAllTrash,
++  onPurgeAllTrash,
+ }: UseDataCardsParams): DataCardsViewModel {
+   const { t } = useTranslation('DataCards');
+   const { show: showToast } = useToaster();
+@@ -212,6 +219,7 @@ export function useDataCards({
+   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
+   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
++  const [isTrashBulkSubmitting, setIsTrashBulkSubmitting] = useState(false);
+   const [showPassword, setShowPassword] = useState(false);
+   const [createAttachments, setCreateAttachments] = useState<PendingAttachment[]>([]);
+@@ -559,6 +567,44 @@ export function useDataCards({
      }
- }
+   }, [editCardId, editForm, isEditSubmitting, onUpdateCard, t]);
  
-@@ -98,12 +130,13 @@ pub fn restore_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
- 
- pub fn purge_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
--    purge_bank_card_internal(state, &profile_id, &id)
-+    let purged = purge_bank_card_internal(state, &profile_id, &id)?;
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(purged)
- }
- 
- fn purge_bank_card_internal(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
-     let purged = repo_impl::purge_bank_card(state, profile_id, id)?;
--    security_service::request_persist_active_vault(state.clone());
-     Ok(purged)
- }
- 
-diff --git a/src-tauri/src/services/datacards_service.rs b/src-tauri/src/services/datacards_service.rs
-index 1478a77..2c42b40 100644
---- a/src-tauri/src/services/datacards_service.rs
-+++ b/src-tauri/src/services/datacards_service.rs
-@@ -131,7 +131,9 @@ pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
-         security_service::request_persist_active_vault(state.clone());
-         Ok(true)
-     } else {
--        purge_datacard_with_attachments(state, &profile_id, &id)
-+        let purged = purge_datacard_with_attachments(state, &profile_id, &id)?;
-+        security_service::request_persist_active_vault(state.clone());
-+        Ok(purged)
-     }
- }
- 
-@@ -145,6 +147,37 @@ pub fn list_deleted_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataC
-     repo_impl::list_deleted_datacards_summary(state, &profile_id)
- }
- 
++  const restoreAllTrash = useCallback(async () => {
++    if (!isTrashMode) return;
++    if (!onRestoreAllTrash) return;
++    if (isTrashBulkSubmitting) return;
 +
-+pub fn restore_all_deleted_datacards(state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let ids = repo_impl::list_deleted_datacard_ids(state, &profile_id)?;
-+    if ids.is_empty() {
-+        return Ok(true);
++    setIsTrashBulkSubmitting(true);
++    try {
++      await onRestoreAllTrash();
++    } finally {
++      setIsTrashBulkSubmitting(false);
 +    }
++  }, [isTrashBulkSubmitting, isTrashMode, onRestoreAllTrash]);
 +
-+    for id in ids {
-+        repo_impl::restore_datacard(state, &profile_id, &id)?;
-+        repo_impl::restore_attachments_by_datacard(state, &profile_id, &id)?;
++  const purgeAllTrash = useCallback(async () => {
++    if (!isTrashMode) return;
++    if (!onPurgeAllTrash) return;
++    if (isTrashBulkSubmitting) return;
++
++    setIsTrashBulkSubmitting(true);
++    try {
++      await onPurgeAllTrash();
++    } finally {
++      setIsTrashBulkSubmitting(false);
 +    }
++  }, [isTrashBulkSubmitting, isTrashMode, onPurgeAllTrash]);
 +
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(true)
+   return {
+     cards,
+     selectedCardId,
+     isTrashMode,
+     selectCard: onSelectCard,
+     deleteCard: onDeleteCard,
+     restoreCard: onRestoreCard,
+     purgeCard: onPurgeCard,
++    restoreAllTrash,
++    purgeAllTrash,
++    isTrashBulkSubmitting,
+     openCreateModal,
+     closeCreateModal,
+     openEditModal,
+@@ -604,4 +650,4 @@ export function useDataCards({
+     setCreateSeedPhrase,
+     setEditSeedPhrase,
+   };
+ }
+diff --git a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+index a16e7bf..87c2c4d 100644
+--- a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
++++ b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+@@ -21,6 +21,8 @@ type UseBankCardsParams = {
+   onDeleteCard: (id: string) => Promise<void> | void;
+   onRestoreCard: (id: string) => Promise<void> | void;
+   onPurgeCard: (id: string) => Promise<void> | void;
++  onRestoreAllTrash?: () => Promise<void> | void;
++  onPurgeAllTrash?: () => Promise<void> | void;
+ };
+ 
+ export type BankCardsViewModel = {
+@@ -31,6 +33,9 @@ export type BankCardsViewModel = {
+   deleteCard: (id: string) => void;
+   restoreCard: (id: string) => void;
+   purgeCard: (id: string) => void;
++  restoreAllTrash: () => Promise<void>;
++  purgeAllTrash: () => Promise<void>;
++  isTrashBulkSubmitting: boolean;
+   openCreateModal: () => void;
+   closeCreateModal: () => void;
+   openEditModal: (card: BankCardItem) => void;
+@@ -107,6 +112,8 @@ export function useBankCardsViewModel({
+   onUpdateCard,
+   onDeleteCard,
+   onRestoreCard,
+   onPurgeCard,
++  onRestoreAllTrash,
++  onPurgeAllTrash,
+ }: UseBankCardsParams): BankCardsViewModel {
+   const { t } = useTranslation('BankCards');
+   const [createForm, setCreateForm] = useState<BankCardFormState>(() => ({
+@@ -117,6 +124,7 @@ export function useBankCardsViewModel({
+   const [createErrors, setCreateErrors] = useState<BankCardFieldErrors>({});
+   const [editErrors, setEditErrors] = useState<BankCardFieldErrors>({});
+   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
+   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
++  const [isTrashBulkSubmitting, setIsTrashBulkSubmitting] = useState(false);
+ 
+@@ -296,6 +304,40 @@ export function useBankCardsViewModel({
+     [isTrashMode, onPurgeCard]
+   );
+ 
++  const restoreAllTrash = useCallback(async () => {
++    if (!isTrashMode) return;
++    if (!onRestoreAllTrash) return;
++    if (isTrashBulkSubmitting) return;
++
++    setIsTrashBulkSubmitting(true);
++    try {
++      await onRestoreAllTrash();
++    } finally {
++      setIsTrashBulkSubmitting(false);
++    }
++  }, [isTrashBulkSubmitting, isTrashMode, onRestoreAllTrash]);
++
++  const purgeAllTrash = useCallback(async () => {
++    if (!isTrashMode) return;
++    if (!onPurgeAllTrash) return;
++    if (isTrashBulkSubmitting) return;
++
++    setIsTrashBulkSubmitting(true);
++    try {
++      await onPurgeAllTrash();
++    } finally {
++      setIsTrashBulkSubmitting(false);
++    }
++  }, [isTrashBulkSubmitting, isTrashMode, onPurgeAllTrash]);
++
+   return {
+     cards,
+     selectedCardId,
+     isTrashMode,
+     selectCard,
+     deleteCard,
+     restoreCard,
+     purgeCard,
++    restoreAllTrash,
++    purgeAllTrash,
++    isTrashBulkSubmitting,
+     openCreateModal,
+     closeCreateModal,
+     openEditModal,
+```
+
+---
+
+## PATCH 5 — UI: кнопка Actions (⋯) в заголовке списка Deleted + серый popover + тексты + CSS
+
+```diff
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 5a6b4d1..8f2cc2c 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -10,6 +10,7 @@ import {
+   IconPreviewOff,
+   IconRename,
+   IconRegenerate,
+   IconTrash,
++  IconMoreHorizontal,
+ } from '@/shared/icons/lucide/icons';
+@@ -63,6 +64,7 @@ export function DataCards({
+   const [generatedPassword, setGeneratedPassword] = useState('');
+   const [charsetSize, setCharsetSize] = useState(0);
+   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
++  const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
+@@ -712,10 +714,51 @@ export function DataCards({
+   return (
+     <div className="vault-panel-wrapper">
+       <div className="datacards-header">
+-        <div className="vault-section-header">{sectionTitle}</div>
++        <div className="vault-section-header">{sectionTitle}</div>
++
++        {viewModel.isTrashMode && (
++          <div className="datacards-actions">
++            <button
++              className="btn btn-secondary btn-icon vault-trash-actions-button"
++              type="button"
++              aria-label={t('trash.actions')}
++              aria-haspopup="menu"
++              aria-expanded={isTrashActionsOpen}
++              onClick={() => setIsTrashActionsOpen((prev) => !prev)}
++            >
++              <IconMoreHorizontal size={18} />
++            </button>
++
++            {isTrashActionsOpen && (
++              <>
++                <div
++                  className="datacards-actions-backdrop"
++                  onClick={() => setIsTrashActionsOpen(false)}
++                />
++                <div className="datacards-menu" role="menu">
++                  <button
++                    className="datacards-menu-item"
++                    type="button"
++                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                    onClick={async () => {
++                      setIsTrashActionsOpen(false);
++                      await viewModel.restoreAllTrash();
++                    }}
++                  >
++                    {t('trash.restoreAll')}
++                  </button>
++
++                  <button
++                    className="datacards-menu-item datacards-menu-danger"
++                    type="button"
++                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                    onClick={async () => {
++                      setIsTrashActionsOpen(false);
++                      await viewModel.purgeAllTrash();
++                    }}
++                  >
++                    {t('trash.removeAll')}
++                  </button>
++                </div>
++              </>
++            )}
++          </div>
++        )}
+       </div>
+ 
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+index 4f2a24c..bde4a5f 100644
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -1,6 +1,7 @@
+-import React, { useEffect, useRef } from 'react';
++import React, { useEffect, useRef, useState } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
+ import { wasActuallyUpdated } from '../../utils/updatedAt';
++import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
+@@ -16,6 +17,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+   const {
+     cards,
+     selectedCardId,
++    isTrashMode,
+     isCreateOpen,
+     isEditOpen,
+     isCreateSubmitting,
+@@ -25,6 +27,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+     closeCreateModal,
+   } = viewModel;
++  const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
+   const createTitleRef = useRef<HTMLInputElement | null>(null);
+   const editTitleRef = useRef<HTMLInputElement | null>(null);
+@@ -166,9 +169,50 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+   return (
+     <div className="vault-panel-wrapper">
+       <div className="datacards-header">
+-        <div className="vault-section-header">{sectionTitle}</div>
++        <div className="vault-section-header">{sectionTitle}</div>
++
++        {isTrashMode && (
++          <div className="datacards-actions">
++            <button
++              className="btn btn-secondary btn-icon vault-trash-actions-button"
++              type="button"
++              aria-label={t('trash.actions')}
++              aria-haspopup="menu"
++              aria-expanded={isTrashActionsOpen}
++              onClick={() => setIsTrashActionsOpen((prev) => !prev)}
++            >
++              <IconMoreHorizontal size={18} />
++            </button>
++
++            {isTrashActionsOpen && (
++              <>
++                <div
++                  className="datacards-actions-backdrop"
++                  onClick={() => setIsTrashActionsOpen(false)}
++                />
++                <div className="datacards-menu" role="menu">
++                  <button
++                    className="datacards-menu-item"
++                    type="button"
++                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                    onClick={async () => {
++                      setIsTrashActionsOpen(false);
++                      await viewModel.restoreAllTrash();
++                    }}
++                  >
++                    {t('trash.restoreAll')}
++                  </button>
++
++                  <button
++                    className="datacards-menu-item datacards-menu-danger"
++                    type="button"
++                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                    onClick={async () => {
++                      setIsTrashActionsOpen(false);
++                      await viewModel.purgeAllTrash();
++                    }}
++                  >
++                    {t('trash.removeAll')}
++                  </button>
++                </div>
++              </>
++            )}
++          </div>
++        )}
+       </div>
+ 
+       {cards.length === 0 ? (
+diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
+index 97bf43b..0f5b517 100644
+--- a/src/shared/styles/screens/vault.css
++++ b/src/shared/styles/screens/vault.css
+@@ -413,6 +413,21 @@
+ .datacards-actions {
+   position: relative;
+ }
+ 
++.datacards-actions-backdrop {
++  position: fixed;
++  inset: 0;
++  background: transparent;
++  z-index: 14;
 +}
 +
-+pub fn purge_all_deleted_datacards(state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let ids = repo_impl::list_deleted_datacard_ids(state, &profile_id)?;
-+    if ids.is_empty() {
-+        return Ok(true);
-+    }
-+
-+    for id in ids {
-+        purge_datacard_with_attachments(state, &profile_id, &id)?;
-+    }
-+
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(true)
++/* Do NOT turn this button blue on hover (keep neutral like Obsidian-style menus) */
++.vault-trash-actions-button.btn-secondary:not(:disabled):hover {
++  border-color: var(--border-subtle);
 +}
- pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-     repo_impl::restore_datacard(state, &profile_id, &id)?;
-@@ -155,7 +188,9 @@ pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
- 
- pub fn purge_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
--    purge_datacard_with_attachments(state, &profile_id, &id)
-+    let purged = purge_datacard_with_attachments(state, &profile_id, &id)?;
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(purged)
++
+ /* Cards menu */
+ .datacards-menu {
+   position: absolute;
+   right: 0;
+@@ -433,6 +448,10 @@
+ .datacards-menu-item {
+   padding: 10px 12px;
+   text-align: left;
+   background: transparent;
+   color: var(--color-text);
+   border: none;
+   width: 100%;
+   cursor: pointer;
  }
- 
- fn purge_datacard_with_attachments(
-@@ -177,7 +212,6 @@ fn purge_datacard_with_attachments(
-     }
- 
-     let purged = repo_impl::purge_datacard(state, profile_id, id)?;
--    security_service::request_persist_active_vault(state.clone());
-     Ok(purged)
- }
- 
+diff --git a/src/i18n/locales/en/DataCards.json b/src/i18n/locales/en/DataCards.json
+index 3cc0a6d..a3f8f47 100644
+--- a/src/i18n/locales/en/DataCards.json
++++ b/src/i18n/locales/en/DataCards.json
+@@ -34,6 +34,9 @@
+   "action.cancel": "Cancel",
+   "action.ok": "OK",
+   "action.more": "More",
++  "trash.actions": "Actions",
++  "trash.restoreAll": "Restore all data",
++  "trash.removeAll": "Remove all data",
+   "action.save": "Save",
+   "dialog.createTitle": "Create data card",
+   "dialog.editTitle": "Edit data card",
+diff --git a/src/i18n/locales/en/BankCards.json b/src/i18n/locales/en/BankCards.json
+index 68094bb..f12f2d0 100644
+--- a/src/i18n/locales/en/BankCards.json
++++ b/src/i18n/locales/en/BankCards.json
+@@ -24,6 +24,9 @@
+   "action.unmarkFavorite": "Unmark favorite",
+   "action.create": "Create",
+   "action.save": "Save",
++  "trash.actions": "Actions",
++  "trash.restoreAll": "Restore all data",
++  "trash.removeAll": "Remove all data",
+   "action.copy": "Copy",
+   "action.reveal": "Reveal",
+   "action.hide": "Hide",
+```
+
