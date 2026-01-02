@@ -347,35 +347,36 @@
 }
 
 /* ==========================================================================
-   Autofill highlight override (Chromium/WebKit + modern :autofill)
+   WebView2/Chromium "Saved info" autofill highlight override (dark theme)
    --------------------------------------------------------------------------
-   When user picks from "Saved info", browser applies autofill styles (often light bg).
-   Paint our theme surface via inset box-shadow to keep dark UI consistent.
+   Chromium may apply a white background for autofill/suggestions and sometimes
+   uses internal pseudo-classes. Force our surface via inset box-shadow.
    ========================================================================== */
-.input:-webkit-autofill,
-.input:-webkit-autofill:hover,
-.input:-webkit-autofill:focus,
-.form-field input:-webkit-autofill,
-.form-field input:-webkit-autofill:hover,
-.form-field input:-webkit-autofill:focus,
-.form-field textarea:-webkit-autofill,
-.form-field textarea:-webkit-autofill:hover,
-.form-field textarea:-webkit-autofill:focus,
-.form-field select:-webkit-autofill,
-.form-field select:-webkit-autofill:hover,
-.form-field select:-webkit-autofill:focus {
-  -webkit-text-fill-color: var(--color-text);
-  caret-color: var(--color-text);
-  -webkit-box-shadow: 0 0 0 1000px var(--input-surface) inset;
-  box-shadow: 0 0 0 1000px var(--input-surface) inset;
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus,
+input:-internal-autofill-selected,
+textarea:-internal-autofill-selected,
+select:-internal-autofill-selected {
+  -webkit-text-fill-color: var(--color-text) !important;
+  caret-color: var(--color-text) !important;
+  background-color: var(--input-surface) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--input-surface) inset !important;
+  box-shadow: 0 0 0 1000px var(--input-surface) inset !important;
 }
 
-.input:autofill,
-.form-field input:autofill,
-.form-field textarea:autofill,
-.form-field select:autofill {
-  box-shadow: 0 0 0 1000px var(--input-surface) inset;
-  caret-color: var(--color-text);
+/* Modern standard selector (supported widely since 2023) */
+input:autofill,
+textarea:autofill,
+select:autofill {
+  box-shadow: 0 0 0 1000px var(--input-surface) inset !important;
+  caret-color: var(--color-text) !important;
 }
 
 /* Textareas - minimum height + allow resize */

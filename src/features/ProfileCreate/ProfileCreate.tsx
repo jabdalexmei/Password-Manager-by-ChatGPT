@@ -32,7 +32,7 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({ onCreated, onProfileCreat
         </header>
 
         {/* Full-width panel like "Select profile" (no narrow centered column) */}
-        <form className="profile-create-form" onSubmit={handleSubmit}>
+        <form className="profile-create-form" onSubmit={handleSubmit} autoComplete="off">
           <div className="profile-create-panel form-grid">
             <div className="form-field">
               <label className="form-label" htmlFor="profile-name">
@@ -40,10 +40,15 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({ onCreated, onProfileCreat
               </label>
               <input
                 id="profile-name"
+                name="profile_display_name"
+                autoComplete="off"
+                aria-autocomplete="none"
+                list="autocompleteOff"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('namePlaceholder')}
               />
+              <datalist id="autocompleteOff" />
             </div>
 
             <div className="form-field">
@@ -52,7 +57,9 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({ onCreated, onProfileCreat
               </label>
               <input
                 id="profile-password"
+                name="profile_master_password"
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={t('passwordPlaceholder')}
@@ -65,7 +72,9 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({ onCreated, onProfileCreat
               </label>
               <input
                 id="profile-password-confirm"
+                name="profile_master_password_confirm"
                 type="password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder={t('confirmPasswordPlaceholder')}
