@@ -361,19 +361,6 @@ export function DataCards({
                     className="dialog-actionmenu-item"
                     onClick={() => {
                       setIsActionMenuOpen(false);
-                      setTwoFactorTargetDialogId(
-                        dialogId === 'datacard-create-dialog' ? 'datacard-create-dialog' : 'datacard-edit-dialog'
-                      );
-                      setIs2faModalOpen(true);
-                    }}
-                  >
-                    {form.totpUri?.trim() ? t('twoFactor.editAction') : t('twoFactor.addAction')}
-                  </button>
-                  <button
-                    type="button"
-                    className="dialog-actionmenu-item"
-                    onClick={() => {
-                      setIsActionMenuOpen(false);
                       setCustomFieldTargetDialogId(dialogId);
                       setCustomFieldName('');
                       setCustomFieldModalError(null);
@@ -381,6 +368,19 @@ export function DataCards({
                     }}
                   >
                     {t('customFields.add')}
+                  </button>
+                  <button
+                    type="button"
+                    className="dialog-actionmenu-item"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setTwoFactorTargetDialogId(
+                        dialogId === 'datacard-create-dialog' ? 'datacard-create-dialog' : 'datacard-edit-dialog'
+                      );
+                      setIs2faModalOpen(true);
+                    }}
+                  >
+                    {form.totpUri?.trim() ? t('twoFactor.editAction') : t('twoFactor.addAction')}
                   </button>
                   <button
                     type="button"
