@@ -16,6 +16,7 @@ import { SeedPhraseModal } from '../modals/SeedPhraseModal';
 import { useToaster } from '../../../../shared/components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { generateTotpCode } from '../../utils/totp';
+import { wasActuallyUpdated } from '../../utils/updatedAt';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 import { open } from '@tauri-apps/plugin-dialog';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
@@ -724,7 +725,8 @@ export function DataCards({
             const isActive = selectedCardId === card.id;
             const isFavorite = card.isFavorite;
             const meta = card.metaLine || t('label.noMeta');
-            const updatedText = `${t('label.updated')}: ${card.updatedAtLabel}`;
+            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
+            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
 
             return (
               <button
@@ -741,7 +743,7 @@ export function DataCards({
 
                 <div className="datacard-meta">
                   <span>{meta}</span>
-                  <span className="muted">{updatedText}</span>
+                  {showUpdated && <span className="muted">{updatedText}</span>}
                 </div>
               </button>
             );

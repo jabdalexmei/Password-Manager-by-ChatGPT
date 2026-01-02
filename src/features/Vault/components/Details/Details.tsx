@@ -3,6 +3,7 @@ import { CustomField, DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { useDetails } from './useDetails';
 import { generateTotpCode } from '../../utils/totp';
+import { wasActuallyUpdated } from '../../utils/updatedAt';
 import {
   IconAttachment,
   IconCopy,
@@ -118,7 +119,8 @@ export function Details({
 
   const isFavorite = card.isFavorite;
   const createdText = `${t('label.created')}: ${new Date(card.createdAt).toLocaleString()}`;
-  const updatedText = `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}`;
+  const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
+  const updatedText = showUpdated ? `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}` : '';
   const hasValue = (value?: string | null) => {
     const trimmed = value?.trim();
     return Boolean(trimmed);
@@ -169,7 +171,7 @@ export function Details({
           <div className="detail-row">
             <div className="detail-dates">
               <div className="muted">{createdText}</div>
-              <div className="muted">{updatedText}</div>
+              {showUpdated && <div className="muted">{updatedText}</div>}
             </div>
             <div className="detail-actions">
               {!isTrashMode && (

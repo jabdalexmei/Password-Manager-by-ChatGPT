@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
+import { wasActuallyUpdated } from '../../utils/updatedAt';
 
 export type BankCardsProps = {
   viewModel: BankCardsViewModel;
@@ -203,7 +204,8 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
             const isActive = selectedCardId === card.id;
             const isFavorite = card.isFavorite;
             const meta = card.metaLine || t('label.noMeta');
-            const updatedText = `${t('label.updated')}: ${card.updatedAtLabel}`;
+            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
+            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
 
             return (
               <button
@@ -219,7 +221,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
 
                 <div className="datacard-meta">
                   <span>{meta}</span>
-                  <span className="muted">{updatedText}</span>
+                  {showUpdated && <span className="muted">{updatedText}</span>}
                 </div>
               </button>
             );
