@@ -1,19 +1,48 @@
 diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 18409af..c6f1a2d 100644
+index c6f1a2d..6b8c2f1 100644
 --- a/src/shared/styles/screens/vault.css
 +++ b/src/shared/styles/screens/vault.css
-@@ -196,12 +196,12 @@
+@@ -170,12 +170,20 @@
+ .vault-filter-panel {
+   position: absolute;
+   z-index: 41;
+   top: calc(100% + 8px);
+   right: 0;
+   min-width: 180px;
+   padding: 10px;
+   border-radius: var(--radius-md);
+   border: 1px solid var(--color-border);
+   background: var(--color-surface-2);
+   box-shadow: var(--shadow-popover);
++
++  /* make filter chips match the screenshot: same width, same height */
++  --filter-chip-width: 200px;
++  --filter-chip-pad-y: 8px;
++  --filter-chip-pad-x: 12px;
+ }
+ 
+ .vault-filter-panel__title {
+   font-size: 12px;
+   font-weight: 600;
+   color: var(--color-text);
+   margin-bottom: 10px;
+ }
+ 
  .vault-filter-list {
    display: flex;
    flex-direction: column;
    flex-wrap: nowrap;
    gap: 8px;
--  align-items: flex-start;
-+  align-items: stretch;
+-  align-items: stretch;
++  align-items: center;
  }
  
  .filter-chip {
-+  width: 100%;
+-  width: 100%;
+-  justify-content: center;
+-  text-align: center;
++  width: var(--filter-chip-width);
++  max-width: 100%;
 +  justify-content: center;
 +  text-align: center;
    border: 1px solid var(--greycolorsecondaryborder);
