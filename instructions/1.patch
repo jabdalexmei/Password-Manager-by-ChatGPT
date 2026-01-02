@@ -1,17 +1,26 @@
+diff --git a/src/shared/styles/base.css b/src/shared/styles/base.css
+index 9c2f0a1..3b1a6c7 100644
+--- a/src/shared/styles/base.css
++++ b/src/shared/styles/base.css
+@@ -54,6 +54,11 @@
+   --greycolorsecondary: var(--btn-secondary-bg);
+   --greycolorsecondaryborder: var(--btn-secondary-border);
++  /* Hover border is a lighter variant of the regular border */
++  --greycolorsecondaryborder-hover: color-mix(
++    in srgb,
++    var(--greycolorsecondaryborder) 70%,
++    var(--color-text) 30%
++  );
+ 
+   --blueprimarycolor: var(--color-primary);
+ }
 diff --git a/src/shared/styles/screens/workspace.css b/src/shared/styles/screens/workspace.css
-index e45a2a7..6b7c2b1 100644
+index b0f4c23..6a9c1c8 100644
 --- a/src/shared/styles/screens/workspace.css
 +++ b/src/shared/styles/screens/workspace.css
-@@ -120,13 +120,13 @@
- .workspace-actionmenu-panel {
-   position: fixed;
-   z-index: 61;
-   min-width: 240px;
-   padding: 6px;
-   border-radius: var(--radius-md);
--  border: 1px solid var(--color-border);
--  background: var(--color-surface-2);
-+  border: 1px solid var(--greycolorsecondaryborder);
-+  background: var(--greycolorsecondary);
-   box-shadow: var(--shadow-popover);
+@@ -140,7 +140,7 @@
+ .workspace-actionmenu-item:hover {
+   background: var(--color-surface-1);
+-  border-color: var(--focus-border);
++  border-color: var(--greycolorsecondaryborder-hover);
  }
