@@ -20,5 +20,6 @@
   "invalid": "Invalid",
   "removeFromList": "Remove from list",
   "open": "Open",
-  "actions": "Actions"
+  "actions": "Actions",
+  "revealVaultInExplorer": "Reveal vault in system explorer"
 }

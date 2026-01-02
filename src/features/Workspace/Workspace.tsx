@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from '../../shared/lib/i18n';
 import {
@@ -17,18 +17,61 @@ type WorkspaceProps = {
   onWorkspaceReady: () => void;
 };
 
+type ActionsMenuState = {
+  id: string;
+  top: number;
+  right: number;
+};
+
 const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const { t } = useTranslation('Workspace');
   const { show: showToast } = useToaster();
   const { workspaces, loading, error, selectedId, setSelectedId, refresh, remove } = useWorkspace();
   const [busy, setBusy] = useState(false);
+  const [actionsMenu, setActionsMenu] = useState<ActionsMenuState | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingBackupPath, setPendingBackupPath] = useState<string | null>(null);
   const [pendingProfileName, setPendingProfileName] = useState<string>('');
 
+  const closeActionsMenu = useCallback(() => setActionsMenu(null), []);
+
+  useEffect(() => {
+    if (!actionsMenu) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeActionsMenu();
+    };
+    const onResize = () => closeActionsMenu();
+    const onAnyScroll = () => closeActionsMenu();
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('scroll', onAnyScroll, true);
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onAnyScroll, true);
+    };
+  }, [actionsMenu, closeActionsMenu]);
+
+  const toggleActionsMenu = useCallback((workspaceId: string, anchorEl: HTMLElement) => {
+    setActionsMenu((prev) => {
+      if (prev?.id === workspaceId) return null;
+      const rect = anchorEl.getBoundingClientRect();
+      const right = Math.max(8, window.innerWidth - rect.right);
+      const top = Math.max(8, rect.bottom + 6);
+      return { id: workspaceId, top, right };
+    });
+  }, []);
+
   const selectedWorkspace = useMemo(
     () => workspaces.find((w) => w.id === selectedId) ?? null,
     [selectedId, workspaces]
+  );
+  const actionsWorkspace = useMemo(
+    () => (actionsMenu ? workspaces.find((w) => w.id === actionsMenu.id) ?? null : null),
+    [actionsMenu, workspaces]
   );
 
   const activeWorkspace = useMemo(() => workspaces.find((w) => w.is_active) ?? null, [workspaces]);
@@ -171,6 +214,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
         {workspaces.map((workspace) => {
           const isSelected = workspace.id === selectedId;
           const statusLabel = workspace.exists ? (workspace.valid ? null : t('invalid')) : t('missing');
+          const isActionsOpen = actionsMenu?.id === workspace.id;
 
           return (
             <div
@@ -192,21 +236,17 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
                   <p className="workspace-tile-path">{workspace.path}</p>
                 </div>
 
-                {/* Action Bar placeholder (no behavior for now) */}
                 <button
                   type="button"
                   className="btn btn-icon workspace-actionbar"
                   aria-label={t('actions')}
                   title={t('actions')}
-                  onClick={async (e) => {
+                  aria-haspopup="menu"
+                  aria-expanded={isActionsOpen}
+                  aria-controls={isActionsOpen ? `workspace-actions-menu-${workspace.id}` : undefined}
+                  onClick={(e) => {
                     e.stopPropagation();
-                    if (busy) return;
-                    setBusy(true);
-                    try {
-                      await workspaceOpenInExplorer(workspace.id);
-                    } finally {
-                      setBusy(false);
-                    }
+                    toggleActionsMenu(workspace.id, e.currentTarget);
                   }}
                 >
                   <span className="workspace-actionbar-dots">⋯</span>
@@ -241,9 +281,63 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
             </div>
           );
         })}
+
+        {actionsMenu && actionsWorkspace && (
+          <>
+            <div
+              className="workspace-actionmenu-backdrop"
+              onClick={(e) => {
+                e.stopPropagation();
+                closeActionsMenu();
+              }}
+            />
+            <div
+              id={`workspace-actions-menu-${actionsWorkspace.id}`}
+              className="workspace-actionmenu-panel"
+              role="menu"
+              aria-label={t('actions')}
+              style={{ top: actionsMenu.top, right: actionsMenu.right }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="workspace-actionmenu-item"
+                role="menuitem"
+                disabled={busy}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (busy) return;
+                  setBusy(true);
+                  try {
+                    await workspaceOpenInExplorer(actionsWorkspace.id);
+                  } finally {
+                    setBusy(false);
+                    closeActionsMenu();
+                  }
+                }}
+              >
+                {t('revealVaultInExplorer')}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
-  }, [busy, error, handleSelect, loading, remove, selectedId, setSelectedId, t, workspaces]);
+  }, [
+    actionsMenu,
+    actionsWorkspace,
+    busy,
+    closeActionsMenu,
+    error,
+    handleSelect,
+    loading,
+    remove,
+    selectedId,
+    setSelectedId,
+    t,
+    toggleActionsMenu,
+    workspaces,
+  ]);
 
   return (
     <div className="screen-shell">
