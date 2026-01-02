@@ -434,7 +434,7 @@ export function DataCards({
               <input
                 id={`${dialogId}-url`}
                 className="input"
-                type="url"
+                type="text"
                 value={form.url}
                 onChange={(e) => onFieldChange('url', e.target.value)}
               />
