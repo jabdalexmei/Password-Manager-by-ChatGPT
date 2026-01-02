@@ -184,12 +184,20 @@
   z-index: 41;
   top: calc(100% + 8px);
   right: 0;
-  min-width: 180px;
-  padding: 10px;
+  /* shrink popover to content */
+  min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-surface-2);
   box-shadow: var(--shadow-popover);
+
+  /* Filter chips edit size */
+  --filter-chip-width: 100px;
+  --filter-chip-pad-y: 5px;
+  --filter-chip-pad-x: 1px;
 }
 
 .vault-filter-panel__title {
@@ -204,18 +212,17 @@
   flex-direction: column;
   flex-wrap: nowrap;
   gap: 8px;
-  align-items: stretch;
+  align-items: flex-start;
 }
 
 .filter-chip {
   /* customizable knobs */
-  --filter-chip-pad-y: 7px;
-  --filter-chip-pad-x: 12px;
   --filter-chip-font-size: 13px;
 
   flex: 0 0 auto;
-  width: 100%;
-  align-self: stretch;
+  width: var(--filter-chip-width);
+  max-width: 100%;
+  align-self: flex-start;
 
   display: inline-flex;
   align-items: center;
