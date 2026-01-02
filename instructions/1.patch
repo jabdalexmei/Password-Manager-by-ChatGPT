@@ -1,14 +1,47 @@
 diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index b7b8d1a..2f4c8aa 100644
+index 5a6d5e8..6d4c0b2 100644
 --- a/src/features/Vault/components/DataCards/DataCards.tsx
 +++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -434,7 +434,7 @@ export function DataCards({
-               <input
-                 id={`${dialogId}-url`}
-                 className="input"
--                type="url"
-+                type="text"
-                 value={form.url}
-                 onChange={(e) => onFieldChange('url', e.target.value)}
-               />
-             </div>
+@@ -366,6 +366,20 @@
+               {isActionMenuOpen && customFieldTargetDialogId === dialogId && (
+                 <div className="dialog-actionmenu" role="menu" ref={actionMenuRef}>
+                   <button
++                    type="button"
++                    className="dialog-actionmenu-item"
++                    onClick={() => {
++                      setIsActionMenuOpen(false);
++                      setCustomFieldTargetDialogId(dialogId);
++                      setCustomFieldName('');
++                      setCustomFieldModalError(null);
++                      setIsCustomFieldModalOpen(true);
++                    }}
++                  >
++                    {t('customFields.add')}
++                  </button>
++                  <button
+                     type="button"
+                     className="dialog-actionmenu-item"
+                     onClick={() => {
+                       setIsActionMenuOpen(false);
+@@ -377,20 +391,6 @@
+                     {form.totpUri?.trim() ? t('twoFactor.editAction') : t('twoFactor.addAction')}
+                   </button>
+                   <button
+-                    type="button"
+-                    className="dialog-actionmenu-item"
+-                    onClick={() => {
+-                      setIsActionMenuOpen(false);
+-                      setCustomFieldTargetDialogId(dialogId);
+-                      setCustomFieldName('');
+-                      setCustomFieldModalError(null);
+-                      setIsCustomFieldModalOpen(true);
+-                    }}
+-                  >
+-                    {t('customFields.add')}
+-                  </button>
+-                  <button
+                     type="button"
+                     className="dialog-actionmenu-item"
+                     onClick={() => {
+                       setIsActionMenuOpen(false);
+                       setSeedPhraseTargetDialogId(
