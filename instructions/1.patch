@@ -1,22 +1,145 @@
---- a/src-tauri/src/types.rs
-+++ b/src-tauri/src/types.rs
-@@ -270,7 +270,7 @@ impl Default for UserSettings {
-             clipboard_clear_timeout_seconds: default_clipboard_clear_timeout_seconds(),
-             soft_delete_enabled: true,
-             trash_retention_days: 30,
--            backups_enabled: false,
-+            backups_enabled: true,
-             auto_backup_interval_minutes: default_auto_backup_interval_minutes(),
-             backup_max_copies: default_backup_max_copies(),
-             backup_frequency: "weekly".to_string(),
-             default_sort_field: "updated_at".to_string(),
-             default_sort_direction: "DESC".to_string(),
-             mask_password_by_default: true,
-         }
-     }
- }
+diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+index 5edd4c9..4b6875d 100644
+--- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
++++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+@@ -4,6 +4,7 @@ import { BankCardItem } from '../../types/ui';
+ import { useBankCardDetails } from './useBankCardDetails';
+ import { IconCopy, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
+ import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
++import { wasActuallyUpdated } from '../../utils/updatedAt';
  
- fn default_auto_backup_interval_minutes() -> i64 {
--    60
-+    5
- }
+ export type BankCardDetailsProps = {
+   card: BankCardItem | null;
+@@ -66,7 +67,8 @@ export function BankCardDetails({
+ 
+   const isFavorite = card.isFavorite;
+   const createdText = `${t('label.created')}: ${new Date(card.createdAt).toLocaleString()}`;
+-  const updatedText = `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}`;
++  const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
++  const updatedText = showUpdated ? `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}` : '';
+   const hasValue = (value?: string | null) => {
+     const trimmed = value?.trim();
+     return Boolean(trimmed);
+@@ -98,7 +100,7 @@ export function BankCardDetails({
+           <div className="detail-row">
+             <div className="detail-dates">
+               <div className="muted">{createdText}</div>
+-              <div className="muted">{updatedText}</div>
++              {showUpdated && <div className="muted">{updatedText}</div>}
+             </div>
+             <div className="detail-actions">
+               {!isTrashMode && (
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+index e5c366e..3c6c557 100644
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -1,6 +1,7 @@
+ import React, { useEffect, useRef } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
++import { wasActuallyUpdated } from '../../utils/updatedAt';
+ 
+ export type BankCardsProps = {
+   viewModel: BankCardsViewModel;
+@@ -203,7 +204,8 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+             const isActive = selectedCardId === card.id;
+             const isFavorite = card.isFavorite;
+             const meta = card.metaLine || t('label.noMeta');
+-            const updatedText = `${t('label.updated')}: ${card.updatedAtLabel}`;
++            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
++            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
+ 
+             return (
+               <button
+@@ -219,7 +221,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+ 
+                 <div className="datacard-meta">
+                   <span>{meta}</span>
+-                  <span className="muted">{updatedText}</span>
++                  {showUpdated && <span className="muted">{updatedText}</span>}
+                 </div>
+               </button>
+             );
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 5a6d5e8..18409af 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -16,6 +16,7 @@ import { SeedPhraseModal } from '../modals/SeedPhraseModal';
+ import { useToaster } from '../../../../shared/components/Toaster';
+ import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
+ import { generateTotpCode } from '../../utils/totp';
++import { wasActuallyUpdated } from '../../utils/updatedAt';
+ import { DataCardFormState, DataCardsViewModel } from './useDataCards';
+ import { open } from '@tauri-apps/plugin-dialog';
+ import { clipboardClearAll } from '../../../../shared/lib/tauri';
+@@ -724,7 +725,8 @@ export function DataCards({
+             const isActive = selectedCardId === card.id;
+             const isFavorite = card.isFavorite;
+             const meta = card.metaLine || t('label.noMeta');
+-            const updatedText = `${t('label.updated')}: ${card.updatedAtLabel}`;
++            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
++            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
+ 
+             return (
+               <button
+@@ -741,7 +743,7 @@ export function DataCards({
+ 
+                 <div className="datacard-meta">
+                   <span>{meta}</span>
+-                  <span className="muted">{updatedText}</span>
++                  {showUpdated && <span className="muted">{updatedText}</span>}
+                 </div>
+               </button>
+             );
+diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
+index 00f75b5..b20d62a 100644
+--- a/src/features/Vault/components/Details/Details.tsx
++++ b/src/features/Vault/components/Details/Details.tsx
+@@ -3,6 +3,7 @@ import { CustomField, DataCard, Folder } from '../../types/ui';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import { useDetails } from './useDetails';
+ import { generateTotpCode } from '../../utils/totp';
++import { wasActuallyUpdated } from '../../utils/updatedAt';
+ import {
+   IconAttachment,
+   IconCopy,
+@@ -118,7 +119,8 @@ export function Details({
+ 
+   const isFavorite = card.isFavorite;
+   const createdText = `${t('label.created')}: ${new Date(card.createdAt).toLocaleString()}`;
+-  const updatedText = `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}`;
++  const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
++  const updatedText = showUpdated ? `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}` : '';
+   const hasValue = (value?: string | null) => {
+     const trimmed = value?.trim();
+     return Boolean(trimmed);
+@@ -169,7 +171,7 @@ export function Details({
+           <div className="detail-row">
+             <div className="detail-dates">
+               <div className="muted">{createdText}</div>
+-              <div className="muted">{updatedText}</div>
++              {showUpdated && <div className="muted">{updatedText}</div>}
+             </div>
+             <div className="detail-actions">
+               {!isTrashMode && (
+diff --git a/src/features/Vault/utils/updatedAt.ts b/src/features/Vault/utils/updatedAt.ts
+new file mode 100644
+index 0000000..7b6c1b9
+--- /dev/null
++++ b/src/features/Vault/utils/updatedAt.ts
+@@ -0,0 +1,15 @@
++export function wasActuallyUpdated(
++  createdAt?: string | null,
++  updatedAt?: string | null
++): boolean {
++  if (!createdAt || !updatedAt) return false;
++
++  const createdMs = Date.parse(createdAt);
++  const updatedMs = Date.parse(updatedAt);
++
++  if (!Number.isFinite(createdMs) || !Number.isFinite(updatedMs)) {
++    return false;
++  }
++
++  return updatedMs > createdMs;
++}
