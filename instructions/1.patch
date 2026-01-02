@@ -1,116 +1,13 @@
-diff --git a/src/shared/lib/tauri.ts b/src/shared/lib/tauri.ts
-index 4a3a0d3..5e9e5f1 100644
---- a/src/shared/lib/tauri.ts
-+++ b/src/shared/lib/tauri.ts
-@@ -69,8 +69,8 @@ export function workspaceRemove(id: string): Promise<boolean> {
-   return invoke('workspace_remove', { id });
- }
- 
--export function workspaceOpenInExplorer(): Promise<boolean> {
--  return invoke('workspace_open_in_explorer');
-+export function workspaceOpenInExplorer(id: string): Promise<boolean> {
-+  return invoke('workspace_open_in_explorer', { id });
- }
- 
- export type BackupInspectResult = {
-diff --git a/src/features/Workspace/Workspace.tsx b/src/features/Workspace/Workspace.tsx
-index 23b8f61..0de0c72 100644
---- a/src/features/Workspace/Workspace.tsx
-+++ b/src/features/Workspace/Workspace.tsx
-@@ -140,7 +140,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
-         activeWorkspace.exists &&
-         activeWorkspace.valid &&
-         activeWorkspace.path === selected
-       ) {
--        await workspaceOpenInExplorer();
-+        await workspaceOpenInExplorer(activeWorkspace.id);
-         return;
-       }
- 
-       // Otherwise initialize/add this folder as a workspace
-@@ -194,13 +194,21 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
-                   className="btn btn-icon workspace-actionbar"
-                   aria-label={t('actions')}
-                   title={t('actions')}
--                  onClick={(e) => {
-+                  onClick={async (e) => {
-                     e.stopPropagation();
--                    // intentionally empty (future action menu)
-+                    if (busy) return;
-+                    setBusy(true);
-+                    try {
-+                      await workspaceOpenInExplorer(workspace.id);
-+                    } finally {
-+                      setBusy(false);
-+                    }
-                   }}
-                 >
-                   <span className="workspace-actionbar-dots">⋯</span>
-                 </button>
-               </div>
 diff --git a/src-tauri/src/commands/workspace.rs b/src-tauri/src/commands/workspace.rs
-index 5e6a9c0..b9e47ee 100644
+index b9e47ee..e2f5b42 100644
 --- a/src-tauri/src/commands/workspace.rs
 +++ b/src-tauri/src/commands/workspace.rs
-@@ -249,22 +249,56 @@ pub async fn workspace_remove(id: String, state: State<'_, Arc<AppState>>) -> Res
- }
+@@ -261,7 +261,7 @@ pub async fn workspace_open_in_explorer(
+             .find(|w| w.id == id)
+             .ok_or_else(|| ErrorCodeString::new("WORKSPACE_NOT_FOUND"))?;
  
- #[tauri::command]
- pub async fn workspace_open_in_explorer(
-+    id: String,
-     state: State<'_, Arc<AppState>>,
- ) -> Result<bool> {
-     let app_state = state.inner().clone();
-     tauri::async_runtime::spawn_blocking(move || {
--        let storage_paths = app_state.get_storage_paths()?;
--        let root = storage_paths.workspace_root()?.clone();
--        if !root.exists() {
--            return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
--        }
--        std::process::Command::new("explorer")
--            .arg(root)
--            .spawn()
--            .map_err(|_| ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"))?;
-+        let app_dir = app_dir_from_state(&app_state)?;
-+        let registry = load_registry(&app_dir)?;
-+
-+        let record = registry
-+            .workspaces
-+            .iter()
-+            .find(|w| w.id == id)
-+            .ok_or_else(|| ErrorCodeString::new("WORKSPACE_NOT_FOUND"))?;
-+
-+        let root = std::path::PathBuf::from(&record.path);
-+        if !root.exists() {
-+            return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
-+        }
-+
-+        #[cfg(target_os = "windows")]
-+        {
-+            std::process::Command::new("explorer")
-+                .arg(&root)
-+                .spawn()
-+                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
-+        }
-+
-+        #[cfg(target_os = "macos")]
-+        {
-+            std::process::Command::new("open")
-+                .arg(&root)
-+                .spawn()
-+                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
-+        }
-+
-+        #[cfg(all(unix, not(target_os = "macos")))]
-+        {
-+            std::process::Command::new("xdg-open")
-+                .arg(&root)
-+                .spawn()
-+                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
-+        }
-+
-         Ok(true)
-     })
-     .await
-     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
+-        let root = std::path::PathBuf::from(&record.path);
++        let root = resolve_workspace_path(&app_dir, record);
+         if !root.exists() {
+             return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
+         }
