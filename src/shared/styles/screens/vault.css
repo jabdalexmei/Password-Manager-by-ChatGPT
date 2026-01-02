@@ -190,6 +190,11 @@
   border: 1px solid var(--color-border);
   background: var(--color-surface-2);
   box-shadow: var(--shadow-popover);
+
+  /* make filter chips match the screenshot: same width, same height */
+  --filter-chip-width: 200px;
+  --filter-chip-pad-y: 8px;
+  --filter-chip-pad-x: 12px;
 }
 
 .vault-filter-panel__title {
@@ -204,25 +209,23 @@
   flex-direction: column;
   flex-wrap: nowrap;
   gap: 8px;
-  align-items: stretch;
+  align-items: center;
 }
 
 .filter-chip {
   /* customizable knobs */
-  --filter-chip-pad-y: 7px;
-  --filter-chip-pad-x: 12px;
   --filter-chip-font-size: 13px;
 
   flex: 0 0 auto;
-  width: 100%;
-  align-self: stretch;
+  width: var(--filter-chip-width);
+  max-width: 100%;
 
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-align: center;
 
-  padding: var(--filter-chip-pad-y) var(--filter-chip-pad-x);
+  padding: var(--filter-chip-pad-y, 7px) var(--filter-chip-pad-x, 12px);
   border-radius: var(--radius-pill);
   border: 1px solid var(--greycolorsecondaryborder);
   background: var(--greycolorsecondary);
