@@ -497,11 +497,8 @@
 
   /* prevent clipping of hover transform + focus-visible outline */
   padding: 4px;
-  /* Always reserve the scrollbar space to prevent "Empty" shifting by a few px */
-  overflow-x: hidden;
-  overflow-y: scroll;
-  /* Progressive enhancement: keep centering stable even with classic scrollbars */
-  scrollbar-gutter: stable both-edges;
+  overflow: auto;
+  scrollbar-gutter: stable;
   flex: 1;
   display: flex;
   flex-direction: column;
