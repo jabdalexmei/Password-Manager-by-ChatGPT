@@ -75,8 +75,8 @@ export function workspaceRemove(id: string): Promise<boolean> {
   return invoke('workspace_remove', { id });
 }
 
-export function workspaceOpenInExplorer(): Promise<boolean> {
-  return invoke('workspace_open_in_explorer');
+export function workspaceOpenInExplorer(id: string): Promise<boolean> {
+  return invoke('workspace_open_in_explorer', { id });
 }
 
 export type BackupInspectResult = {

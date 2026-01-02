@@ -250,19 +250,49 @@ pub async fn workspace_remove(id: String, state: State<'_, Arc<AppState>>) -> Re
 
 #[tauri::command]
 pub async fn workspace_open_in_explorer(
+    id: String,
     state: State<'_, Arc<AppState>>,
 ) -> Result<bool> {
     let app_state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let storage_paths = app_state.get_storage_paths()?;
-        let root = storage_paths.workspace_root()?.clone();
+        let app_dir = app_dir_from_state(&app_state)?;
+        let registry = load_registry(&app_dir)?;
+
+        let record = registry
+            .workspaces
+            .iter()
+            .find(|w| w.id == id)
+            .ok_or_else(|| ErrorCodeString::new("WORKSPACE_NOT_FOUND"))?;
+
+        let root = std::path::PathBuf::from(&record.path);
         if !root.exists() {
             return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
         }
-        std::process::Command::new("explorer")
-            .arg(root)
-            .spawn()
-            .map_err(|_| ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"))?;
+
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("explorer")
+                .arg(&root)
+                .spawn()
+                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .arg(&root)
+                .spawn()
+                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
+        }
+
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            std::process::Command::new("xdg-open")
+                .arg(&root)
+                .spawn()
+                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
+        }
+
         Ok(true)
     })
     .await

@@ -140,7 +140,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
         activeWorkspace.valid &&
         activeWorkspace.path === selected
       ) {
-        await workspaceOpenInExplorer();
+        await workspaceOpenInExplorer(activeWorkspace.id);
         return;
       }
 
@@ -198,9 +198,15 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
                   className="btn btn-icon workspace-actionbar"
                   aria-label={t('actions')}
                   title={t('actions')}
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    // intentionally empty (future action menu)
+                    if (busy) return;
+                    setBusy(true);
+                    try {
+                      await workspaceOpenInExplorer(workspace.id);
+                    } finally {
+                      setBusy(false);
+                    }
                   }}
                 >
                   <span className="workspace-actionbar-dots">⋯</span>
