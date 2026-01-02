@@ -188,6 +188,7 @@
 
 .workspace-actionmenu-item:hover {
   background: var(--color-surface-1);
+  border-color: var(--greycolorsecondaryborder-hover);
 }
 
 .workspace-actionmenu-item:disabled {

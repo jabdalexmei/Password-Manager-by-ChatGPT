@@ -10,6 +10,12 @@
      --------------------------------------------------------------------- */
   --greycolorsecondary: var(--btn-secondary-bg, var(--surface-container, var(--color-surface-2)));
   --greycolorsecondaryborder: var(--btn-secondary-border, var(--border-subtle, var(--color-border)));
+  /* Hover border is a lighter variant of the regular border */
+  --greycolorsecondaryborder-hover: color-mix(
+    in srgb,
+    var(--greycolorsecondaryborder) 70%,
+    var(--color-text) 30%
+  );
   --blueprimarycolor: var(--color-primary);
   --blueprimarycolorstrong: var(--color-primary-strong);
 }
