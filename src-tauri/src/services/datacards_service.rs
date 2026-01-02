@@ -61,9 +61,6 @@ pub fn create_datacard(input: CreateDataCardInput, state: &Arc<AppState>) -> Res
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
-    if sanitized.title.is_empty() {
-        return Err(ErrorCodeString::new("DATACARD_TITLE_REQUIRED"));
-    }
     sanitized.tags = normalize_tags(sanitized.tags);
     sanitized.totp_uri = sanitized
         .totp_uri
@@ -89,9 +86,6 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
-    if sanitized.title.is_empty() {
-        return Err(ErrorCodeString::new("DATACARD_TITLE_REQUIRED"));
-    }
     sanitized.tags = normalize_tags(sanitized.tags);
     sanitized.totp_uri = sanitized
         .totp_uri

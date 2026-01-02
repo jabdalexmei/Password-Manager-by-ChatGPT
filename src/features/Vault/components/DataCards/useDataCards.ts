@@ -492,11 +492,6 @@ export function useDataCards({
 
   const submitCreate = useCallback(async () => {
     if (isCreateSubmitting) return;
-    const trimmedTitle = createForm.title.trim();
-    if (!trimmedTitle) {
-      setCreateError(t('validation.titleRequired'));
-      return;
-    }
 
     setCreateFolderError(null);
     const hasFolderName = createForm.folderName.trim() !== '';
@@ -541,11 +536,6 @@ export function useDataCards({
   const submitEdit = useCallback(async () => {
     if (isEditSubmitting) return;
     if (!editForm) return;
-    const trimmedTitle = editForm.title.trim();
-    if (!trimmedTitle) {
-      setEditError(t('validation.titleRequired'));
-      return;
-    }
 
     if (!editCardId) return;
 

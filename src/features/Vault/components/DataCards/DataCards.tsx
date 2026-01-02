@@ -415,7 +415,7 @@ export function DataCards({
           <form className="dialog-body" onSubmit={handleSubmit}>
             <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-title`}>
-                {t('label.title')}*
+                {t('label.title')}
               </label>
               <input
                 id={`${dialogId}-title`}
