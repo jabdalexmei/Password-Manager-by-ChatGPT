@@ -769,7 +769,9 @@ export function DataCards({
       </div>
 
       {cards.length === 0 ? (
-        <div className="vault-empty">{t('label.empty')}</div>
+        <div className="vault-datacard-list vault-datacard-list--empty">
+          <div className="vault-empty">{t('label.empty')}</div>
+        </div>
       ) : (
         <div className="vault-datacard-list">
           {cards.map((card) => {

@@ -498,12 +498,17 @@
   /* prevent clipping of hover transform + focus-visible outline */
   padding: 4px;
   overflow: auto;
+  /* Reserve scrollbar gutter to avoid layout shift between empty/non-empty lists */
+  scrollbar-gutter: stable;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+.vault-datacard-list--empty {
+  justify-content: center;
+}
 .vault-datacard {
   width: 100%;
   text-align: left;
