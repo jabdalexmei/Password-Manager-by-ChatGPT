@@ -1,50 +1,22 @@
 diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 5bf0a4b..7d3a2c1 100644
+index 7d3a2c1..2a6b0c9 100644
 --- a/src/shared/styles/screens/vault.css
 +++ b/src/shared/styles/screens/vault.css
-@@ -185,6 +185,12 @@
+@@ -175,12 +175,16 @@
+ .vault-filter-panel {
+   position: absolute;
+   z-index: 41;
+   top: calc(100% + 8px);
+   right: 0;
+-  min-width: 180px;
+-  padding: 10px;
++  /* shrink popover to content */
++  min-width: 0;
++  width: fit-content;
++  max-width: 100%;
++  padding: 8px;
+   border-radius: var(--radius-md);
    border: 1px solid var(--color-border);
    background: var(--color-surface-2);
    box-shadow: var(--shadow-popover);
-+
-+  /* Make all filter chips the same size (like the reference screenshot) */
-+  --filter-chip-width: 170px;
-+  --filter-chip-pad-y: 7px;
-+  --filter-chip-pad-x: 12px;
  }
- 
- .vault-filter-panel__title {
-   font-size: 12px;
-@@ -202,7 +208,7 @@
-   display: flex;
-   flex-direction: column;
-   flex-wrap: nowrap;
-   gap: 8px;
--  align-items: flex-start;
-+  align-items: flex-start;
- }
- 
- .filter-chip {
-   /* customizable knobs */
--  --filter-chip-pad-y: 7px;
--  --filter-chip-pad-x: 12px;
-   --filter-chip-font-size: 13px;
- 
-   flex: 0 0 auto;
--  width: auto;
--  align-self: flex-start;
-+  width: var(--filter-chip-width);
-+  max-width: 100%;
-+  align-self: flex-start;
- 
-   display: inline-flex;
-   align-items: center;
-   justify-content: center;
-+  text-align: center;
- 
--  padding: var(--filter-chip-pad-y) var(--filter-chip-pad-x);
-+  padding: var(--filter-chip-pad-y) var(--filter-chip-pad-x);
-   border-radius: var(--radius-pill);
-   border: 1px solid var(--greycolorsecondaryborder);
-   background: var(--greycolorsecondary);
-   color: var(--color-text);
