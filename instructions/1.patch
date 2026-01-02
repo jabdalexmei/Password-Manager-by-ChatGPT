@@ -1,145 +1,116 @@
-diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
-index 5edd4c9..4b6875d 100644
---- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
-+++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
-@@ -4,6 +4,7 @@ import { BankCardItem } from '../../types/ui';
- import { useBankCardDetails } from './useBankCardDetails';
- import { IconCopy, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
- import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
-+import { wasActuallyUpdated } from '../../utils/updatedAt';
+diff --git a/src/shared/lib/tauri.ts b/src/shared/lib/tauri.ts
+index 4a3a0d3..5e9e5f1 100644
+--- a/src/shared/lib/tauri.ts
++++ b/src/shared/lib/tauri.ts
+@@ -69,8 +69,8 @@ export function workspaceRemove(id: string): Promise<boolean> {
+   return invoke('workspace_remove', { id });
+ }
  
- export type BankCardDetailsProps = {
-   card: BankCardItem | null;
-@@ -66,7 +67,8 @@ export function BankCardDetails({
+-export function workspaceOpenInExplorer(): Promise<boolean> {
+-  return invoke('workspace_open_in_explorer');
++export function workspaceOpenInExplorer(id: string): Promise<boolean> {
++  return invoke('workspace_open_in_explorer', { id });
+ }
  
-   const isFavorite = card.isFavorite;
-   const createdText = `${t('label.created')}: ${new Date(card.createdAt).toLocaleString()}`;
--  const updatedText = `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}`;
-+  const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
-+  const updatedText = showUpdated ? `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}` : '';
-   const hasValue = (value?: string | null) => {
-     const trimmed = value?.trim();
-     return Boolean(trimmed);
-@@ -98,7 +100,7 @@ export function BankCardDetails({
-           <div className="detail-row">
-             <div className="detail-dates">
-               <div className="muted">{createdText}</div>
--              <div className="muted">{updatedText}</div>
-+              {showUpdated && <div className="muted">{updatedText}</div>}
-             </div>
-             <div className="detail-actions">
-               {!isTrashMode && (
-diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
-index e5c366e..3c6c557 100644
---- a/src/features/Vault/components/BankCards/BankCards.tsx
-+++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -1,6 +1,7 @@
- import React, { useEffect, useRef } from 'react';
- import { useTranslation } from '../../../../shared/lib/i18n';
- import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
-+import { wasActuallyUpdated } from '../../utils/updatedAt';
+ export type BackupInspectResult = {
+diff --git a/src/features/Workspace/Workspace.tsx b/src/features/Workspace/Workspace.tsx
+index 23b8f61..0de0c72 100644
+--- a/src/features/Workspace/Workspace.tsx
++++ b/src/features/Workspace/Workspace.tsx
+@@ -140,7 +140,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
+         activeWorkspace.exists &&
+         activeWorkspace.valid &&
+         activeWorkspace.path === selected
+       ) {
+-        await workspaceOpenInExplorer();
++        await workspaceOpenInExplorer(activeWorkspace.id);
+         return;
+       }
  
- export type BankCardsProps = {
-   viewModel: BankCardsViewModel;
-@@ -203,7 +204,8 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-             const isActive = selectedCardId === card.id;
-             const isFavorite = card.isFavorite;
-             const meta = card.metaLine || t('label.noMeta');
--            const updatedText = `${t('label.updated')}: ${card.updatedAtLabel}`;
-+            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
-+            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
+       // Otherwise initialize/add this folder as a workspace
+@@ -194,13 +194,21 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
+                   className="btn btn-icon workspace-actionbar"
+                   aria-label={t('actions')}
+                   title={t('actions')}
+-                  onClick={(e) => {
++                  onClick={async (e) => {
+                     e.stopPropagation();
+-                    // intentionally empty (future action menu)
++                    if (busy) return;
++                    setBusy(true);
++                    try {
++                      await workspaceOpenInExplorer(workspace.id);
++                    } finally {
++                      setBusy(false);
++                    }
+                   }}
+                 >
+                   <span className="workspace-actionbar-dots">⋯</span>
+                 </button>
+               </div>
+diff --git a/src-tauri/src/commands/workspace.rs b/src-tauri/src/commands/workspace.rs
+index 5e6a9c0..b9e47ee 100644
+--- a/src-tauri/src/commands/workspace.rs
++++ b/src-tauri/src/commands/workspace.rs
+@@ -249,22 +249,56 @@ pub async fn workspace_remove(id: String, state: State<'_, Arc<AppState>>) -> Res
+ }
  
-             return (
-               <button
-@@ -219,7 +221,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
- 
-                 <div className="datacard-meta">
-                   <span>{meta}</span>
--                  <span className="muted">{updatedText}</span>
-+                  {showUpdated && <span className="muted">{updatedText}</span>}
-                 </div>
-               </button>
-             );
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 5a6d5e8..18409af 100644
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -16,6 +16,7 @@ import { SeedPhraseModal } from '../modals/SeedPhraseModal';
- import { useToaster } from '../../../../shared/components/Toaster';
- import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
- import { generateTotpCode } from '../../utils/totp';
-+import { wasActuallyUpdated } from '../../utils/updatedAt';
- import { DataCardFormState, DataCardsViewModel } from './useDataCards';
- import { open } from '@tauri-apps/plugin-dialog';
- import { clipboardClearAll } from '../../../../shared/lib/tauri';
-@@ -724,7 +725,8 @@ export function DataCards({
-             const isActive = selectedCardId === card.id;
-             const isFavorite = card.isFavorite;
-             const meta = card.metaLine || t('label.noMeta');
--            const updatedText = `${t('label.updated')}: ${card.updatedAtLabel}`;
-+            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
-+            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
- 
-             return (
-               <button
-@@ -741,7 +743,7 @@ export function DataCards({
- 
-                 <div className="datacard-meta">
-                   <span>{meta}</span>
--                  <span className="muted">{updatedText}</span>
-+                  {showUpdated && <span className="muted">{updatedText}</span>}
-                 </div>
-               </button>
-             );
-diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
-index 00f75b5..b20d62a 100644
---- a/src/features/Vault/components/Details/Details.tsx
-+++ b/src/features/Vault/components/Details/Details.tsx
-@@ -3,6 +3,7 @@ import { CustomField, DataCard, Folder } from '../../types/ui';
- import { useTranslation } from '../../../../shared/lib/i18n';
- import { useDetails } from './useDetails';
- import { generateTotpCode } from '../../utils/totp';
-+import { wasActuallyUpdated } from '../../utils/updatedAt';
- import {
-   IconAttachment,
-   IconCopy,
-@@ -118,7 +119,8 @@ export function Details({
- 
-   const isFavorite = card.isFavorite;
-   const createdText = `${t('label.created')}: ${new Date(card.createdAt).toLocaleString()}`;
--  const updatedText = `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}`;
-+  const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
-+  const updatedText = showUpdated ? `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}` : '';
-   const hasValue = (value?: string | null) => {
-     const trimmed = value?.trim();
-     return Boolean(trimmed);
-@@ -169,7 +171,7 @@ export function Details({
-           <div className="detail-row">
-             <div className="detail-dates">
-               <div className="muted">{createdText}</div>
--              <div className="muted">{updatedText}</div>
-+              {showUpdated && <div className="muted">{updatedText}</div>}
-             </div>
-             <div className="detail-actions">
-               {!isTrashMode && (
-diff --git a/src/features/Vault/utils/updatedAt.ts b/src/features/Vault/utils/updatedAt.ts
-new file mode 100644
-index 0000000..7b6c1b9
---- /dev/null
-+++ b/src/features/Vault/utils/updatedAt.ts
-@@ -0,0 +1,15 @@
-+export function wasActuallyUpdated(
-+  createdAt?: string | null,
-+  updatedAt?: string | null
-+): boolean {
-+  if (!createdAt || !updatedAt) return false;
+ #[tauri::command]
+ pub async fn workspace_open_in_explorer(
++    id: String,
+     state: State<'_, Arc<AppState>>,
+ ) -> Result<bool> {
+     let app_state = state.inner().clone();
+     tauri::async_runtime::spawn_blocking(move || {
+-        let storage_paths = app_state.get_storage_paths()?;
+-        let root = storage_paths.workspace_root()?.clone();
+-        if !root.exists() {
+-            return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
+-        }
+-        std::process::Command::new("explorer")
+-            .arg(root)
+-            .spawn()
+-            .map_err(|_| ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"))?;
++        let app_dir = app_dir_from_state(&app_state)?;
++        let registry = load_registry(&app_dir)?;
 +
-+  const createdMs = Date.parse(createdAt);
-+  const updatedMs = Date.parse(updatedAt);
++        let record = registry
++            .workspaces
++            .iter()
++            .find(|w| w.id == id)
++            .ok_or_else(|| ErrorCodeString::new("WORKSPACE_NOT_FOUND"))?;
 +
-+  if (!Number.isFinite(createdMs) || !Number.isFinite(updatedMs)) {
-+    return false;
-+  }
++        let root = std::path::PathBuf::from(&record.path);
++        if !root.exists() {
++            return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
++        }
 +
-+  return updatedMs > createdMs;
-+}
++        #[cfg(target_os = "windows")]
++        {
++            std::process::Command::new("explorer")
++                .arg(&root)
++                .spawn()
++                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
++        }
++
++        #[cfg(target_os = "macos")]
++        {
++            std::process::Command::new("open")
++                .arg(&root)
++                .spawn()
++                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
++        }
++
++        #[cfg(all(unix, not(target_os = "macos")))]
++        {
++            std::process::Command::new("xdg-open")
++                .arg(&root)
++                .spawn()
++                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
++        }
++
+         Ok(true)
+     })
+     .await
+     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+ }

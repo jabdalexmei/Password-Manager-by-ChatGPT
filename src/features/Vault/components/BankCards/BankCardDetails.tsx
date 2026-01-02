@@ -4,6 +4,7 @@ import { BankCardItem } from '../../types/ui';
 import { useBankCardDetails } from './useBankCardDetails';
 import { IconCopy, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
+import { wasActuallyUpdated } from '../../utils/updatedAt';
 
 export type BankCardDetailsProps = {
   card: BankCardItem | null;
@@ -66,7 +67,8 @@ export function BankCardDetails({
 
   const isFavorite = card.isFavorite;
   const createdText = `${t('label.created')}: ${new Date(card.createdAt).toLocaleString()}`;
-  const updatedText = `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}`;
+  const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
+  const updatedText = showUpdated ? `${t('label.updated')}: ${new Date(card.updatedAt).toLocaleString()}` : '';
   const hasValue = (value?: string | null) => {
     const trimmed = value?.trim();
     return Boolean(trimmed);
@@ -98,7 +100,7 @@ export function BankCardDetails({
           <div className="detail-row">
             <div className="detail-dates">
               <div className="muted">{createdText}</div>
-              <div className="muted">{updatedText}</div>
+              {showUpdated && <div className="muted">{updatedText}</div>}
             </div>
             <div className="detail-actions">
               {!isTrashMode && (
