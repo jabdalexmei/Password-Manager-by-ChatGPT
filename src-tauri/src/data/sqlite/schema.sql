@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS datacards (
   id           TEXT PRIMARY KEY,
   folder_id    TEXT NULL,
 
-  title        TEXT NOT NULL,
+  title        TEXT,
   url          TEXT NULL,
   email        TEXT NULL,
   username     TEXT NULL,
