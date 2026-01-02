@@ -191,8 +191,7 @@
   background: var(--color-surface-2);
   box-shadow: var(--shadow-popover);
 
-  /* make filter chips match the screenshot: same width, same height */
-  --filter-chip-width: 200px;
+  /* chip sizing knobs */
   --filter-chip-pad-y: 8px;
   --filter-chip-pad-x: 12px;
 }
@@ -209,7 +208,7 @@
   flex-direction: column;
   flex-wrap: nowrap;
   gap: 8px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .filter-chip {
@@ -217,8 +216,9 @@
   --filter-chip-font-size: 13px;
 
   flex: 0 0 auto;
-  width: var(--filter-chip-width);
+  width: fit-content;
   max-width: 100%;
+  align-self: flex-start;
 
   display: inline-flex;
   align-items: center;
