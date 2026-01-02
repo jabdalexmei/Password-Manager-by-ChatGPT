@@ -1,45 +1,121 @@
+
+
+## PATCH 1 — фикс белого фона (CSS, максимально жёстко)
+
+```diff
 diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
-index 4a4b7d2..5f0f51f 100644
+index 3b5b2a1..f7a7d1c 100644
 --- a/src/shared/styles/ui.css
 +++ b/src/shared/styles/ui.css
-@@ -333,6 +333,39 @@
+@@ -8543,6 +8543,44 @@
    background: var(--input-surface);
-   color: var(--color-text);
+ .  color: var(--color-text);
    padding: 10px 12px;
  }
  
 +/* ==========================================================================
-+   Autofill highlight override (Chromium/WebKit + modern :autofill)
++   WebView2/Chromium "Saved info" autofill highlight override (dark theme)
 +   --------------------------------------------------------------------------
-+   When user picks from "Saved info", browser applies autofill styles (often light bg).
-+   Paint our theme surface via inset box-shadow to keep dark UI consistent.
++   Chromium may apply a white background for autofill/suggestions and sometimes
++   uses internal pseudo-classes. Force our surface via inset box-shadow.
 +   ========================================================================== */
-+.input:-webkit-autofill,
-+.input:-webkit-autofill:hover,
-+.input:-webkit-autofill:focus,
-+.form-field input:-webkit-autofill,
-+.form-field input:-webkit-autofill:hover,
-+.form-field input:-webkit-autofill:focus,
-+.form-field textarea:-webkit-autofill,
-+.form-field textarea:-webkit-autofill:hover,
-+.form-field textarea:-webkit-autofill:focus,
-+.form-field select:-webkit-autofill,
-+.form-field select:-webkit-autofill:hover,
-+.form-field select:-webkit-autofill:focus {
-+  -webkit-text-fill-color: var(--color-text);
-+  caret-color: var(--color-text);
-+  -webkit-box-shadow: 0 0 0 1000px var(--input-surface) inset;
-+  box-shadow: 0 0 0 1000px var(--input-surface) inset;
++input:-webkit-autofill,
++input:-webkit-autofill:hover,
++input:-webkit-autofill:focus,
++textarea:-webkit-autofill,
++textarea:-webkit-autofill:hover,
++textarea:-webkit-autofill:focus,
++select:-webkit-autofill,
++select:-webkit-autofill:hover,
++select:-webkit-autofill:focus,
++input:-internal-autofill-selected,
++textarea:-internal-autofill-selected,
++select:-internal-autofill-selected {
++  -webkit-text-fill-color: var(--color-text) !important;
++  caret-color: var(--color-text) !important;
++  background-color: var(--input-surface) !important;
++  -webkit-box-shadow: 0 0 0 1000px var(--input-surface) inset !important;
++  box-shadow: 0 0 0 1000px var(--input-surface) inset !important;
 +}
 +
-+.input:autofill,
-+.form-field input:autofill,
-+.form-field textarea:autofill,
-+.form-field select:autofill {
-+  box-shadow: 0 0 0 1000px var(--input-surface) inset;
-+  caret-color: var(--color-text);
++/* Modern standard selector (supported widely since 2023) */
++input:autofill,
++textarea:autofill,
++select:autofill {
++  box-shadow: 0 0 0 1000px var(--input-surface) inset !important;
++  caret-color: var(--color-text) !important;
 +}
 +
  /* Textareas - minimum height + allow resize */
  .textarea,
  .form-field textarea,
+ .form-textarea {
+```
+
+
+
+## PATCH 2 — убрать/сильно снизить “Saved info” на Create profile (WebView2 workaround)
+
+```diff
+diff --git a/src/features/ProfileCreate/ProfileCreate.tsx b/src/features/ProfileCreate/ProfileCreate.tsx
+index 7b9a7a1..c5d3c90 100644
+--- a/src/features/ProfileCreate/ProfileCreate.tsx
++++ b/src/features/ProfileCreate/ProfileCreate.tsx
+@@ -35,7 +35,7 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({ onCreated, onProfileCreated, onBack }) => {
+ 
+   return (
+     <div className="screen-shell">
+       <div className="screen-card profile-create-card">
+@@ -46,7 +46,7 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({ onCreated, onProfileCreated, onBack }) => {
+         </header>
+ 
+         {/* Full-width panel like "Select profile" (no narrow centered column) */}
+-        <form className="profile-create-form" onSubmit={handleSubmit}>
++        <form className="profile-create-form" onSubmit={handleSubmit} autoComplete="off">
+           <div className="profile-create-panel form-grid">
+             <div className="form-field">
+               <label className="form-label" htmlFor="profile-name">
+                 {t('name')}
+               </label>
+               <input
+                 id="profile-name"
++                name="profile_display_name"
++                autoComplete="off"
++                aria-autocomplete="none"
++                list="autocompleteOff"
+                 value={name}
+                 onChange={(e) => setName(e.target.value)}
+                 placeholder={t('namePlaceholder')}
+               />
++              <datalist id="autocompleteOff" />
+             </div>
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="profile-password">
+                 {t('passwordLabel')}
+               </label>
+               <input
+                 id="profile-password"
++                name="profile_master_password"
+                 type="password"
++                autoComplete="new-password"
+                 value={password}
+                 onChange={(e) => setPassword(e.target.value)}
+                 placeholder={t('passwordPlaceholder')}
+               />
+             </div>
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="profile-password-confirm">
+                 {t('confirmPassword')}
+               </label>
+               <input
+                 id="profile-password-confirm"
++                name="profile_master_password_confirm"
+                 type="password"
++                autoComplete="new-password"
+                 value={confirmPassword}
+                 onChange={(e) => setConfirmPassword(e.target.value)}
+                 placeholder={t('confirmPasswordPlaceholder')}
+               />
+             </div>
