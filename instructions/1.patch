@@ -1,55 +1,22 @@
-
-```diff
-diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
-index 4d1a9b2..0d6d3c7 100644
---- a/src/features/Vault/components/modals/SettingsModal.tsx
-+++ b/src/features/Vault/components/modals/SettingsModal.tsx
-@@ -156,7 +156,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-           >
-             <div className="form-field" style={toggleRowStyle}>
--              <span className="form-label" id="auto-lock-enabled-label">
-+              <span className="form-label settings-subheader" id="auto-lock-enabled-label">
-                 Enable auto-lock
-               </span>
- 
-@@ -229,7 +229,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-           >
-             <div className="form-field" style={toggleRowStyle}>
--              <span className="form-label" id="clipboard-auto-clear-enabled-label">
-+              <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
-                 Enable clipboard auto-clear
-               </span>
- 
-@@ -307,7 +307,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-           <div role="group" aria-labelledby="backups-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-             <div className="form-field" style={toggleRowStyle}>
--              <span className="form-label" id="backup-auto-enabled-label">
-+              <span className="form-label settings-subheader" id="backup-auto-enabled-label">
-                 Auto backup enabled
-               </span>
-
-diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
-index 3b5b2a1..d5c33c9 100644
---- a/src/shared/styles/ui.css
-+++ b/src/shared/styles/ui.css
-@@ -325,11 +325,20 @@
- .form-label {
-   font-size: 12px;
-   line-height: 16px;
-   color: var(--color-text-muted);
+diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
+index 9f2a7c4..a7c6d21 100644
+--- a/src/shared/styles/screens/vault.css
++++ b/src/shared/styles/screens/vault.css
+@@ -286,10 +286,12 @@
+ .vault-folder-list {
+   list-style: none;
+-  padding: 0;
++  padding: 0;
++  padding-left: 6px;
+   margin: 0;
+   display: flex;
+   flex-direction: column;
+   gap: 6px;
  }
- 
-+/* Settings modal: make selected "toggle titles" look like headers (white, not muted) */
-+.form-label.settings-subheader {
-+  color: var(--color-text);
-+  font-weight: 700;
-+  font-size: 13px;
-+  line-height: 16px;
-+}
-+
- /* Inputs - shared base for <input>, <select>, <textarea> in forms */
- .input,
- .textarea,
- .form-field input,
-```
-
+@@ -357,8 +359,6 @@
+ .vault-folder-list li.active .vault-folder {
+   background: linear-gradient(90deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
+   border-color: var(--color-primary);
+-  
+-  margin-left: 6px;
+ }
