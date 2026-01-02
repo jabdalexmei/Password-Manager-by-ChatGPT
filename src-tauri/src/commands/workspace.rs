@@ -264,7 +264,7 @@ pub async fn workspace_open_in_explorer(
             .find(|w| w.id == id)
             .ok_or_else(|| ErrorCodeString::new("WORKSPACE_NOT_FOUND"))?;
 
-        let root = std::path::PathBuf::from(&record.path);
+        let root = resolve_workspace_path(&app_dir, record);
         if !root.exists() {
             return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
         }
