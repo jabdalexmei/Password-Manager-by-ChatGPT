@@ -405,6 +405,18 @@
   position: relative;
 }
 
+.datacards-actions-backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 14;
+}
+
+/* Do NOT turn this button blue on hover (keep neutral like Obsidian-style menus) */
+.vault-trash-actions-button.btn-secondary:not(:disabled):hover {
+  border-color: var(--border-subtle);
+}
+
 /* Cards menu */
 .datacards-menu {
   position: absolute;

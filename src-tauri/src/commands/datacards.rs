@@ -94,6 +94,24 @@ pub async fn purge_datacard(id: String, state: State<'_, Arc<AppState>>) -> Resu
 }
 
 #[tauri::command]
+pub async fn restore_all_deleted_datacards(state: State<'_, Arc<AppState>>) -> Result<bool> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        datacards_service::restore_all_deleted_datacards(&app)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
+pub async fn purge_all_deleted_datacards(state: State<'_, Arc<AppState>>) -> Result<bool> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::purge_all_deleted_datacards(&app))
+        .await
+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
 pub async fn set_datacard_favorite(
     input: SetDataCardFavoriteInput,
     state: State<'_, Arc<AppState>>,

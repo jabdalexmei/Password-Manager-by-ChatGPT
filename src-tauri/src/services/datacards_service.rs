@@ -125,7 +125,9 @@ pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
         security_service::request_persist_active_vault(state.clone());
         Ok(true)
     } else {
-        purge_datacard_with_attachments(state, &profile_id, &id)
+        let purged = purge_datacard_with_attachments(state, &profile_id, &id)?;
+        security_service::request_persist_active_vault(state.clone());
+        Ok(purged)
     }
 }
 
@@ -139,6 +141,37 @@ pub fn list_deleted_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataC
     repo_impl::list_deleted_datacards_summary(state, &profile_id)
 }
 
+pub fn restore_all_deleted_datacards(state: &Arc<AppState>) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let ids = repo_impl::list_deleted_datacard_ids(state, &profile_id)?;
+    if ids.is_empty() {
+        return Ok(true);
+    }
+
+    for id in ids {
+        repo_impl::restore_datacard(state, &profile_id, &id)?;
+        repo_impl::restore_attachments_by_datacard(state, &profile_id, &id)?;
+    }
+
+    security_service::request_persist_active_vault(state.clone());
+    Ok(true)
+}
+
+pub fn purge_all_deleted_datacards(state: &Arc<AppState>) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let ids = repo_impl::list_deleted_datacard_ids(state, &profile_id)?;
+    if ids.is_empty() {
+        return Ok(true);
+    }
+
+    for id in ids {
+        purge_datacard_with_attachments(state, &profile_id, &id)?;
+    }
+
+    security_service::request_persist_active_vault(state.clone());
+    Ok(true)
+}
+
 pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::restore_datacard(state, &profile_id, &id)?;
@@ -149,7 +182,9 @@ pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
 
 pub fn purge_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-    purge_datacard_with_attachments(state, &profile_id, &id)
+    let purged = purge_datacard_with_attachments(state, &profile_id, &id)?;
+    security_service::request_persist_active_vault(state.clone());
+    Ok(purged)
 }
 
 fn purge_datacard_with_attachments(
@@ -171,7 +206,6 @@ fn purge_datacard_with_attachments(
     }
 
     let purged = repo_impl::purge_datacard(state, profile_id, id)?;
-    security_service::request_persist_active_vault(state.clone());
     Ok(purged)
 }
 

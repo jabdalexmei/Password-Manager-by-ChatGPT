@@ -61,6 +61,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     onDeleteCard: vault.deleteCard,
     onRestoreCard: vault.restoreCard,
     onPurgeCard: vault.purgeCard,
+    onRestoreAllTrash: vault.restoreAllTrash,
+    onPurgeAllTrash: vault.purgeAllTrash,
   });
   const folderDialogs = useFolders({ onCreateFolder: (name) => vault.createFolder(name, null) });
   const bankCardsViewModel = useBankCardsViewModel({
@@ -73,6 +75,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     onDeleteCard: bankCards.deleteCard,
     onRestoreCard: bankCards.restoreCard,
     onPurgeCard: bankCards.purgeCard,
+    onRestoreAllTrash: bankCards.restoreAllTrash,
+    onPurgeAllTrash: bankCards.purgeAllTrash,
   });
 
   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);

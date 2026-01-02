@@ -480,6 +480,27 @@ pub fn list_deleted_datacards_summary(
     })
 }
 
+pub fn list_deleted_datacard_ids(
+    state: &Arc<AppState>,
+    profile_id: &str,
+) -> Result<Vec<String>> {
+    with_connection(state, profile_id, |conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        let ids = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        Ok(ids)
+    })
+}
+
 fn get_datacard_by_id_conn(conn: &Connection, id: &str) -> Result<DataCard> {
     let mut stmt = conn
         .prepare("SELECT * FROM datacards WHERE id = ?1")
@@ -786,6 +807,27 @@ pub fn list_deleted_bank_cards_summary(
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         Ok(cards)
+    })
+}
+
+pub fn list_deleted_bank_card_ids(
+    state: &Arc<AppState>,
+    profile_id: &str,
+) -> Result<Vec<String>> {
+    with_connection(state, profile_id, |conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        let ids = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        Ok(ids)
     })
 }
 

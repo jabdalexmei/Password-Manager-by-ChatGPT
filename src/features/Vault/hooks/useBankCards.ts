@@ -8,7 +8,9 @@ import {
   listBankCardSummaries,
   listDeletedBankCardSummaries,
   purgeBankCard,
+  purgeAllDeletedBankCards,
   restoreBankCard,
+  restoreAllDeletedBankCards,
   setBankCardFavorite,
   updateBankCard,
 } from '../api/vaultApi';
@@ -315,6 +317,43 @@ export function useBankCards(profileId: string, onLocked: () => void) {
     [handleError]
   );
 
+  const restoreAllTrashAction = useCallback(async () => {
+    if (deletedCards.length === 0) return;
+    try {
+      await restoreAllDeletedBankCards();
+      setDeletedCards([]);
+      setCards((prev) =>
+        sortCardsWithSettings([
+          ...prev,
+          ...deletedCards.map((card) => ({ ...card, deletedAt: null })),
+        ])
+      );
+      setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
+    } catch (err) {
+      handleError(err);
+    }
+  }, [deletedCards, handleError, sortCardsWithSettings]);
+
+  const purgeAllTrashAction = useCallback(async () => {
+    if (deletedCards.length === 0) return;
+    try {
+      await purgeAllDeletedBankCards();
+      setDeletedCards([]);
+      setCardDetailsById((prev) => {
+        const next = { ...prev };
+        for (const card of deletedCards) {
+          delete next[card.id];
+        }
+        return next;
+      });
+      setSelectedCardId((prev) =>
+        prev && deletedCards.some((card) => card.id === prev) ? null : prev
+      );
+    } catch (err) {
+      handleError(err);
+    }
+  }, [deletedCards, handleError]);
+
   const visibleCards = useMemo(() => {
     const activeCards = cards.filter((card) => !card.deletedAt);
     const isArchived = (card: BankCardSummary) => card.tags?.includes('archived');
@@ -427,6 +466,8 @@ export function useBankCards(profileId: string, onLocked: () => void) {
     deleteCard: deleteCardAction,
     restoreCard: restoreCardAction,
     purgeCard: purgeCardAction,
+    restoreAllTrash: restoreAllTrashAction,
+    purgeAllTrash: purgeAllTrashAction,
     loadCard,
     toggleFavorite,
     settings,

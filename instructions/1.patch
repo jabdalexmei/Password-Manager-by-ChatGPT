@@ -1,350 +1,121 @@
-part 1
 
-diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
---- a/src-tauri/src/data/sqlite/repo_impl.rs
-+++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -475,7 +475,9 @@
- 
-         Ok(cards)
-     })
-+}
-+
- pub fn list_deleted_datacard_ids(
-     state: &Arc<AppState>,
-     profile_id: &str,
-@@ -497,9 +499,6 @@
- 
-         Ok(ids)
-     })
--}
--
--
- }
- 
- fn get_datacard_by_id_conn(conn: &Connection, id: &str) -> Result<DataCard> {
----------------------------------------------------------------------------------
-pert 2
 
-diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
-index 0000000..0000000 100644
---- a/src/features/Vault/hooks/useVault.ts
-+++ b/src/features/Vault/hooks/useVault.ts
-@@ -736,6 +736,8 @@ export function useVault(profileId: string, onLocked: () => void) {
-     restoreCard: restoreCardAction,
-     purgeCard: purgeCardAction,
-+    restoreAllTrash: restoreAllTrashAction,
-+    purgeAllTrash: purgeAllTrashAction,
-     moveCardToFolder: moveCardAction,
-     lock,
-     loadCard,
-diff --git a/src/features/Vault/hooks/useBankCards.ts b/src/features/Vault/hooks/useBankCards.ts
-index 0000000..0000000 100644
---- a/src/features/Vault/hooks/useBankCards.ts
-+++ b/src/features/Vault/hooks/useBankCards.ts
-@@ -521,6 +521,8 @@ export function useBankCards(profileId: string, onLocked: () => void) {
-     restoreCard: restoreCardAction,
-     purgeCard: purgeCardAction,
-+    restoreAllTrash: restoreAllTrashAction,
-+    purgeAllTrash: purgeAllTrashAction,
-     lock,
-     loadCard,
-     toggleFavorite,
---------------------------------------------------------------------------------------
-part 3
+## PATCH 1 — фикс белого фона (CSS, максимально жёстко)
 
-diff --git a/src/shared/icons/lucide/icons.ts b/src/shared/icons/lucide/icons.ts
-index 0000000..0000000 100644
---- a/src/shared/icons/lucide/icons.ts
-+++ b/src/shared/icons/lucide/icons.ts
-@@ -19,6 +19,7 @@ export {
+```diff
+diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
+index 3b5b2a1..f7a7d1c 100644
+--- a/src/shared/styles/ui.css
++++ b/src/shared/styles/ui.css
+@@ -8543,6 +8543,44 @@
+   background: var(--input-surface);
+ .  color: var(--color-text);
+   padding: 10px 12px;
+ }
  
-   SlidersHorizontal as IconFilter,
-+  MoreHorizontal as IconMoreHorizontal,
- 
-   RefreshCw as IconRegenerate,
-   History as IconHistory,
- } from "lucide-react";
-----------------------------------------------------------------------------------------
++/* ==========================================================================
++   WebView2/Chromium "Saved info" autofill highlight override (dark theme)
++   --------------------------------------------------------------------------
++   Chromium may apply a white background for autofill/suggestions and sometimes
++   uses internal pseudo-classes. Force our surface via inset box-shadow.
++   ========================================================================== */
++input:-webkit-autofill,
++input:-webkit-autofill:hover,
++input:-webkit-autofill:focus,
++textarea:-webkit-autofill,
++textarea:-webkit-autofill:hover,
++textarea:-webkit-autofill:focus,
++select:-webkit-autofill,
++select:-webkit-autofill:hover,
++select:-webkit-autofill:focus,
++input:-internal-autofill-selected,
++textarea:-internal-autofill-selected,
++select:-internal-autofill-selected {
++  -webkit-text-fill-color: var(--color-text) !important;
++  caret-color: var(--color-text) !important;
++  background-color: var(--input-surface) !important;
++  -webkit-box-shadow: 0 0 0 1000px var(--input-surface) inset !important;
++  box-shadow: 0 0 0 1000px var(--input-surface) inset !important;
++}
++
++/* Modern standard selector (supported widely since 2023) */
++input:autofill,
++textarea:autofill,
++select:autofill {
++  box-shadow: 0 0 0 1000px var(--input-surface) inset !important;
++  caret-color: var(--color-text) !important;
++}
++
+ /* Textareas - minimum height + allow resize */
+ .textarea,
+ .form-field textarea,
+ .form-textarea {
+```
 
-part 4
 
-diff --git a/src-tauri/src/commands/bank_cards.rs b/src-tauri/src/commands/bank_cards.rs
-index 28a3522..2e2dfc4 100644
---- a/src-tauri/src/commands/bank_cards.rs
-+++ b/src-tauri/src/commands/bank_cards.rs
-@@ -98,3 +98,22 @@ pub async fn purge_bank_card(id: String, state: State<'_, Arc<AppState>>) -> Res
-         .await
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
-+
-+
-+#[tauri::command]
-+pub async fn restore_all_deleted_bank_cards(state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || {
-+        bank_cards_service::restore_all_deleted_bank_cards(&app)
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn purge_all_deleted_bank_cards(state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || bank_cards_service::purge_all_deleted_bank_cards(&app))
-+        .await
-+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-diff --git a/src-tauri/src/commands/datacards.rs b/src-tauri/src/commands/datacards.rs
-index 1ea0752..9a23760 100644
---- a/src-tauri/src/commands/datacards.rs
-+++ b/src-tauri/src/commands/datacards.rs
-@@ -93,6 +93,24 @@ pub async fn purge_datacard(id: String, state: State<'_, Arc<AppState>>) -> Resu
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
+
+## PATCH 2 — убрать/сильно снизить “Saved info” на Create profile (WebView2 workaround)
+
+```diff
+diff --git a/src/features/ProfileCreate/ProfileCreate.tsx b/src/features/ProfileCreate/ProfileCreate.tsx
+index 7b9a7a1..c5d3c90 100644
+--- a/src/features/ProfileCreate/ProfileCreate.tsx
++++ b/src/features/ProfileCreate/ProfileCreate.tsx
+@@ -35,7 +35,7 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({ onCreated, onProfileCreated, onBack }) => {
  
-+
-+#[tauri::command]
-+pub async fn restore_all_deleted_datacards(state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || {
-+        datacards_service::restore_all_deleted_datacards(&app)
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn purge_all_deleted_datacards(state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || datacards_service::purge_all_deleted_datacards(&app))
-+        .await
-+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
- #[tauri::command]
- pub async fn set_datacard_favorite(
-     input: SetDataCardFavoriteInput,
-diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
-index 68e493a..13bf8d7 100644
---- a/src-tauri/src/data/sqlite/repo_impl.rs
-+++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -480,6 +480,28 @@ pub fn list_deleted_datacards_summary(
-     })
- }
+   return (
+     <div className="screen-shell">
+       <div className="screen-card profile-create-card">
+@@ -46,7 +46,7 @@ const ProfileCreate: React.FC<ProfileCreateProps> = ({ onCreated, onProfileCreated, onBack }) => {
+         </header>
  
-+
-+
-+pub fn list_deleted_datacard_ids(
-+    state: &Arc<AppState>,
-+    profile_id: &str,
-+) -> Result<Vec<String>> {
-+    with_connection(state, profile_id, |conn| {
-+        let mut stmt = conn
-+            .prepare(
-+                "SELECT id FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-+            )
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+        let ids = stmt
-+            .query_map([], |row| row.get::<_, String>(0))
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-+            .collect::<rusqlite::Result<Vec<_>>>()
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+        Ok(ids)
-+    })
-+}
- fn get_datacard_by_id_conn(conn: &Connection, id: &str) -> Result<DataCard> {
-     let mut stmt = conn
-         .prepare("SELECT * FROM datacards WHERE id = ?1")
-@@ -789,6 +811,28 @@ pub fn list_deleted_bank_cards_summary(
-     })
- }
+         {/* Full-width panel like "Select profile" (no narrow centered column) */}
+-        <form className="profile-create-form" onSubmit={handleSubmit}>
++        <form className="profile-create-form" onSubmit={handleSubmit} autoComplete="off">
+           <div className="profile-create-panel form-grid">
+             <div className="form-field">
+               <label className="form-label" htmlFor="profile-name">
+                 {t('name')}
+               </label>
+               <input
+                 id="profile-name"
++                name="profile_display_name"
++                autoComplete="off"
++                aria-autocomplete="none"
++                list="autocompleteOff"
+                 value={name}
+                 onChange={(e) => setName(e.target.value)}
+                 placeholder={t('namePlaceholder')}
+               />
++              <datalist id="autocompleteOff" />
+             </div>
  
-+
-+
-+pub fn list_deleted_bank_card_ids(
-+    state: &Arc<AppState>,
-+    profile_id: &str,
-+) -> Result<Vec<String>> {
-+    with_connection(state, profile_id, |conn| {
-+        let mut stmt = conn
-+            .prepare(
-+                "SELECT id FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-+            )
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+        let ids = stmt
-+            .query_map([], |row| row.get::<_, String>(0))
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-+            .collect::<rusqlite::Result<Vec<_>>>()
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+        Ok(ids)
-+    })
-+}
- pub fn get_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<BankCardItem> {
-     with_connection(state, profile_id, |conn| {
-         let mut stmt = conn
-diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
-index f090c47..3b2f679 100644
---- a/src-tauri/src/main.rs
-+++ b/src-tauri/src/main.rs
-@@ -128,6 +128,8 @@ fn main() {
-             delete_bank_card,
-             restore_bank_card,
-             purge_bank_card,
-+            restore_all_deleted_bank_cards,
-+            purge_all_deleted_bank_cards,
-             list_datacards,
-             list_datacards_summary_command,
-             get_datacard,
-@@ -140,6 +142,8 @@ fn main() {
-             list_deleted_datacards_summary_command,
-             restore_datacard,
-             purge_datacard,
-+            restore_all_deleted_datacards,
-+            purge_all_deleted_datacards,
-             get_datacard_password_history,
-             clear_datacard_password_history,
-             get_settings,
-diff --git a/src-tauri/src/services/bank_cards_service.rs b/src-tauri/src/services/bank_cards_service.rs
-index 4688cce..4546539 100644
---- a/src-tauri/src/services/bank_cards_service.rs
-+++ b/src-tauri/src/services/bank_cards_service.rs
-@@ -42,6 +42,36 @@ pub fn list_deleted_bank_cards_summary(state: &Arc<AppState>) -> Result<Vec<Bank
-     repo_impl::list_deleted_bank_cards_summary(state, &profile_id)
- }
+             <div className="form-field">
+               <label className="form-label" htmlFor="profile-password">
+                 {t('passwordLabel')}
+               </label>
+               <input
+                 id="profile-password"
++                name="profile_master_password"
+                 type="password"
++                autoComplete="new-password"
+                 value={password}
+                 onChange={(e) => setPassword(e.target.value)}
+                 placeholder={t('passwordPlaceholder')}
+               />
+             </div>
  
-+
-+pub fn restore_all_deleted_bank_cards(state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let ids = repo_impl::list_deleted_bank_card_ids(state, &profile_id)?;
-+    if ids.is_empty() {
-+        return Ok(true);
-+    }
-+
-+    for id in ids {
-+        repo_impl::restore_bank_card(state, &profile_id, &id)?;
-+    }
-+
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(true)
-+}
-+
-+pub fn purge_all_deleted_bank_cards(state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let ids = repo_impl::list_deleted_bank_card_ids(state, &profile_id)?;
-+    if ids.is_empty() {
-+        return Ok(true);
-+    }
-+
-+    for id in ids {
-+        purge_bank_card_internal(state, &profile_id, &id)?;
-+    }
-+
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(true)
-+}
- pub fn get_bank_card(id: String, state: &Arc<AppState>) -> Result<BankCardItem> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-     repo_impl::get_bank_card(state, &profile_id, &id)
-@@ -85,7 +115,9 @@ pub fn delete_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
-         security_service::request_persist_active_vault(state.clone());
-         Ok(true)
-     } else {
--        purge_bank_card_internal(state, &profile_id, &id)
-+        let purged = purge_bank_card_internal(state, &profile_id, &id)?;
-+        security_service::request_persist_active_vault(state.clone());
-+        Ok(purged)
-     }
- }
- 
-@@ -98,12 +130,13 @@ pub fn restore_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
- 
- pub fn purge_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
--    purge_bank_card_internal(state, &profile_id, &id)
-+    let purged = purge_bank_card_internal(state, &profile_id, &id)?;
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(purged)
- }
- 
- fn purge_bank_card_internal(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
-     let purged = repo_impl::purge_bank_card(state, profile_id, id)?;
--    security_service::request_persist_active_vault(state.clone());
-     Ok(purged)
- }
- 
-diff --git a/src-tauri/src/services/datacards_service.rs b/src-tauri/src/services/datacards_service.rs
-index 1478a77..2c42b40 100644
---- a/src-tauri/src/services/datacards_service.rs
-+++ b/src-tauri/src/services/datacards_service.rs
-@@ -131,7 +131,9 @@ pub fn delete_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
-         security_service::request_persist_active_vault(state.clone());
-         Ok(true)
-     } else {
--        purge_datacard_with_attachments(state, &profile_id, &id)
-+        let purged = purge_datacard_with_attachments(state, &profile_id, &id)?;
-+        security_service::request_persist_active_vault(state.clone());
-+        Ok(purged)
-     }
- }
- 
-@@ -145,6 +147,37 @@ pub fn list_deleted_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataC
-     repo_impl::list_deleted_datacards_summary(state, &profile_id)
- }
- 
-+
-+pub fn restore_all_deleted_datacards(state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let ids = repo_impl::list_deleted_datacard_ids(state, &profile_id)?;
-+    if ids.is_empty() {
-+        return Ok(true);
-+    }
-+
-+    for id in ids {
-+        repo_impl::restore_datacard(state, &profile_id, &id)?;
-+        repo_impl::restore_attachments_by_datacard(state, &profile_id, &id)?;
-+    }
-+
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(true)
-+}
-+
-+pub fn purge_all_deleted_datacards(state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let ids = repo_impl::list_deleted_datacard_ids(state, &profile_id)?;
-+    if ids.is_empty() {
-+        return Ok(true);
-+    }
-+
-+    for id in ids {
-+        purge_datacard_with_attachments(state, &profile_id, &id)?;
-+    }
-+
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(true)
-+}
- pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-     repo_impl::restore_datacard(state, &profile_id, &id)?;
-@@ -155,7 +188,9 @@ pub fn restore_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
- 
- pub fn purge_datacard(id: String, state: &Arc<AppState>) -> Result<bool> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
--    purge_datacard_with_attachments(state, &profile_id, &id)
-+    let purged = purge_datacard_with_attachments(state, &profile_id, &id)?;
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(purged)
- }
- 
- fn purge_datacard_with_attachments(
-@@ -177,7 +212,6 @@ fn purge_datacard_with_attachments(
-     }
- 
-     let purged = repo_impl::purge_datacard(state, profile_id, id)?;
--    security_service::request_persist_active_vault(state.clone());
-     Ok(purged)
- }
- 
+             <div className="form-field">
+               <label className="form-label" htmlFor="profile-password-confirm">
+                 {t('confirmPassword')}
+               </label>
+               <input
+                 id="profile-password-confirm"
++                name="profile_master_password_confirm"
+                 type="password"
++                autoComplete="new-password"
+                 value={confirmPassword}
+                 onChange={(e) => setConfirmPassword(e.target.value)}
+                 placeholder={t('confirmPasswordPlaceholder')}
+               />
+             </div>

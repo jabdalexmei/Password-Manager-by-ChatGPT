@@ -14,8 +14,10 @@ import {
   listFolders,
   moveDataCardToFolder,
   purgeDataCard,
+  purgeAllDeletedDataCards,
   renameFolder,
   restoreDataCard,
+  restoreAllDeletedDataCards,
   setDataCardFavorite,
   updateDataCard,
 } from '../api/vaultApi';
@@ -481,6 +483,43 @@ export function useVault(profileId: string, onLocked: () => void) {
     [handleError]
   );
 
+  const restoreAllTrashAction = useCallback(async () => {
+    if (deletedCards.length === 0) return;
+    try {
+      await restoreAllDeletedDataCards();
+      setDeletedCards([]);
+      setCards((prev) =>
+        sortCardsWithSettings([
+          ...prev,
+          ...deletedCards.map((card) => ({ ...card, deletedAt: null })),
+        ])
+      );
+      setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
+    } catch (err) {
+      handleError(err);
+    }
+  }, [deletedCards, handleError, sortCardsWithSettings]);
+
+  const purgeAllTrashAction = useCallback(async () => {
+    if (deletedCards.length === 0) return;
+    try {
+      await purgeAllDeletedDataCards();
+      setDeletedCards([]);
+      setCardDetailsById((prev) => {
+        const next = { ...prev };
+        for (const card of deletedCards) {
+          delete next[card.id];
+        }
+        return next;
+      });
+      setSelectedCardId((prev) =>
+        prev && deletedCards.some((card) => card.id === prev) ? null : prev
+      );
+    } catch (err) {
+      handleError(err);
+    }
+  }, [deletedCards, handleError]);
+
   const moveCardAction = useCallback(
     async (id: string, folderId: string | null) => {
       try {
@@ -717,6 +756,8 @@ export function useVault(profileId: string, onLocked: () => void) {
     deleteCard: deleteCardAction,
     restoreCard: restoreCardAction,
     purgeCard: purgeCardAction,
+    restoreAllTrash: restoreAllTrashAction,
+    purgeAllTrash: purgeAllTrashAction,
     moveCardToFolder: moveCardAction,
     lock,
     loadCard,
