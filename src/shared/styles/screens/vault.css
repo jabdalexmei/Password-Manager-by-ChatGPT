@@ -191,10 +191,10 @@
   background: var(--color-surface-2);
   box-shadow: var(--shadow-popover);
 
-  /* Make all filter chips the same size (like the reference screenshot) */
-  --filter-chip-width: 170px;
-  --filter-chip-pad-y: 7px;
-  --filter-chip-pad-x: 12px;
+  /* Filter chips edit size */
+  --filter-chip-width: 100px;
+  --filter-chip-pad-y: 5px;
+  --filter-chip-pad-x: 1px;
 }
 
 .vault-filter-panel__title {
