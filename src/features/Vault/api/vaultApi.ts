@@ -83,6 +83,14 @@ export async function purgeBankCard(id: string): Promise<boolean> {
   return invoke('purge_bank_card', { id });
 }
 
+export async function restoreAllDeletedBankCards(): Promise<boolean> {
+  return invoke('restore_all_deleted_bank_cards');
+}
+
+export async function purgeAllDeletedBankCards(): Promise<boolean> {
+  return invoke('purge_all_deleted_bank_cards');
+}
+
 export async function getDataCard(id: string): Promise<BackendDataCard> {
   return invoke('get_datacard', { id });
 }
@@ -113,6 +121,14 @@ export async function restoreDataCard(id: string): Promise<boolean> {
 
 export async function purgeDataCard(id: string): Promise<boolean> {
   return invoke('purge_datacard', { id });
+}
+
+export async function restoreAllDeletedDataCards(): Promise<boolean> {
+  return invoke('restore_all_deleted_datacards');
+}
+
+export async function purgeAllDeletedDataCards(): Promise<boolean> {
+  return invoke('purge_all_deleted_datacards');
 }
 
 export async function getSettings(): Promise<BackendUserSettings> {

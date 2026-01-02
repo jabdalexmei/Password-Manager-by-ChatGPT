@@ -98,3 +98,21 @@ pub async fn purge_bank_card(id: String, state: State<'_, Arc<AppState>>) -> Res
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
+
+#[tauri::command]
+pub async fn restore_all_deleted_bank_cards(state: State<'_, Arc<AppState>>) -> Result<bool> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        bank_cards_service::restore_all_deleted_bank_cards(&app)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
+pub async fn purge_all_deleted_bank_cards(state: State<'_, Arc<AppState>>) -> Result<bool> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || bank_cards_service::purge_all_deleted_bank_cards(&app))
+        .await
+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}

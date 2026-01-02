@@ -42,6 +42,36 @@ pub fn list_deleted_bank_cards_summary(state: &Arc<AppState>) -> Result<Vec<Bank
     repo_impl::list_deleted_bank_cards_summary(state, &profile_id)
 }
 
+pub fn restore_all_deleted_bank_cards(state: &Arc<AppState>) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let ids = repo_impl::list_deleted_bank_card_ids(state, &profile_id)?;
+    if ids.is_empty() {
+        return Ok(true);
+    }
+
+    for id in ids {
+        repo_impl::restore_bank_card(state, &profile_id, &id)?;
+    }
+
+    security_service::request_persist_active_vault(state.clone());
+    Ok(true)
+}
+
+pub fn purge_all_deleted_bank_cards(state: &Arc<AppState>) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let ids = repo_impl::list_deleted_bank_card_ids(state, &profile_id)?;
+    if ids.is_empty() {
+        return Ok(true);
+    }
+
+    for id in ids {
+        purge_bank_card_internal(state, &profile_id, &id)?;
+    }
+
+    security_service::request_persist_active_vault(state.clone());
+    Ok(true)
+}
+
 pub fn get_bank_card(id: String, state: &Arc<AppState>) -> Result<BankCardItem> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     repo_impl::get_bank_card(state, &profile_id, &id)
@@ -85,7 +115,9 @@ pub fn delete_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
         security_service::request_persist_active_vault(state.clone());
         Ok(true)
     } else {
-        purge_bank_card_internal(state, &profile_id, &id)
+        let purged = purge_bank_card_internal(state, &profile_id, &id)?;
+        security_service::request_persist_active_vault(state.clone());
+        Ok(purged)
     }
 }
 
@@ -98,12 +130,13 @@ pub fn restore_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
 
 pub fn purge_bank_card(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-    purge_bank_card_internal(state, &profile_id, &id)
+    let purged = purge_bank_card_internal(state, &profile_id, &id)?;
+    security_service::request_persist_active_vault(state.clone());
+    Ok(purged)
 }
 
 fn purge_bank_card_internal(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
     let purged = repo_impl::purge_bank_card(state, profile_id, id)?;
-    security_service::request_persist_active_vault(state.clone());
     Ok(purged)
 }
 

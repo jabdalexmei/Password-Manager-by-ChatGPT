@@ -21,6 +21,7 @@ export {
   Paperclip as IconAttachment,
 
   SlidersHorizontal as IconFilter,
+  MoreHorizontal as IconMoreHorizontal,
 
   RefreshCw as IconRegenerate,
   History as IconHistory,
