@@ -279,7 +279,7 @@ impl Default for UserSettings {
             clipboard_clear_timeout_seconds: default_clipboard_clear_timeout_seconds(),
             soft_delete_enabled: true,
             trash_retention_days: 30,
-            backups_enabled: false,
+            backups_enabled: true,
             auto_backup_interval_minutes: default_auto_backup_interval_minutes(),
             backup_max_copies: default_backup_max_copies(),
             backup_frequency: "weekly".to_string(),
@@ -291,7 +291,7 @@ impl Default for UserSettings {
 }
 
 fn default_auto_backup_interval_minutes() -> i64 {
-    60
+    5
 }
 
 fn default_backup_max_copies() -> i64 {

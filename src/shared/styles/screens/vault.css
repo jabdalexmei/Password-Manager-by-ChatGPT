@@ -80,6 +80,12 @@
   height: 20px;
 }
 
+.vault-action-button:focus-visible,
+.vault-header__icon-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* ===== Layout ===== */
 
 .vault-body {
@@ -137,9 +143,12 @@
 }
 
 .vault-filter-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-md);
+  /* only shape matches top buttons */
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+
+  /* keep existing colors/behavior */
   border: 1px solid var(--greycolorsecondaryborder);
   background: var(--greycolorsecondary);
   color: var(--color-text);
@@ -156,12 +165,6 @@
 
 .vault-filter-btn:active {
   transform: translateY(1px);
-}
-
-.vault-filter-btn.is-active {
-  background: var(--blueprimarycolor);
-  border-color: var(--blueprimarycolor);
-  color: var(--color-on-primary);
 }
 
 .vault-filter-btn:focus-visible {
