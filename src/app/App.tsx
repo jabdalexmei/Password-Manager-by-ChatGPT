@@ -1,13 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import LogIn from '../features/LogIn/LogIn';
-import ProfileCreate from '../features/ProfileCreate/ProfileCreate';
-import Startup from '../features/Startup/Startup';
-import Vault from '../features/Vault/Vault';
 import Workspace from '../features/Workspace/Workspace';
 import { ToasterProvider } from '../shared/components/Toaster';
 import { ProfileMeta, loginVault, setActiveProfile } from '../shared/lib/tauri';
 
 type View = 'workspace' | 'startup' | 'create' | 'login' | 'vault';
+
+const Startup = React.lazy(() => import('../features/Startup/Startup'));
+const ProfileCreate = React.lazy(() => import('../features/ProfileCreate/ProfileCreate'));
+const LogIn = React.lazy(() => import('../features/LogIn/LogIn'));
+const Vault = React.lazy(() => import('../features/Vault/Vault'));
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>('workspace');
@@ -92,7 +93,11 @@ const App: React.FC = () => {
     }
   }, [activeProfile, handleProfileCreated, openProfile, view]);
 
-  return <ToasterProvider>{content}</ToasterProvider>;
+  return (
+    <ToasterProvider>
+      <React.Suspense fallback={null}>{content}</React.Suspense>
+    </ToasterProvider>
+  );
 };
 
 export default App;

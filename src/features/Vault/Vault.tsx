@@ -12,14 +12,23 @@ import { BankCards } from './components/BankCards/BankCards';
 import { BankCardDetails } from './components/BankCards/BankCardDetails';
 import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewModel';
 import { useTranslation } from '../../shared/lib/i18n';
-import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
 import { useBankCards } from './hooks/useBankCards';
 import { useToaster } from '../../shared/components/Toaster';
 import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
-import { ExportBackupModal } from './components/modals/ExportBackupModal';
-import { ImportBackupModal } from './components/modals/ImportBackupModal';
-import { SettingsModal } from './components/modals/SettingsModal';
 import { BackendUserSettings } from './types/backend';
+
+const DeleteFolderModal = React.lazy(() =>
+  import('./components/modals/DeleteFolderModal').then((m) => ({ default: m.DeleteFolderModal }))
+);
+const ExportBackupModal = React.lazy(() =>
+  import('./components/modals/ExportBackupModal').then((m) => ({ default: m.ExportBackupModal }))
+);
+const ImportBackupModal = React.lazy(() =>
+  import('./components/modals/ImportBackupModal').then((m) => ({ default: m.ImportBackupModal }))
+);
+const SettingsModal = React.lazy(() =>
+  import('./components/modals/SettingsModal').then((m) => ({ default: m.SettingsModal }))
+);
 
 type VaultProps = {
   profileId: string;
@@ -276,32 +285,42 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
         </section>
       </div>
 
-      <DeleteFolderModal
-        open={!!pendingFolderDelete}
-        folderName={pendingFolderDelete?.name ?? ''}
-        cardsCount={pendingFolderDelete?.cardsCount ?? 0}
-        onCancel={closeDeleteModal}
-        onDeleteFolderOnly={handleDeleteFolderOnly}
-        onDeleteFolderAndCards={handleDeleteFolderAndCards}
-      />
+      <React.Suspense fallback={null}>
+        {!!pendingFolderDelete && (
+          <DeleteFolderModal
+            open={true}
+            folderName={pendingFolderDelete.name}
+            cardsCount={pendingFolderDelete.cardsCount}
+            onCancel={closeDeleteModal}
+            onDeleteFolderOnly={handleDeleteFolderOnly}
+            onDeleteFolderAndCards={handleDeleteFolderAndCards}
+          />
+        )}
 
-      <ExportBackupModal open={exportModalOpen} profileId={profileId} onClose={() => setExportModalOpen(false)} />
+        {exportModalOpen && (
+          <ExportBackupModal open={true} profileId={profileId} onClose={() => setExportModalOpen(false)} />
+        )}
 
-      <ImportBackupModal
-        open={!!pendingImportPath}
-        backupPath={pendingImportPath}
-        isSubmitting={isRestoringBackup}
-        onCancel={handleCloseImport}
-        onConfirm={handleConfirmImport}
-      />
+        {!!pendingImportPath && (
+          <ImportBackupModal
+            open={true}
+            backupPath={pendingImportPath}
+            isSubmitting={isRestoringBackup}
+            onCancel={handleCloseImport}
+            onConfirm={handleConfirmImport}
+          />
+        )}
 
-      <SettingsModal
-        open={settingsModalOpen}
-        settings={vault.settings}
-        isSaving={isSavingSettings}
-        onCancel={() => setSettingsModalOpen(false)}
-        onSave={handleSaveSettings}
-      />
+        {settingsModalOpen && (
+          <SettingsModal
+            open={true}
+            settings={vault.settings}
+            isSaving={isSavingSettings}
+            onCancel={() => setSettingsModalOpen(false)}
+            onSave={handleSaveSettings}
+          />
+        )}
+      </React.Suspense>
 
     </div>
   );

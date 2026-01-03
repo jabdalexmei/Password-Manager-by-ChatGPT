@@ -14,9 +14,14 @@ import {
   IconPreviewOff,
 } from '@/shared/icons/lucide/icons';
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
-import AttachmentPreviewModal from '../modals/AttachmentPreviewModal';
-import PasswordHistoryDialog from '../modals/PasswordHistoryDialog';
-import { SeedPhraseViewModal } from '../modals/SeedPhraseViewModal';
+
+const AttachmentPreviewModal = React.lazy(() => import('../modals/AttachmentPreviewModal'));
+const PasswordHistoryDialog = React.lazy(() =>
+  import('../modals/PasswordHistoryDialog').then((m) => ({ default: m.PasswordHistoryDialog }))
+);
+const SeedPhraseViewModal = React.lazy(() =>
+  import('../modals/SeedPhraseViewModal').then((m) => ({ default: m.SeedPhraseViewModal }))
+);
 
 export type DetailsProps = {
   card: DataCard | null;
@@ -547,33 +552,42 @@ export function Details({
       </div>
     </div>
 
-      <SeedPhraseViewModal
-        isOpen={seedPhraseViewOpen}
-        phrase={seedPhraseRaw}
-        wordCount={
-          seedPhraseWordCount === 12 || seedPhraseWordCount === 18 || seedPhraseWordCount === 24
-            ? (seedPhraseWordCount as 12 | 18 | 24)
-            : null
-        }
-        onClose={() => setSeedPhraseViewOpen(false)}
-      />
+      <React.Suspense fallback={null}>
+        {seedPhraseViewOpen && (
+          <SeedPhraseViewModal
+            isOpen={true}
+            phrase={seedPhraseRaw}
+            wordCount={
+              seedPhraseWordCount === 12 || seedPhraseWordCount === 18 || seedPhraseWordCount === 24
+                ? (seedPhraseWordCount as 12 | 18 | 24)
+                : null
+            }
+            onClose={() => setSeedPhraseViewOpen(false)}
+          />
+        )}
 
-      <AttachmentPreviewModal
-        open={detailActions.previewOpen}
-        fileName={previewTitle}
-        mime={previewMimeType}
-        objectUrl={previewObjectUrl}
-        onClose={detailActions.closePreview}
-        onDownload={previewDownloadHandler}
-        loading={detailActions.isPreviewLoading}
-      />
-      <PasswordHistoryDialog
-        isOpen={historyOpen}
-        datacardId={card.id}
-        onClose={() => setHistoryOpen(false)}
-        clipboardAutoClearEnabled={clipboardAutoClearEnabled}
-        clipboardClearTimeoutSeconds={clipboardClearTimeoutSeconds}
-      />
+        {detailActions.previewOpen && (
+          <AttachmentPreviewModal
+            open={true}
+            fileName={previewTitle}
+            mime={previewMimeType}
+            objectUrl={previewObjectUrl}
+            onClose={detailActions.closePreview}
+            onDownload={previewDownloadHandler}
+            loading={detailActions.isPreviewLoading}
+          />
+        )}
+
+        {historyOpen && (
+          <PasswordHistoryDialog
+            isOpen={true}
+            datacardId={card.id}
+            onClose={() => setHistoryOpen(false)}
+            clipboardAutoClearEnabled={clipboardAutoClearEnabled}
+            clipboardClearTimeoutSeconds={clipboardClearTimeoutSeconds}
+          />
+        )}
+      </React.Suspense>
     </>
   );
 }
