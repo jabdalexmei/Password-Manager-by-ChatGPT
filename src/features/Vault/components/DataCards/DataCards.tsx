@@ -694,7 +694,9 @@ export function DataCards({
               </div>
             )}
 
-            <div className="dialog-footer dialog-footer--split">
+            <div
+              className={`dialog-footer dialog-footer--split${isCreateDialog ? ' dialog-footer--equal-buttons' : ''}`}
+            >
               <div className="dialog-footer-left">
                 <button className="btn btn-secondary" type="button" onClick={onClose}>
                   {tCommon('action.cancel')}
