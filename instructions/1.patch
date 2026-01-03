@@ -1,34 +1,29 @@
-diff --git a/src/features/Vault/components/Header/VaultHeader.tsx b/src/features/Vault/components/Header/VaultHeader.tsx
-index a90a2b6..b1e07f3 100644
---- a/src/features/Vault/components/Header/VaultHeader.tsx
-+++ b/src/features/Vault/components/Header/VaultHeader.tsx
-@@ -56,18 +56,18 @@ export function VaultHeader({
-           title={tTip('backup.import')}
-         >
-           <IconImport />
-         </button>
-         <button
-+          className="vault-action-button"
-+          type="button"
-+          aria-label={lockLabel}
-+          title={lockLabel}
-+          onClick={onLock}
-+        >
-+          <IconLock />
-+        </button>
-+        <button
-           className="vault-action-button"
-           type="button"
-           aria-label={tTip('vault.settings')}
-           title={tTip('vault.settings')}
-           onClick={onOpenSettings}
-         >
-           <IconSettings />
-         </button>
--        <button className="vault-action-button" type="button" aria-label={lockLabel} title={lockLabel} onClick={onLock}>
--          <IconLock />
--        </button>
-       </div>
-     </header>
-   );
+diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
+index 27e2785..c3c8d9e 100644
+--- a/src/shared/styles/ui.css
++++ b/src/shared/styles/ui.css
+@@ -831,6 +831,20 @@
+   overflow-y: auto;
  }
+ 
+ /* Dialog footer (buttons row) */
+ .dialog-footer {
+   padding: 14px 18px;
+   display: flex;
+   justify-content: flex-end;
+   gap: 10px;
+ }
++
++/* When footer is placed INSIDE .dialog-body (like DataCard create/edit form),
++   don't double-apply horizontal padding. Keep the same left/right line as fields. */
++.dialog-body .dialog-footer {
++  padding-left: 0;
++  padding-right: 0;
++  width: 100%;
++}
+ 
+ /* Dialog footer: keep Cancel on the left, actions on the right */
+ .dialog-footer > .btn.btn-secondary:first-child {
+   margin-right: auto;
+ }
+
