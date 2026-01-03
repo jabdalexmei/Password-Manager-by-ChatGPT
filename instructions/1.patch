@@ -1,13 +1,34 @@
-diff --git a/package.json b/package.json
---- a/package.json
-+++ b/package.json
-@@ -6,10 +6,11 @@
-   "scripts": {
-     "dev": "vite",
-     "build": "vite build",
--    "tauri": "tauri dev",
-     "tauri:dev": "tauri dev",
-+    "tauri:build": "tauri build",
-     "theme:check": "node scripts/check-theme-colors.mjs",
-     "icons:check": "node scripts/check-no-inline-svg.mjs"
-   },
+diff --git a/src-tauri/src/data/profiles/paths.rs b/src-tauri/src/data/profiles/paths.rs
+index c0aa8e9..6aa1f76 100644
+--- a/src-tauri/src/data/profiles/paths.rs
++++ b/src-tauri/src/data/profiles/paths.rs
+@@ -37,6 +37,16 @@ pub fn attachment_file_path(
+         .join(format!("{attachment_id}.bin")))
+ }
+ 
++/// Root directory for cached attachment previews (used by attachments_service cleanup).
++///
++/// NOTE: This path is also created in `ensure_profile_dirs`.
++pub fn attachments_preview_root(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
++    Ok(profile_dir(sp, profile_id)?
++        .join("tmp")
++        .join("attachments"))
++}
++
+ pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
+     Ok(profile_dir(sp, profile_id)?.join("user_settings.json"))
+ }
+diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
+index 1c7a6c1..9a4f2dd 100644
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -4,9 +4,7 @@ use std::path::PathBuf;
+ use uuid::Uuid;
+ 
+ use crate::data::profiles::paths::{
+-    ensure_profiles_dir, kdf_salt_path, profile_config_path, registry_path,
++    ensure_profiles_dir, profile_config_path, registry_path,
+ };
+ use crate::data::storage_paths::StoragePaths;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::types::ProfileMeta;
