@@ -1,35 +1,23 @@
 diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json
-index 6b21c1d..1c0c8a9 100644
+index 1c0c8a9..9a5b7f1 100644
 --- a/src-tauri/tauri.conf.json
 +++ b/src-tauri/tauri.conf.json
-@@ -1,22 +1,35 @@
- {
-   "productName": "Password Manager",
-   "version": "0.1.0",
-   "identifier": "PasswordManager",
-   "build": {
-     "beforeDevCommand": "npm run dev",
-     "beforeBuildCommand": "npm run build",
-     "frontendDist": "../dist",
-     "devUrl": "http://localhost:5173"
-   },
-   "app": {
-     "windows": [
-       {
-         "title": "Password Manager",
-         "width": 1200,
-         "height": 900
-       }
-     ]
-+  },
-+  "bundle": {
-+    "active": true,
-+    "icon": [
-+      "icons/32x32.png",
-+      "icons/128x128.png",
-+      "icons/128x128@2x.png",
-+      "icons/icon.icns",
-+      "icons/icon.ico"
-+    ]
+@@ -27,6 +27,18 @@
+   "bundle": {
+     "active": true,
+     "icon": [
+       "icons/32x32.png",
+       "icons/128x128.png",
+       "icons/128x128@2x.png",
+       "icons/icon.icns",
+       "icons/icon.ico"
+-    ]
++    ],
++    "windows": {
++      "webviewInstallMode": {
++        "type": "fixedRuntime",
++        "path": "./webview2-fixed/Microsoft.WebView2.FixedVersionRuntime.143.0.3650.96.x64/"
++      }
++    }
    }
  }
