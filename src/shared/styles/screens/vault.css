@@ -399,6 +399,22 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  /* Keep consistent header height across All/Archive/Deleted (prevents "Empty" Y shift) */
+  min-height: 32px;
+}
+
+.datacards-header__right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  /* Reserve space for the actions button even when it isn't shown */
+  width: 32px;
+  flex: 0 0 32px;
+}
+
+.datacards-header__spacer {
+  width: 24px;
+  height: 24px;
 }
 
 .datacards-actions {
@@ -422,6 +438,7 @@
   padding: 0 6px !important;
   height: 24px;
   border-radius: 10px;
+  margin: 0;
 }
 
 .vault-actionbar:hover {

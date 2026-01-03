@@ -1,259 +1,40 @@
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index e1c2b35..f6a6d5a 100644
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -708,42 +708,52 @@ export function DataCards({
-   return (
-     <div className="vault-panel-wrapper">
-       <div className="datacards-header">
-         <div className="vault-section-header">{sectionTitle}</div>
+diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
+index 0d6d3c7..8b9b3a2 100644
+--- a/src/features/Vault/components/modals/SettingsModal.tsx
++++ b/src/features/Vault/components/modals/SettingsModal.tsx
+@@ -170,7 +170,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
+               <span className="form-label settings-subheader" id="auto-lock-enabled-label">
+                 Enable auto-lock
+               </span>
  
--        {viewModel.isTrashMode && (
--          <div className="datacards-actions">
--            <button
--              className="btn btn-icon vault-actionbar"
--              type="button"
--              aria-label={t('trash.actions')}
--              aria-haspopup="menu"
--              aria-expanded={isTrashActionsOpen}
--              onClick={() => setIsTrashActionsOpen((prev) => !prev)}
--            >
--              <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
--            </button>
--
--            {isTrashActionsOpen && (
--              <>
--                <div
--                  className="vault-actionmenu-backdrop"
--                  onClick={() => setIsTrashActionsOpen(false)}
--                />
--                <div className="vault-actionmenu-panel" role="menu">
--                  <button
--                    className="vault-actionmenu-item"
--                    type="button"
--                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
--                    onClick={async () => {
--                      setIsTrashActionsOpen(false);
--                      await viewModel.restoreAllTrash();
--                    }}
--                  >
--                    {t('trash.restoreAll')}
--                  </button>
--
--                  <button
--                    className="vault-actionmenu-item vault-actionmenu-danger"
--                    type="button"
--                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
--                    onClick={async () => {
--                      setIsTrashActionsOpen(false);
--                      await viewModel.purgeAllTrash();
--                    }}
--                  >
--                    {t('trash.removeAll')}
--                  </button>
--                </div>
--              </>
--            )}
--          </div>
--        )}
-+        <div className="datacards-header__right">
-+          {viewModel.isTrashMode ? (
-+            <div className="datacards-actions">
-+              <button
-+                className="btn btn-icon vault-actionbar"
-+                type="button"
-+                aria-label={t('trash.actions')}
-+                aria-haspopup="menu"
-+                aria-expanded={isTrashActionsOpen}
-+                onClick={() => setIsTrashActionsOpen((prev) => !prev)}
-+              >
-+                <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
-+              </button>
-+
-+              {isTrashActionsOpen && (
-+                <>
-+                  <div
-+                    className="vault-actionmenu-backdrop"
-+                    onClick={() => setIsTrashActionsOpen(false)}
-+                  />
-+                  <div className="vault-actionmenu-panel" role="menu">
-+                    <button
-+                      className="vault-actionmenu-item"
-+                      type="button"
-+                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
-+                      onClick={async () => {
-+                        setIsTrashActionsOpen(false);
-+                        await viewModel.restoreAllTrash();
-+                      }}
-+                    >
-+                      {t('trash.restoreAll')}
-+                    </button>
-+
-+                    <button
-+                      className="vault-actionmenu-item vault-actionmenu-danger"
-+                      type="button"
-+                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
-+                      onClick={async () => {
-+                        setIsTrashActionsOpen(false);
-+                        await viewModel.purgeAllTrash();
-+                      }}
-+                    >
-+                      {t('trash.removeAll')}
-+                    </button>
-+                  </div>
-+                </>
-+              )}
-+            </div>
-+          ) : (
-+            <div className="datacards-header__spacer" aria-hidden="true" />
-+          )}
-+        </div>
-       </div>
-
-diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
-index 2f1f4aa..a0f9b72 100644
---- a/src/features/Vault/components/BankCards/BankCards.tsx
-+++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -166,42 +166,52 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-   return (
-     <div className="vault-panel-wrapper">
-       <div className="datacards-header">
-         <div className="vault-section-header">{sectionTitle}</div>
+-              <div style={{ display: 'flex', justifyContent: 'center' }}>
++              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                 <button
+                   id="auto-lock-enabled-switch"
+                   type="button"
+                   role="switch"
+                   aria-checked={autoLockEnabled}
+@@ -243,7 +243,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
+               <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
+                 Enable clipboard auto-clear
+               </span>
  
--        {isTrashMode && (
--          <div className="datacards-actions">
--            <button
--              className="btn btn-icon vault-actionbar"
--              type="button"
--              aria-label={t('trash.actions')}
--              aria-haspopup="menu"
--              aria-expanded={isTrashActionsOpen}
--              onClick={() => setIsTrashActionsOpen((prev) => !prev)}
--            >
--              <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
--            </button>
--
--            {isTrashActionsOpen && (
--              <>
--                <div
--                  className="vault-actionmenu-backdrop"
--                  onClick={() => setIsTrashActionsOpen(false)}
--                />
--                <div className="vault-actionmenu-panel" role="menu">
--                  <button
--                    className="vault-actionmenu-item"
--                    type="button"
--                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
--                    onClick={async () => {
--                      setIsTrashActionsOpen(false);
--                      await viewModel.restoreAllTrash();
--                    }}
--                  >
--                    {t('trash.restoreAll')}
--                  </button>
--
--                  <button
--                    className="vault-actionmenu-item vault-actionmenu-danger"
--                    type="button"
--                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
--                    onClick={async () => {
--                      setIsTrashActionsOpen(false);
--                      await viewModel.purgeAllTrash();
--                    }}
--                  >
--                    {t('trash.removeAll')}
--                  </button>
--                </div>
--              </>
--            )}
--          </div>
--        )}
-+        <div className="datacards-header__right">
-+          {isTrashMode ? (
-+            <div className="datacards-actions">
-+              <button
-+                className="btn btn-icon vault-actionbar"
-+                type="button"
-+                aria-label={t('trash.actions')}
-+                aria-haspopup="menu"
-+                aria-expanded={isTrashActionsOpen}
-+                onClick={() => setIsTrashActionsOpen((prev) => !prev)}
-+              >
-+                <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
-+              </button>
-+
-+              {isTrashActionsOpen && (
-+                <>
-+                  <div
-+                    className="vault-actionmenu-backdrop"
-+                    onClick={() => setIsTrashActionsOpen(false)}
-+                  />
-+                  <div className="vault-actionmenu-panel" role="menu">
-+                    <button
-+                      className="vault-actionmenu-item"
-+                      type="button"
-+                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
-+                      onClick={async () => {
-+                        setIsTrashActionsOpen(false);
-+                        await viewModel.restoreAllTrash();
-+                      }}
-+                    >
-+                      {t('trash.restoreAll')}
-+                    </button>
-+
-+                    <button
-+                      className="vault-actionmenu-item vault-actionmenu-danger"
-+                      type="button"
-+                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
-+                      onClick={async () => {
-+                        setIsTrashActionsOpen(false);
-+                        await viewModel.purgeAllTrash();
-+                      }}
-+                    >
-+                      {t('trash.removeAll')}
-+                    </button>
-+                  </div>
-+                </>
-+              )}
-+            </div>
-+          ) : (
-+            <div className="datacards-header__spacer" aria-hidden="true" />
-+          )}
-+        </div>
-       </div>
-
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index e2c0f9c..c2bb1e4 100644
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -250,6 +250,22 @@
- .datacards-header {
-   display: flex;
-   align-items: center;
-   justify-content: space-between;
-+  /* Keep consistent header height across All/Archive/Deleted (prevents "Empty" Y shift) */
-+  min-height: 32px;
- }
+-              <div style={{ display: 'flex', justifyContent: 'center' }}>
++              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                 <button
+                   id="clipboard-auto-clear-enabled-switch"
+                   type="button"
+                   role="switch"
+                   aria-checked={clipboardAutoClearEnabled}
+@@ -321,7 +321,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
+               <span className="form-label settings-subheader" id="backup-auto-enabled-label">
+                 Auto backup enabled
+               </span>
  
-+.datacards-header__right {
-+  display: flex;
-+  align-items: center;
-+  justify-content: flex-end;
-+  /* Reserve space for the actions button even when it isn't shown */
-+  width: 32px;
-+  flex: 0 0 32px;
-+}
-+
-+.datacards-header__spacer {
-+  width: 24px;
-+  height: 24px;
-+}
-+
- .vault-actionbar {
-   background: transparent !important;
-   border: 0 !important;
-   padding: 0 6px !important;
-   height: 24px;
-   border-radius: 10px;
-+  margin: 0;
- }
+-              <div style={{ display: 'flex', justifyContent: 'center' }}>
++              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                 <button
+                   id="backup-auto-enabled-switch"
+                   type="button"
+                   role="switch"
+                   aria-checked={autoBackupEnabled}

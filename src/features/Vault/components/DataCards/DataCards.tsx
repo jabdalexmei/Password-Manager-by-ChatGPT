@@ -718,54 +718,58 @@ export function DataCards({
       <div className="datacards-header">
         <div className="vault-section-header">{sectionTitle}</div>
 
-        {viewModel.isTrashMode && (
-          <div className="datacards-actions">
-            <button
-              className="btn btn-icon vault-actionbar"
-              type="button"
-              aria-label={t('trash.actions')}
-              aria-haspopup="menu"
-              aria-expanded={isTrashActionsOpen}
-              onClick={() => setIsTrashActionsOpen((prev) => !prev)}
-            >
-              <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
-            </button>
+        <div className="datacards-header__right">
+          {viewModel.isTrashMode ? (
+            <div className="datacards-actions">
+              <button
+                className="btn btn-icon vault-actionbar"
+                type="button"
+                aria-label={t('trash.actions')}
+                aria-haspopup="menu"
+                aria-expanded={isTrashActionsOpen}
+                onClick={() => setIsTrashActionsOpen((prev) => !prev)}
+              >
+                <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
+              </button>
 
-            {isTrashActionsOpen && (
-              <>
-                <div
-                  className="vault-actionmenu-backdrop"
-                  onClick={() => setIsTrashActionsOpen(false)}
-                />
-                <div className="vault-actionmenu-panel" role="menu">
-                  <button
-                    className="vault-actionmenu-item"
-                    type="button"
-                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
-                    onClick={async () => {
-                      setIsTrashActionsOpen(false);
-                      await viewModel.restoreAllTrash();
-                    }}
-                  >
-                    {t('trash.restoreAll')}
-                  </button>
+              {isTrashActionsOpen && (
+                <>
+                  <div
+                    className="vault-actionmenu-backdrop"
+                    onClick={() => setIsTrashActionsOpen(false)}
+                  />
+                  <div className="vault-actionmenu-panel" role="menu">
+                    <button
+                      className="vault-actionmenu-item"
+                      type="button"
+                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+                      onClick={async () => {
+                        setIsTrashActionsOpen(false);
+                        await viewModel.restoreAllTrash();
+                      }}
+                    >
+                      {t('trash.restoreAll')}
+                    </button>
 
-                  <button
-                    className="vault-actionmenu-item vault-actionmenu-danger"
-                    type="button"
-                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
-                    onClick={async () => {
-                      setIsTrashActionsOpen(false);
-                      await viewModel.purgeAllTrash();
-                    }}
-                  >
-                    {t('trash.removeAll')}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                    <button
+                      className="vault-actionmenu-item vault-actionmenu-danger"
+                      type="button"
+                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+                      onClick={async () => {
+                        setIsTrashActionsOpen(false);
+                        await viewModel.purgeAllTrash();
+                      }}
+                    >
+                      {t('trash.removeAll')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="datacards-header__spacer" aria-hidden="true" />
+          )}
+        </div>
       </div>
 
       {cards.length === 0 ? (
