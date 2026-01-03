@@ -41,21 +41,6 @@ pub fn attachment_file_path(
         .join(format!("{attachment_id}.bin")))
 }
 
-pub fn attachments_preview_root(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
-    Ok(profile_dir(sp, profile_id)?.join("tmp").join("attachments"))
-}
-
-pub fn attachment_preview_path(
-    sp: &StoragePaths,
-    profile_id: &str,
-    attachment_id: &str,
-    file_name: &str,
-) -> Result<PathBuf> {
-    Ok(attachments_preview_root(sp, profile_id)?
-        .join(attachment_id)
-        .join(file_name))
-}
-
 pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
     Ok(profile_dir(sp, profile_id)?.join("user_settings.json"))
 }

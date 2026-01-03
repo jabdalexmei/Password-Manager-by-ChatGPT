@@ -3,15 +3,12 @@ use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::data::crypto::kdf::derive_master_key;
-use crate::data::crypto::key_check;
 use crate::data::profiles::paths::{
     ensure_profiles_dir, kdf_salt_path, profile_config_path, registry_path,
 };
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::ProfileMeta;
-use zeroize::Zeroizing;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProfileRecord {
@@ -207,19 +204,4 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
 pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>> {
     let registry = load_registry(sp)?;
     Ok(registry.profiles.into_iter().find(|p| p.id == id))
-}
-
-pub fn verify_profile_password(sp: &StoragePaths, id: &str, password: &str) -> Result<bool> {
-    let record = get_profile(sp, id)?.ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
-    if !record.has_password {
-        return Ok(true);
-    }
-
-    let salt_path = kdf_salt_path(sp, id)?;
-    if !salt_path.exists() {
-        return Err(ErrorCodeString::new("KDF_SALT_MISSING"));
-    }
-    let salt = fs::read(&salt_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
-    let key = Zeroizing::new(derive_master_key(password, &salt)?);
-    key_check::verify_key_check_file(sp, id, &key)
 }

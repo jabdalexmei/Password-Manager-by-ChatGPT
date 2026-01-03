@@ -2,8 +2,6 @@ use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use rand::rngs::OsRng;
 use rand::RngCore;
-use zeroize::Zeroizing;
-
 use crate::data::fs::atomic_write::write_atomic;
 use crate::error::{ErrorCodeString, Result};
 
@@ -133,8 +131,4 @@ pub fn encrypt_key_check(
 pub fn decrypt_key_check(profile_id: &str, key: &[u8; KEY_LEN], blob: &[u8]) -> Result<Vec<u8>> {
     let aad = format!("key_check:{}", profile_id);
     decrypt_bytes(key, aad.as_bytes(), blob)
-}
-
-pub fn zeroize_key(key: &[u8; KEY_LEN]) -> Zeroizing<[u8; KEY_LEN]> {
-    Zeroizing::new(*key)
 }

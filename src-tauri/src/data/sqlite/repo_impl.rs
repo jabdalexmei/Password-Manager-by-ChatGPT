@@ -726,22 +726,6 @@ pub fn soft_delete_datacards_in_folder(
         Ok(true)
     })
 }
-
-pub fn restore_datacards_in_folder(
-    state: &Arc<AppState>,
-    profile_id: &str,
-    folder_id: &str,
-) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
-        conn.execute(
-            "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE folder_id = ?2",
-            params![Utc::now().to_rfc3339(), folder_id],
-        )
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-        Ok(true)
-    })
-}
-
 pub fn purge_datacards_in_folder(
     state: &Arc<AppState>,
     profile_id: &str,
