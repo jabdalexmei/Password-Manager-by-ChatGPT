@@ -1,34 +1,503 @@
-diff --git a/src-tauri/src/data/profiles/paths.rs b/src-tauri/src/data/profiles/paths.rs
-index c0aa8e9..6aa1f76 100644
---- a/src-tauri/src/data/profiles/paths.rs
-+++ b/src-tauri/src/data/profiles/paths.rs
-@@ -37,6 +37,16 @@ pub fn attachment_file_path(
-         .join(format!("{attachment_id}.bin")))
- }
+
+
+## PATCH 1 — Ленивая загрузка крупных экранов (App)
+
+```diff
+diff --git a/src/app/App.tsx b/src/app/App.tsx
+index 7f7a1a2..d2c5d0f 100644
+--- a/src/app/App.tsx
++++ b/src/app/App.tsx
+@@ -1,10 +1,14 @@
+ import React, { useCallback, useMemo, useState } from 'react';
+-import LogIn from '../features/LogIn/LogIn';
+-import ProfileCreate from '../features/ProfileCreate/ProfileCreate';
+-import Startup from '../features/Startup/Startup';
+-import Vault from '../features/Vault/Vault';
+ import Workspace from '../features/Workspace/Workspace';
+ import { ToasterProvider } from '../shared/components/Toaster';
+ import { ProfileMeta, loginVault, setActiveProfile } from '../shared/lib/tauri';
  
-+/// Root directory for cached attachment previews (used by attachments_service cleanup).
-+///
-+/// NOTE: This path is also created in `ensure_profile_dirs`.
-+pub fn attachments_preview_root(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
-+    Ok(profile_dir(sp, profile_id)?
-+        .join("tmp")
-+        .join("attachments"))
-+}
+ type View = 'workspace' | 'startup' | 'create' | 'login' | 'vault';
+ 
++const Startup = React.lazy(() => import('../features/Startup/Startup'));
++const ProfileCreate = React.lazy(() => import('../features/ProfileCreate/ProfileCreate'));
++const LogIn = React.lazy(() => import('../features/LogIn/LogIn'));
++const Vault = React.lazy(() => import('../features/Vault/Vault'));
 +
- pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
-     Ok(profile_dir(sp, profile_id)?.join("user_settings.json"))
- }
-diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
-index 1c7a6c1..9a4f2dd 100644
---- a/src-tauri/src/data/profiles/registry.rs
-+++ b/src-tauri/src/data/profiles/registry.rs
-@@ -4,9 +4,7 @@ use std::path::PathBuf;
- use uuid::Uuid;
+ const App: React.FC = () => {
+   const [view, setView] = useState<View>('workspace');
+   const [activeProfile, setProfile] = useState<ProfileMeta | null>(null);
+@@ -98,7 +102,13 @@ const App: React.FC = () => {
+   }, [activeProfile, handleProfileCreated, openProfile, view]);
  
- use crate::data::profiles::paths::{
--    ensure_profiles_dir, kdf_salt_path, profile_config_path, registry_path,
-+    ensure_profiles_dir, profile_config_path, registry_path,
+-  return <ToasterProvider>{content}</ToasterProvider>;
++  return (
++    <ToasterProvider>
++      <React.Suspense fallback={null}>
++        {content}
++      </React.Suspense>
++    </ToasterProvider>
++  );
  };
- use crate::data::storage_paths::StoragePaths;
- use crate::error::{ErrorCodeString, Result};
- use crate::types::ProfileMeta;
+ 
+ export default App;
+```
+
+Почему так: `React.lazy(() => import(...))` создаёт отдельный чанк; пока он грузится — `Suspense`.
+
+---
+
+## PATCH 2 — Ленивая загрузка модалок Vault (Settings/Import/Export/Delete)
+
+```diff
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+index 5c8d8b1..d66e8e9 100644
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -1,4 +1,4 @@
+-import React, { useCallback, useEffect, useMemo, useState } from 'react';
++import React, { useCallback, useEffect, useMemo, useState } from 'react';
+ import { open } from '@tauri-apps/plugin-dialog';
+ import { useVault } from './hooks/useVault';
+ import { VaultHeader } from './components/Header/VaultHeader';
+@@ -12,15 +12,25 @@ import { BankCards } from './components/BankCards/BankCards';
+ import { BankCardDetails } from './components/BankCards/BankCardDetails';
+ import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewModel';
+ import { useTranslation } from '../../shared/lib/i18n';
+-import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
+ import { useBankCards } from './hooks/useBankCards';
+ import { useToaster } from '../../shared/components/Toaster';
+ import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
+-import { ExportBackupModal } from './components/modals/ExportBackupModal';
+-import { ImportBackupModal } from './components/modals/ImportBackupModal';
+-import { SettingsModal } from './components/modals/SettingsModal';
+ import { BackendUserSettings } from './types/backend';
+ 
++const DeleteFolderModal = React.lazy(() =>
++  import('./components/modals/DeleteFolderModal').then((m) => ({ default: m.DeleteFolderModal }))
++);
++const ExportBackupModal = React.lazy(() =>
++  import('./components/modals/ExportBackupModal').then((m) => ({ default: m.ExportBackupModal }))
++);
++const ImportBackupModal = React.lazy(() =>
++  import('./components/modals/ImportBackupModal').then((m) => ({ default: m.ImportBackupModal }))
++);
++const SettingsModal = React.lazy(() =>
++  import('./components/modals/SettingsModal').then((m) => ({ default: m.SettingsModal }))
++);
++
+ type VaultProps = {
+   profileId: string;
+   profileName: string;
+@@ -229,34 +239,44 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked }
+         </section>
+       </div>
+ 
+-      <DeleteFolderModal
+-        open={!!pendingFolderDelete}
+-        folderName={pendingFolderDelete?.name ?? ''}
+-        cardsCount={pendingFolderDelete?.cardsCount ?? 0}
+-        onCancel={closeDeleteModal}
+-        onDeleteFolderOnly={handleDeleteFolderOnly}
+-        onDeleteFolderAndCards={handleDeleteFolderAndCards}
+-      />
+-
+-      <ExportBackupModal open={exportModalOpen} profileId={profileId} onClose={() => setExportModalOpen(false)} />
+-
+-      <ImportBackupModal
+-        open={!!pendingImportPath}
+-        backupPath={pendingImportPath}
+-        isSubmitting={isRestoringBackup}
+-        onCancel={handleCloseImport}
+-        onConfirm={handleConfirmImport}
+-      />
+-
+-      <SettingsModal
+-        open={settingsModalOpen}
+-        settings={vault.settings}
+-        isSaving={isSavingSettings}
+-        onCancel={() => setSettingsModalOpen(false)}
+-        onSave={handleSaveSettings}
+-      />
++      <React.Suspense fallback={null}>
++        {!!pendingFolderDelete && (
++          <DeleteFolderModal
++            open={true}
++            folderName={pendingFolderDelete.name}
++            cardsCount={pendingFolderDelete.cardsCount}
++            onCancel={closeDeleteModal}
++            onDeleteFolderOnly={handleDeleteFolderOnly}
++            onDeleteFolderAndCards={handleDeleteFolderAndCards}
++          />
++        )}
++
++        {exportModalOpen && (
++          <ExportBackupModal open={true} profileId={profileId} onClose={() => setExportModalOpen(false)} />
++        )}
++
++        {!!pendingImportPath && (
++          <ImportBackupModal
++            open={true}
++            backupPath={pendingImportPath}
++            isSubmitting={isRestoringBackup}
++            onCancel={handleCloseImport}
++            onConfirm={handleConfirmImport}
++          />
++        )}
++
++        {settingsModalOpen && (
++          <SettingsModal
++            open={true}
++            settings={vault.settings}
++            isSaving={isSavingSettings}
++            onCancel={() => setSettingsModalOpen(false)}
++            onSave={handleSaveSettings}
++          />
++        )}
++      </React.Suspense>
+ 
+     </div>
+   );
+ }
+```
+
+Смысл: **пока модалка закрыта — код модалки и её зависимости вообще не в памяти/чанке старта**. Это прямое code splitting.
+
+---
+
+## PATCH 3 — DataCards: вынести тяжёлые модалки (особенно 2FA с @zxing/browser)
+
+```diff
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 1c4a9f7..b6c0c3a 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -9,11 +9,8 @@ import {
+   IconMoreHorizontal,
+ } from '@/shared/icons/lucide/icons';
+-import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
+ import { CustomFieldModal } from '../modals/CustomFieldModal';
+ import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
+-import { Add2FAModal } from '../modals/Add2FAModal';
+-import { SeedPhraseModal } from '../modals/SeedPhraseModal';
+ import { useToaster } from '../../../../shared/components/Toaster';
+ import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
+ import { generateTotpCode } from '../../utils/totp';
+@@ -16,6 +13,18 @@ import { DataCardFormState, DataCardsViewModel } from './useDataCards';
+ import { open } from '@tauri-apps/plugin-dialog';
+ import { clipboardClearAll } from '../../../../shared/lib/tauri';
+ 
++const PasswordGeneratorModal = React.lazy(() =>
++  import('../modals/PasswordGeneratorModal').then((m) => ({ default: m.PasswordGeneratorModal }))
++);
++const Add2FAModal = React.lazy(() =>
++  import('../modals/Add2FAModal').then((m) => ({ default: m.Add2FAModal }))
++);
++const SeedPhraseModal = React.lazy(() =>
++  import('../modals/SeedPhraseModal').then((m) => ({ default: m.SeedPhraseModal }))
++);
++
+ export type DataCardsProps = {
+   viewModel: DataCardsViewModel;
+   sectionTitle: string;
+@@ -905,62 +914,70 @@ export function DataCards({
+         }}
+       />
+ 
+-      <PasswordGeneratorModal
+-        isOpen={isGeneratorOpen}
+-        generatedPassword={generatedPassword}
+-        charsetSize={charsetSize}
+-        options={generatorOptions}
+-        onChangeOptions={setGeneratorOptions}
+-        onClose={closeGenerator}
+-        onUse={handleUseGeneratedPassword}
+-        onRegenerate={() => regeneratePassword(generatorOptions)}
+-        onCopy={handleCopyGeneratedPassword}
+-      />
+-
+-      <Add2FAModal
+-        isOpen={is2faModalOpen}
+-        existingUri={
+-          twoFactorTargetDialogId === 'datacard-create-dialog'
+-            ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
+-            : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
+-        }
+-        defaults={{
+-          issuer:
+-            twoFactorTargetDialogId === 'datacard-create-dialog'
+-              ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
+-              : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
+-          label:
+-            twoFactorTargetDialogId === 'datacard-create-dialog'
+-              ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
+-              : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
+-        }}
+-        onCancel={() => {
+-          setIs2faModalOpen(false);
+-          setTwoFactorTargetDialogId(null);
+-        }}
+-        onSave={(uri) => {
+-          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+-            viewModel.updateCreateField('totpUri', uri);
+-          } else {
+-            viewModel.updateEditField('totpUri', uri);
+-          }
+-          setIs2faModalOpen(false);
+-          setTwoFactorTargetDialogId(null);
+-        }}
+-        onRemove={() => {
+-          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+-            viewModel.updateCreateField('totpUri', '');
+-          } else {
+-            viewModel.updateEditField('totpUri', '');
+-          }
+-          setIs2faModalOpen(false);
+-          setTwoFactorTargetDialogId(null);
+-        }}
+-      />
+-
+-      <SeedPhraseModal
+-        isOpen={isSeedPhraseModalOpen}
+-        existingPhrase={
+-          seedPhraseTargetDialogId === 'datacard-create-dialog'
+-            ? (viewModel.createForm.seedPhrase.trim() ? viewModel.createForm.seedPhrase : null)
+-            : (viewModel.editForm?.seedPhrase?.trim() ? viewModel.editForm.seedPhrase : null)
+-        }
+-        onCancel={() => {
+-          setIsSeedPhraseModalOpen(false);
+-          setSeedPhraseTargetDialogId(null);
+-        }}
+-        onSave={(words, wordCount) => {
+-          const phrase = words.join(' ').trim();
+-          if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
+-            viewModel.setCreateSeedPhrase(phrase, wordCount);
+-          } else {
+-            viewModel.setEditSeedPhrase(phrase, wordCount);
+-          }
+-          setIsSeedPhraseModalOpen(false);
+-          setSeedPhraseTargetDialogId(null);
+-        }}
+-      />
++      <React.Suspense fallback={null}>
++        {isGeneratorOpen && (
++          <PasswordGeneratorModal
++            isOpen={true}
++            generatedPassword={generatedPassword}
++            charsetSize={charsetSize}
++            options={generatorOptions}
++            onChangeOptions={setGeneratorOptions}
++            onClose={closeGenerator}
++            onUse={handleUseGeneratedPassword}
++            onRegenerate={() => regeneratePassword(generatorOptions)}
++            onCopy={handleCopyGeneratedPassword}
++          />
++        )}
++
++        {is2faModalOpen && (
++          <Add2FAModal
++            isOpen={true}
++            existingUri={
++              twoFactorTargetDialogId === 'datacard-create-dialog'
++                ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
++                : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
++            }
++            defaults={{
++              issuer:
++                twoFactorTargetDialogId === 'datacard-create-dialog'
++                  ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
++                  : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
++              label:
++                twoFactorTargetDialogId === 'datacard-create-dialog'
++                  ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
++                  : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
++            }}
++            onCancel={() => {
++              setIs2faModalOpen(false);
++              setTwoFactorTargetDialogId(null);
++            }}
++            onSave={(uri) => {
++              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
++                viewModel.updateCreateField('totpUri', uri);
++              } else {
++                viewModel.updateEditField('totpUri', uri);
++              }
++              setIs2faModalOpen(false);
++              setTwoFactorTargetDialogId(null);
++            }}
++            onRemove={() => {
++              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
++                viewModel.updateCreateField('totpUri', '');
++              } else {
++                viewModel.updateEditField('totpUri', '');
++              }
++              setIs2faModalOpen(false);
++              setTwoFactorTargetDialogId(null);
++            }}
++          />
++        )}
++
++        {isSeedPhraseModalOpen && (
++          <SeedPhraseModal
++            isOpen={true}
++            existingPhrase={
++              seedPhraseTargetDialogId === 'datacard-create-dialog'
++                ? (viewModel.createForm.seedPhrase.trim() ? viewModel.createForm.seedPhrase : null)
++                : (viewModel.editForm?.seedPhrase?.trim() ? viewModel.editForm.seedPhrase : null)
++            }
++            onCancel={() => {
++              setIsSeedPhraseModalOpen(false);
++              setSeedPhraseTargetDialogId(null);
++            }}
++            onSave={(words, wordCount) => {
++              const phrase = words.join(' ').trim();
++              if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
++                viewModel.setCreateSeedPhrase(phrase, wordCount);
++              } else {
++                viewModel.setEditSeedPhrase(phrase, wordCount);
++              }
++              setIsSeedPhraseModalOpen(false);
++              setSeedPhraseTargetDialogId(null);
++            }}
++          />
++        )}
++      </React.Suspense>
+     </div>
+   );
+ }
+```
+
+Это самый жирный выигрыш: `@zxing/browser` (QR сканер) больше не тащится в стартовый бандл, пока юзер не открыл 2FA модалку. Это и есть “правильное” разбиение через dynamic import.
+
+---
+
+## PATCH 4 — Details: lazy preview/history/seed view
+
+```diff
+diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
+index 3ac2e67..bc5de51 100644
+--- a/src/features/Vault/components/Details/Details.tsx
++++ b/src/features/Vault/components/Details/Details.tsx
+@@ -14,9 +14,15 @@ import {
+   IconPreviewOff,
+ } from '@/shared/icons/lucide/icons';
+ import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
+-import AttachmentPreviewModal from '../modals/AttachmentPreviewModal';
+-import PasswordHistoryDialog from '../modals/PasswordHistoryDialog';
+-import { SeedPhraseViewModal } from '../modals/SeedPhraseViewModal';
++
++const AttachmentPreviewModal = React.lazy(() => import('../modals/AttachmentPreviewModal'));
++const PasswordHistoryDialog = React.lazy(() =>
++  import('../modals/PasswordHistoryDialog').then((m) => ({ default: m.PasswordHistoryDialog }))
++);
++const SeedPhraseViewModal = React.lazy(() =>
++  import('../modals/SeedPhraseViewModal').then((m) => ({ default: m.SeedPhraseViewModal }))
++);
+@@ -540,39 +546,45 @@ export function Details({
+     </div>
+ 
+-      <SeedPhraseViewModal
+-        isOpen={seedPhraseViewOpen}
+-        phrase={seedPhraseRaw}
+-        wordCount={
+-          seedPhraseWordCount === 12 || seedPhraseWordCount === 18 || seedPhraseWordCount === 24
+-            ? (seedPhraseWordCount as 12 | 18 | 24)
+-            : null
+-        }
+-        onClose={() => setSeedPhraseViewOpen(false)}
+-      />
+-
+-      <AttachmentPreviewModal
+-        open={detailActions.previewOpen}
+-        fileName={previewTitle}
+-        mime={previewMimeType}
+-        objectUrl={previewObjectUrl}
+-        onClose={detailActions.closePreview}
+-        onDownload={previewDownloadHandler}
+-        loading={detailActions.isPreviewLoading}
+-      />
+-      <PasswordHistoryDialog
+-        isOpen={historyOpen}
+-        datacardId={card.id}
+-        onClose={() => setHistoryOpen(false)}
+-        clipboardAutoClearEnabled={clipboardAutoClearEnabled}
+-        clipboardClearTimeoutSeconds={clipboardClearTimeoutSeconds}
+-      />
++      <React.Suspense fallback={null}>
++        {seedPhraseViewOpen && (
++          <SeedPhraseViewModal
++            isOpen={true}
++            phrase={seedPhraseRaw}
++            wordCount={
++              seedPhraseWordCount === 12 || seedPhraseWordCount === 18 || seedPhraseWordCount === 24
++                ? (seedPhraseWordCount as 12 | 18 | 24)
++                : null
++            }
++            onClose={() => setSeedPhraseViewOpen(false)}
++          />
++        )}
++
++        {detailActions.previewOpen && (
++          <AttachmentPreviewModal
++            open={true}
++            fileName={previewTitle}
++            mime={previewMimeType}
++            objectUrl={previewObjectUrl}
++            onClose={detailActions.closePreview}
++            onDownload={previewDownloadHandler}
++            loading={detailActions.isPreviewLoading}
++          />
++        )}
++
++        {historyOpen && (
++          <PasswordHistoryDialog
++            isOpen={true}
++            datacardId={card.id}
++            onClose={() => setHistoryOpen(false)}
++            clipboardAutoClearEnabled={clipboardAutoClearEnabled}
++            clipboardClearTimeoutSeconds={clipboardClearTimeoutSeconds}
++          />
++        )}
++      </React.Suspense>
+     </>
+   );
+ }
+```
+
+---
+
+## PATCH 5 — Vite: manualChunks (react/tauri/vendor)
+
+```diff
+diff --git a/vite.config.ts b/vite.config.ts
+index 7dd4b9a..b6dc45c 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -16,9 +16,29 @@ export default defineConfig({
+   build: {
+     // а билдить нужно в ../dist относительно src → в корневую dist
+     outDir: '../dist',
+     emptyOutDir: true,
++    rollupOptions: {
++      output: {
++        // Basic vendor chunking for better caching & smaller main chunk.
++        // Vite exposes this Rollup option directly.
++        manualChunks(id) {
++          if (!id.includes('node_modules')) return;
++
++          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
++            return 'react';
++          }
++          if (id.includes('/@tauri-apps/')) {
++            return 'tauri';
++          }
++          return 'vendor';
++        },
++      },
++    },
+   },
+ });
+```
+
+Vite прямо рекомендует `build.rollupOptions.output.manualChunks` для стратегии разбиения чанков.
+
