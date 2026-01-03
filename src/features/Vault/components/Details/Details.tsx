@@ -16,9 +16,7 @@ import {
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 
 const AttachmentPreviewModal = React.lazy(() => import('../modals/AttachmentPreviewModal'));
-const PasswordHistoryDialog = React.lazy(() =>
-  import('../modals/PasswordHistoryDialog').then((m) => ({ default: m.PasswordHistoryDialog }))
-);
+const PasswordHistoryDialog = React.lazy(() => import('../modals/PasswordHistoryDialog'));
 const SeedPhraseViewModal = React.lazy(() =>
   import('../modals/SeedPhraseViewModal').then((m) => ({ default: m.SeedPhraseViewModal }))
 );
