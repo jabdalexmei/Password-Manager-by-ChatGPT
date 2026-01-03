@@ -1,45 +1,90 @@
+Да — **по коду это вполне объяснимо**.
+
+Сейчас `Empty` у тебя (в `DataCards.tsx` и `BankCards.tsx`) рендерится **вне** `.vault-datacard-list`, то есть **в другом контейнере**, с другой геометрией (пэддинги/скролл-контейнер/гаттер). Из-за этого при переключении **All/Archive/Deleted** ты получаешь микросдвиги. Если где-то ещё включено вертикальное центрирование (`justify-content: center`), то при разной высоте хедера (например, Deleted с кнопкой) **“Empty” действительно уезжает вниз/вверх** (центр считается от разной высоты). Для флекса это нормальная механика. ([MDN Web Docs][1])
+
+Правильный фикс “чётко и гладко”:
+
+* **всегда** рендерить один и тот же контейнер `.vault-datacard-list` (и для пустого состояния тоже),
+* **НЕ** центрировать пустое состояние вертикально (иначе при разной высоте хедера оно будет гулять),
+* оставить `overflow: auto` и `scrollbar-gutter: stable` (это как раз для горизонтального “прыжка”). ([MDN Web Docs][2])
+
+Ниже diff.
+
+```diff
 diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 8f2cc2c..9b0b8a1 100644
+index 8f2cc2c..e1c2b35 100644
 --- a/src/features/Vault/components/DataCards/DataCards.tsx
 +++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -742,10 +742,12 @@ export function DataCards({
+@@ -742,10 +742,18 @@ export function DataCards({
          )}
        </div>
  
-       {cards.length === 0 ? (
+-      {cards.length === 0 ? (
 -        <div className="vault-empty">{t('label.empty')}</div>
-+        <div className="vault-datacard-list vault-datacard-list--empty">
+-      ) : (
+-        <div className="vault-datacard-list">
++      <div
++        className={
++          cards.length === 0
++            ? 'vault-datacard-list vault-datacard-list--empty'
++            : 'vault-datacard-list'
++        }
++      >
++        {cards.length === 0 ? (
 +          <div className="vault-empty">{t('label.empty')}</div>
-+        </div>
-       ) : (
-         <div className="vault-datacard-list">
++        ) : (
            {cards.map((card) => {
              const isActive = selectedCardId === card.id;
+             const isFavorite = card.isFavorite;
+             const meta = card.metaLine || t('label.noMeta');
+             const updatedAt = card.updatedAt;
+             return (
+@@ -780,7 +788,7 @@ export function DataCards({
+             );
+           })}
+-        </div>
+-      )}
++        )}
++      </div>
 
 diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
-index f0f11c8..3f9b7e2 100644
+index f0f11c8..2f1f4aa 100644
 --- a/src/features/Vault/components/BankCards/BankCards.tsx
 +++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -234,10 +234,12 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+@@ -234,10 +234,18 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
          )}
        </div>
  
-       {cards.length === 0 ? (
+-      {cards.length === 0 ? (
 -        <div className="vault-empty">{t('label.empty')}</div>
-+        <div className="vault-datacard-list vault-datacard-list--empty">
+-      ) : (
+-        <div className="vault-datacard-list">
++      <div
++        className={
++          cards.length === 0
++            ? 'vault-datacard-list vault-datacard-list--empty'
++            : 'vault-datacard-list'
++        }
++      >
++        {cards.length === 0 ? (
 +          <div className="vault-empty">{t('label.empty')}</div>
-+        </div>
-       ) : (
-         <div className="vault-datacard-list">
++        ) : (
            {cards.map((card) => {
              const isActive = selectedCardId === card.id;
+             return (
+@@ -263,7 +271,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+             );
+           })}
+-        </div>
+-      )}
++        )}
++      </div>
 
 diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 65be388..e2c0f9c 100644
+index 65be388..0f4a1c2 100644
 --- a/src/shared/styles/screens/vault.css
 +++ b/src/shared/styles/screens/vault.css
-@@ -488,14 +488,10 @@
- 
+@@ -480,6 +480,16 @@
  /* Cards list */
  .vault-datacard-list {
    background: transparent; /* remove panel fill */
@@ -48,12 +93,11 @@ index 65be388..e2c0f9c 100644
  
    /* prevent clipping of hover transform + focus-visible outline */
    padding: 4px;
--  /* Always reserve the scrollbar space to prevent "Empty" shifting by a few px */
 -  overflow-x: hidden;
 -  overflow-y: scroll;
--  /* Progressive enhancement: keep centering stable even with classic scrollbars */
 -  scrollbar-gutter: stable both-edges;
 +  overflow: auto;
++  /* prevents horizontal layout shift when scrollbar appears/disappears */
 +  scrollbar-gutter: stable;
    flex: 1;
    display: flex;
@@ -62,5 +106,19 @@ index 65be388..e2c0f9c 100644
  }
  
  .vault-datacard-list--empty {
-   justify-content: center;
+-  justify-content: center;
++  /* IMPORTANT: no vertical centering — keeps "Empty" at a stable Y across views */
++  justify-content: flex-start;
  }
++
++.vault-empty {
++  color: var(--color-text-muted);
++  text-align: center;
++  padding: 24px;
++}
+```
+
+Ключевой момент: **никакого `justify-content: center`** для пустого состояния. Центрирование по высоте — это и есть “Archive уехал вниз”, потому что высота области отличается между режимами. ([MDN Web Docs][1])
+
+[1]: https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Flexible_box_layout/Aligning_items?utm_source=chatgpt.com "Aligning items in a flex container - CSS - MDN Web Docs"
+[2]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/scrollbar-gutter?utm_source=chatgpt.com "scrollbar-gutter - CSS - MDN Web Docs"
