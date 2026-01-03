@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "tauri": "tauri dev",
     "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "theme:check": "node scripts/check-theme-colors.mjs",
     "icons:check": "node scripts/check-no-inline-svg.mjs"
   },
