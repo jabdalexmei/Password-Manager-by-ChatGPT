@@ -1,8 +1,8 @@
 diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json
-index 3d1c2a7..d5a9d1f 100644
+index 6b21c1d..1c0c8a9 100644
 --- a/src-tauri/tauri.conf.json
 +++ b/src-tauri/tauri.conf.json
-@@ -1,22 +1,38 @@
+@@ -1,22 +1,35 @@
  {
    "productName": "Password Manager",
    "version": "0.1.0",
@@ -24,11 +24,12 @@ index 3d1c2a7..d5a9d1f 100644
 +  },
 +  "bundle": {
 +    "active": true,
-+    "windows": {
-+      "webviewInstallMode": {
-+        "type": "fixedRuntime",
-+        "path": "./webview2-fixed/"
-+      }
-+    }
++    "icon": [
++      "icons/32x32.png",
++      "icons/128x128.png",
++      "icons/128x128@2x.png",
++      "icons/icon.icns",
++      "icons/icon.ico"
++    ]
    }
  }
