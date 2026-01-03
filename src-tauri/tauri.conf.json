@@ -16,5 +16,14 @@
         "height": 900
       }
     ]
+  },
+  "bundle": {
+    "active": true,
+    "windows": {
+      "webviewInstallMode": {
+        "type": "fixedRuntime",
+        "path": "./webview2-fixed/"
+      }
+    }
   }
 }
