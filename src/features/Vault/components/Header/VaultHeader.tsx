@@ -54,14 +54,20 @@ export function VaultHeader({
         <button
           className="vault-action-button"
           type="button"
+          aria-label={lockLabel}
+          title={lockLabel}
+          onClick={onLock}
+        >
+          <IconLock />
+        </button>
+        <button
+          className="vault-action-button"
+          type="button"
           aria-label={tTip('vault.settings')}
           title={tTip('vault.settings')}
           onClick={onOpenSettings}
         >
           <IconSettings />
-        </button>
-        <button className="vault-action-button" type="button" aria-label={lockLabel} title={lockLabel} onClick={onLock}>
-          <IconLock />
         </button>
       </div>
     </header>

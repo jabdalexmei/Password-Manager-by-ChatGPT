@@ -1,40 +1,29 @@
-diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
-index 0d6d3c7..8b9b3a2 100644
---- a/src/features/Vault/components/modals/SettingsModal.tsx
-+++ b/src/features/Vault/components/modals/SettingsModal.tsx
-@@ -170,7 +170,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-               <span className="form-label settings-subheader" id="auto-lock-enabled-label">
-                 Enable auto-lock
-               </span>
+diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
+index 27e2785..c3c8d9e 100644
+--- a/src/shared/styles/ui.css
++++ b/src/shared/styles/ui.css
+@@ -831,6 +831,20 @@
+   overflow-y: auto;
+ }
  
--              <div style={{ display: 'flex', justifyContent: 'center' }}>
-+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                 <button
-                   id="auto-lock-enabled-switch"
-                   type="button"
-                   role="switch"
-                   aria-checked={autoLockEnabled}
-@@ -243,7 +243,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-               <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
-                 Enable clipboard auto-clear
-               </span>
+ /* Dialog footer (buttons row) */
+ .dialog-footer {
+   padding: 14px 18px;
+   display: flex;
+   justify-content: flex-end;
+   gap: 10px;
+ }
++
++/* When footer is placed INSIDE .dialog-body (like DataCard create/edit form),
++   don't double-apply horizontal padding. Keep the same left/right line as fields. */
++.dialog-body .dialog-footer {
++  padding-left: 0;
++  padding-right: 0;
++  width: 100%;
++}
  
--              <div style={{ display: 'flex', justifyContent: 'center' }}>
-+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                 <button
-                   id="clipboard-auto-clear-enabled-switch"
-                   type="button"
-                   role="switch"
-                   aria-checked={clipboardAutoClearEnabled}
-@@ -321,7 +321,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-               <span className="form-label settings-subheader" id="backup-auto-enabled-label">
-                 Auto backup enabled
-               </span>
- 
--              <div style={{ display: 'flex', justifyContent: 'center' }}>
-+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                 <button
-                   id="backup-auto-enabled-switch"
-                   type="button"
-                   role="switch"
-                   aria-checked={autoBackupEnabled}
+ /* Dialog footer: keep Cancel on the left, actions on the right */
+ .dialog-footer > .btn.btn-secondary:first-child {
+   margin-right: auto;
+ }
+

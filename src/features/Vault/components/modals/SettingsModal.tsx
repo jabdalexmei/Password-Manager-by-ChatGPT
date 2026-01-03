@@ -162,7 +162,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
                 Enable auto-lock
               </span>
 
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   id="auto-lock-enabled-switch"
                   type="button"
@@ -233,7 +233,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
                 Enable clipboard auto-clear
               </span>
 
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   id="clipboard-auto-clear-enabled-switch"
                   type="button"
@@ -310,7 +310,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
                 Auto backup enabled
               </span>
 
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   id="backup-auto-enabled-switch"
                   type="button"
