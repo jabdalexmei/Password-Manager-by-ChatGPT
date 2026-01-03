@@ -29,7 +29,7 @@
     "windows": {
       "webviewInstallMode": {
         "type": "fixedRuntime",
-        "path": "./webview2-fixed/"
+        "path": "./webview2-fixed/Microsoft.WebView2.FixedVersionRuntime.143.0.3650.96.x64/"
       }
     }
   }
