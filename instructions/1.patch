@@ -1,124 +1,259 @@
-Да — **по коду это вполне объяснимо**.
-
-Сейчас `Empty` у тебя (в `DataCards.tsx` и `BankCards.tsx`) рендерится **вне** `.vault-datacard-list`, то есть **в другом контейнере**, с другой геометрией (пэддинги/скролл-контейнер/гаттер). Из-за этого при переключении **All/Archive/Deleted** ты получаешь микросдвиги. Если где-то ещё включено вертикальное центрирование (`justify-content: center`), то при разной высоте хедера (например, Deleted с кнопкой) **“Empty” действительно уезжает вниз/вверх** (центр считается от разной высоты). Для флекса это нормальная механика. ([MDN Web Docs][1])
-
-Правильный фикс “чётко и гладко”:
-
-* **всегда** рендерить один и тот же контейнер `.vault-datacard-list` (и для пустого состояния тоже),
-* **НЕ** центрировать пустое состояние вертикально (иначе при разной высоте хедера оно будет гулять),
-* оставить `overflow: auto` и `scrollbar-gutter: stable` (это как раз для горизонтального “прыжка”). ([MDN Web Docs][2])
-
-Ниже diff.
-
-```diff
 diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 8f2cc2c..e1c2b35 100644
+index e1c2b35..f6a6d5a 100644
 --- a/src/features/Vault/components/DataCards/DataCards.tsx
 +++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -742,10 +742,18 @@ export function DataCards({
-         )}
-       </div>
+@@ -708,42 +708,52 @@ export function DataCards({
+   return (
+     <div className="vault-panel-wrapper">
+       <div className="datacards-header">
+         <div className="vault-section-header">{sectionTitle}</div>
  
--      {cards.length === 0 ? (
--        <div className="vault-empty">{t('label.empty')}</div>
--      ) : (
--        <div className="vault-datacard-list">
-+      <div
-+        className={
-+          cards.length === 0
-+            ? 'vault-datacard-list vault-datacard-list--empty'
-+            : 'vault-datacard-list'
-+        }
-+      >
-+        {cards.length === 0 ? (
-+          <div className="vault-empty">{t('label.empty')}</div>
-+        ) : (
-           {cards.map((card) => {
-             const isActive = selectedCardId === card.id;
-             const isFavorite = card.isFavorite;
-             const meta = card.metaLine || t('label.noMeta');
-             const updatedAt = card.updatedAt;
-             return (
-@@ -780,7 +788,7 @@ export function DataCards({
-             );
-           })}
--        </div>
--      )}
-+        )}
-+      </div>
+-        {viewModel.isTrashMode && (
+-          <div className="datacards-actions">
+-            <button
+-              className="btn btn-icon vault-actionbar"
+-              type="button"
+-              aria-label={t('trash.actions')}
+-              aria-haspopup="menu"
+-              aria-expanded={isTrashActionsOpen}
+-              onClick={() => setIsTrashActionsOpen((prev) => !prev)}
+-            >
+-              <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
+-            </button>
+-
+-            {isTrashActionsOpen && (
+-              <>
+-                <div
+-                  className="vault-actionmenu-backdrop"
+-                  onClick={() => setIsTrashActionsOpen(false)}
+-                />
+-                <div className="vault-actionmenu-panel" role="menu">
+-                  <button
+-                    className="vault-actionmenu-item"
+-                    type="button"
+-                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+-                    onClick={async () => {
+-                      setIsTrashActionsOpen(false);
+-                      await viewModel.restoreAllTrash();
+-                    }}
+-                  >
+-                    {t('trash.restoreAll')}
+-                  </button>
+-
+-                  <button
+-                    className="vault-actionmenu-item vault-actionmenu-danger"
+-                    type="button"
+-                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+-                    onClick={async () => {
+-                      setIsTrashActionsOpen(false);
+-                      await viewModel.purgeAllTrash();
+-                    }}
+-                  >
+-                    {t('trash.removeAll')}
+-                  </button>
+-                </div>
+-              </>
+-            )}
+-          </div>
+-        )}
++        <div className="datacards-header__right">
++          {viewModel.isTrashMode ? (
++            <div className="datacards-actions">
++              <button
++                className="btn btn-icon vault-actionbar"
++                type="button"
++                aria-label={t('trash.actions')}
++                aria-haspopup="menu"
++                aria-expanded={isTrashActionsOpen}
++                onClick={() => setIsTrashActionsOpen((prev) => !prev)}
++              >
++                <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
++              </button>
++
++              {isTrashActionsOpen && (
++                <>
++                  <div
++                    className="vault-actionmenu-backdrop"
++                    onClick={() => setIsTrashActionsOpen(false)}
++                  />
++                  <div className="vault-actionmenu-panel" role="menu">
++                    <button
++                      className="vault-actionmenu-item"
++                      type="button"
++                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                      onClick={async () => {
++                        setIsTrashActionsOpen(false);
++                        await viewModel.restoreAllTrash();
++                      }}
++                    >
++                      {t('trash.restoreAll')}
++                    </button>
++
++                    <button
++                      className="vault-actionmenu-item vault-actionmenu-danger"
++                      type="button"
++                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                      onClick={async () => {
++                        setIsTrashActionsOpen(false);
++                        await viewModel.purgeAllTrash();
++                      }}
++                    >
++                      {t('trash.removeAll')}
++                    </button>
++                  </div>
++                </>
++              )}
++            </div>
++          ) : (
++            <div className="datacards-header__spacer" aria-hidden="true" />
++          )}
++        </div>
+       </div>
 
 diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
-index f0f11c8..2f1f4aa 100644
+index 2f1f4aa..a0f9b72 100644
 --- a/src/features/Vault/components/BankCards/BankCards.tsx
 +++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -234,10 +234,18 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-         )}
-       </div>
+@@ -166,42 +166,52 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+   return (
+     <div className="vault-panel-wrapper">
+       <div className="datacards-header">
+         <div className="vault-section-header">{sectionTitle}</div>
  
--      {cards.length === 0 ? (
--        <div className="vault-empty">{t('label.empty')}</div>
--      ) : (
--        <div className="vault-datacard-list">
-+      <div
-+        className={
-+          cards.length === 0
-+            ? 'vault-datacard-list vault-datacard-list--empty'
-+            : 'vault-datacard-list'
-+        }
-+      >
-+        {cards.length === 0 ? (
-+          <div className="vault-empty">{t('label.empty')}</div>
-+        ) : (
-           {cards.map((card) => {
-             const isActive = selectedCardId === card.id;
-             return (
-@@ -263,7 +271,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-             );
-           })}
--        </div>
--      )}
-+        )}
-+      </div>
+-        {isTrashMode && (
+-          <div className="datacards-actions">
+-            <button
+-              className="btn btn-icon vault-actionbar"
+-              type="button"
+-              aria-label={t('trash.actions')}
+-              aria-haspopup="menu"
+-              aria-expanded={isTrashActionsOpen}
+-              onClick={() => setIsTrashActionsOpen((prev) => !prev)}
+-            >
+-              <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
+-            </button>
+-
+-            {isTrashActionsOpen && (
+-              <>
+-                <div
+-                  className="vault-actionmenu-backdrop"
+-                  onClick={() => setIsTrashActionsOpen(false)}
+-                />
+-                <div className="vault-actionmenu-panel" role="menu">
+-                  <button
+-                    className="vault-actionmenu-item"
+-                    type="button"
+-                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+-                    onClick={async () => {
+-                      setIsTrashActionsOpen(false);
+-                      await viewModel.restoreAllTrash();
+-                    }}
+-                  >
+-                    {t('trash.restoreAll')}
+-                  </button>
+-
+-                  <button
+-                    className="vault-actionmenu-item vault-actionmenu-danger"
+-                    type="button"
+-                    disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+-                    onClick={async () => {
+-                      setIsTrashActionsOpen(false);
+-                      await viewModel.purgeAllTrash();
+-                    }}
+-                  >
+-                    {t('trash.removeAll')}
+-                  </button>
+-                </div>
+-              </>
+-            )}
+-          </div>
+-        )}
++        <div className="datacards-header__right">
++          {isTrashMode ? (
++            <div className="datacards-actions">
++              <button
++                className="btn btn-icon vault-actionbar"
++                type="button"
++                aria-label={t('trash.actions')}
++                aria-haspopup="menu"
++                aria-expanded={isTrashActionsOpen}
++                onClick={() => setIsTrashActionsOpen((prev) => !prev)}
++              >
++                <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
++              </button>
++
++              {isTrashActionsOpen && (
++                <>
++                  <div
++                    className="vault-actionmenu-backdrop"
++                    onClick={() => setIsTrashActionsOpen(false)}
++                  />
++                  <div className="vault-actionmenu-panel" role="menu">
++                    <button
++                      className="vault-actionmenu-item"
++                      type="button"
++                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                      onClick={async () => {
++                        setIsTrashActionsOpen(false);
++                        await viewModel.restoreAllTrash();
++                      }}
++                    >
++                      {t('trash.restoreAll')}
++                    </button>
++
++                    <button
++                      className="vault-actionmenu-item vault-actionmenu-danger"
++                      type="button"
++                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                      onClick={async () => {
++                        setIsTrashActionsOpen(false);
++                        await viewModel.purgeAllTrash();
++                      }}
++                    >
++                      {t('trash.removeAll')}
++                    </button>
++                  </div>
++                </>
++              )}
++            </div>
++          ) : (
++            <div className="datacards-header__spacer" aria-hidden="true" />
++          )}
++        </div>
+       </div>
 
 diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 65be388..0f4a1c2 100644
+index e2c0f9c..c2bb1e4 100644
 --- a/src/shared/styles/screens/vault.css
 +++ b/src/shared/styles/screens/vault.css
-@@ -480,6 +480,16 @@
- /* Cards list */
- .vault-datacard-list {
-   background: transparent; /* remove panel fill */
-   border: none; /* remove stroke */
-   border-radius: 0; /* avoid “panel shape” */
- 
-   /* prevent clipping of hover transform + focus-visible outline */
-   padding: 4px;
--  overflow-x: hidden;
--  overflow-y: scroll;
--  scrollbar-gutter: stable both-edges;
-+  overflow: auto;
-+  /* prevents horizontal layout shift when scrollbar appears/disappears */
-+  scrollbar-gutter: stable;
-   flex: 1;
+@@ -250,6 +250,22 @@
+ .datacards-header {
    display: flex;
-   flex-direction: column;
-   gap: 8px;
+   align-items: center;
+   justify-content: space-between;
++  /* Keep consistent header height across All/Archive/Deleted (prevents "Empty" Y shift) */
++  min-height: 32px;
  }
  
- .vault-datacard-list--empty {
--  justify-content: center;
-+  /* IMPORTANT: no vertical centering — keeps "Empty" at a stable Y across views */
-+  justify-content: flex-start;
- }
-+
-+.vault-empty {
-+  color: var(--color-text-muted);
-+  text-align: center;
-+  padding: 24px;
++.datacards-header__right {
++  display: flex;
++  align-items: center;
++  justify-content: flex-end;
++  /* Reserve space for the actions button even when it isn't shown */
++  width: 32px;
++  flex: 0 0 32px;
 +}
-```
-
-Ключевой момент: **никакого `justify-content: center`** для пустого состояния. Центрирование по высоте — это и есть “Archive уехал вниз”, потому что высота области отличается между режимами. ([MDN Web Docs][1])
-
-[1]: https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Flexible_box_layout/Aligning_items?utm_source=chatgpt.com "Aligning items in a flex container - CSS - MDN Web Docs"
-[2]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/scrollbar-gutter?utm_source=chatgpt.com "scrollbar-gutter - CSS - MDN Web Docs"
++
++.datacards-header__spacer {
++  width: 24px;
++  height: 24px;
++}
++
+ .vault-actionbar {
+   background: transparent !important;
+   border: 0 !important;
+   padding: 0 6px !important;
+   height: 24px;
+   border-radius: 10px;
++  margin: 0;
+ }
