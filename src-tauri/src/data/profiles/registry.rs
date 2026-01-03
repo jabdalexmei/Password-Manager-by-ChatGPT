@@ -3,9 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::data::profiles::paths::{
-    ensure_profiles_dir, kdf_salt_path, profile_config_path, registry_path,
-};
+use crate::data::profiles::paths::{ensure_profiles_dir, profile_config_path, registry_path};
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::ProfileMeta;

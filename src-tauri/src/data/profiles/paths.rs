@@ -41,6 +41,15 @@ pub fn attachment_file_path(
         .join(format!("{attachment_id}.bin")))
 }
 
+/// Root directory for cached attachment previews (used by attachments_service cleanup).
+///
+/// NOTE: This path is also created in `ensure_profile_dirs`.
+pub fn attachments_preview_root(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
+    Ok(profile_dir(sp, profile_id)?
+        .join("tmp")
+        .join("attachments"))
+}
+
 pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
     Ok(profile_dir(sp, profile_id)?.join("user_settings.json"))
 }
