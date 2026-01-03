@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
-import { BrowserQRCodeReader } from '@zxing/browser';
 import { normalizeTotpInput } from '../../utils/totp';
 
 type Props = {
@@ -60,6 +59,7 @@ export const Add2FAModal: React.FC<Props> = ({
     try {
       const url = URL.createObjectURL(file);
       try {
+        const { BrowserQRCodeReader } = await import('@zxing/browser');
         const reader = new BrowserQRCodeReader();
         const decoded = await reader.decodeFromImageUrl(url);
         const text = decoded.getText();
