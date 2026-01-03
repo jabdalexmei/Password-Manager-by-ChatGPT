@@ -1,29 +1,36 @@
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 7f5a8e1..9c2a7d4 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -611,7 +611,7 @@ export function DataCards({
+               </div>
+             </div>
+ 
+-            <div className="dialog-footer">
++            <div className="dialog-footer dialog-footer--equal-buttons">
+               <button type="button" className="btn btn-secondary" onClick={closeCreateModal}>
+                 {t('action.cancel')}
+               </button>
+               <button type="button" className="btn btn-primary" disabled={isCreateSubmitting} onClick={submitCreate}>
+                 {t('action.create')}
+               </button>
+             </div>
+           </div>
+         </div>
+
 diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
-index 27e2785..c3c8d9e 100644
+index c3c8d9e..7b1a6f2 100644
 --- a/src/shared/styles/ui.css
 +++ b/src/shared/styles/ui.css
-@@ -831,6 +831,20 @@
-   overflow-y: auto;
- }
- 
- /* Dialog footer (buttons row) */
- .dialog-footer {
-   padding: 14px 18px;
-   display: flex;
-   justify-content: flex-end;
-   gap: 10px;
- }
-+
-+/* When footer is placed INSIDE .dialog-body (like DataCard create/edit form),
-+   don't double-apply horizontal padding. Keep the same left/right line as fields. */
-+.dialog-body .dialog-footer {
-+  padding-left: 0;
-+  padding-right: 0;
-+  width: 100%;
-+}
- 
- /* Dialog footer: keep Cancel on the left, actions on the right */
+@@ -845,6 +845,17 @@
  .dialog-footer > .btn.btn-secondary:first-child {
    margin-right: auto;
  }
-
++
++/* Create data card: make Cancel/Create the same size */
++.dialog-footer--equal-buttons > .btn {
++  /* fixed width via flex-basis; keeps both buttons identical */
++  flex: 0 0 120px;
++  display: inline-flex;
++  justify-content: center;
++}
