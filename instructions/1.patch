@@ -1,14 +1,88 @@
-diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
-index bc5de51..a4f1c72 100644
---- a/src/features/Vault/components/Details/Details.tsx
-+++ b/src/features/Vault/components/Details/Details.tsx
-@@ -16,9 +16,7 @@ import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
+diff --git a/package.json b/package.json
+index 8d7b2a1..a4c1e0f 100644
+--- a/package.json
++++ b/package.json
+@@ -7,9 +7,10 @@
+   "scripts": {
+     "dev": "vite",
+     "build": "vite build",
++    "analyze": "vite build --mode analyze",
+     "tauri:dev": "tauri dev",
+     "tauri:build": "tauri build"
+   },
+@@ -22,6 +23,7 @@
+   "devDependencies": {
+     "@tauri-apps/cli": "^2.0.0",
+     "@types/react": "^18.0.0",
+     "@types/react-dom": "^18.0.0",
+     "@vitejs/plugin-react": "^4.0.0",
++    "rollup-plugin-visualizer": "^5.12.0",
+     "typescript": "^5.0.0",
+     "vite": "^5.0.0"
+   }
+ }
+diff --git a/vite.config.ts b/vite.config.ts
+index b6dc45c..2cbd7aa 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -1,6 +1,7 @@
+ import path from 'node:path';
+ import { defineConfig } from 'vite';
+ import react from '@vitejs/plugin-react';
++import { visualizer } from 'rollup-plugin-visualizer';
  
- const AttachmentPreviewModal = React.lazy(() => import('../modals/AttachmentPreviewModal'));
--const PasswordHistoryDialog = React.lazy(() =>
--  import('../modals/PasswordHistoryDialog').then((m) => ({ default: m.PasswordHistoryDialog }))
--);
-+const PasswordHistoryDialog = React.lazy(() => import('../modals/PasswordHistoryDialog'));
- const SeedPhraseViewModal = React.lazy(() =>
-   import('../modals/SeedPhraseViewModal').then((m) => ({ default: m.SeedPhraseViewModal }))
- );
+-export default defineConfig({
++export default defineConfig(({ mode }) => ({
+   // говорим Vite, что корень проекта — src
+   root: 'src',
+   resolve: {
+@@ -11,7 +12,12 @@ export default defineConfig({
+      
+     },
+   },
+-  plugins: [react()],
++  plugins: [
++    react(),
++    ...(mode === 'analyze'
++      ? [visualizer({ filename: '../dist/stats.html', open: true })]
++      : []),
++  ],
+   build: {
+     // а билдить нужно в ../dist относительно src → в корневую dist
+     outDir: '../dist',
+@@ -36,4 +42,4 @@ export default defineConfig({
+       },
+     },
+   },
+-});
++}));
+
+
+patch 2
+
+diff --git a/vite.config.ts b/vite.config.ts
+index 2cbd7aa..5a0d0e6 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => ({
+     rollupOptions: {
+       output: {
+         // Basic vendor chunking for better caching & smaller main chunk.
+         // Vite exposes this Rollup option directly.
+         manualChunks(id) {
+           if (!id.includes('node_modules')) return;
+ 
++          if (id.includes('/@zxing/')) return 'zxing';
++          if (id.includes('/otpauth/')) return 'otpauth';
+           if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
+             return 'react';
+           }
+           if (id.includes('/@tauri-apps/')) {
+             return 'tauri';
+           }
+           return 'vendor';
+         },
+       },
+     },
+   },
+ }));
