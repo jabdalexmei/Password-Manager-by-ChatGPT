@@ -1,36 +1,115 @@
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 7f5a8e1..9c2a7d4 100644
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -611,7 +611,7 @@ export function DataCards({
-               </div>
-             </div>
+diff --git a/src-tauri/src/data/crypto/cipher.rs b/src-tauri/src/data/crypto/cipher.rs
+index 2e10b3a..7d8b1a2 100644
+--- a/src-tauri/src/data/crypto/cipher.rs
++++ b/src-tauri/src/data/crypto/cipher.rs
+@@ -3,7 +3,6 @@ use chacha20poly1305::aead::{Aead, KeyInit};
+ use chacha20poly1305::{XChaCha20Poly1305, XNonce};
+ use rand::rngs::OsRng;
+ use rand::RngCore;
+-use zeroize::Zeroizing;
  
--            <div className="dialog-footer">
-+            <div className="dialog-footer dialog-footer--equal-buttons">
-               <button type="button" className="btn btn-secondary" onClick={closeCreateModal}>
-                 {t('action.cancel')}
-               </button>
-               <button type="button" className="btn btn-primary" disabled={isCreateSubmitting} onClick={submitCreate}>
-                 {t('action.create')}
-               </button>
-             </div>
-           </div>
-         </div>
-
-diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
-index c3c8d9e..7b1a6f2 100644
---- a/src/shared/styles/ui.css
-+++ b/src/shared/styles/ui.css
-@@ -845,6 +845,17 @@
- .dialog-footer > .btn.btn-secondary:first-child {
-   margin-right: auto;
+ use crate::data::fs::atomic_write::write_atomic;
+ use crate::error::{ErrorCodeString, Result};
+@@ -134,7 +133,0 @@ pub fn decrypt_key_check(profile_id: &str, key: &[u8; KEY_LEN], blob: &[u8]) -> R
+     let aad = format!("key_check:{}", profile_id);
+     decrypt_bytes(key, aad.as_bytes(), blob)
  }
-+
-+/* Create data card: make Cancel/Create the same size */
-+.dialog-footer--equal-buttons > .btn {
-+  /* fixed width via flex-basis; keeps both buttons identical */
-+  flex: 0 0 120px;
-+  display: inline-flex;
-+  justify-content: center;
-+}
+-
+-pub fn zeroize_key(key: &[u8; KEY_LEN]) -> Zeroizing<[u8; KEY_LEN]> {
+-    Zeroizing::new(*key)
+-}
+
+diff --git a/src-tauri/src/data/profiles/paths.rs b/src-tauri/src/data/profiles/paths.rs
+index 4d7f9bc..1a3d6c8 100644
+--- a/src-tauri/src/data/profiles/paths.rs
++++ b/src-tauri/src/data/profiles/paths.rs
+@@ -41,20 +41,0 @@ pub fn attachment_file_path(
+         .join(format!("{attachment_id}.bin")))
+ }
+ 
+-pub fn attachments_preview_root(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
+-    Ok(profile_dir(sp, profile_id)?.join("tmp").join("attachments"))
+-}
+-
+-pub fn attachment_preview_path(
+-    sp: &StoragePaths,
+-    profile_id: &str,
+-    attachment_id: &str,
+-    file_name: &str,
+-) -> Result<PathBuf> {
+-    Ok(attachments_preview_root(sp, profile_id)?
+-        .join(attachment_id)
+-        .join(file_name))
+-}
+-
+ pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
+     Ok(profile_dir(sp, profile_id)?.join("user_settings.json"))
+ }
+
+diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
+index 4e1c59a..b8e2f3a 100644
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -3,16 +3,12 @@ use serde::{Deserialize, Serialize};
+ use std::fs;
+ use std::path::PathBuf;
+ use uuid::Uuid;
+ 
+-use crate::data::crypto::kdf::derive_master_key;
+-use crate::data::crypto::key_check;
+ use crate::data::profiles::paths::{
+     ensure_profiles_dir, kdf_salt_path, profile_config_path, registry_path,
+ };
+ use crate::data::storage_paths::StoragePaths;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::types::ProfileMeta;
+-use zeroize::Zeroizing;
+ 
+ #[derive(Debug, Serialize, Deserialize, Clone)]
+ pub struct ProfileRecord {
+@@ -206,22 +202,0 @@ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>>
+     let registry = load_registry(sp)?;
+     Ok(registry.profiles.into_iter().find(|p| p.id == id))
+ }
+-
+-pub fn verify_profile_password(sp: &StoragePaths, id: &str, password: &str) -> Result<bool> {
+-    let record = get_profile(sp, id)?.ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+-    if !record.has_password {
+-        return Ok(true);
+-    }
+-
+-    let salt_path = kdf_salt_path(sp, id)?;
+-    if !salt_path.exists() {
+-        return Err(ErrorCodeString::new("KDF_SALT_MISSING"));
+-    }
+-    let salt = fs::read(&salt_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+-    let key = Zeroizing::new(derive_master_key(password, &salt)?);
+-    key_check::verify_key_check_file(sp, id, &key)
+-}
+
+diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
+index 13bf8d7..7a9f0e1 100644
+--- a/src-tauri/src/data/sqlite/repo_impl.rs
++++ b/src-tauri/src/data/sqlite/repo_impl.rs
+@@ -715,19 +715,0 @@ pub fn soft_delete_datacards_in_folder(
+     })
+ }
+ 
+-pub fn restore_datacards_in_folder(
+-    state: &Arc<AppState>,
+-    profile_id: &str,
+-    folder_id: &str,
+-) -> Result<bool> {
+-    with_connection(state, profile_id, |conn| {
+-        conn.execute(
+-            "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE folder_id = ?2",
+-            params![Utc::now().to_rfc3339(), folder_id],
+-        )
+-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+-        Ok(true)
+-    })
+-}
+-
+ pub fn purge_datacards_in_folder(
+     state: &Arc<AppState>,
+     profile_id: &str,
