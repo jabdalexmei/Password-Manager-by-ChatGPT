@@ -851,6 +851,14 @@ select:autofill {
   margin-right: auto;
 }
 
+/* Create data card: make Cancel/Create the same size */
+.dialog-footer--equal-buttons > .btn {
+  /* fixed width via flex-basis; keeps both buttons identical */
+  flex: 0 0 120px;
+  display: inline-flex;
+  justify-content: center;
+}
+
 /* Split footer: left actions + right actions */
 .dialog-footer--split {
   justify-content: space-between;
