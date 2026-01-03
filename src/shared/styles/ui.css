@@ -331,6 +331,14 @@
   color: var(--color-text-muted);
 }
 
+/* Settings modal: make selected "toggle titles" look like headers (white, not muted) */
+.form-label.settings-subheader {
+  color: var(--color-text);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 16px;
+}
+
 /* Inputs - shared base for <input>, <select>, <textarea> in forms */
 .input,
 .textarea,

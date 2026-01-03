@@ -158,7 +158,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
             style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
           >
             <div className="form-field" style={toggleRowStyle}>
-              <span className="form-label" id="auto-lock-enabled-label">
+              <span className="form-label settings-subheader" id="auto-lock-enabled-label">
                 Enable auto-lock
               </span>
 
@@ -229,7 +229,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
             </div>
 
             <div className="form-field" style={toggleRowStyle}>
-              <span className="form-label" id="clipboard-auto-clear-enabled-label">
+              <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
                 Enable clipboard auto-clear
               </span>
 
@@ -306,7 +306,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
           <div role="group" aria-labelledby="backups-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="form-field" style={toggleRowStyle}>
-              <span className="form-label" id="backup-auto-enabled-label">
+              <span className="form-label settings-subheader" id="backup-auto-enabled-label">
                 Auto backup enabled
               </span>
 
