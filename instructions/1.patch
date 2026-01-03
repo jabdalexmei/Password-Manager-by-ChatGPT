@@ -1,40 +1,34 @@
-diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
-index 0d6d3c7..8b9b3a2 100644
---- a/src/features/Vault/components/modals/SettingsModal.tsx
-+++ b/src/features/Vault/components/modals/SettingsModal.tsx
-@@ -170,7 +170,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-               <span className="form-label settings-subheader" id="auto-lock-enabled-label">
-                 Enable auto-lock
-               </span>
- 
--              <div style={{ display: 'flex', justifyContent: 'center' }}>
-+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                 <button
-                   id="auto-lock-enabled-switch"
-                   type="button"
-                   role="switch"
-                   aria-checked={autoLockEnabled}
-@@ -243,7 +243,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-               <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
-                 Enable clipboard auto-clear
-               </span>
- 
--              <div style={{ display: 'flex', justifyContent: 'center' }}>
-+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                 <button
-                   id="clipboard-auto-clear-enabled-switch"
-                   type="button"
-                   role="switch"
-                   aria-checked={clipboardAutoClearEnabled}
-@@ -321,7 +321,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-               <span className="form-label settings-subheader" id="backup-auto-enabled-label">
-                 Auto backup enabled
-               </span>
- 
--              <div style={{ display: 'flex', justifyContent: 'center' }}>
-+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                 <button
-                   id="backup-auto-enabled-switch"
-                   type="button"
-                   role="switch"
-                   aria-checked={autoBackupEnabled}
+diff --git a/src/features/Vault/components/Header/VaultHeader.tsx b/src/features/Vault/components/Header/VaultHeader.tsx
+index a90a2b6..b1e07f3 100644
+--- a/src/features/Vault/components/Header/VaultHeader.tsx
++++ b/src/features/Vault/components/Header/VaultHeader.tsx
+@@ -56,18 +56,18 @@ export function VaultHeader({
+           title={tTip('backup.import')}
+         >
+           <IconImport />
+         </button>
+         <button
++          className="vault-action-button"
++          type="button"
++          aria-label={lockLabel}
++          title={lockLabel}
++          onClick={onLock}
++        >
++          <IconLock />
++        </button>
++        <button
+           className="vault-action-button"
+           type="button"
+           aria-label={tTip('vault.settings')}
+           title={tTip('vault.settings')}
+           onClick={onOpenSettings}
+         >
+           <IconSettings />
+         </button>
+-        <button className="vault-action-button" type="button" aria-label={lockLabel} title={lockLabel} onClick={onLock}>
+-          <IconLock />
+-        </button>
+       </div>
+     </header>
+   );
+ }
