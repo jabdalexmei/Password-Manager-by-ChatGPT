@@ -506,7 +506,8 @@
 }
 
 .vault-datacard-list--empty {
-  justify-content: center;
+  /* IMPORTANT: no vertical centering — keeps "Empty" at a stable Y across views */
+  justify-content: flex-start;
 }
 .vault-datacard {
   width: 100%;
