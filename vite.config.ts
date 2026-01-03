@@ -1,8 +1,9 @@
 import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { visualizer } from 'rollup-plugin-visualizer';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   // говорим Vite, что корень проекта — src
   root: 'src',
   resolve: {
@@ -11,7 +12,12 @@ export default defineConfig({
      
     },
   },
-  plugins: [react()],
+  plugins: [
+    react(),
+    ...(mode === 'analyze'
+      ? [visualizer({ filename: '../dist/stats.html', open: true })]
+      : []),
+  ],
   build: {
     // а билдить нужно в ../dist относительно src → в корневую dist
     outDir: '../dist',
@@ -23,6 +29,8 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
 
+          if (id.includes('/@zxing/')) return 'zxing';
+          if (id.includes('/otpauth/')) return 'otpauth';
           if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
             return 'react';
           }
@@ -34,4 +42,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
