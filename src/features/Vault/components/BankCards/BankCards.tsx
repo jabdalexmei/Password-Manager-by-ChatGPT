@@ -248,13 +248,17 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
         )}
       </div>
 
-      {cards.length === 0 ? (
-        <div className="vault-datacard-list vault-datacard-list--empty">
+      <div
+        className={
+          cards.length === 0
+            ? 'vault-datacard-list vault-datacard-list--empty'
+            : 'vault-datacard-list'
+        }
+      >
+        {cards.length === 0 ? (
           <div className="vault-empty">{t('label.empty')}</div>
-        </div>
-      ) : (
-        <div className="vault-datacard-list">
-          {cards.map((card) => {
+        ) : (
+          cards.map((card) => {
             const isActive = selectedCardId === card.id;
             const isFavorite = card.isFavorite;
             const meta = card.metaLine || t('label.noMeta');
@@ -279,9 +283,9 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
                 </div>
               </button>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
       {viewModel.isCreateOpen &&
         renderDialog(
