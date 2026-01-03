@@ -838,6 +838,14 @@ select:autofill {
   gap: 10px;
 }
 
+/* When footer is placed INSIDE .dialog-body (like DataCard create/edit form),
+   don't double-apply horizontal padding. Keep the same left/right line as fields. */
+.dialog-body .dialog-footer {
+  padding-left: 0;
+  padding-right: 0;
+  width: 100%;
+}
+
 /* Dialog footer: keep Cancel on the left, actions on the right */
 .dialog-footer > .btn.btn-secondary:first-child {
   margin-right: auto;
