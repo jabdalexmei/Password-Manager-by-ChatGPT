@@ -5,7 +5,6 @@ import { VaultHeader } from './components/Header/VaultHeader';
 import { Search } from './components/Search/Search';
 import { Folders } from './components/Folders/Folders';
 import { DataCards } from './components/DataCards/DataCards';
-import { Details } from './components/Details/Details';
 import { useDataCards } from './components/DataCards/useDataCards';
 import { useFolders } from './components/Folders/useFolders';
 import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewModel';
@@ -31,6 +30,9 @@ const LazyBankCards = React.lazy(() =>
 const LazyBankCardDetails = React.lazy(() =>
   import('./components/BankCards/BankCardDetails').then((m) => ({ default: m.BankCardDetails })),
 );
+const LazyDetails = React.lazy(() =>
+  import('./components/Details/Details').then((m) => ({ default: m.Details })),
+);
 
 type VaultProps = {
   profileId: string;
@@ -47,6 +49,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
   const { t: tFolders } = useTranslation('Folders');
   const { t: tVault } = useTranslation('Vault');
   const { t: tCommon } = useTranslation('Common');
+  const { t: tDetails } = useTranslation('Details');
   const { show: showToast } = useToaster();
   const [selectedCategory, setSelectedCategory] = useState<'data_cards' | 'bank_cards'>('data_cards');
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -264,18 +267,27 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
         <section className="vault-details">
           {selectedCategory === 'data_cards' ? (
-            <Details
-              card={vault.selectedCard}
-              folders={foldersForCards}
-              onEdit={(card) => dataCardsViewModel.openEditModal(card)}
-              onDelete={vault.deleteCard}
-              onRestore={vault.restoreCard}
-              onPurge={vault.purgeCard}
-              onToggleFavorite={vault.toggleFavorite}
-              isTrashMode={vault.isTrashMode}
-              clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-              clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-            />
+            vault.selectedCard ? (
+              <Suspense fallback={<p aria-busy="true">Loading…</p>}>
+                <LazyDetails
+                  card={vault.selectedCard}
+                  folders={foldersForCards}
+                  onEdit={(card) => dataCardsViewModel.openEditModal(card)}
+                  onDelete={vault.deleteCard}
+                  onRestore={vault.restoreCard}
+                  onPurge={vault.purgeCard}
+                  onToggleFavorite={vault.toggleFavorite}
+                  isTrashMode={vault.isTrashMode}
+                  clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+                  clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+                />
+              </Suspense>
+            ) : (
+              <div className="vault-panel-wrapper">
+                <div className="vault-section-header">{tVault('information.title')}</div>
+                <div className="vault-empty">{tDetails('empty.selectPrompt')}</div>
+              </div>
+            )
           ) : (
             <Suspense fallback={<p aria-busy="true">Loading…</p>}>
               <LazyBankCardDetails
