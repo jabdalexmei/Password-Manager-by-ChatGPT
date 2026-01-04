@@ -1,39 +1,160 @@
-*** Begin Patch
-*** Update File: src/app/App.tsx
-@@
--import React, { useCallback, useMemo, useState } from 'react';
--import LogIn from '../features/LogIn/LogIn';
--import ProfileCreate from '../features/ProfileCreate/ProfileCreate';
--import Startup from '../features/Startup/Startup';
--import Vault from '../features/Vault/Vault';
--import Workspace from '../features/Workspace/Workspace';
-+import React, { Suspense, useCallback, useMemo, useState } from 'react';
- import { ToasterProvider } from '../shared/components/Toaster';
- import { ProfileMeta, loginVault, setActiveProfile } from '../shared/lib/tauri';
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 8d2a9c1..f3b0f24 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -1,4 +1,4 @@
+-import React, { useCallback, useEffect, useRef, useState } from 'react';
++import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import {
+   IconAttachment,
+@@ -12,10 +12,19 @@ import {
+ } from '@/shared/icons/lucide/icons';
+ import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
+ import { CustomFieldModal } from '../modals/CustomFieldModal';
+ import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
+-import { Add2FAModal } from '../modals/Add2FAModal';
+ import { SeedPhraseModal } from '../modals/SeedPhraseModal';
+ import { useToaster } from '../../../../shared/components/Toaster';
+ import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
+ import { generateTotpCode } from '../../utils/totp';
+ import { wasActuallyUpdated } from '../../utils/updatedAt';
+ import { DataCardFormState, DataCardsViewModel } from './useDataCards';
+ import { open } from '@tauri-apps/plugin-dialog';
+ import { clipboardClearAll } from '../../../../shared/lib/tauri';
  
- type View = 'workspace' | 'startup' | 'create' | 'login' | 'vault';
- 
-+const Workspace = React.lazy(() => import('../features/Workspace/Workspace'));
-+const Startup = React.lazy(() => import('../features/Startup/Startup'));
-+const ProfileCreate = React.lazy(() => import('../features/ProfileCreate/ProfileCreate'));
-+const LogIn = React.lazy(() => import('../features/LogIn/LogIn'));
-+const Vault = React.lazy(() => import('../features/Vault/Vault'));
++const LazyAdd2FAModal = React.lazy(() =>
++  import('../modals/Add2FAModal').then((m) => ({ default: m.Add2FAModal })),
++);
 +
- const App: React.FC = () => {
-   const [view, setView] = useState<View>('workspace');
-   const [activeProfile, setProfile] = useState<ProfileMeta | null>(null);
-@@
-   }, [activeProfile, handleProfileCreated, openProfile, view]);
+ export type DataCardsProps = {
+   viewModel: DataCardsViewModel;
+   sectionTitle: string;
+@@ -916,37 +925,41 @@ export function DataCards({
+         onCopy={handleCopyGeneratedPassword}
+       />
  
--  return <ToasterProvider>{content}</ToasterProvider>;
-+  return (
-+    <ToasterProvider>
-+      <Suspense fallback={<p className="muted centered" aria-busy="true">Loading…</p>}>
-+        {content}
-+      </Suspense>
-+    </ToasterProvider>
-+  );
- };
+-      <Add2FAModal
+-        isOpen={is2faModalOpen}
+-        existingUri={
+-          twoFactorTargetDialogId === 'datacard-create-dialog'
+-            ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
+-            : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
+-        }
+-        defaults={{
+-          issuer:
+-            twoFactorTargetDialogId === 'datacard-create-dialog'
+-              ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
+-              : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
+-          label:
+-            twoFactorTargetDialogId === 'datacard-create-dialog'
+-              ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
+-              : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
+-        }}
+-        onCancel={() => {
+-          setIs2faModalOpen(false);
+-          setTwoFactorTargetDialogId(null);
+-        }}
+-        onSave={(uri) => {
+-          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+-            viewModel.updateCreateField('totpUri', uri);
+-          } else {
+-            viewModel.updateEditField('totpUri', uri);
+-          }
+-          setIs2faModalOpen(false);
+-          setTwoFactorTargetDialogId(null);
+-        }}
+-        onRemove={() => {
+-          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+-            viewModel.updateCreateField('totpUri', '');
+-          } else {
+-            viewModel.updateEditField('totpUri', '');
+-          }
+-          setIs2faModalOpen(false);
+-          setTwoFactorTargetDialogId(null);
+-        }}
+-      />
++      {is2faModalOpen && (
++        <Suspense fallback={null}>
++          <LazyAdd2FAModal
++            isOpen={is2faModalOpen}
++            existingUri={
++              twoFactorTargetDialogId === 'datacard-create-dialog'
++                ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
++                : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
++            }
++            defaults={{
++              issuer:
++                twoFactorTargetDialogId === 'datacard-create-dialog'
++                  ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
++                  : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
++              label:
++                twoFactorTargetDialogId === 'datacard-create-dialog'
++                  ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
++                  : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
++            }}
++            onCancel={() => {
++              setIs2faModalOpen(false);
++              setTwoFactorTargetDialogId(null);
++            }}
++            onSave={(uri) => {
++              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
++                viewModel.updateCreateField('totpUri', uri);
++              } else {
++                viewModel.updateEditField('totpUri', uri);
++              }
++              setIs2faModalOpen(false);
++              setTwoFactorTargetDialogId(null);
++            }}
++            onRemove={() => {
++              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
++                viewModel.updateCreateField('totpUri', '');
++              } else {
++                viewModel.updateEditField('totpUri', '');
++              }
++              setIs2faModalOpen(false);
++              setTwoFactorTargetDialogId(null);
++            }}
++          />
++        </Suspense>
++      )}
  
- export default App;
-*** End Patch
+       <SeedPhraseModal
+         isOpen={isSeedPhraseModalOpen}
+         existingPhrase={
+diff --git a/src/features/Vault/components/modals/Add2FAModal.tsx b/src/features/Vault/components/modals/Add2FAModal.tsx
+index 5a3b2f8..3b5b8d1 100644
+--- a/src/features/Vault/components/modals/Add2FAModal.tsx
++++ b/src/features/Vault/components/modals/Add2FAModal.tsx
+@@ -1,7 +1,6 @@
+ import React, { useEffect, useMemo, useState } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+-import { BrowserQRCodeReader } from '@zxing/browser';
+ import { normalizeTotpInput } from '../../utils/totp';
+ 
+ type Props = {
+@@ -67,8 +66,9 @@ export const Add2FAModal: React.FC<Props> = ({
+     setBusy(true);
+     try {
+       const url = URL.createObjectURL(file);
+       try {
+-        const reader = new BrowserQRCodeReader();
++        const { BrowserQRCodeReader } = await import('@zxing/browser');
++        const reader = new BrowserQRCodeReader();
+         const decoded = await reader.decodeFromImageUrl(url);
+         const text = decoded.getText();
+         const norm = normalizeTotpInput(text, defaults);
+         if (!norm.ok) {
+           setError(t(`twoFactor.error.${norm.error}`));
+           return;
+         }
+         setTextValue(norm.uri);
+       } finally {
+         URL.revokeObjectURL(url);
+       }
+     } catch {
+       setError(t('twoFactor.error.QR_DECODE_FAILED'));
+     } finally {
+       setBusy(false);
+     }
+   };
