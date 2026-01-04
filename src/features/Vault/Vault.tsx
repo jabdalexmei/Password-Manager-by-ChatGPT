@@ -9,7 +9,6 @@ import { useDataCards } from './components/DataCards/useDataCards';
 import { useFolders } from './components/Folders/useFolders';
 import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewModel';
 import { useTranslation } from '../../shared/lib/i18n';
-import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
 import { useBankCards } from './hooks/useBankCards';
 import { useToaster } from '../../shared/components/Toaster';
 import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
@@ -32,6 +31,9 @@ const LazyBankCardDetails = React.lazy(() =>
 );
 const LazyDetails = React.lazy(() =>
   import('./components/Details/Details').then((m) => ({ default: m.Details })),
+);
+const LazyDeleteFolderModal = React.lazy(() =>
+  import('./components/modals/DeleteFolderModal').then((m) => ({ default: m.DeleteFolderModal })),
 );
 
 type VaultProps = {
@@ -306,14 +308,18 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
         </section>
       </div>
 
-      <DeleteFolderModal
-        open={!!pendingFolderDelete}
-        folderName={pendingFolderDelete?.name ?? ''}
-        cardsCount={pendingFolderDelete?.cardsCount ?? 0}
-        onCancel={closeDeleteModal}
-        onDeleteFolderOnly={handleDeleteFolderOnly}
-        onDeleteFolderAndCards={handleDeleteFolderAndCards}
-      />
+      {pendingFolderDelete !== null && (
+        <Suspense fallback={null}>
+          <LazyDeleteFolderModal
+            open={pendingFolderDelete !== null}
+            folderName={pendingFolderDelete?.name ?? ''}
+            cardsCount={pendingFolderDelete?.cardsCount ?? 0}
+            onCancel={closeDeleteModal}
+            onDeleteFolderOnly={handleDeleteFolderOnly}
+            onDeleteFolderAndCards={handleDeleteFolderAndCards}
+          />
+        </Suspense>
+      )}
 
       {exportModalOpen && (
         <Suspense fallback={null}>
