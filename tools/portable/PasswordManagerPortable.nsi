@@ -21,25 +21,27 @@ Section
   StrCpy $INSTDIR "$EXEDIR\${PORTABLE_DIR_NAME}"
   CreateDirectory "$INSTDIR"
 
-  ; Keep app files isolated so we can update them without touching user data.
+  ; Recreate ONLY the technical folders (app + webview2-fixed) to avoid stale/partial runtime.
+  RMDir /r "$INSTDIR\app"
+  RMDir /r "$INSTDIR\webview2-fixed"
   CreateDirectory "$INSTDIR\app"
 
   ; App exe (built by tauri)
-  ; Re-extract app folder on each run (updates app without nuking other portable files).
-  RMDir /r "$INSTDIR\app"
-  CreateDirectory "$INSTDIR\app"
   SetOutPath "$INSTDIR\app"
+  SetOverwrite on
   File /oname=${APP_EXE_NAME} "..\..\src-tauri\target\release\${APP_EXE_NAME}"
 
   ; Optional resources dir (if present)
   IfFileExists "..\..\src-tauri\target\release\resources\*.*" 0 +3
     CreateDirectory "$INSTDIR\app\resources"
     SetOutPath "$INSTDIR\app\resources"
+    SetOverwrite on
     File /r "..\..\src-tauri\target\release\resources\*.*"
 
   ; Fixed WebView2 runtime (must contain msedgewebview2.exe at its root)
   CreateDirectory "$INSTDIR\webview2-fixed\runtime"
   SetOutPath "$INSTDIR\webview2-fixed\runtime"
+  SetOverwrite on
   File /r "..\..\src-tauri\webview2-fixed\runtime\*.*"
 
   ; Hard check: msedgewebview2.exe must exist in the runtime folder.
@@ -58,6 +60,9 @@ Section
     MessageBox MB_OK "Не удалось установить WEBVIEW2_BROWSER_EXECUTABLE_FOLDER.`r`nGetLastError=$1"
     Abort
   setenv_ok:
+
+  ; Ensure the app starts with a sane working directory (SetOutPath controls $OUTDIR / CWD).
+  SetOutPath "$INSTDIR\app"
 
   ; Run the app and wait until it exits
   ExecWait '"$INSTDIR\app\${APP_EXE_NAME}"'
