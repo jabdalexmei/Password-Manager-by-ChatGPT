@@ -57,7 +57,62 @@ use services::security_service;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
+#[cfg(target_os = "windows")]
+fn ensure_webview2_fixed_runtime_env() {
+    use std::{
+        env,
+        fs,
+        path::{Path, PathBuf},
+    };
+
+    // If the launcher (or user) already set it, do not override.
+    if env::var_os("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER").is_some() {
+        return;
+    }
+
+    fn find_runtime_root(dir: &Path) -> Option<PathBuf> {
+        // The folder itself might be the runtime root.
+        if dir.join("msedgewebview2.exe").is_file() {
+            return Some(dir.to_path_buf());
+        }
+
+        // Or it might contain the FixedVersionRuntime folder.
+        let entries = fs::read_dir(dir).ok()?;
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if !p.is_dir() {
+                continue;
+            }
+            if p.join("msedgewebview2.exe").is_file() {
+                return Some(p);
+            }
+        }
+
+        None
+    }
+
+    let exe_dir = match env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()))
+    {
+        Some(d) => d,
+        None => return,
+    };
+
+    // Common layouts:
+    // 1) <exe_dir>/webview2-fixed/<FixedRuntimeFolder>/msedgewebview2.exe
+    // 2) <exe_dir>/<FixedRuntimeFolder>/msedgewebview2.exe
+    let candidates = [exe_dir.join("webview2-fixed"), exe_dir.clone()];
+    for c in candidates {
+        if let Some(root) = find_runtime_root(&c) {
+            env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", root);
+            return;
+        }
+    }
+}
+
 fn main() {
+    #[cfg(target_os = "windows")]
+    ensure_webview2_fixed_runtime_env();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_log::Builder::new().build())
