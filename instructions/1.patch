@@ -1,62 +1,20 @@
-diff --git a/src/features/Vault/components/BankCards/BankCardsBody.tsx b/src/features/Vault/components/BankCards/BankCardsBody.tsx
-index b7d36b8..0c4a5e1 100644
---- a/src/features/Vault/components/BankCards/BankCardsBody.tsx
-+++ b/src/features/Vault/components/BankCards/BankCardsBody.tsx
-@@ -1,7 +1,6 @@
--import React, { useEffect, useMemo } from 'react';
-+import React, { useEffect } from 'react';
- import { useTranslation } from '../../../../shared/lib/i18n';
- import type { BackendUserSettings } from '../../types/backend';
- import type { Folder } from '../../types/ui';
- import type { FolderDialogState } from '../Folders/useFolders';
- import type { VaultCategory } from '../Folders/Folders';
- import { Search } from '../Search/Search';
- import { Folders as VaultFolders } from '../Folders/Folders';
- import { useBankCards } from '../../hooks/useBankCards';
- import { useBankCardsViewModel } from './useBankCardsViewModel';
- import { BankCards } from './BankCards';
- import { BankCardDetails } from './BankCardDetails';
-@@ -48,24 +47,19 @@ export function BankCardsBody({
- }: BankCardsBodyProps) {
-   const bankCards = useBankCards(profileId, onLocked);
-
-   const viewModel = useBankCardsViewModel({
--    cards: bankCards.filteredCards,
--    deletedCards: bankCards.filteredDeletedCards,
-+    cards: bankCards.visibleCards,
-     selectedCardId: bankCards.selectedCardId,
-     isTrashMode: bankCards.isTrashMode,
-     onSelectCard: bankCards.selectCard,
--    onSelectNav: bankCards.selectNav,
-     onCreateCard: bankCards.createCard,
-     onUpdateCard: bankCards.updateCard,
-     onDeleteCard: bankCards.deleteCard,
-     onRestoreCard: bankCards.restoreCard,
-     onPurgeCard: bankCards.purgeCard,
-     onRestoreAllTrash: bankCards.restoreAllTrash,
-     onPurgeAllTrash: bankCards.purgeAllTrash,
-   });
-
-   useEffect(() => {
-     registerCommands({
-       openCreateModal: viewModel.openCreateModal,
-       setSettings: bankCards.setSettings,
-     });
-
-     return () => {
-       registerCommands(null);
-     };
-   }, [bankCards.setSettings, registerCommands, viewModel.openCreateModal]);
-
-   const { t: tBankCards } = useTranslation('BankCards');
--  const { t: tVault } = useTranslation('Vault');
--
--  const sectionTitle = useMemo(
--    () => (bankCards.isTrashMode ? tVault('title.bank_cards.trash') : tVault('title.bank_cards.main')),
--    [bankCards.isTrashMode, tVault],
--  );
-+  const sectionTitle = bankCards.currentSectionTitle;
-
-   if (!active) {
-     return <div hidden />;
-   }
+diff --git a/package.json b/package.json
+index a5fdab3..f9d0e2a 100644
+--- a/package.json
++++ b/package.json
+@@ -4,15 +4,17 @@
+   "private": true,
+   "type": "module",
+   "scripts": {
+     "dev": "vite",
+     "zxing:guard": "node scripts/check-no-zxing-imports.mjs",
+-    "build": "npm run zxing:guard && vite build",
+-    "analyze": "npm run zxing:guard && vite build --mode analyze",
++    "typecheck": "tsc -p tsconfig.json --noEmit",
++    "build": "npm run zxing:guard && npm run typecheck && vite build",
++    "analyze": "npm run zxing:guard && npm run typecheck && vite build --mode analyze",
+     "tauri:dev": "tauri dev",
+     "tauri:build": "tauri build",
+     "theme:check": "node scripts/check-theme-colors.mjs",
+     "icons:check": "node scripts/check-no-inline-svg.mjs"
+   },
