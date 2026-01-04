@@ -5,6 +5,10 @@ RequestExecutionLevel user
 !define PORTABLE_NAME "PasswordManager-Portable.exe"
 !define TEMP_DIR_NAME "PasswordManagerPortable"
 
+; Make sure the output directory exists at compile time.
+; OutFile will fail with "Can't open output file" if the directory doesn't exist.
+!system 'cmd /c if not exist "..\..\dist-portable" mkdir "..\..\dist-portable"'
+
 OutFile "..\..\dist-portable\${PORTABLE_NAME}"
 SetCompressor /SOLID lzma
 
