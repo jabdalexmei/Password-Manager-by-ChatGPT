@@ -1,15 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import ConfirmDialog from '../../components/ConfirmDialog';
-import { useTranslation } from '../../lib/i18n';
-import { ProfileMeta, setActiveProfile } from '../../lib/tauri';
-import { useStartup } from './useStartup';
+import ConfirmDialog from '../../shared/components/ConfirmDialog';
+import { useTranslation } from '../../shared/lib/i18n';
+import { ProfileMeta, setActiveProfile } from '../../shared/lib/tauri';
+import { useStartup } from './hooks/useStartup';
 
 type StartupProps = {
   onCreate: () => void;
   onOpen: (profile: ProfileMeta) => void;
+  onBack: () => void;
 };
 
-const Startup: React.FC<StartupProps> = ({ onCreate, onOpen }) => {
+const Startup: React.FC<StartupProps> = ({ onCreate, onOpen, onBack }) => {
   const { profiles, loading, error, removeProfile } = useStartup();
   const { t } = useTranslation('Startup');
   const [pendingDelete, setPendingDelete] = useState<ProfileMeta | null>(null);
@@ -33,8 +34,8 @@ const Startup: React.FC<StartupProps> = ({ onCreate, onOpen }) => {
 
     if (!profiles.length) {
       return (
-        <div className="empty-state">
-          <p>{t('noProfiles')}</p>
+        <div className="empty empty--dashed">
+          <p className="empty-text">{t('noProfiles')}</p>
         </div>
       );
     }
@@ -42,18 +43,18 @@ const Startup: React.FC<StartupProps> = ({ onCreate, onOpen }) => {
     return (
       <div className="profiles-list">
         {profiles.map((profile, index) => (
-          <div className="profile-card" key={profile.id}>
-            <div className="profile-meta">
-              <p className="profile-name">
-                {profile.name || index + 1}
-              </p>
-              <p className="profile-id">
-                ID: {profile.id}
-              </p>
-              <span className="badge">
-                {profile.has_password ? t('requiresPassword') : t('passwordless')}
-              </span>
-            </div>
+            <div className="profile-card" key={profile.id}>
+              <div className="profile-meta">
+                <p className="profile-name">
+                  {profile.name || index + 1}
+                </p>
+                <p className="profile-id">
+                  {t('label.profileId', { id: profile.id })}
+                </p>
+                <span className="badge">
+                  {profile.has_password ? t('requiresPassword') : t('passwordless')}
+                </span>
+              </div>
             <div className="button-row">
               <button
                 type="button"
@@ -80,8 +81,8 @@ const Startup: React.FC<StartupProps> = ({ onCreate, onOpen }) => {
   }, [error, loading, onOpen, profiles, t]);
 
   return (
-    <div className="startup-shell">
-      <div className="startup-card">
+    <div className="screen-shell">
+      <div className="screen-card">
         <header className="startup-header">
           <h1 className="startup-title">{t('title')}</h1>
           <p className="startup-subtitle">{t('subtitle')}</p>
@@ -89,32 +90,32 @@ const Startup: React.FC<StartupProps> = ({ onCreate, onOpen }) => {
 
         {content}
 
-        <div className="centered">
-          <button
-            type="button"
-            className="link-button"
-            onClick={onCreate}
-          >
+        <div className="startup-footer">
+          <button type="button" className="btn btn-secondary" onClick={onBack}>
+            {t('back')}
+          </button>
+
+          <button type="button" className="btn btn-primary" onClick={onCreate}>
             {t('create')}
           </button>
-          <p className="startup-footnote">{t('footnote')}</p>
         </div>
+        <p className="startup-footnote">{t('footnote')}</p>
       </div>
 
       <ConfirmDialog
-  open={Boolean(pendingDelete)}
-  title={t('confirmDeleteTitle')}
-  description={t('confirmDelete')}
-  cancelLabel={t('cancel')}
-  confirmLabel={t('delete')}
-  onCancel={() => setPendingDelete(null)}
-  onConfirm={async () => {
-    if (pendingDelete) {
-      await removeProfile(pendingDelete.id);
-    }
-    setPendingDelete(null);
-  }}
-/>
+        open={Boolean(pendingDelete)}
+        title={t('confirmDeleteTitle')}
+        description={t('confirmDelete')}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('delete')}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (pendingDelete) {
+            await removeProfile(pendingDelete.id);
+          }
+          setPendingDelete(null);
+        }}
+      />
 
     </div>
   );
