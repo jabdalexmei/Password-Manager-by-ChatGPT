@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { normalizeTotpInput } from '../../utils/totp';
+import { decodeQrFromImageFile } from '../../../../shared/lib/zxingLoader';
 
 type Props = {
   isOpen: boolean;
@@ -57,21 +58,13 @@ export const Add2FAModal: React.FC<Props> = ({
     setError(null);
     setBusy(true);
     try {
-      const url = URL.createObjectURL(file);
-      try {
-        const { BrowserQRCodeReader } = await import('@zxing/browser');
-        const reader = new BrowserQRCodeReader();
-        const decoded = await reader.decodeFromImageUrl(url);
-        const text = decoded.getText();
-        const norm = normalizeTotpInput(text, defaults);
-        if (!norm.ok) {
-          setError(t(`twoFactor.error.${norm.error}`));
-          return;
-        }
-        setTextValue(norm.uri);
-      } finally {
-        URL.revokeObjectURL(url);
+      const text = await decodeQrFromImageFile(file);
+      const norm = normalizeTotpInput(text, defaults);
+      if (!norm.ok) {
+        setError(t(`twoFactor.error.${norm.error}`));
+        return;
       }
+      setTextValue(norm.uri);
     } catch {
       setError(t('twoFactor.error.QR_DECODE_FAILED'));
     } finally {

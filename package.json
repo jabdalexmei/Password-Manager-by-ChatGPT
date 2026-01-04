@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "analyze": "vite build --mode analyze",
+    "zxing:guard": "node scripts/check-no-zxing-imports.mjs",
+    "build": "npm run zxing:guard && vite build",
+    "analyze": "npm run zxing:guard && vite build --mode analyze",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "theme:check": "node scripts/check-theme-colors.mjs",
