@@ -9,6 +9,7 @@
     "analyze": "vite build --mode analyze",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "portable:build": "makensis tools/portable/PasswordManagerPortable.nsi",
     "theme:check": "node scripts/check-theme-colors.mjs",
     "icons:check": "node scripts/check-no-inline-svg.mjs"
   },
