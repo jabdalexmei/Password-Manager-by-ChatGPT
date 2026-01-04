@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useVault } from './hooks/useVault';
 import { VaultHeader } from './components/Header/VaultHeader';
@@ -16,10 +16,17 @@ import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
 import { useBankCards } from './hooks/useBankCards';
 import { useToaster } from '../../shared/components/Toaster';
 import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
-import { ExportBackupModal } from './components/modals/ExportBackupModal';
-import { ImportBackupModal } from './components/modals/ImportBackupModal';
-import { SettingsModal } from './components/modals/SettingsModal';
 import { BackendUserSettings } from './types/backend';
+
+const LazyExportBackupModal = React.lazy(() =>
+  import('./components/modals/ExportBackupModal').then((m) => ({ default: m.ExportBackupModal })),
+);
+const LazyImportBackupModal = React.lazy(() =>
+  import('./components/modals/ImportBackupModal').then((m) => ({ default: m.ImportBackupModal })),
+);
+const LazySettingsModal = React.lazy(() =>
+  import('./components/modals/SettingsModal').then((m) => ({ default: m.SettingsModal })),
+);
 
 type VaultProps = {
   profileId: string;
@@ -285,23 +292,39 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
         onDeleteFolderAndCards={handleDeleteFolderAndCards}
       />
 
-      <ExportBackupModal open={exportModalOpen} profileId={profileId} onClose={() => setExportModalOpen(false)} />
+      {exportModalOpen && (
+        <Suspense fallback={null}>
+          <LazyExportBackupModal
+            open={exportModalOpen}
+            profileId={profileId}
+            onClose={() => setExportModalOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <ImportBackupModal
-        open={!!pendingImportPath}
-        backupPath={pendingImportPath}
-        isSubmitting={isRestoringBackup}
-        onCancel={handleCloseImport}
-        onConfirm={handleConfirmImport}
-      />
+      {pendingImportPath !== null && (
+        <Suspense fallback={null}>
+          <LazyImportBackupModal
+            open={pendingImportPath !== null}
+            backupPath={pendingImportPath}
+            isSubmitting={isRestoringBackup}
+            onCancel={handleCloseImport}
+            onConfirm={handleConfirmImport}
+          />
+        </Suspense>
+      )}
 
-      <SettingsModal
-        open={settingsModalOpen}
-        settings={vault.settings}
-        isSaving={isSavingSettings}
-        onCancel={() => setSettingsModalOpen(false)}
-        onSave={handleSaveSettings}
-      />
+      {settingsModalOpen && (
+        <Suspense fallback={null}>
+          <LazySettingsModal
+            open={settingsModalOpen}
+            settings={vault.settings}
+            isSaving={isSavingSettings}
+            onCancel={() => setSettingsModalOpen(false)}
+            onSave={handleSaveSettings}
+          />
+        </Suspense>
+      )}
 
     </div>
   );
