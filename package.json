@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "zxing:guard": "node scripts/check-no-zxing-imports.mjs",
-    "build": "npm run zxing:guard && vite build",
-    "analyze": "npm run zxing:guard && vite build --mode analyze",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "npm run zxing:guard && npm run typecheck && vite build",
+    "analyze": "npm run zxing:guard && npm run typecheck && vite build --mode analyze",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "theme:check": "node scripts/check-theme-colors.mjs",
