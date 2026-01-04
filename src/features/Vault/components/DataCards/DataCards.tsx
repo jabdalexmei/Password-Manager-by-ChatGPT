@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import {
   IconAttachment,
@@ -12,7 +12,6 @@ import {
 import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
 import { CustomFieldModal } from '../modals/CustomFieldModal';
 import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
-import { Add2FAModal } from '../modals/Add2FAModal';
 import { SeedPhraseModal } from '../modals/SeedPhraseModal';
 import { useToaster } from '../../../../shared/components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
@@ -21,6 +20,10 @@ import { wasActuallyUpdated } from '../../utils/updatedAt';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 import { open } from '@tauri-apps/plugin-dialog';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
+
+const LazyAdd2FAModal = React.lazy(() =>
+  import('../modals/Add2FAModal').then((m) => ({ default: m.Add2FAModal })),
+);
 
 export type DataCardsProps = {
   viewModel: DataCardsViewModel;
@@ -920,46 +923,50 @@ export function DataCards({
         onCopy={handleCopyGeneratedPassword}
       />
 
-      <Add2FAModal
-        isOpen={is2faModalOpen}
-        existingUri={
-          twoFactorTargetDialogId === 'datacard-create-dialog'
-            ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
-            : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
-        }
-        defaults={{
-          issuer:
-            twoFactorTargetDialogId === 'datacard-create-dialog'
-              ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
-              : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
-          label:
-            twoFactorTargetDialogId === 'datacard-create-dialog'
-              ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
-              : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
-        }}
-        onCancel={() => {
-          setIs2faModalOpen(false);
-          setTwoFactorTargetDialogId(null);
-        }}
-        onSave={(uri) => {
-          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
-            viewModel.updateCreateField('totpUri', uri);
-          } else {
-            viewModel.updateEditField('totpUri', uri);
-          }
-          setIs2faModalOpen(false);
-          setTwoFactorTargetDialogId(null);
-        }}
-        onRemove={() => {
-          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
-            viewModel.updateCreateField('totpUri', '');
-          } else {
-            viewModel.updateEditField('totpUri', '');
-          }
-          setIs2faModalOpen(false);
-          setTwoFactorTargetDialogId(null);
-        }}
-      />
+      {is2faModalOpen && (
+        <Suspense fallback={null}>
+          <LazyAdd2FAModal
+            isOpen={is2faModalOpen}
+            existingUri={
+              twoFactorTargetDialogId === 'datacard-create-dialog'
+                ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
+                : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
+            }
+            defaults={{
+              issuer:
+                twoFactorTargetDialogId === 'datacard-create-dialog'
+                  ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
+                  : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
+              label:
+                twoFactorTargetDialogId === 'datacard-create-dialog'
+                  ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
+                  : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
+            }}
+            onCancel={() => {
+              setIs2faModalOpen(false);
+              setTwoFactorTargetDialogId(null);
+            }}
+            onSave={(uri) => {
+              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+                viewModel.updateCreateField('totpUri', uri);
+              } else {
+                viewModel.updateEditField('totpUri', uri);
+              }
+              setIs2faModalOpen(false);
+              setTwoFactorTargetDialogId(null);
+            }}
+            onRemove={() => {
+              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+                viewModel.updateCreateField('totpUri', '');
+              } else {
+                viewModel.updateEditField('totpUri', '');
+              }
+              setIs2faModalOpen(false);
+              setTwoFactorTargetDialogId(null);
+            }}
+          />
+        </Suspense>
+      )}
 
       <SeedPhraseModal
         isOpen={isSeedPhraseModalOpen}
