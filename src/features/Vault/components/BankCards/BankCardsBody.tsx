@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import type { BackendUserSettings } from '../../types/backend';
 import type { Folder } from '../../types/ui';
@@ -44,12 +44,10 @@ export function BankCardsBody({
   const bankCards = useBankCards(profileId, onLocked);
 
   const viewModel = useBankCardsViewModel({
-    cards: bankCards.filteredCards,
-    deletedCards: bankCards.filteredDeletedCards,
+    cards: bankCards.visibleCards,
     selectedCardId: bankCards.selectedCardId,
     isTrashMode: bankCards.isTrashMode,
     onSelectCard: bankCards.selectCard,
-    onSelectNav: bankCards.selectNav,
     onCreateCard: bankCards.createCard,
     onUpdateCard: bankCards.updateCard,
     onDeleteCard: bankCards.deleteCard,
@@ -71,12 +69,7 @@ export function BankCardsBody({
   }, [bankCards.setSettings, registerCommands, viewModel.openCreateModal]);
 
   const { t: tBankCards } = useTranslation('BankCards');
-  const { t: tVault } = useTranslation('Vault');
-
-  const sectionTitle = useMemo(
-    () => (bankCards.isTrashMode ? tVault('title.bank_cards.trash') : tVault('title.bank_cards.main')),
-    [bankCards.isTrashMode, tVault],
-  );
+  const sectionTitle = bankCards.currentSectionTitle;
 
   if (!active) {
     return <div hidden />;
