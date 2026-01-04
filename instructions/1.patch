@@ -1,615 +1,94 @@
-
-
-## Шаг 0 — анализ бандла (чтобы не гадать)
-
-**Объём:** +1 devDependency, +1 скрипт, маленькая правка vite config.
-
-### TS (patch)
-
-```diff
-*** Begin Patch
-*** Update File: package.json
-@@
-   "scripts": {
-     "dev": "vite",
-     "build": "vite build",
-+    "analyze": "vite build --mode analyze",
-     "tauri:dev": "tauri dev",
-     "tauri:build": "tauri build",
-     "theme:check": "node scripts/check-theme-colors.mjs",
-     "icons:check": "node scripts/check-no-inline-svg.mjs"
-   },
-@@
-   "devDependencies": {
-     "@tauri-apps/cli": "2.0.0",
-     "@types/react": "^18.3.3",
-     "@types/react-dom": "^18.3.0",
-     "@vitejs/plugin-react": "^4.3.3",
-     "typescript": "^5.6.2",
--    "vite": "^5.4.0"
-+    "vite": "^5.4.0",
-+    "vite-plugin-visualizer": "^5.12.0"
-   }
- }
-*** End Patch
-```
-
-```diff
-*** Begin Patch
-*** Update File: vite.config.ts
-@@
- import path from 'node:path';
--import { defineConfig } from 'vite';
-+import type { PluginOption } from 'vite';
-+import { defineConfig } from 'vite';
- import react from '@vitejs/plugin-react';
-+import { visualizer } from 'vite-plugin-visualizer';
- 
--export default defineConfig({
--  // говорим Vite, что корень проекта — src
--  root: 'src',
--  resolve: {
--    alias: {
--      '@': path.resolve(__dirname, 'src'),
--     
--    },
--  },
--  plugins: [react()],
--  build: {
--    // а билдить нужно в ../dist относительно src → в корневую dist
--    outDir: '../dist',
--    emptyOutDir: true,
--  },
--});
-+export default defineConfig(({ mode }) => {
-+  const plugins: PluginOption[] = [react()];
-+
-+  if (mode === 'analyze') {
-+    plugins.push(
-+      visualizer({
-+        filename: '../dist/stats.html',
-+        open: true,
-+        gzipSize: true,
-+        brotliSize: true,
-+      })
-+    );
-+  }
-+
-+  return {
-+    // Vite project root is src
-+    root: 'src',
-+    // Safer for Tauri/file protocol + chunked builds
-+    base: './',
-+    resolve: {
-+      alias: {
-+        '@': path.resolve(__dirname, 'src'),
-+      },
-+    },
-+    plugins,
-+    build: {
-+      outDir: '../dist',
-+      emptyOutDir: true,
-+      sourcemap: false,
-+    },
-+  };
-+});
-*** End Patch
-```
-
-**Команды:**
-
-* `npm i`
-* `npm run analyze` → откроется `dist/stats.html` (посмотри top offenders).
-
----
-
-## Шаг 1 — lazy-load экранов в App (самый большой выигрыш)
-
-**Объём:** одна правка `src/app/App.tsx`.
-**Эффект:** `Vault` и всё его дерево **не попадёт** в стартовый бандл Workspace/Startup.
-
-### TS (patch)
-
-```diff
-*** Begin Patch
-*** Update File: src/app/App.tsx
-@@
--import React, { useCallback, useMemo, useState } from 'react';
--import LogIn from '../features/LogIn/LogIn';
--import ProfileCreate from '../features/ProfileCreate/ProfileCreate';
--import Startup from '../features/Startup/Startup';
--import Vault from '../features/Vault/Vault';
--import Workspace from '../features/Workspace/Workspace';
-+import React, { Suspense, useCallback, useMemo, useState } from 'react';
- import { ToasterProvider } from '../shared/components/Toaster';
- import { ProfileMeta, loginVault, setActiveProfile } from '../shared/lib/tauri';
- 
- type View = 'workspace' | 'startup' | 'create' | 'login' | 'vault';
- 
-+const Workspace = React.lazy(() => import('../features/Workspace/Workspace'));
-+const Startup = React.lazy(() => import('../features/Startup/Startup'));
-+const ProfileCreate = React.lazy(() => import('../features/ProfileCreate/ProfileCreate'));
-+const LogIn = React.lazy(() => import('../features/LogIn/LogIn'));
-+const Vault = React.lazy(() => import('../features/Vault/Vault'));
-+
- const App: React.FC = () => {
-   const [view, setView] = useState<View>('workspace');
-   const [activeProfile, setProfile] = useState<ProfileMeta | null>(null);
-@@
--  return <ToasterProvider>{content}</ToasterProvider>;
-+  return (
-+    <ToasterProvider>
-+      <Suspense fallback={<div className="app-loading" aria-busy="true" />}>{content}</Suspense>
-+    </ToasterProvider>
-+  );
- };
- 
- export default App;
-*** End Patch
-```
-
-**Проверка:**
-
-* `npm run build` → в `dist/assets` должны появиться отдельные чанки под `Vault` и т.п.
-* `npm run analyze` → сравни, насколько похудел initial bundle.
-
----
-
-## Шаг 2 — lazy-load тяжёлых модалок (QR/2FA в отдельный чанк)
-
-**Объём:** одна правка `DataCards.tsx`.
-**Эффект:** `@zxing/browser` (QR) не будет грузиться, пока пользователь реально не откроет 2FA.
-
-### TS (patch)
-
-```diff
-*** Begin Patch
-*** Update File: src/features/Vault/components/DataCards/DataCards.tsx
-@@
--import React, { useCallback, useEffect, useRef, useState } from 'react';
-+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
- import { useTranslation } from '../../../../shared/lib/i18n';
- import {
-   IconAttachment,
-   IconPreview,
-   IconPreviewOff,
-   IconRename,
-   IconRegenerate,
-   IconTrash,
-   IconMoreHorizontal,
- } from '@/shared/icons/lucide/icons';
--import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
--import { CustomFieldModal } from '../modals/CustomFieldModal';
--import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
--import { Add2FAModal } from '../modals/Add2FAModal';
--import { SeedPhraseModal } from '../modals/SeedPhraseModal';
- import { useToaster } from '../../../../shared/components/Toaster';
- import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
- import { generateTotpCode } from '../../utils/totp';
- import { wasActuallyUpdated } from '../../utils/updatedAt';
- import { DataCardFormState, DataCardsViewModel } from './useDataCards';
- import { open } from '@tauri-apps/plugin-dialog';
- import { clipboardClearAll } from '../../../../shared/lib/tauri';
-@@
- export type DataCardsProps = {
-   viewModel: DataCardsViewModel;
-   sectionTitle: string;
-   clipboardAutoClearEnabled?: boolean;
-   clipboardClearTimeoutSeconds?: number;
- };
- 
-+const LazyPasswordGeneratorModal = React.lazy(() =>
-+  import('../modals/PasswordGeneratorModal').then((m) => ({ default: m.PasswordGeneratorModal }))
-+);
-+const LazyCustomFieldModal = React.lazy(() =>
-+  import('../modals/CustomFieldModal').then((m) => ({ default: m.CustomFieldModal }))
-+);
-+const LazyCustomFieldRenameModal = React.lazy(() =>
-+  import('../modals/CustomFieldRenameModal').then((m) => ({ default: m.CustomFieldRenameModal }))
-+);
-+const LazyAdd2FAModal = React.lazy(() => import('../modals/Add2FAModal').then((m) => ({ default: m.Add2FAModal })));
-+const LazySeedPhraseModal = React.lazy(() =>
-+  import('../modals/SeedPhraseModal').then((m) => ({ default: m.SeedPhraseModal }))
-+);
-+
- export function DataCards({
-   viewModel,
-   sectionTitle,
-   clipboardAutoClearEnabled,
-   clipboardClearTimeoutSeconds,
- }: DataCardsProps) {
-@@
--      <CustomFieldModal
--        isOpen={isCustomFieldModalOpen}
--        name={customFieldName}
--        error={customFieldModalError}
--        onChangeName={(value) => {
--          setCustomFieldName(value);
--          setCustomFieldModalError(null);
--        }}
--        onCancel={() => {
--          setIsCustomFieldModalOpen(false);
--          setCustomFieldModalError(null);
--        }}
--        onOk={() => {
--          if (!customFieldTargetDialogId) return;
--          const result =
--            customFieldTargetDialogId === 'datacard-create-dialog'
--              ? viewModel.addCreateCustomFieldByName(customFieldName)
--              : viewModel.addEditCustomFieldByName(customFieldName);
--
--          if (!result.ok) {
--            setCustomFieldModalError(
--              result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
--            );
--            return;
--          }
--
--          setIsCustomFieldModalOpen(false);
--          setCustomFieldModalError(null);
--        }}
--      />
-+      {isCustomFieldModalOpen && (
-+        <Suspense fallback={<div className="dialog-backdrop" aria-busy="true" />}>
-+          <LazyCustomFieldModal
-+            isOpen={true}
-+            name={customFieldName}
-+            error={customFieldModalError}
-+            onChangeName={(value) => {
-+              setCustomFieldName(value);
-+              setCustomFieldModalError(null);
-+            }}
-+            onCancel={() => {
-+              setIsCustomFieldModalOpen(false);
-+              setCustomFieldModalError(null);
-+            }}
-+            onOk={() => {
-+              if (!customFieldTargetDialogId) return;
-+              const result =
-+                customFieldTargetDialogId === 'datacard-create-dialog'
-+                  ? viewModel.addCreateCustomFieldByName(customFieldName)
-+                  : viewModel.addEditCustomFieldByName(customFieldName);
-+
-+              if (!result.ok) {
-+                setCustomFieldModalError(
-+                  result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
-+                );
-+                return;
-+              }
-+
-+              setIsCustomFieldModalOpen(false);
-+              setCustomFieldModalError(null);
-+            }}
-+          />
-+        </Suspense>
-+      )}
- 
--      <CustomFieldRenameModal
--        isOpen={isRenameModalOpen}
--        name={renameName}
--        error={renameError}
--        onChangeName={(value) => {
--          setRenameName(value);
--          setRenameError(null);
--        }}
--        onCancel={() => {
--          setIsRenameModalOpen(false);
--          setRenameError(null);
--        }}
--        onOk={() => {
--          if (!renameTargetRowId || !renameTargetDialogId) {
--            setIsRenameModalOpen(false);
--            setRenameError(null);
--            return;
--          }
--
--          const result =
--            renameTargetDialogId === 'datacard-create-dialog'
--              ? viewModel.renameCreateCustomFieldById(renameTargetRowId, renameName)
--              : viewModel.renameEditCustomFieldById(renameTargetRowId, renameName);
--          if (!result.ok) {
--            setRenameError(
--              result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
--            );
--            return;
--          }
--
--          setIsRenameModalOpen(false);
--          setRenameError(null);
--          setRenameTargetRowId(null);
--          setRenameTargetDialogId(null);
--        }}
--      />
-+      {isRenameModalOpen && (
-+        <Suspense fallback={<div className="dialog-backdrop" aria-busy="true" />}>
-+          <LazyCustomFieldRenameModal
-+            isOpen={true}
-+            name={renameName}
-+            error={renameError}
-+            onChangeName={(value) => {
-+              setRenameName(value);
-+              setRenameError(null);
-+            }}
-+            onCancel={() => {
-+              setIsRenameModalOpen(false);
-+              setRenameError(null);
-+            }}
-+            onOk={() => {
-+              if (!renameTargetRowId || !renameTargetDialogId) {
-+                setIsRenameModalOpen(false);
-+                setRenameError(null);
-+                return;
-+              }
-+
-+              const result =
-+                renameTargetDialogId === 'datacard-create-dialog'
-+                  ? viewModel.renameCreateCustomFieldById(renameTargetRowId, renameName)
-+                  : viewModel.renameEditCustomFieldById(renameTargetRowId, renameName);
-+              if (!result.ok) {
-+                setRenameError(
-+                  result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
-+                );
-+                return;
-+              }
-+
-+              setIsRenameModalOpen(false);
-+              setRenameError(null);
-+              setRenameTargetRowId(null);
-+              setRenameTargetDialogId(null);
-+            }}
-+          />
-+        </Suspense>
-+      )}
- 
--      <PasswordGeneratorModal
--        isOpen={isGeneratorOpen}
--        generatedPassword={generatedPassword}
--        charsetSize={charsetSize}
--        options={generatorOptions}
--        onChangeOptions={setGeneratorOptions}
--        onClose={closeGenerator}
--        onUse={handleUseGeneratedPassword}
--        onRegenerate={() => regeneratePassword(generatorOptions)}
--        onCopy={handleCopyGeneratedPassword}
--      />
-+      {isGeneratorOpen && (
-+        <Suspense fallback={<div className="dialog-backdrop" aria-busy="true" />}>
-+          <LazyPasswordGeneratorModal
-+            isOpen={true}
-+            generatedPassword={generatedPassword}
-+            charsetSize={charsetSize}
-+            options={generatorOptions}
-+            onChangeOptions={setGeneratorOptions}
-+            onClose={closeGenerator}
-+            onUse={handleUseGeneratedPassword}
-+            onRegenerate={() => regeneratePassword(generatorOptions)}
-+            onCopy={handleCopyGeneratedPassword}
-+          />
-+        </Suspense>
-+      )}
- 
--      <Add2FAModal
--        isOpen={is2faModalOpen}
--        existingUri={
--          twoFactorTargetDialogId === 'datacard-create-dialog'
--            ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
--            : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
--        }
--        defaults={{
--          issuer:
--            twoFactorTargetDialogId === 'datacard-create-dialog'
--              ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
--              : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
--          label:
--            twoFactorTargetDialogId === 'datacard-create-dialog'
--              ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
--              : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
--        }}
--        onCancel={() => {
--          setIs2faModalOpen(false);
--          setTwoFactorTargetDialogId(null);
--        }}
--        onSave={(uri) => {
--          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
--            viewModel.updateCreateField('totpUri', uri);
--          } else {
--            viewModel.updateEditField('totpUri', uri);
--          }
--          setIs2faModalOpen(false);
--          setTwoFactorTargetDialogId(null);
--        }}
--        onRemove={() => {
--          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
--            viewModel.updateCreateField('totpUri', '');
--          } else {
--            viewModel.updateEditField('totpUri', '');
--          }
--          setIs2faModalOpen(false);
--          setTwoFactorTargetDialogId(null);
--        }}
--      />
-+      {is2faModalOpen && (
-+        <Suspense fallback={<div className="dialog-backdrop" aria-busy="true" />}>
-+          <LazyAdd2FAModal
-+            isOpen={true}
-+            existingUri={
-+              twoFactorTargetDialogId === 'datacard-create-dialog'
-+                ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
-+                : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
-+            }
-+            defaults={{
-+              issuer:
-+                twoFactorTargetDialogId === 'datacard-create-dialog'
-+                  ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
-+                  : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
-+              label:
-+                twoFactorTargetDialogId === 'datacard-create-dialog'
-+                  ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
-+                  : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
-+            }}
-+            onCancel={() => {
-+              setIs2faModalOpen(false);
-+              setTwoFactorTargetDialogId(null);
-+            }}
-+            onSave={(uri) => {
-+              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
-+                viewModel.updateCreateField('totpUri', uri);
-+              } else {
-+                viewModel.updateEditField('totpUri', uri);
-+              }
-+              setIs2faModalOpen(false);
-+              setTwoFactorTargetDialogId(null);
-+            }}
-+            onRemove={() => {
-+              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
-+                viewModel.updateCreateField('totpUri', '');
-+              } else {
-+                viewModel.updateEditField('totpUri', '');
-+              }
-+              setIs2faModalOpen(false);
-+              setTwoFactorTargetDialogId(null);
-+            }}
-+          />
-+        </Suspense>
-+      )}
- 
--      <SeedPhraseModal
--        isOpen={isSeedPhraseModalOpen}
--        existingPhrase={
--          seedPhraseTargetDialogId === 'datacard-create-dialog'
--            ? (viewModel.createForm.seedPhrase.trim() ? viewModel.createForm.seedPhrase : null)
--            : (viewModel.editForm?.seedPhrase?.trim() ? viewModel.editForm.seedPhrase : null)
--        }
--        onCancel={() => {
--          setIsSeedPhraseModalOpen(false);
--          setSeedPhraseTargetDialogId(null);
--        }}
--        onSave={(words, wordCount) => {
--          const phrase = words.join(' ').trim();
--          if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
--            viewModel.setCreateSeedPhrase(phrase, wordCount);
--          } else {
--            viewModel.setEditSeedPhrase(phrase, wordCount);
--          }
--          setIsSeedPhraseModalOpen(false);
--          setSeedPhraseTargetDialogId(null);
--        }}
--      />
-+      {isSeedPhraseModalOpen && (
-+        <Suspense fallback={<div className="dialog-backdrop" aria-busy="true" />}>
-+          <LazySeedPhraseModal
-+            isOpen={true}
-+            existingPhrase={
-+              seedPhraseTargetDialogId === 'datacard-create-dialog'
-+                ? (viewModel.createForm.seedPhrase.trim() ? viewModel.createForm.seedPhrase : null)
-+                : (viewModel.editForm?.seedPhrase?.trim() ? viewModel.editForm.seedPhrase : null)
-+            }
-+            onCancel={() => {
-+              setIsSeedPhraseModalOpen(false);
-+              setSeedPhraseTargetDialogId(null);
-+            }}
-+            onSave={(words, wordCount) => {
-+              const phrase = words.join(' ').trim();
-+              if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
-+                viewModel.setCreateSeedPhrase(phrase, wordCount);
-+              } else {
-+                viewModel.setEditSeedPhrase(phrase, wordCount);
-+              }
-+              setIsSeedPhraseModalOpen(false);
-+              setSeedPhraseTargetDialogId(null);
-+            }}
-+          />
-+        </Suspense>
-+      )}
-     </div>
-   );
- }
-*** End Patch
-```
-
-**Проверка:**
-
-* `npm run analyze` → должен появиться отдельный чанк под `Add2FAModal`/`@zxing/browser`.
-* В UI: открыть/закрыть модалки, убедиться что всё ок.
-
----
-
-## Шаг 3 — “разумные” чанки в Vite (manualChunks)
-
-**Объём:** правка `vite.config.ts`.
-**Эффект:** меньше случайных “суперчанков”, стабильнее раскладка.
-
-### TS (patch)
-
-```diff
-*** Begin Patch
-*** Update File: vite.config.ts
-@@
- export default defineConfig(({ mode }) => {
-   const plugins: PluginOption[] = [react()];
-@@
-   return {
-@@
-     build: {
-       outDir: '../dist',
-       emptyOutDir: true,
-       sourcemap: false,
-+      rollupOptions: {
-+        output: {
-+          manualChunks(id) {
-+            const n = id.replaceAll('\\', '/');
-+
-+            if (n.includes('node_modules')) {
-+              if (n.includes('/react/') || n.includes('/react-dom/')) return 'vendor-react';
-+              if (n.includes('/@tauri-apps/')) return 'vendor-tauri';
-+              if (n.includes('/@zxing/')) return 'vendor-zxing';
-+              if (n.includes('/otpauth/')) return 'vendor-otpauth';
-+              return 'vendor';
-+            }
-+
-+            if (n.includes('/src/features/Vault/')) return 'feature-vault';
-+            if (n.includes('/src/features/Workspace/')) return 'feature-workspace';
-+            if (n.includes('/src/features/Startup/')) return 'feature-startup';
-+            if (n.includes('/src/features/ProfileCreate/')) return 'feature-profile-create';
-+            if (n.includes('/src/features/LogIn/')) return 'feature-login';
-+
-+            return undefined;
-+          },
-+        },
-+      },
-     },
-   };
- });
-*** End Patch
-```
-
-**Проверка:**
-
-* `npm run build` → посмотри `dist/assets/*` (vendor-react/vendor-tauri/feature-vault и т.д.)
-* `npm run analyze` → убедись, что чанков не стало слишком много и нет “монстра”.
-
----
-
-## Шаг 4 — уменьшение размера exe (Rust release profile)
-
-**Объём:** добавить блок в `src-tauri/Cargo.toml`.
-**Эффект:** заметно худее бинарник без трогания логики.
-
-### TS (patch)
-
-```diff
-*** Begin Patch
-*** Update File: src-tauri/Cargo.toml
-@@
- [build-dependencies]
- tauri-build = { version = "2.0.0", features = [] }
-+
-+[profile.release]
-+opt-level = "z"
-+lto = true
-+codegen-units = 1
-+panic = "abort"
-+strip = true
-*** End Patch
-```
-
+*** a/package.json
+--- b/package.json
+***************
+*** 1,27 ****
+  {
+    "name": "Password-Manager",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+      "dev": "vite",
+      "build": "vite build",
++     "analyze": "vite build --mode analyze",
+      "tauri:dev": "tauri dev",
+      "tauri:build": "tauri build",
+      "theme:check": "node scripts/check-theme-colors.mjs",
+      "icons:check": "node scripts/check-no-inline-svg.mjs"
+    },
+    "dependencies": {
+      "@zxing/browser": "^0.1.5",
+      "@tauri-apps/api": "2.0.0",
+      "@tauri-apps/plugin-dialog": "^2.0.0",
+      "lucide-react": "^0.562.0",
+      "otpauth": "^9.4.1",
+      "react": "^18.3.1",
+      "react-dom": "^18.3.1"
+    },
+    "devDependencies": {
+      "@tauri-apps/cli": "2.0.0",
+      "@types/react": "^18.3.3",
+      "@types/react-dom": "^18.3.0",
+      "@vitejs/plugin-react": "^4.3.3",
++     "rollup-plugin-visualizer": "^6.0.5",
+      "typescript": "^5.6.2",
+      "vite": "^5.4.0"
+    }
+  }
+*** a/vite.config.ts
+--- b/vite.config.ts
+***************
+*** 1,21 ****
+  import path from 'node:path';
+  import { defineConfig } from 'vite';
+  import react from '@vitejs/plugin-react';
++ import { visualizer } from 'rollup-plugin-visualizer';
+  
+- export default defineConfig({
+-   // говорим Vite, что корень проекта — src
+-   root: 'src',
+-   resolve: {
+-     alias: {
+-       '@': path.resolve(__dirname, 'src'),
+-      
+-     },
+-   },
+-   plugins: [react()],
+-   build: {
+-     // а билдить нужно в ../dist относительно src → в корневую dist
+-     outDir: '../dist',
+-     emptyOutDir: true,
+-   },
+- });
++ export default defineConfig(({ mode }) => {
++   const plugins = [react()];
++ 
++   if (mode === 'analyze') {
++     plugins.push(
++       visualizer({
++         template: 'treemap',
++         gzipSize: true,
++         brotliSize: true,
++         emitFile: true,
++         filename: 'stats.html',
++         open: true,
++       }),
++     );
++   }
++ 
++   return {
++     // говорим Vite, что корень проекта — src
++     root: 'src',
++     resolve: {
++       alias: {
++         '@': path.resolve(__dirname, 'src'),
++       },
++     },
++     plugins,
++     build: {
++       // а билдить нужно в ../dist относительно src → в корневую dist
++       outDir: '../dist',
++       emptyOutDir: true,
++     },
++   };
++ });
