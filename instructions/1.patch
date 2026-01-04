@@ -1,99 +1,373 @@
-diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
-index 3c53d31..d5b6e10 100644
---- a/src/features/Vault/Vault.tsx
-+++ b/src/features/Vault/Vault.tsx
-@@ -1,4 +1,4 @@
--import React, { useCallback, useEffect, useMemo, useState } from 'react';
-+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
- import { open } from '@tauri-apps/plugin-dialog';
- import { useVault } from './hooks/useVault';
- import { VaultHeader } from './components/Header/VaultHeader';
- import { Search } from './components/Search/Search';
- import { Folders } from './components/Folders/Folders';
- import { DataCards } from './components/DataCards/DataCards';
- import { Details } from './components/Details/Details';
- import { useDataCards } from './components/DataCards/useDataCards';
- import { useFolders } from './components/Folders/useFolders';
- import { BankCards } from './components/BankCards/BankCards';
- import { BankCardDetails } from './components/BankCards/BankCardDetails';
- import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewModel';
- import { useTranslation } from '../../shared/lib/i18n';
- import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
- import { useBankCards } from './hooks/useBankCards';
- import { useToaster } from '../../shared/components/Toaster';
- import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
--import { ExportBackupModal } from './components/modals/ExportBackupModal';
--import { ImportBackupModal } from './components/modals/ImportBackupModal';
--import { SettingsModal } from './components/modals/SettingsModal';
- import { BackendUserSettings } from './types/backend';
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 6c3f3c1..9b7a2e4 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -1,18 +1,33 @@
+ import React, { useCallback, useEffect, useRef, useState } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import {
+   IconAttachment,
+   IconPreview,
+   IconPreviewOff,
+   IconRename,
+   IconRegenerate,
+   IconTrash,
+   IconMoreHorizontal,
+ } from '@/shared/icons/lucide/icons';
+-import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
+-import { CustomFieldModal } from '../modals/CustomFieldModal';
+-import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
+-import { Add2FAModal } from '../modals/Add2FAModal';
+-import { SeedPhraseModal } from '../modals/SeedPhraseModal';
+ import { useToaster } from '../../../../shared/components/Toaster';
+ import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
+ import { generateTotpCode } from '../../utils/totp';
+ import { wasActuallyUpdated } from '../../utils/updatedAt';
+ import { DataCardFormState, DataCardsViewModel } from './useDataCards';
+-import { open } from '@tauri-apps/plugin-dialog';
+ import { clipboardClearAll } from '../../../../shared/lib/tauri';
  
-+const LazyExportBackupModal = React.lazy(() =>
-+  import('./components/modals/ExportBackupModal').then((m) => ({ default: m.ExportBackupModal })),
-+);
-+const LazyImportBackupModal = React.lazy(() =>
-+  import('./components/modals/ImportBackupModal').then((m) => ({ default: m.ImportBackupModal })),
-+);
-+const LazySettingsModal = React.lazy(() =>
-+  import('./components/modals/SettingsModal').then((m) => ({ default: m.SettingsModal })),
-+);
++const LazyPasswordGeneratorModal = React.lazy(async () => {
++  const m = await import('../modals/PasswordGeneratorModal');
++  return { default: m.PasswordGeneratorModal };
++});
++const LazyCustomFieldModal = React.lazy(async () => {
++  const m = await import('../modals/CustomFieldModal');
++  return { default: m.CustomFieldModal };
++});
++const LazyCustomFieldRenameModal = React.lazy(async () => {
++  const m = await import('../modals/CustomFieldRenameModal');
++  return { default: m.CustomFieldRenameModal };
++});
++const LazyAdd2FAModal = React.lazy(async () => {
++  const m = await import('../modals/Add2FAModal');
++  return { default: m.Add2FAModal };
++});
++const LazySeedPhraseModal = React.lazy(async () => {
++  const m = await import('../modals/SeedPhraseModal');
++  return { default: m.SeedPhraseModal };
++});
 +
- type VaultProps = {
-   profileId: string;
-   profileName: string;
-   isPasswordless: boolean;
-@@ -271,26 +285,34 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-         onDeleteFolderAndCards={handleDeleteFolderAndCards}
-       />
+ export type DataCardsProps = {
+   viewModel: DataCardsViewModel;
+   sectionTitle: string;
+@@ -326,7 +341,8 @@ export function DataCards({
+     };
  
--      <ExportBackupModal open={exportModalOpen} profileId={profileId} onClose={() => setExportModalOpen(false)} />
-+      {exportModalOpen && (
-+        <Suspense fallback={null}>
-+          <LazyExportBackupModal
-+            open={exportModalOpen}
-+            profileId={profileId}
-+            onClose={() => setExportModalOpen(false)}
-+          />
-+        </Suspense>
-+      )}
+     const handleAddAttachments = async () => {
+-      const selection = await open({ multiple: true });
++      const { open } = await import('@tauri-apps/plugin-dialog');
++      const selection = await open({ multiple: true });
+       const paths = Array.isArray(selection) ? selection : selection ? [selection] : [];
+       viewModel.addCreateAttachments(paths.filter((p): p is string => typeof p === 'string'));
+     };
+@@ -828,63 +844,83 @@ export function DataCards({
+       </div>
  
--      <ImportBackupModal
--        open={!!pendingImportPath}
--        backupPath={pendingImportPath}
--        isSubmitting={isRestoringBackup}
--        onCancel={handleCloseImport}
--        onConfirm={handleConfirmImport}
+-      <CustomFieldModal
+-        isOpen={isCustomFieldModalOpen}
+-        name={customFieldName}
+-        error={customFieldModalError}
+-        onChangeName={(value) => {
+-          setCustomFieldName(value);
+-          setCustomFieldModalError(null);
+-        }}
+-        onCancel={() => {
+-          setIsCustomFieldModalOpen(false);
+-          setCustomFieldModalError(null);
+-        }}
+-        onOk={() => {
+-          const result =
+-            customFieldTargetDialogId === 'datacard-create-dialog'
+-              ? viewModel.addCreateCustomFieldByName(customFieldName)
+-              : viewModel.addEditCustomFieldByName(customFieldName);
+-
+-          if (!result.ok) {
+-            setCustomFieldModalError(
+-              result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
+-            );
+-            return;
+-          }
+-
+-          setIsCustomFieldModalOpen(false);
+-          setCustomFieldModalError(null);
+-        }}
 -      />
-+      {pendingImportPath !== null && (
-+        <Suspense fallback={null}>
-+          <LazyImportBackupModal
-+            open={pendingImportPath !== null}
-+            backupPath={pendingImportPath}
-+            isSubmitting={isRestoringBackup}
-+            onCancel={handleCloseImport}
-+            onConfirm={handleConfirmImport}
-+          />
-+        </Suspense>
-+      )}
- 
--      <SettingsModal
--        open={settingsModalOpen}
--        settings={vault.settings}
--        isSaving={isSavingSettings}
--        onCancel={() => setSettingsModalOpen(false)}
--        onSave={handleSaveSettings}
+-
+-      <CustomFieldRenameModal
+-        isOpen={isRenameModalOpen}
+-        name={renameName}
+-        error={renameError}
+-        onChangeName={(value) => {
+-          setRenameName(value);
+-          setRenameError(null);
+-        }}
+-        onCancel={() => {
+-          setIsRenameModalOpen(false);
+-          setRenameError(null);
+-        }}
+-        onOk={() => {
+-          if (!renameTargetRowId || !renameTargetDialogId) {
+-            setIsRenameModalOpen(false);
+-            setRenameError(null);
+-            return;
+-          }
+-
+-          const result =
+-            renameTargetDialogId === 'datacard-create-dialog'
+-              ? viewModel.renameCreateCustomFieldById(renameTargetRowId, renameName)
+-              : viewModel.renameEditCustomFieldById(renameTargetRowId, renameName);
+-          if (!result.ok) {
+-            setRenameError(
+-              result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
+-            );
+-            return;
+-          }
+-
+-          setIsRenameModalOpen(false);
+-          setRenameError(null);
+-          setRenameTargetRowId(null);
+-          setRenameTargetDialogId(null);
+-        }}
 -      />
-+      {settingsModalOpen && (
-+        <Suspense fallback={null}>
-+          <LazySettingsModal
-+            open={settingsModalOpen}
-+            settings={vault.settings}
-+            isSaving={isSavingSettings}
-+            onCancel={() => setSettingsModalOpen(false)}
-+            onSave={handleSaveSettings}
+-
+-      <PasswordGeneratorModal
+-        isOpen={isGeneratorOpen}
+-        generatedPassword={generatedPassword}
+-        charsetSize={charsetSize}
+-        options={generatorOptions}
+-        onChangeOptions={setGeneratorOptions}
+-        onClose={closeGenerator}
+-        onUse={handleUseGeneratedPassword}
+-        onRegenerate={() => regeneratePassword(generatorOptions)}
+-        onCopy={handleCopyGeneratedPassword}
+-      />
+-
+-      <Add2FAModal
+-        isOpen={is2faModalOpen}
+-        existingUri={
+-          twoFactorTargetDialogId === 'datacard-create-dialog'
+-            ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
+-            : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
+-        }
+-        defaults={{
+-          issuer:
+-            twoFactorTargetDialogId === 'datacard-create-dialog'
+-              ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
+-              : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
+-          label:
+-            twoFactorTargetDialogId === 'datacard-create-dialog'
+-              ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
+-              : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
+-        }}
+-        onCancel={() => {
+-          setIs2faModalOpen(false);
+-          setTwoFactorTargetDialogId(null);
+-        }}
+-        onSave={(uri) => {
+-          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+-            viewModel.updateCreateField('totpUri', uri);
+-          } else {
+-            viewModel.updateEditField('totpUri', uri);
+-          }
+-          setIs2faModalOpen(false);
+-          setTwoFactorTargetDialogId(null);
+-        }}
+-        onRemove={() => {
+-          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
+-            viewModel.updateCreateField('totpUri', '');
+-          } else {
+-            viewModel.updateEditField('totpUri', '');
+-          }
+-          setIs2faModalOpen(false);
+-          setTwoFactorTargetDialogId(null);
+-        }}
+-      />
+-
+-      <SeedPhraseModal
+-        isOpen={isSeedPhraseModalOpen}
+-        existingPhrase={
+-          seedPhraseTargetDialogId === 'datacard-create-dialog'
+-            ? (viewModel.createForm.seedPhrase.trim() ? viewModel.createForm.seedPhrase : null)
+-            : (viewModel.editForm?.seedPhrase?.trim() ? viewModel.editForm.seedPhrase : null)
+-        }
+-        onCancel={() => {
+-          setIsSeedPhraseModalOpen(false);
+-          setSeedPhraseTargetDialogId(null);
+-        }}
+-        onSave={(words, wordCount) => {
+-          const phrase = words.join(' ').trim();
+-          if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
+-            viewModel.setCreateSeedPhrase(phrase, wordCount);
+-          } else {
+-            viewModel.setEditSeedPhrase(phrase, wordCount);
+-          }
+-          setIsSeedPhraseModalOpen(false);
+-          setSeedPhraseTargetDialogId(null);
+-        }}
+-      />
++      {isCustomFieldModalOpen && (
++        <React.Suspense fallback={null}>
++          <LazyCustomFieldModal
++            isOpen={isCustomFieldModalOpen}
++            name={customFieldName}
++            error={customFieldModalError}
++            onChangeName={(value) => {
++              setCustomFieldName(value);
++              setCustomFieldModalError(null);
++            }}
++            onCancel={() => {
++              setIsCustomFieldModalOpen(false);
++              setCustomFieldModalError(null);
++            }}
++            onOk={() => {
++              const result =
++                customFieldTargetDialogId === 'datacard-create-dialog'
++                  ? viewModel.addCreateCustomFieldByName(customFieldName)
++                  : viewModel.addEditCustomFieldByName(customFieldName);
++
++              if (!result.ok) {
++                setCustomFieldModalError(
++                  result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
++                );
++                return;
++              }
++
++              setIsCustomFieldModalOpen(false);
++              setCustomFieldModalError(null);
++            }}
 +          />
-+        </Suspense>
++        </React.Suspense>
 +      )}
- 
++
++      {isRenameModalOpen && (
++        <React.Suspense fallback={null}>
++          <LazyCustomFieldRenameModal
++            isOpen={isRenameModalOpen}
++            name={renameName}
++            error={renameError}
++            onChangeName={(value) => {
++              setRenameName(value);
++              setRenameError(null);
++            }}
++            onCancel={() => {
++              setIsRenameModalOpen(false);
++              setRenameError(null);
++            }}
++            onOk={() => {
++              if (!renameTargetRowId || !renameTargetDialogId) {
++                setIsRenameModalOpen(false);
++                setRenameError(null);
++                return;
++              }
++
++              const result =
++                renameTargetDialogId === 'datacard-create-dialog'
++                  ? viewModel.renameCreateCustomFieldById(renameTargetRowId, renameName)
++                  : viewModel.renameEditCustomFieldById(renameTargetRowId, renameName);
++              if (!result.ok) {
++                setRenameError(
++                  result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
++                );
++                return;
++              }
++
++              setIsRenameModalOpen(false);
++              setRenameError(null);
++              setRenameTargetRowId(null);
++              setRenameTargetDialogId(null);
++            }}
++          />
++        </React.Suspense>
++      )}
++
++      {isGeneratorOpen && (
++        <React.Suspense fallback={null}>
++          <LazyPasswordGeneratorModal
++            isOpen={isGeneratorOpen}
++            generatedPassword={generatedPassword}
++            charsetSize={charsetSize}
++            options={generatorOptions}
++            onChangeOptions={setGeneratorOptions}
++            onClose={closeGenerator}
++            onUse={handleUseGeneratedPassword}
++            onRegenerate={() => regeneratePassword(generatorOptions)}
++            onCopy={handleCopyGeneratedPassword}
++          />
++        </React.Suspense>
++      )}
++
++      {is2faModalOpen && (
++        <React.Suspense fallback={null}>
++          <LazyAdd2FAModal
++            isOpen={is2faModalOpen}
++            existingUri={
++              twoFactorTargetDialogId === 'datacard-create-dialog'
++                ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
++                : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
++            }
++            defaults={{
++              issuer:
++                twoFactorTargetDialogId === 'datacard-create-dialog'
++                  ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
++                  : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
++              label:
++                twoFactorTargetDialogId === 'datacard-create-dialog'
++                  ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
++                  : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
++            }}
++            onCancel={() => {
++              setIs2faModalOpen(false);
++              setTwoFactorTargetDialogId(null);
++            }}
++            onSave={(uri) => {
++              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
++                viewModel.updateCreateField('totpUri', uri);
++              } else {
++                viewModel.updateEditField('totpUri', uri);
++              }
++              setIs2faModalOpen(false);
++              setTwoFactorTargetDialogId(null);
++            }}
++            onRemove={() => {
++              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
++                viewModel.updateCreateField('totpUri', '');
++              } else {
++                viewModel.updateEditField('totpUri', '');
++              }
++              setIs2faModalOpen(false);
++              setTwoFactorTargetDialogId(null);
++            }}
++          />
++        </React.Suspense>
++      )}
++
++      {isSeedPhraseModalOpen && (
++        <React.Suspense fallback={null}>
++          <LazySeedPhraseModal
++            isOpen={isSeedPhraseModalOpen}
++            existingPhrase={
++              seedPhraseTargetDialogId === 'datacard-create-dialog'
++                ? (viewModel.createForm.seedPhrase.trim() ? viewModel.createForm.seedPhrase : null)
++                : (viewModel.editForm?.seedPhrase?.trim() ? viewModel.editForm.seedPhrase : null)
++            }
++            onCancel={() => {
++              setIsSeedPhraseModalOpen(false);
++              setSeedPhraseTargetDialogId(null);
++            }}
++            onSave={(words, wordCount) => {
++              const phrase = words.join(' ').trim();
++              if (seedPhraseTargetDialogId === 'datacard-create-dialog') {
++                viewModel.setCreateSeedPhrase(phrase, wordCount);
++              } else {
++                viewModel.setEditSeedPhrase(phrase, wordCount);
++              }
++              setIsSeedPhraseModalOpen(false);
++              setSeedPhraseTargetDialogId(null);
++            }}
++          />
++        </React.Suspense>
++      )}
      </div>
    );
  }
