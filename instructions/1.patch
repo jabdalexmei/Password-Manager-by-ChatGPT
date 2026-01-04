@@ -1,160 +1,99 @@
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 8d2a9c1..f3b0f24 100644
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+index 3c53d31..d5b6e10 100644
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
 @@ -1,4 +1,4 @@
--import React, { useCallback, useEffect, useRef, useState } from 'react';
-+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
- import { useTranslation } from '../../../../shared/lib/i18n';
- import {
-   IconAttachment,
-@@ -12,10 +12,19 @@ import {
- } from '@/shared/icons/lucide/icons';
- import { PasswordGeneratorModal } from '../modals/PasswordGeneratorModal';
- import { CustomFieldModal } from '../modals/CustomFieldModal';
- import { CustomFieldRenameModal } from '../modals/CustomFieldRenameModal';
--import { Add2FAModal } from '../modals/Add2FAModal';
- import { SeedPhraseModal } from '../modals/SeedPhraseModal';
- import { useToaster } from '../../../../shared/components/Toaster';
- import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
- import { generateTotpCode } from '../../utils/totp';
- import { wasActuallyUpdated } from '../../utils/updatedAt';
- import { DataCardFormState, DataCardsViewModel } from './useDataCards';
+-import React, { useCallback, useEffect, useMemo, useState } from 'react';
++import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
  import { open } from '@tauri-apps/plugin-dialog';
- import { clipboardClearAll } from '../../../../shared/lib/tauri';
+ import { useVault } from './hooks/useVault';
+ import { VaultHeader } from './components/Header/VaultHeader';
+ import { Search } from './components/Search/Search';
+ import { Folders } from './components/Folders/Folders';
+ import { DataCards } from './components/DataCards/DataCards';
+ import { Details } from './components/Details/Details';
+ import { useDataCards } from './components/DataCards/useDataCards';
+ import { useFolders } from './components/Folders/useFolders';
+ import { BankCards } from './components/BankCards/BankCards';
+ import { BankCardDetails } from './components/BankCards/BankCardDetails';
+ import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewModel';
+ import { useTranslation } from '../../shared/lib/i18n';
+ import { DeleteFolderModal } from './components/modals/DeleteFolderModal';
+ import { useBankCards } from './hooks/useBankCards';
+ import { useToaster } from '../../shared/components/Toaster';
+ import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
+-import { ExportBackupModal } from './components/modals/ExportBackupModal';
+-import { ImportBackupModal } from './components/modals/ImportBackupModal';
+-import { SettingsModal } from './components/modals/SettingsModal';
+ import { BackendUserSettings } from './types/backend';
  
-+const LazyAdd2FAModal = React.lazy(() =>
-+  import('../modals/Add2FAModal').then((m) => ({ default: m.Add2FAModal })),
++const LazyExportBackupModal = React.lazy(() =>
++  import('./components/modals/ExportBackupModal').then((m) => ({ default: m.ExportBackupModal })),
++);
++const LazyImportBackupModal = React.lazy(() =>
++  import('./components/modals/ImportBackupModal').then((m) => ({ default: m.ImportBackupModal })),
++);
++const LazySettingsModal = React.lazy(() =>
++  import('./components/modals/SettingsModal').then((m) => ({ default: m.SettingsModal })),
 +);
 +
- export type DataCardsProps = {
-   viewModel: DataCardsViewModel;
-   sectionTitle: string;
-@@ -916,37 +925,41 @@ export function DataCards({
-         onCopy={handleCopyGeneratedPassword}
+ type VaultProps = {
+   profileId: string;
+   profileName: string;
+   isPasswordless: boolean;
+@@ -271,26 +285,34 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+         onDeleteFolderAndCards={handleDeleteFolderAndCards}
        />
  
--      <Add2FAModal
--        isOpen={is2faModalOpen}
--        existingUri={
--          twoFactorTargetDialogId === 'datacard-create-dialog'
--            ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
--            : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
--        }
--        defaults={{
--          issuer:
--            twoFactorTargetDialogId === 'datacard-create-dialog'
--              ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
--              : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
--          label:
--            twoFactorTargetDialogId === 'datacard-create-dialog'
--              ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
--              : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
--        }}
--        onCancel={() => {
--          setIs2faModalOpen(false);
--          setTwoFactorTargetDialogId(null);
--        }}
--        onSave={(uri) => {
--          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
--            viewModel.updateCreateField('totpUri', uri);
--          } else {
--            viewModel.updateEditField('totpUri', uri);
--          }
--          setIs2faModalOpen(false);
--          setTwoFactorTargetDialogId(null);
--        }}
--        onRemove={() => {
--          if (twoFactorTargetDialogId === 'datacard-create-dialog') {
--            viewModel.updateCreateField('totpUri', '');
--          } else {
--            viewModel.updateEditField('totpUri', '');
--          }
--          setIs2faModalOpen(false);
--          setTwoFactorTargetDialogId(null);
--        }}
--      />
-+      {is2faModalOpen && (
+-      <ExportBackupModal open={exportModalOpen} profileId={profileId} onClose={() => setExportModalOpen(false)} />
++      {exportModalOpen && (
 +        <Suspense fallback={null}>
-+          <LazyAdd2FAModal
-+            isOpen={is2faModalOpen}
-+            existingUri={
-+              twoFactorTargetDialogId === 'datacard-create-dialog'
-+                ? (viewModel.createForm.totpUri.trim() ? viewModel.createForm.totpUri : null)
-+                : (viewModel.editForm?.totpUri?.trim() ? viewModel.editForm.totpUri : null)
-+            }
-+            defaults={{
-+              issuer:
-+                twoFactorTargetDialogId === 'datacard-create-dialog'
-+                  ? ((viewModel.createForm.title ?? 'Vault').trim() || 'Vault')
-+                  : ((viewModel.editForm?.title ?? 'Vault').trim() || 'Vault'),
-+              label:
-+                twoFactorTargetDialogId === 'datacard-create-dialog'
-+                  ? ((viewModel.createForm.title ?? 'Account').trim() || 'Account')
-+                  : ((viewModel.editForm?.title ?? 'Account').trim() || 'Account'),
-+            }}
-+            onCancel={() => {
-+              setIs2faModalOpen(false);
-+              setTwoFactorTargetDialogId(null);
-+            }}
-+            onSave={(uri) => {
-+              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
-+                viewModel.updateCreateField('totpUri', uri);
-+              } else {
-+                viewModel.updateEditField('totpUri', uri);
-+              }
-+              setIs2faModalOpen(false);
-+              setTwoFactorTargetDialogId(null);
-+            }}
-+            onRemove={() => {
-+              if (twoFactorTargetDialogId === 'datacard-create-dialog') {
-+                viewModel.updateCreateField('totpUri', '');
-+              } else {
-+                viewModel.updateEditField('totpUri', '');
-+              }
-+              setIs2faModalOpen(false);
-+              setTwoFactorTargetDialogId(null);
-+            }}
++          <LazyExportBackupModal
++            open={exportModalOpen}
++            profileId={profileId}
++            onClose={() => setExportModalOpen(false)}
 +          />
 +        </Suspense>
 +      )}
  
-       <SeedPhraseModal
-         isOpen={isSeedPhraseModalOpen}
-         existingPhrase={
-diff --git a/src/features/Vault/components/modals/Add2FAModal.tsx b/src/features/Vault/components/modals/Add2FAModal.tsx
-index 5a3b2f8..3b5b8d1 100644
---- a/src/features/Vault/components/modals/Add2FAModal.tsx
-+++ b/src/features/Vault/components/modals/Add2FAModal.tsx
-@@ -1,7 +1,6 @@
- import React, { useEffect, useMemo, useState } from 'react';
- import { useTranslation } from '../../../../shared/lib/i18n';
--import { BrowserQRCodeReader } from '@zxing/browser';
- import { normalizeTotpInput } from '../../utils/totp';
+-      <ImportBackupModal
+-        open={!!pendingImportPath}
+-        backupPath={pendingImportPath}
+-        isSubmitting={isRestoringBackup}
+-        onCancel={handleCloseImport}
+-        onConfirm={handleConfirmImport}
+-      />
++      {pendingImportPath !== null && (
++        <Suspense fallback={null}>
++          <LazyImportBackupModal
++            open={pendingImportPath !== null}
++            backupPath={pendingImportPath}
++            isSubmitting={isRestoringBackup}
++            onCancel={handleCloseImport}
++            onConfirm={handleConfirmImport}
++          />
++        </Suspense>
++      )}
  
- type Props = {
-@@ -67,8 +66,9 @@ export const Add2FAModal: React.FC<Props> = ({
-     setBusy(true);
-     try {
-       const url = URL.createObjectURL(file);
-       try {
--        const reader = new BrowserQRCodeReader();
-+        const { BrowserQRCodeReader } = await import('@zxing/browser');
-+        const reader = new BrowserQRCodeReader();
-         const decoded = await reader.decodeFromImageUrl(url);
-         const text = decoded.getText();
-         const norm = normalizeTotpInput(text, defaults);
-         if (!norm.ok) {
-           setError(t(`twoFactor.error.${norm.error}`));
-           return;
-         }
-         setTextValue(norm.uri);
-       } finally {
-         URL.revokeObjectURL(url);
-       }
-     } catch {
-       setError(t('twoFactor.error.QR_DECODE_FAILED'));
-     } finally {
-       setBusy(false);
-     }
-   };
+-      <SettingsModal
+-        open={settingsModalOpen}
+-        settings={vault.settings}
+-        isSaving={isSavingSettings}
+-        onCancel={() => setSettingsModalOpen(false)}
+-        onSave={handleSaveSettings}
+-      />
++      {settingsModalOpen && (
++        <Suspense fallback={null}>
++          <LazySettingsModal
++            open={settingsModalOpen}
++            settings={vault.settings}
++            isSaving={isSavingSettings}
++            onCancel={() => setSettingsModalOpen(false)}
++            onSave={handleSaveSettings}
++          />
++        </Suspense>
++      )}
+ 
+     </div>
+   );
+ }
