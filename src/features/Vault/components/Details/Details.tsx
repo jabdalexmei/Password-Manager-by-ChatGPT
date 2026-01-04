@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { CustomField, DataCard, Folder } from '../../types/ui';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { useDetails } from './useDetails';
@@ -14,9 +14,16 @@ import {
   IconPreviewOff,
 } from '@/shared/icons/lucide/icons';
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
-import AttachmentPreviewModal from '../modals/AttachmentPreviewModal';
-import PasswordHistoryDialog from '../modals/PasswordHistoryDialog';
-import { SeedPhraseViewModal } from '../modals/SeedPhraseViewModal';
+
+const LazyAttachmentPreviewModal = React.lazy(() =>
+  import('../modals/AttachmentPreviewModal').then((m) => ({ default: m.default })),
+);
+const LazyPasswordHistoryDialog = React.lazy(() =>
+  import('../modals/PasswordHistoryDialog').then((m) => ({ default: m.default })),
+);
+const LazySeedPhraseViewModal = React.lazy(() =>
+  import('../modals/SeedPhraseViewModal').then((m) => ({ default: m.SeedPhraseViewModal })),
+);
 
 export type DetailsProps = {
   card: DataCard | null;
@@ -547,33 +554,45 @@ export function Details({
       </div>
     </div>
 
-      <SeedPhraseViewModal
-        isOpen={seedPhraseViewOpen}
-        phrase={seedPhraseRaw}
-        wordCount={
-          seedPhraseWordCount === 12 || seedPhraseWordCount === 18 || seedPhraseWordCount === 24
-            ? (seedPhraseWordCount as 12 | 18 | 24)
-            : null
-        }
-        onClose={() => setSeedPhraseViewOpen(false)}
-      />
+      {seedPhraseViewOpen && (
+        <Suspense fallback={null}>
+          <LazySeedPhraseViewModal
+            isOpen={seedPhraseViewOpen}
+            phrase={seedPhraseRaw}
+            wordCount={
+              seedPhraseWordCount === 12 || seedPhraseWordCount === 18 || seedPhraseWordCount === 24
+                ? (seedPhraseWordCount as 12 | 18 | 24)
+                : null
+            }
+            onClose={() => setSeedPhraseViewOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <AttachmentPreviewModal
-        open={detailActions.previewOpen}
-        fileName={previewTitle}
-        mime={previewMimeType}
-        objectUrl={previewObjectUrl}
-        onClose={detailActions.closePreview}
-        onDownload={previewDownloadHandler}
-        loading={detailActions.isPreviewLoading}
-      />
-      <PasswordHistoryDialog
-        isOpen={historyOpen}
-        datacardId={card.id}
-        onClose={() => setHistoryOpen(false)}
-        clipboardAutoClearEnabled={clipboardAutoClearEnabled}
-        clipboardClearTimeoutSeconds={clipboardClearTimeoutSeconds}
-      />
+      {detailActions.previewOpen && (
+        <Suspense fallback={null}>
+          <LazyAttachmentPreviewModal
+            open={detailActions.previewOpen}
+            fileName={previewTitle}
+            mime={previewMimeType}
+            objectUrl={previewObjectUrl}
+            onClose={detailActions.closePreview}
+            onDownload={previewDownloadHandler}
+            loading={detailActions.isPreviewLoading}
+          />
+        </Suspense>
+      )}
+      {historyOpen && (
+        <Suspense fallback={null}>
+          <LazyPasswordHistoryDialog
+            isOpen={historyOpen}
+            datacardId={card.id}
+            onClose={() => setHistoryOpen(false)}
+            clipboardAutoClearEnabled={clipboardAutoClearEnabled}
+            clipboardClearTimeoutSeconds={clipboardClearTimeoutSeconds}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

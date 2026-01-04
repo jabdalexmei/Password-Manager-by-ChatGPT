@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../../shared/lib/i18n';
 import {
   backupInspect,
@@ -9,9 +8,12 @@ import {
   workspaceOpenInExplorer,
   workspaceSelect,
 } from '../../shared/lib/tauri';
-import ConfirmDialog from '../../shared/components/ConfirmDialog';
 import { useToaster } from '../../shared/components/Toaster';
 import { useWorkspace } from './hooks/useWorkspace';
+
+const LazyConfirmDialog = React.lazy(() =>
+  import('../../shared/components/ConfirmDialog').then((m) => ({ default: m.default })),
+);
 
 type WorkspaceProps = {
   onWorkspaceReady: () => void;
@@ -94,6 +96,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const handleCreate = useCallback(async () => {
     setBusy(true);
     try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
       const selected = await open({
         directory: true,
         multiple: false,
@@ -123,6 +126,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const handleRestoreFromBackup = useCallback(async () => {
     setBusy(true);
     try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
       const backup = await open({
         directory: false,
         multiple: false,
@@ -165,6 +169,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const handleOpenDataFolder = useCallback(async () => {
     setBusy(true);
     try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
       // Always open directory picker first (acts as "Browse…")
       const selected = await open({
         directory: true,
@@ -402,31 +407,35 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
         </div>
       </div>
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title={t('restoreConfirmTitle')}
-        description={t('restoreConfirmOverwrite', { name: pendingProfileName })}
-        confirmLabel={t('restoreFromBackup')}
-        cancelLabel={t('cancel')}
-        onCancel={() => {
-          setConfirmOpen(false);
-          setPendingBackupPath(null);
-        }}
-        onConfirm={async () => {
-          const path = pendingBackupPath;
-          setConfirmOpen(false);
-          setPendingBackupPath(null);
-          if (!path) return;
-          setBusy(true);
-          try {
-            await backupRestoreWorkflow(path);
-            showToast(t('restoreSuccess'), 'success');
-            onWorkspaceReady();
-          } finally {
-            setBusy(false);
-          }
-        }}
-      />
+      {confirmOpen && (
+        <Suspense fallback={null}>
+          <LazyConfirmDialog
+            open={confirmOpen}
+            title={t('restoreConfirmTitle')}
+            description={t('restoreConfirmOverwrite', { name: pendingProfileName })}
+            confirmLabel={t('restoreFromBackup')}
+            cancelLabel={t('cancel')}
+            onCancel={() => {
+              setConfirmOpen(false);
+              setPendingBackupPath(null);
+            }}
+            onConfirm={async () => {
+              const path = pendingBackupPath;
+              setConfirmOpen(false);
+              setPendingBackupPath(null);
+              if (!path) return;
+              setBusy(true);
+              try {
+                await backupRestoreWorkflow(path);
+                showToast(t('restoreSuccess'), 'success');
+                onWorkspaceReady();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Attachment, DataCard } from '../../types/ui';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { useToaster } from '../../../../shared/components/Toaster';
-import { open, save } from '@tauri-apps/plugin-dialog';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
 import {
   addAttachmentFromPath,
@@ -195,6 +194,7 @@ export function useDetails({
   const onAddAttachment = useCallback(async () => {
     if (!card || isTrashMode) return;
     try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
       const selection = await open({ multiple: true });
       const paths = Array.isArray(selection)
         ? selection.filter((p): p is string => typeof p === 'string')
@@ -265,6 +265,7 @@ export function useDetails({
     async (attachmentId: string, defaultName: string) => {
       if (!card) return;
       try {
+        const { save } = await import('@tauri-apps/plugin-dialog');
         const selection = await save({ defaultPath: defaultName });
         const targetPath = Array.isArray(selection) ? selection[0] : selection;
         if (!targetPath || typeof targetPath !== 'string') return;
