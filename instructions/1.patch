@@ -1,32 +1,69 @@
-diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json
-index 6f7a0e1..f2b1c3d 100644
---- a/src-tauri/tauri.conf.json
-+++ b/src-tauri/tauri.conf.json
-@@ -1,21 +1,30 @@
- {
-   "productName": "Password Manager",
-   "version": "0.1.0",
-   "identifier": "PasswordManager",
-   "build": {
-     "beforeDevCommand": "npm run dev",
-     "beforeBuildCommand": "npm run build",
-     "frontendDist": "../dist",
-     "devUrl": "http://localhost:5173"
-   },
-   "app": {
-     "windows": [
-       {
-         "title": "Password Manager",
-         "width": 1200,
-         "height": 900
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 9b7a2e4..f0f6d7a 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -874,12 +874,12 @@ export function DataCards({
+               const result =
+                 customFieldTargetDialogId === 'datacard-create-dialog'
+                   ? viewModel.addCreateCustomFieldByName(customFieldName)
+                   : viewModel.addEditCustomFieldByName(customFieldName);
+ 
+-              if (!result.ok) {
++              if (result.ok === false) {
+                 setCustomFieldModalError(
+                   result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
+                 );
+                 return;
+               }
+@@ -912,7 +912,7 @@ export function DataCards({
+               const result =
+                 renameTargetDialogId === 'datacard-create-dialog'
+                   ? viewModel.renameCreateCustomFieldById(renameTargetRowId, renameName)
+                   : viewModel.renameEditCustomFieldById(renameTargetRowId, renameName);
+-              if (!result.ok) {
++              if (result.ok === false) {
+                 setRenameError(
+                   result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
+                 );
+                 return;
+               }
+
+diff --git a/src/features/Vault/components/modals/Add2FAModal.tsx b/src/features/Vault/components/modals/Add2FAModal.tsx
+index c4a0c53..9b1c45d 100644
+--- a/src/features/Vault/components/modals/Add2FAModal.tsx
++++ b/src/features/Vault/components/modals/Add2FAModal.tsx
+@@ -47,7 +47,7 @@ export const Add2FAModal: React.FC<Props> = ({
+   const handleSaveText = () => {
+     setError(null);
+     const result = normalizeTotpInput(textValue, defaults);
+-    if (!result.ok) {
++    if (result.ok === false) {
+       setError(t(`twoFactor.error.${result.error}`));
+       return;
+     }
+     onSave(result.uri);
+@@ -60,7 +60,7 @@ export const Add2FAModal: React.FC<Props> = ({
+     setBusy(true);
+     try {
+       const text = await decodeQrFromImageFile(file);
+       const norm = normalizeTotpInput(text, defaults);
+-      if (!norm.ok) {
++      if (norm.ok === false) {
+         setError(t(`twoFactor.error.${norm.error}`));
+         return;
        }
-     ]
-+  },
-+  "bundle": {
-+    "windows": {
-+      "webviewInstallMode": {
-+        "type": "offlineInstaller"
-+      }
-+    }
-   }
- }
+       setTextValue(norm.uri);
+
+diff --git a/src/features/Vault/utils/totp.ts b/src/features/Vault/utils/totp.ts
+index 8f0b0a7..b4b74c1 100644
+--- a/src/features/Vault/utils/totp.ts
++++ b/src/features/Vault/utils/totp.ts
+@@ -47,7 +47,7 @@ export function generateTotpCode(uri: string, nowMs: number) {
+ 
+   const token = parsed.generate({ timestamp: nowMs });
+   const period = parsed.period ?? 30;
+-  const epoch = parsed.epoch ?? 0;
++  const epoch = (parsed as unknown as { epoch?: number }).epoch ?? 0;
+ 
+   const nowSec = Math.floor(nowMs / 1000);
+   const remaining = period - ((nowSec - epoch) % period);
