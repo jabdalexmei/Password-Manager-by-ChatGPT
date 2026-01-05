@@ -328,11 +328,14 @@ export function useBankCards(profileId: string, onLocked: () => void) {
           ...deletedCards.map((card) => ({ ...card, deletedAt: null })),
         ])
       );
-      setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
+      // Keep nav; if user is in "deleted", list becomes empty so clear selection.
+      if (selectedNav === 'deleted') {
+        setSelectedCardId(null);
+      }
     } catch (err) {
       handleError(err);
     }
-  }, [deletedCards, handleError, sortCardsWithSettings]);
+  }, [deletedCards, handleError, selectedNav, sortCardsWithSettings]);
 
   const purgeAllTrashAction = useCallback(async () => {
     if (deletedCards.length === 0) return;

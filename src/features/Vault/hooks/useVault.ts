@@ -448,21 +448,33 @@ export function useVault(profileId: string, onLocked: () => void) {
     async (id: string) => {
       try {
         await restoreDataCard(id);
+
+        const restored = deletedCards.find((card) => card.id === id) ?? null;
+        const deletedAfterRestore = deletedCards.filter((card) => card.id !== id);
+
         setDeletedCards((prev) => prev.filter((card) => card.id !== id));
         setCards((prev) => {
-          const restored = deletedCards.find((card) => card.id === id);
           if (!restored) return prev;
           const updated = { ...restored, deletedAt: null };
           return sortCardsWithSettings([...prev.filter((card) => card.id !== id), updated]);
         });
-        setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
+
+        // Keep user in the current navigation.
+        // If they are in "deleted", the restored card disappears from that list,
+        // so select the next deleted card (or clear selection).
+        if (selectedNav === 'deleted') {
+          setSelectedCardId(deletedAfterRestore[0]?.id ?? null);
+          return;
+        }
+
+        // If not in "deleted", keep behavior: select restored card and load details.
         setSelectedCardId(id);
         await loadCard(id);
       } catch (err) {
         handleError(err);
       }
     },
-    [deletedCards, handleError, loadCard, sortCardsWithSettings]
+    [deletedCards, handleError, loadCard, selectedNav, sortCardsWithSettings]
   );
 
   const purgeCardAction = useCallback(
@@ -494,11 +506,14 @@ export function useVault(profileId: string, onLocked: () => void) {
           ...deletedCards.map((card) => ({ ...card, deletedAt: null })),
         ])
       );
-      setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
+      // Keep nav; if user is in "deleted", list becomes empty so clear selection.
+      if (selectedNav === 'deleted') {
+        setSelectedCardId(null);
+      }
     } catch (err) {
       handleError(err);
     }
-  }, [deletedCards, handleError, sortCardsWithSettings]);
+  }, [deletedCards, handleError, selectedNav, sortCardsWithSettings]);
 
   const purgeAllTrashAction = useCallback(async () => {
     if (deletedCards.length === 0) return;
