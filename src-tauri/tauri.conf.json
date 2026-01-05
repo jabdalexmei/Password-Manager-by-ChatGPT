@@ -16,5 +16,12 @@
         "height": 900
       }
     ]
+  },
+  "bundle": {
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      }
+    }
   }
 }
