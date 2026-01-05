@@ -876,7 +876,7 @@ export function DataCards({
                   ? viewModel.addCreateCustomFieldByName(customFieldName)
                   : viewModel.addEditCustomFieldByName(customFieldName);
 
-              if (!result.ok) {
+              if (result.ok === false) {
                 setCustomFieldModalError(
                   result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
                 );
@@ -915,7 +915,7 @@ export function DataCards({
                 renameTargetDialogId === 'datacard-create-dialog'
                   ? viewModel.renameCreateCustomFieldById(renameTargetRowId, renameName)
                   : viewModel.renameEditCustomFieldById(renameTargetRowId, renameName);
-              if (!result.ok) {
+              if (result.ok === false) {
                 setRenameError(
                   result.reason === 'EMPTY' ? t('customFields.errorEmpty') : t('customFields.errorDuplicate')
                 );

@@ -47,7 +47,7 @@ export function generateTotpCode(uri: string, nowMs: number) {
 
   const token = parsed.generate({ timestamp: nowMs });
   const period = parsed.period ?? 30;
-  const epoch = parsed.epoch ?? 0;
+  const epoch = (parsed as unknown as { epoch?: number }).epoch ?? 0;
 
   const nowSec = Math.floor(nowMs / 1000);
   const remaining = period - ((nowSec - epoch) % period);

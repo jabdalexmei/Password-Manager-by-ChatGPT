@@ -47,7 +47,7 @@ export const Add2FAModal: React.FC<Props> = ({
   const handleSaveText = () => {
     setError(null);
     const result = normalizeTotpInput(textValue, defaults);
-    if (!result.ok) {
+    if (result.ok === false) {
       setError(t(`twoFactor.error.${result.error}`));
       return;
     }
@@ -60,7 +60,7 @@ export const Add2FAModal: React.FC<Props> = ({
     try {
       const text = await decodeQrFromImageFile(file);
       const norm = normalizeTotpInput(text, defaults);
-      if (!norm.ok) {
+      if (norm.ok === false) {
         setError(t(`twoFactor.error.${norm.error}`));
         return;
       }
