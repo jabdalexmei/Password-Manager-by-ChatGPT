@@ -1,20 +1,32 @@
-diff --git a/package.json b/package.json
-index a5fdab3..f9d0e2a 100644
---- a/package.json
-+++ b/package.json
-@@ -4,15 +4,17 @@
-   "private": true,
-   "type": "module",
-   "scripts": {
-     "dev": "vite",
-     "zxing:guard": "node scripts/check-no-zxing-imports.mjs",
--    "build": "npm run zxing:guard && vite build",
--    "analyze": "npm run zxing:guard && vite build --mode analyze",
-+    "typecheck": "tsc -p tsconfig.json --noEmit",
-+    "build": "npm run zxing:guard && npm run typecheck && vite build",
-+    "analyze": "npm run zxing:guard && npm run typecheck && vite build --mode analyze",
-     "tauri:dev": "tauri dev",
-     "tauri:build": "tauri build",
-     "theme:check": "node scripts/check-theme-colors.mjs",
-     "icons:check": "node scripts/check-no-inline-svg.mjs"
+diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json
+index 6f7a0e1..f2b1c3d 100644
+--- a/src-tauri/tauri.conf.json
++++ b/src-tauri/tauri.conf.json
+@@ -1,21 +1,30 @@
+ {
+   "productName": "Password Manager",
+   "version": "0.1.0",
+   "identifier": "PasswordManager",
+   "build": {
+     "beforeDevCommand": "npm run dev",
+     "beforeBuildCommand": "npm run build",
+     "frontendDist": "../dist",
+     "devUrl": "http://localhost:5173"
    },
+   "app": {
+     "windows": [
+       {
+         "title": "Password Manager",
+         "width": 1200,
+         "height": 900
+       }
+     ]
++  },
++  "bundle": {
++    "windows": {
++      "webviewInstallMode": {
++        "type": "offlineInstaller"
++      }
++    }
+   }
+ }
