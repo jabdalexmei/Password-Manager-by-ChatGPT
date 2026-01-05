@@ -232,70 +232,74 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
       />
 
       <div className="vault-body">
-        <aside className="vault-sidebar" hidden={selectedCategory !== 'data_cards'}>
-            <div className="vault-sidebar-controls">
-              <Search
-                query={vault.searchQuery}
-                onChange={vault.setSearchQuery}
-                filters={vault.filters}
-                onChangeFilters={vault.setFilters}
-              />
-            </div>
-            <div className="vault-sidebar-actions">
-              <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
-                {tDataCards('label.addDataCard')}
-              </button>
-              <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
-                {tFolders('action.addFolder')}
-              </button>
-            </div>
-            <Folders
-              selectedCategory={selectedCategory}
-              onSelectCategory={handleSelectCategory}
-              onAddBankCard={handleAddBankCard}
-              folders={vault.folders}
-              counts={vault.counts}
-              selectedNav={vault.selectedNav}
-              selectedFolderId={vault.selectedFolderId}
-              onSelectNav={vault.selectNav}
-              dialogState={folderDialogs}
-              onDeleteFolder={handleDeleteFolder}
-              onRenameFolder={vault.renameFolder}
-            />
-        </aside>
-
-        <section className="vault-datacards" hidden={selectedCategory !== 'data_cards'}>
-            <DataCards
-              viewModel={dataCardsViewModel}
-              sectionTitle={vault.currentSectionTitle}
-              clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-              clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-            />
-        </section>
-
-        <section className="vault-details" hidden={selectedCategory !== 'data_cards'}>
-            {vault.selectedCard ? (
-              <Suspense fallback={<p aria-busy="true">Loading…</p>}>
-                <LazyDetails
-                  card={vault.selectedCard}
-                  folders={foldersForCards}
-                  onEdit={(card) => dataCardsViewModel.openEditModal(card)}
-                  onDelete={vault.deleteCard}
-                  onRestore={vault.restoreCard}
-                  onPurge={vault.purgeCard}
-                  onToggleFavorite={vault.toggleFavorite}
-                  isTrashMode={vault.isTrashMode}
-                  clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-                  clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+        {selectedCategory === 'data_cards' && (
+          <>
+            <aside className="vault-sidebar">
+              <div className="vault-sidebar-controls">
+                <Search
+                  query={vault.searchQuery}
+                  onChange={vault.setSearchQuery}
+                  filters={vault.filters}
+                  onChangeFilters={vault.setFilters}
                 />
-              </Suspense>
-            ) : (
-              <div className="vault-panel-wrapper">
-                <div className="vault-section-header">{tVault('information.title')}</div>
-                <div className="vault-empty">{tDetails('empty.selectPrompt')}</div>
               </div>
-            )}
-        </section>
+              <div className="vault-sidebar-actions">
+                <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
+                  {tDataCards('label.addDataCard')}
+                </button>
+                <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
+                  {tFolders('action.addFolder')}
+                </button>
+              </div>
+              <Folders
+                selectedCategory={selectedCategory}
+                onSelectCategory={handleSelectCategory}
+                onAddBankCard={handleAddBankCard}
+                folders={vault.folders}
+                counts={vault.counts}
+                selectedNav={vault.selectedNav}
+                selectedFolderId={vault.selectedFolderId}
+                onSelectNav={vault.selectNav}
+                dialogState={folderDialogs}
+                onDeleteFolder={handleDeleteFolder}
+                onRenameFolder={vault.renameFolder}
+              />
+            </aside>
+
+            <section className="vault-datacards">
+              <DataCards
+                viewModel={dataCardsViewModel}
+                sectionTitle={vault.currentSectionTitle}
+                clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+                clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+              />
+            </section>
+
+            <section className="vault-details">
+              {vault.selectedCard ? (
+                <Suspense fallback={<p aria-busy="true">Loading…</p>}>
+                  <LazyDetails
+                    card={vault.selectedCard}
+                    folders={foldersForCards}
+                    onEdit={(card) => dataCardsViewModel.openEditModal(card)}
+                    onDelete={vault.deleteCard}
+                    onRestore={vault.restoreCard}
+                    onPurge={vault.purgeCard}
+                    onToggleFavorite={vault.toggleFavorite}
+                    isTrashMode={vault.isTrashMode}
+                    clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+                    clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+                  />
+                </Suspense>
+              ) : (
+                <div className="vault-panel-wrapper">
+                  <div className="vault-section-header">{tVault('information.title')}</div>
+                  <div className="vault-empty">{tDetails('empty.selectPrompt')}</div>
+                </div>
+              )}
+            </section>
+          </>
+        )}
 
         {bankCardsEnabled && (
           <Suspense fallback={<p aria-busy="true">Loading…</p>}>
