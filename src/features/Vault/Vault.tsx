@@ -232,8 +232,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
       />
 
       <div className="vault-body">
-        <div hidden={selectedCategory !== 'data_cards'}>
-          <aside className="vault-sidebar">
+        <aside className="vault-sidebar" hidden={selectedCategory !== 'data_cards'}>
             <div className="vault-sidebar-controls">
               <Search
                 query={vault.searchQuery}
@@ -263,18 +262,18 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
               onDeleteFolder={handleDeleteFolder}
               onRenameFolder={vault.renameFolder}
             />
-          </aside>
+        </aside>
 
-          <section className="vault-datacards">
+        <section className="vault-datacards" hidden={selectedCategory !== 'data_cards'}>
             <DataCards
               viewModel={dataCardsViewModel}
               sectionTitle={vault.currentSectionTitle}
               clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
               clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
             />
-          </section>
+        </section>
 
-          <section className="vault-details">
+        <section className="vault-details" hidden={selectedCategory !== 'data_cards'}>
             {vault.selectedCard ? (
               <Suspense fallback={<p aria-busy="true">Loading…</p>}>
                 <LazyDetails
@@ -296,8 +295,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
                 <div className="vault-empty">{tDetails('empty.selectPrompt')}</div>
               </div>
             )}
-          </section>
-        </div>
+        </section>
 
         {bankCardsEnabled && (
           <Suspense fallback={<p aria-busy="true">Loading…</p>}>

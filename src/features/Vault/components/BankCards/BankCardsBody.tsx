@@ -71,13 +71,9 @@ export function BankCardsBody({
   const { t: tBankCards } = useTranslation('BankCards');
   const sectionTitle = bankCards.currentSectionTitle;
 
-  if (!active) {
-    return <div hidden />;
-  }
-
   return (
     <>
-      <aside className="vault-sidebar">
+      <aside className="vault-sidebar" hidden={!active}>
         <div className="vault-sidebar-controls">
           <Search
             query={bankCards.searchQuery}
@@ -106,11 +102,11 @@ export function BankCardsBody({
         />
       </aside>
 
-      <section className="vault-datacards">
+      <section className="vault-datacards" hidden={!active}>
         <BankCards viewModel={viewModel} sectionTitle={sectionTitle} />
       </section>
 
-      <section className="vault-details">
+      <section className="vault-details" hidden={!active}>
         <BankCardDetails
           card={bankCards.selectedCard}
           onEdit={(card) => viewModel.openEditModal(card)}
