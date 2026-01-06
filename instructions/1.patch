@@ -1,0 +1,16 @@
+diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json
+index 1111111..2222222 100644
+--- a/src-tauri/tauri.conf.json
++++ b/src-tauri/tauri.conf.json
+@@ -1,5 +1,12 @@
+ {
+   "bundle": {
++    "active": true,
++    "targets": [
++      "nsis"
++    ],
+     "windows": {
+       "webviewInstallMode": { "type": "offlineInstaller" }
+     }
+   }
+ }
