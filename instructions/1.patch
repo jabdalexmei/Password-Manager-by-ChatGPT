@@ -1,82 +1,16 @@
-diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
-index 8c6c1a2..c1a0e6d 100644
---- a/src/features/Vault/hooks/useVault.ts
-+++ b/src/features/Vault/hooks/useVault.ts
-@@ -443,24 +443,39 @@ export function useVault(profileId: string, onLocked: () => void) {
- 
-   const restoreCardAction = useCallback(
-     async (id: string) => {
-       try {
-         await restoreDataCard(id);
-+
-+        const restored = deletedCards.find((card) => card.id === id) ?? null;
-+        const deletedAfterRestore = deletedCards.filter((card) => card.id !== id);
-+
-         setDeletedCards((prev) => prev.filter((card) => card.id !== id));
-         setCards((prev) => {
--          const restored = deletedCards.find((card) => card.id === id);
--          if (!restored) return prev;
-+          if (!restored) return prev;
-           const updated = { ...restored, deletedAt: null };
-           return sortCardsWithSettings([...prev.filter((card) => card.id !== id), updated]);
-         });
--        setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
--        setSelectedCardId(id);
--        await loadCard(id);
-+
-+        // Keep user in the current navigation.
-+        // If they are in "deleted", the restored card disappears from that list,
-+        // so select the next deleted card (or clear selection).
-+        if (selectedNav === 'deleted') {
-+          setSelectedCardId(deletedAfterRestore[0]?.id ?? null);
-+          return;
-+        }
-+
-+        // If not in "deleted", keep behavior: select restored card and load details.
-+        setSelectedCardId(id);
-+        await loadCard(id);
-       } catch (err) {
-         handleError(err);
-       }
-     },
--    [deletedCards, handleError, loadCard, sortCardsWithSettings]
-+    [deletedCards, handleError, loadCard, selectedNav, sortCardsWithSettings]
-   );
-@@ -500,7 +515,11 @@ export function useVault(profileId: string, onLocked: () => void) {
-       setCards((prev) =>
-         sortCardsWithSettings([
-           ...prev,
-           ...deletedCards.map((card) => ({ ...card, deletedAt: null })),
-         ])
-       );
--      setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
-+      // Keep nav; if user is in "deleted", list becomes empty so clear selection.
-+      if (selectedNav === 'deleted') {
-+        setSelectedCardId(null);
-+      }
-     } catch (err) {
-       handleError(err);
+diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json
+index 1111111..2222222 100644
+--- a/src-tauri/tauri.conf.json
++++ b/src-tauri/tauri.conf.json
+@@ -1,5 +1,12 @@
+ {
+   "bundle": {
++    "active": true,
++    "targets": [
++      "nsis"
++    ],
+     "windows": {
+       "webviewInstallMode": { "type": "offlineInstaller" }
      }
--  }, [deletedCards, handleError, sortCardsWithSettings]);
-+  }, [deletedCards, handleError, selectedNav, sortCardsWithSettings]);
-diff --git a/src/features/Vault/hooks/useBankCards.ts b/src/features/Vault/hooks/useBankCards.ts
-index 4d1f7b1..1d8cc55 100644
---- a/src/features/Vault/hooks/useBankCards.ts
-+++ b/src/features/Vault/hooks/useBankCards.ts
-@@ -306,7 +306,11 @@ export function useBankCards(profileId: string, onLocked: () => void) {
-       setCards((prev) =>
-         sortCardsWithSettings([
-           ...prev,
-           ...deletedCards.map((card) => ({ ...card, deletedAt: null })),
-         ])
-       );
--      setSelectedNav((nav) => (nav === 'deleted' ? 'all' : nav));
-+      // Keep nav; if user is in "deleted", list becomes empty so clear selection.
-+      if (selectedNav === 'deleted') {
-+        setSelectedCardId(null);
-+      }
-     } catch (err) {
-       handleError(err);
-     }
--  }, [deletedCards, handleError, sortCardsWithSettings]);
-+  }, [deletedCards, handleError, selectedNav, sortCardsWithSettings]);
+   }
+ }
