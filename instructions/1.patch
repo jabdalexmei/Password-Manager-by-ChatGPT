@@ -1,799 +1,187 @@
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/app_state.rs b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/app_state.rs
-index 0ea24d2..2b6c51e 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/app_state.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/app_state.rs
-@@ -1,6 +1,8 @@
-+use std::collections::HashMap;
-+use std::path::PathBuf;
- use std::sync::atomic::AtomicBool;
- use std::sync::{Arc, Mutex};
- 
- use crate::data::storage_paths::StoragePaths;
- use crate::error::{ErrorCodeString, Result};
- 
- use zeroize::Zeroizing;
- 
- pub struct VaultSession {
-     pub profile_id: String,
-     pub conn: rusqlite::Connection,
-     pub key: Zeroizing<[u8; 32]>,
+--- a/src-tauri/capabilities/default.json
++++ b/src-tauri/capabilities/default.json
+@@ -1,11 +1,15 @@
+ {
+   "$schema": "../gen/schemas/desktop-schema.json",
+   "identifier": "default",
+-  "description": "Default permissions for main window (dialog open).",
+-  "windows": ["main"],
++  "description": "Default permissions for main window.",
++  "windows": [
++    "main"
++  ],
+   "permissions": [
+-    "core:default",
+-    "dialog:allow-open",
+-    "dialog:allow-save"
++    "core:default"
+   ]
  }
- 
-+#[derive(Clone)]
-+pub struct PendingPickedFile {
-+    pub id: String,
-+    pub path: PathBuf,
-+    pub file_name: String,
-+    pub byte_size: u64,
-+}
-+
-+pub struct PendingAttachmentPick {
-+    pub created_at_ms: u128,
-+    pub files: Vec<PendingPickedFile>,
-+}
-+
- pub struct AppState {
-     pub active_profile: Mutex<Option<String>>,
-     pub storage_paths: Mutex<StoragePaths>,
- 
-     pub vault_session: Mutex<Option<VaultSession>>,
-     pub vault_persist_guard: Mutex<()>,
-     pub vault_persist_requested: AtomicBool,
-     pub vault_persist_in_flight: AtomicBool,
-     pub backup_guard: Mutex<()>,
-+
-+    // One-time picks created by backend-native dialogs.
-+    // Frontend only receives opaque ids (token + file ids), never filesystem paths.
-+    pub pending_attachment_picks: Mutex<HashMap<String, PendingAttachmentPick>>,
+--- a/package.json
++++ b/package.json
+@@ -1,27 +1,26 @@
+ {
+   "name": "Password-Manager",
+   "version": "0.1.0",
+   "private": true,
+   "type": "module",
+   "scripts": {
+     "dev": "vite",
+     "ci:install": "npm ci",
+     "ci:build": "npm ci && npm run build",
+     "zxing:guard": "node scripts/check-no-zxing-imports.mjs",
+     "typecheck": "tsc -p tsconfig.json --noEmit",
+     "build": "npm run zxing:guard && npm run typecheck && vite build",
+     "analyze": "npm run zxing:guard && npm run typecheck && vite build --mode analyze",
+     "tauri:dev": "tauri dev",
+     "tauri:build": "tauri build",
+     "theme:check": "node scripts/check-theme-colors.mjs",
+     "icons:check": "node scripts/check-no-inline-svg.mjs"
+   },
+   "dependencies": {
+     "@zxing/browser": "0.1.5",
+     "@tauri-apps/api": "2.0.0",
+-    "@tauri-apps/plugin-dialog": "2.0.0",
+     "lucide-react": "0.562.0",
+     "otpauth": "9.4.1",
+     "react": "18.3.1",
+     "react-dom": "18.3.1"
+   },
+   "devDependencies": {
+     "@tauri-apps/cli": "2.0.0",
+     "@types/react": "18.3.3",
+     "@types/react-dom": "18.3.0",
+     "@vitejs/plugin-react": "4.3.3",
+     "rollup-plugin-visualizer": "6.0.5",
+     "typescript": "5.6.2",
+     "vite": "5.4.0"
+   }
  }
- 
- impl AppState {
-     pub fn new(storage_paths: StoragePaths) -> Self {
-         Self {
-             active_profile: Mutex::new(None),
-             storage_paths: Mutex::new(storage_paths),
- 
-             vault_session: Mutex::new(None),
-             vault_persist_guard: Mutex::new(()),
-             vault_persist_requested: AtomicBool::new(false),
-             vault_persist_in_flight: AtomicBool::new(false),
-             backup_guard: Mutex::new(()),
-+
-+            pending_attachment_picks: Mutex::new(HashMap::new()),
-         }
-     }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/types.rs b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/types.rs
-index 76c8ff7..53aa0d9 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/types.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/types.rs
-@@ -21,6 +21,20 @@ pub struct AttachmentMeta {
-     pub deleted_at: Option<String>,
+--- a/src/i18n/locales/en/Common.json
++++ b/src/i18n/locales/en/Common.json
+@@ -1,12 +1,18 @@
+ {
+   "action.cancel": "Cancel",
+   "action.close": "Close",
+   "action.ok": "OK",
+   "aria.dismissToast": "Dismiss toast",
+   "error.backupProfileMismatch": "This backup belongs to a different profile and cannot be restored. ({code})",
+   "error.backupUnsupportedFormat": "This backup format is not supported. ({code})",
++  "error.backupIntegrityFailed": "Backup integrity check failed.",
++  "error.backupInvalid": "Backup file is invalid or corrupted.",
++  "error.backupTooLarge": "Backup is too large to restore safely.",
++  "error.backupTooManyFiles": "Backup contains too many files to restore safely.",
++  "error.dialogUnsupported": "This operation is not supported on this platform.",
+   "error.hookToaster": "Toaster hook not initialized",
++  "error.operationBlocked": "Operation blocked for security reasons.",
+   "error.operationFailed": "Operation failed. Please try again.",
+   "error.network": "Network error. Please check your connection. ({code})"
  }
- 
-+#[derive(Debug, Serialize, Deserialize, Clone)]
-+pub struct AttachmentPickFile {
-+    pub id: String,
-+    pub file_name: String,
-+    pub byte_size: i64,
-+}
-+
-+#[derive(Debug, Serialize, Deserialize, Clone)]
-+pub struct AttachmentPickPayload {
-+    pub token: String,
-+    pub files: Vec<AttachmentPickFile>,
-+}
-+
- #[derive(Debug, Serialize, Deserialize, Clone)]
- pub struct AttachmentPreviewPayload {
-     pub attachment_id: String,
-     pub file_name: String,
-     pub mime_type: String,
-     pub byte_size: i64,
-     pub base64_data: String,
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/services/attachments_service.rs b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/services/attachments_service.rs
-index 3f39b70..d0bb236 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/services/attachments_service.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/services/attachments_service.rs
-@@ -1,6 +1,6 @@
- use std::fs;
- use std::path::{Path, PathBuf};
- use std::sync::Arc;
- 
- use base64::{engine::general_purpose, Engine as _};
- use chrono::Utc;
- use tauri::{AppHandle, Manager};
+--- a/src/features/Vault/hooks/useVault.ts
++++ b/src/features/Vault/hooks/useVault.ts
+@@ -102,7 +102,23 @@
+         case 'BACKUP_PROFILE_MISMATCH':
+           return tCommon('error.backupProfileMismatch', { code });
+         case 'BACKUP_UNSUPPORTED_FORMAT':
+           return tCommon('error.backupUnsupportedFormat', { code });
+-        case 'VALIDATION_ERROR':
++        case 'BACKUP_ARCHIVE_TOO_MANY_FILES':
++          return tCommon('error.backupTooManyFiles', { code });
++        case 'BACKUP_ARCHIVE_TOO_LARGE':
++          return tCommon('error.backupTooLarge', { code });
++        case 'BACKUP_ARCHIVE_INVALID':
++        case 'BACKUP_MANIFEST_INVALID':
++          return tCommon('error.backupInvalid', { code });
++        case 'BACKUP_INTEGRITY_FAILED':
++          return tCommon('error.backupIntegrityFailed', { code });
++        case 'DIALOG_UNSUPPORTED_FILE_URI':
++          return tCommon('error.dialogUnsupported', { code });
++        case 'WORKSPACE_CREATE_PATH_FORBIDDEN':
++        case 'BACKUP_DESTINATION_PATH_FORBIDDEN':
++        case 'BACKUP_RESTORE_PATH_FORBIDDEN':
++        case 'BACKUP_INSPECT_PATH_FORBIDDEN':
++          return tCommon('error.operationBlocked', { code });
++        case 'VALIDATION_ERROR':
+           return fallback ?? tCommon('error.operationFailed', { code });
+         default:
+           return fallback ?? tCommon('error.operationFailed', { code });
+       }
+     },
+     [tCommon]
+--- a/src-tauri/src/services/backup_service.rs
++++ b/src-tauri/src/services/backup_service.rs
+@@ -12,6 +12,12 @@
+ use zip::{CompressionMethod, ZipArchive, ZipWriter};
  
  use crate::app_state::AppState;
- use crate::data::crypto::cipher;
- use crate::data::profiles::paths::{attachments_preview_root, attachments_root, profile_root};
- use crate::data::sqlite::repo_impl;
- use crate::error::{ErrorCodeString, Result};
- use crate::services::{security_service};
- use crate::types::{AttachmentMeta, AttachmentPreviewPayload};
- 
- const MAX_ATTACHMENT_BYTES: usize = 10 * 1024 * 1024;
- const MAX_PREVIEW_BYTES: usize = 512 * 1024;
-@@ -54,18 +54,24 @@ fn ensure_target_dir(target: &Path) -> Result<()> {
-     Ok(())
- }
- 
- pub fn add_attachment_from_path(
-     app: &AppHandle,
-     datacard_id: String,
-     source_path: String,
- ) -> Result<AttachmentMeta> {
-+    let source = PathBuf::from(source_path);
-+    add_attachment_from_fs_path(app, datacard_id, &source)
-+}
 +
-+pub fn add_attachment_from_fs_path(
-+    app: &AppHandle,
-+    datacard_id: String,
-+    source: &Path,
-+) -> Result<AttachmentMeta> {
-     let session = require_logged_in(app)?;
- 
--    let source = Path::new(&source_path);
--    let file_name = source
-+    let file_name = source
-         .file_name()
-         .and_then(|s| s.to_str())
-         .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_INVALID_FILE_NAME"))?
-         .to_string();
- 
-     let bytes = fs::read(source).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
-     if bytes.len() > MAX_ATTACHMENT_BYTES {
-         return Err(ErrorCodeString::new("ATTACHMENT_TOO_LARGE"));
-     }
- 
-     let mime = mime_guess::from_path(source)
-         .first_raw()
-         .map(|s| s.to_string());
-@@ -129,6 +135,7 @@ pub fn add_attachment_from_path(
- 
-     Ok(meta)
- }
- 
- pub fn list_attachments(app: &AppHandle, datacard_id: String) -> Result<Vec<AttachmentMeta>> {
-     let session = require_logged_in(app)?;
-     repo_impl::list_attachments_by_datacard(&session.state, &session.profile_id, &datacard_id)
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/commands/attachments.rs b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/commands/attachments.rs
-index 9b8f0cf..f4d89d2 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/commands/attachments.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/commands/attachments.rs
-@@ -1,38 +1,182 @@
-+use std::time::{SystemTime, UNIX_EPOCH};
++// Restore hard limits (anti zip-bomb / decompression bomb DoS)
++const MAX_RESTORE_FILES: usize = 4096;
++const MAX_RESTORE_ENTRY_BYTES: i64 = 64 * 1024 * 1024;
++const MAX_RESTORE_TOTAL_BYTES: i64 = 512 * 1024 * 1024;
 +
-+use tauri_plugin_dialog::{DialogExt, FilePath};
-+use uuid::Uuid;
-+
-+use crate::app_state::{AppState, PendingAttachmentPick, PendingPickedFile};
- use crate::error::{ErrorCodeString, Result};
- use crate::services::attachments_service;
--use crate::types::{AttachmentMeta, AttachmentPreviewPayload};
--use tauri::AppHandle;
-+use crate::types::{
-+    AttachmentMeta, AttachmentPickFile, AttachmentPickPayload, AttachmentPreviewPayload,
-+};
-+use tauri::{AppHandle, Manager};
- 
- #[tauri::command]
- pub async fn list_attachments(app: AppHandle, datacard_id: String) -> Result<Vec<AttachmentMeta>> {
-     tauri::async_runtime::spawn_blocking(move || attachments_service::list_attachments(&app, datacard_id))
-         .await
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
- 
--#[tauri::command]
--pub async fn add_attachment_from_path(
--    app: AppHandle,
--    datacard_id: String,
--    source_path: String,
--) -> Result<AttachmentMeta> {
--    tauri::async_runtime::spawn_blocking(move || {
--        attachments_service::add_attachment_from_path(&app, datacard_id, source_path)
--    })
--    .await
--    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+fn now_ms() -> Result<u128> {
-+    SystemTime::now()
-+        .duration_since(UNIX_EPOCH)
-+        .map(|d| d.as_millis())
-+        .map_err(|_| ErrorCodeString::new("TIME_UNAVAILABLE"))
- }
- 
- #[tauri::command]
- pub async fn remove_attachment(app: AppHandle, attachment_id: String) -> Result<()> {
-     tauri::async_runtime::spawn_blocking(move || attachments_service::remove_attachment(&app, attachment_id))
-         .await
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
- 
- #[tauri::command]
- pub async fn purge_attachment(app: AppHandle, attachment_id: String) -> Result<()> {
-     tauri::async_runtime::spawn_blocking(move || attachments_service::purge_attachment(&app, attachment_id))
-         .await
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
- 
- #[tauri::command]
- pub async fn get_attachment_bytes_base64(
-     app: AppHandle,
-     attachment_id: String,
- ) -> Result<AttachmentPreviewPayload> {
-     tauri::async_runtime::spawn_blocking(move || {
-         attachments_service::get_attachment_bytes_base64(&app, attachment_id)
-     })
-     .await
-     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
- 
- #[tauri::command]
- pub async fn get_attachment_preview(
-     app: AppHandle,
-     attachment_id: String,
- ) -> Result<AttachmentPreviewPayload> {
-     tauri::async_runtime::spawn_blocking(move || attachments_service::get_attachment_preview(&app, attachment_id))
-         .await
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
- 
--#[tauri::command]
--pub async fn save_attachment_to_path(
--    app: AppHandle,
--    attachment_id: String,
--    target_path: String,
--) -> Result<()> {
--    tauri::async_runtime::spawn_blocking(move || {
--        attachments_service::save_attachment_to_path(&app, attachment_id, target_path)
--    })
--    .await
--    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+fn file_path_to_pathbuf(fp: FilePath) -> Result<std::path::PathBuf> {
-+    match fp {
-+        FilePath::Path(p) => Ok(p),
-+        _ => Err(ErrorCodeString::new("DIALOG_UNSUPPORTED_FILE_URI")),
-+    }
-+}
-+
-+fn cleanup_stale_picks(state: &AppState, now: u128) -> Result<()> {
-+    const MAX_AGE_MS: u128 = 10 * 60 * 1000;
-+    const MAX_ENTRIES: usize = 16;
-+
-+    let mut map = state
-+        .pending_attachment_picks
-+        .lock()
-+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+
-+    map.retain(|_, v| now.saturating_sub(v.created_at_ms) <= MAX_AGE_MS);
-+    if map.len() > MAX_ENTRIES {
-+        // Drop arbitrary extras (oldest-first would require sorting; not worth it here)
-+        while map.len() > MAX_ENTRIES {
-+            if let Some(key) = map.keys().next().cloned() {
-+                map.remove(&key);
-+            } else {
-+                break;
-+            }
-+        }
-+    }
-+    Ok(())
-+}
-+
-+#[tauri::command]
-+pub async fn attachments_pick_files(app: AppHandle) -> Result<Option<AttachmentPickPayload>> {
-+    tauri::async_runtime::spawn_blocking(move || {
-+        let state = app.state::<std::sync::Arc<AppState>>().inner().clone();
-+        let now = now_ms()?;
-+        cleanup_stale_picks(&state, now)?;
-+
-+        let selection = app.dialog().file().blocking_pick_files();
-+        let Some(paths) = selection else {
-+            return Ok(None);
-+        };
-+
-+        let mut files: Vec<PendingPickedFile> = Vec::new();
-+        for fp in paths {
-+            let path = file_path_to_pathbuf(fp)?;
-+            let file_name = path
-+                .file_name()
-+                .and_then(|s| s.to_str())
-+                .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_INVALID_FILE_NAME"))?
-+                .to_string();
-+            let byte_size = std::fs::metadata(&path)
-+                .map(|m| m.len())
-+                .map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
-+            files.push(PendingPickedFile {
-+                id: Uuid::new_v4().to_string(),
-+                path,
-+                file_name,
-+                byte_size,
-+            });
-+        }
-+
-+        if files.is_empty() {
-+            return Ok(None);
-+        }
-+
-+        let token = Uuid::new_v4().to_string();
-+        {
-+            let mut map = state
-+                .pending_attachment_picks
-+                .lock()
-+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+            map.insert(
-+                token.clone(),
-+                PendingAttachmentPick {
-+                    created_at_ms: now,
-+                    files: files.clone(),
-+                },
-+            );
-+        }
-+
-+        let payload = AttachmentPickPayload {
-+            token,
-+            files: files
-+                .into_iter()
-+                .map(|f| AttachmentPickFile {
-+                    id: f.id,
-+                    file_name: f.file_name,
-+                    byte_size: f.byte_size as i64,
-+                })
-+                .collect(),
-+        };
-+        Ok(Some(payload))
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn attachments_discard_pick(app: AppHandle, token: String) -> Result<()> {
-+    tauri::async_runtime::spawn_blocking(move || {
-+        let state = app.state::<std::sync::Arc<AppState>>().inner().clone();
-+        let mut map = state
-+            .pending_attachment_picks
-+            .lock()
-+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+        map.remove(&token);
-+        Ok(())
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn add_attachments_from_pick(
-+    app: AppHandle,
-+    datacard_id: String,
-+    token: String,
-+    file_ids: Option<Vec<String>>,
-+) -> Result<Vec<AttachmentMeta>> {
-+    tauri::async_runtime::spawn_blocking(move || {
-+        let state = app.state::<std::sync::Arc<AppState>>().inner().clone();
-+        let pick = {
-+            let mut map = state
-+                .pending_attachment_picks
-+                .lock()
-+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+            map.remove(&token)
-+                .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_PICK_NOT_FOUND"))?
-+        };
-+
-+        let wanted: Option<std::collections::HashSet<String>> =
-+            file_ids.map(|ids| ids.into_iter().collect());
-+
-+        let mut out: Vec<AttachmentMeta> = Vec::new();
-+        for f in pick.files {
-+            if let Some(set) = &wanted {
-+                if !set.contains(&f.id) {
-+                    continue;
-+                }
-+            }
-+            let meta = attachments_service::add_attachment_from_fs_path(&app, datacard_id.clone(), &f.path)?;
-+            out.push(meta);
-+        }
-+        Ok(out)
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn add_attachments_via_dialog(
-+    app: AppHandle,
-+    datacard_id: String,
-+) -> Result<Vec<AttachmentMeta>> {
-+    tauri::async_runtime::spawn_blocking(move || {
-+        let selection = app.dialog().file().blocking_pick_files();
-+        let Some(paths) = selection else {
-+            return Ok(Vec::new());
-+        };
-+
-+        let mut out: Vec<AttachmentMeta> = Vec::new();
-+        for fp in paths {
-+            let path = file_path_to_pathbuf(fp)?;
-+            let meta = attachments_service::add_attachment_from_fs_path(&app, datacard_id.clone(), &path)?;
-+            out.push(meta);
-+        }
-+        Ok(out)
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn save_attachment_via_dialog(app: AppHandle, attachment_id: String) -> Result<bool> {
-+    tauri::async_runtime::spawn_blocking(move || {
-+        // We re-use the existing service logic, but we DO NOT accept a frontend-provided path.
-+        // Instead we show a native save dialog and write to the chosen path.
-+        let preview = attachments_service::get_attachment_preview(&app, attachment_id.clone())?;
-+        let default_name = preview.file_name.clone();
-+
-+        let selection = app
-+            .dialog()
-+            .file()
-+            .set_file_name(default_name)
-+            .blocking_save_file();
-+
-+        let Some(fp) = selection else {
-+            return Ok(false);
-+        };
-+
-+        let target = file_path_to_pathbuf(fp)?;
-+        attachments_service::save_attachment_to_path(&app, attachment_id, target.to_string_lossy().to_string())?;
-+        Ok(true)
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/main.rs b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/main.rs
-index 0fd7c9a..7f4c7c0 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/main.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/src/main.rs
-@@ -72,7 +72,11 @@ fn main() {
-             is_logged_in,
-             health_check,
-             list_attachments,
--            add_attachment_from_path,
-+            attachments_pick_files,
-+            attachments_discard_pick,
-+            add_attachments_from_pick,
-+            add_attachments_via_dialog,
-             remove_attachment,
-             purge_attachment,
-             get_attachment_bytes_base64,
-             get_attachment_preview,
--            save_attachment_to_path,
-+            save_attachment_via_dialog,
-             backup_create,
-             backup_restore,
-             backup_inspect,
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/api/vaultApi.ts b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/api/vaultApi.ts
-index 8c4bcab..45b0d28 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/api/vaultApi.ts
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/api/vaultApi.ts
-@@ -171,25 +171,53 @@ export async function listAttachments(datacardId: string): Promise<BackendAttachm
-   return invoke('list_attachments', { datacardId });
- }
- 
--export async function addAttachmentFromPath(
--  datacardId: string,
--  sourcePath: string
--): Promise<BackendAttachmentMeta> {
--  return invoke('add_attachment_from_path', { datacardId, sourcePath });
--}
-+export type AttachmentPickFileDto = {
-+  id: string;
-+  fileName: string;
-+  byteSize: number;
-+};
-+
-+export type AttachmentPickPayloadDto = {
-+  token: string;
-+  files: AttachmentPickFileDto[];
-+};
-+
-+type BackendAttachmentPickFile = { id: string; file_name: string; byte_size: number };
-+type BackendAttachmentPickPayload = { token: string; files: BackendAttachmentPickFile[] };
-+
-+export async function attachmentsPickFiles(): Promise<AttachmentPickPayloadDto | null> {
-+  const payload = await invoke<BackendAttachmentPickPayload | null>('attachments_pick_files');
-+  if (!payload) return null;
-+  return {
-+    token: payload.token,
-+    files: payload.files.map((f) => ({
-+      id: f.id,
-+      fileName: f.file_name,
-+      byteSize: f.byte_size,
-+    })),
-+  };
-+}
-+
-+export async function attachmentsDiscardPick(token: string): Promise<void> {
-+  await invoke('attachments_discard_pick', { token });
-+}
-+
-+export async function addAttachmentsFromPick(
-+  datacardId: string,
-+  token: string,
-+  fileIds?: string[]
-+): Promise<BackendAttachmentMeta[]> {
-+  return invoke('add_attachments_from_pick', { datacardId, token, fileIds: fileIds ?? null });
-+}
-+
-+export async function addAttachmentsViaDialog(datacardId: string): Promise<BackendAttachmentMeta[]> {
-+  return invoke('add_attachments_via_dialog', { datacardId });
-+}
- 
- export async function removeAttachment(attachmentId: string): Promise<void> {
-   return invoke('remove_attachment', { attachmentId });
- }
- 
- export async function purgeAttachment(attachmentId: string): Promise<void> {
-   return invoke('purge_attachment', { attachmentId });
- }
- 
--export async function saveAttachmentToPath(
--  attachmentId: string,
--  targetPath: string
--): Promise<void> {
--  return invoke('save_attachment_to_path', { attachmentId, targetPath });
-+export async function saveAttachmentViaDialog(attachmentId: string): Promise<boolean> {
-+  return invoke('save_attachment_via_dialog', { attachmentId });
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/Details/useDetails.tsx b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/Details/useDetails.tsx
-index 8c6da3f..4f0c1a1 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/Details/useDetails.tsx
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/Details/useDetails.tsx
-@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
- import {
-   getAttachmentBytesBase64,
--  addAttachmentFromPath,
-+  addAttachmentsViaDialog,
-   listAttachments,
-   purgeAttachment,
-   removeAttachment,
--  saveAttachmentToPath,
-+  saveAttachmentViaDialog,
- } from '../../api/vaultApi';
- import { useToasts } from '../../../../shared/ui/ToastProvider';
- import { useI18n } from '../../../../shared/i18n/useI18n';
-@@ -191,23 +191,15 @@ export function useDetails({
-   const onAddAttachment = useCallback(async () => {
-     if (!card || isTrashMode) return;
-     try {
--      const { open } = await import('@tauri-apps/plugin-dialog');
--      const selection = await open({ multiple: true });
--      const paths = Array.isArray(selection)
--        ? selection.filter((p): p is string => typeof p === 'string')
--        : selection && typeof selection === 'string'
--          ? [selection]
--          : [];
--      if (!paths.length) return;
--
--      for (const path of paths) {
--        await addAttachmentFromPath(card.id, path);
--      }
-+      const added = await addAttachmentsViaDialog(card.id);
-+      if (!added.length) return; // cancelled
-       await refreshAttachments();
-       showToast(t('toast.attachmentAddSuccess'), 'success');
-     } catch (err) {
-       console.error(err);
-       showToast(t('toast.attachmentAddError'), 'error');
-     }
-   }, [card, isTrashMode, refreshAttachments, showToast, t]);
-@@ -264,19 +256,15 @@ export function useDetails({
-   const onDownloadAttachment = useCallback(
-     async (attachmentId: string, defaultName: string) => {
-       if (!card) return;
-       try {
--        const { save } = await import('@tauri-apps/plugin-dialog');
--        const selection = await save({ defaultPath: defaultName });
--        const targetPath = Array.isArray(selection) ? selection[0] : selection;
--        if (!targetPath || typeof targetPath !== 'string') return;
--        await saveAttachmentToPath(attachmentId, targetPath);
--        showToast(t('attachments.downloadSuccess'), 'success');
-+        const ok = await saveAttachmentViaDialog(attachmentId);
-+        if (ok) showToast(t('attachments.downloadSuccess'), 'success');
-       } catch (err) {
-         console.error(err);
-         showToast(t('attachments.downloadError'), 'error');
-       }
-     },
-     [card, showToast, t]
-   );
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/DataCards.tsx b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/DataCards.tsx
-index 0c4b1c6..22cc5d2 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -324,11 +324,7 @@ export function DataCards(props: Props) {
-     };
- 
-     const handleAddAttachments = async () => {
--      const { open } = await import('@tauri-apps/plugin-dialog');
--      const selection = await open({ multiple: true });
--      const paths = Array.isArray(selection) ? selection : selection ? [selection] : [];
--      viewModel.addCreateAttachments(paths.filter((p): p is string => typeof p === 'string'));
-+      await viewModel.pickCreateAttachments();
-     };
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/useDataCards.ts b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/useDataCards.ts
-index 2f0c3f0..f8a0e44 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/useDataCards.ts
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/useDataCards.ts
-@@ -1,6 +1,7 @@
- import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
- import { useToasts } from '../../../../shared/ui/ToastProvider';
- import { useI18n } from '../../../../shared/i18n/useI18n';
-+import { addAttachmentsFromPick, attachmentsDiscardPick, attachmentsPickFiles } from '../../api/vaultApi';
- 
- export type PendingAttachment = {
--  path: string;
-+  id: string;
-   name: string;
-+  byteSize: number;
+ use crate::data::fs::atomic_write::write_atomic;
+ use crate::data::profiles::paths::{
+     attachments_dir, backups_dir, backup_registry_path, kdf_salt_path, key_check_path, profile_dir,
+     profile_registry_path, profile_root_dir, vault_db_path,
  };
- 
- export type ViewModel = {
-   // ...
--  addCreateAttachments: (paths: string[]) => void;
--  removeCreateAttachment: (path: string) => void;
-+  pickCreateAttachments: () => Promise<void>;
-+  removeCreateAttachment: (id: string) => void;
- };
-@@ -216,6 +217,7 @@ export function useDataCards(/* ... */): ViewModel {
-   const [isCreateOpen, setCreateOpen] = useState(false);
-   const [createError, setCreateError] = useState<string | null>(null);
-   const [createFolderError, setCreateFolderError] = useState<string | null>(null);
-   const [createAttachments, setCreateAttachments] = useState<PendingAttachment[]>([]);
-+  const [createAttachmentPickToken, setCreateAttachmentPickToken] = useState<string | null>(null);
- 
-   const resetCreateForm = useCallback(() => {
-     const folderName = findFolderName(defaultFolderId, folders);
-     setCreateForm(buildInitialForm(defaultFolderId, folderName));
-   }, [defaultFolderId, folders]);
-@@ -228,7 +230,9 @@ export function useDataCards(/* ... */): ViewModel {
-     setIsCreateSubmitting(false);
-     resetCreateForm();
-     setCreateAttachments([]);
-+    setCreateAttachmentPickToken(null);
-     setCreateOpen(true);
-     setShowPassword(true);
-   }, [resetCreateForm]);
- 
-   const closeCreateModal = useCallback(() => {
-     setIsCreateSubmitting(false);
-     setCreateOpen(false);
-     setCreateAttachments([]);
-+    if (createAttachmentPickToken) {
-+      void attachmentsDiscardPick(createAttachmentPickToken);
-+    }
-+    setCreateAttachmentPickToken(null);
-   }, [createAttachmentPickToken]);
-@@ -258,33 +262,44 @@ export function useDataCards(/* ... */): ViewModel {
+@@ -21862,6 +21868,30 @@ fn restore_archive_to_profile(
+     if manifest.profile_id != target_profile_id {
+         return Err(ErrorCodeString::new("BACKUP_PROFILE_MISMATCH"));
      }
-   }, [isCreateOpen, isEditOpen]);
- 
--  const addCreateAttachments = useCallback((paths: string[]) => {
--    if (paths.length === 0) return;
--    setCreateAttachments((prev) => {
--      const existing = new Set(prev.map((p) => p.path));
--      const next = [...prev];
--      paths.forEach((path) => {
--        if (existing.has(path)) return;
--        const parts = path.split(/[/\\]/);
--        const name = parts[parts.length - 1] || path;
--        next.push({ path, name });
--      });
--      return next;
--    });
--  }, []);
--
--  const removeCreateAttachment = useCallback((path: string) => {
--    setCreateAttachments((prev) => prev.filter((item) => item.path !== path));
--  }, []);
-+  const pickCreateAttachments = useCallback(async () => {
-+    const payload = await attachmentsPickFiles();
-+    if (!payload) return; // cancelled
 +
-+    // discard previous token (if user re-picked)
-+    if (createAttachmentPickToken) {
-+      await attachmentsDiscardPick(createAttachmentPickToken);
++    if manifest.files.len() > MAX_RESTORE_FILES {
++        return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_MANY_FILES"));
 +    }
 +
-+    setCreateAttachmentPickToken(payload.token);
-+    setCreateAttachments(
-+      payload.files.map((f) => ({
-+        id: f.id,
-+        name: f.fileName,
-+        byteSize: f.byteSize,
-+      }))
-+    );
-+  }, [createAttachmentPickToken]);
-+
-+  const removeCreateAttachment = useCallback((id: string) => {
-+    setCreateAttachments((prev) => prev.filter((item) => item.id !== id));
-+  }, []);
-@@ -505,6 +520,21 @@ export function useDataCards(/* ... */): ViewModel {
-       const created = await onCreateCard(buildCreateInput(createForm));
- 
--      if (created && createAttachments.length > 0) {
--        const failed = await onUploadAttachments(
--          created.id,
--          createAttachments.map((item) => item.path)
--        );
--        if (failed.length > 0) {
--          showToast(t('toast.attachmentUploadError'), 'error');
--        }
--      }
-+      if (created && createAttachments.length > 0 && createAttachmentPickToken) {
-+        try {
-+          const fileIds = createAttachments.map((a) => a.id);
-+          await addAttachmentsFromPick(created.id, createAttachmentPickToken, fileIds);
-+        } catch (err) {
-+          console.error(err);
-+          showToast(t('toast.attachmentUploadError'), 'error');
-+        } finally {
-+          await attachmentsDiscardPick(createAttachmentPickToken);
-+          setCreateAttachmentPickToken(null);
++    let mut total_declared: i64 = 0;
++    for f in &manifest.files {
++        if f.bytes < 0 {
++            return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
 +        }
-+      } else if (createAttachmentPickToken) {
-+        // nothing to upload, discard token
-+        await attachmentsDiscardPick(createAttachmentPickToken);
-+        setCreateAttachmentPickToken(null);
-+      }
++        if f.bytes > MAX_RESTORE_ENTRY_BYTES {
++            return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"));
++        }
++        total_declared = total_declared
++            .checked_add(f.bytes)
++            .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
++        if total_declared > MAX_RESTORE_TOTAL_BYTES {
++            return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"));
++        }
++    }
  
-       if (created) {
-         setCreateOpen(false);
-         resetCreateForm();
-         setCreateAttachments([]);
-       }
-@@ -602,8 +632,8 @@ export function useDataCards(/* ... */): ViewModel {
-     // ...
--    addCreateAttachments,
-+    pickCreateAttachments,
-     removeCreateAttachment,
-   };
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/hooks/useVault.ts b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/hooks/useVault.ts
-index 3f5e2f1..c1d7d1a 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/hooks/useVault.ts
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/hooks/useVault.ts
-@@ -1,7 +1,7 @@
- import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
- import {
-   // ...
--  addAttachmentFromPath,
-+  addAttachmentsViaDialog,
- } from '../api/vaultApi';
+     use std::collections::HashSet;
+     let mut seen = HashSet::new();
+     let mut has_vault = false;
+     let mut has_kdf_salt = false;
+@@ -21953,6 +21983,7 @@ fn restore_archive_to_profile(
+         return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
+     }
  
- // ...
-@@ -373,25 +373,14 @@ export function useVault(/* ... */) {
- 
-   const uploadAttachments = useCallback(
-     async (cardId: string, paths: string[]) => {
--      const failed: string[] = [];
--      for (const path of paths) {
--        try {
--          await addAttachmentFromPath(cardId, path);
--        } catch (err) {
--          failed.push(path);
--          handleError(err);
--        }
--      }
--
--      return failed;
-+      // Legacy API retained for callers; we no longer accept frontend-provided paths for security.
-+      // Instead, we trigger a backend-native dialog and attach what the user selected.
-+      try {
-+        await addAttachmentsViaDialog(cardId);
-+        return [];
-+      } catch (err) {
-+        handleError(err);
-+        return paths;
-+      }
-     },
-     [handleError]
-   );
++    let mut total_written: i64 = 0;
+     for entry in &manifest.files {
+         let rel_path = Path::new(&entry.path);
+         if !validate_zip_entry_rel_path_windows(rel_path) {
+             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+         }
+@@ -21988,8 +22019,18 @@ fn restore_archive_to_profile(
+             writer
+                 .write_all(&buffer[..read])
+                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+-            hasher.update(&buffer[..read]);
+-            bytes_written += read as i64;
++            bytes_written = bytes_written
++                .checked_add(read as i64)
++                .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
++            total_written = total_written
++                .checked_add(read as i64)
++                .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
++            if bytes_written > MAX_RESTORE_ENTRY_BYTES || total_written > MAX_RESTORE_TOTAL_BYTES {
++                return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"));
++            }
++            hasher.update(&buffer[..read]);
+         }
+         writer
+             .flush()
+             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+         let sha256 = hex::encode(hasher.finalize());
