@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use base64::engine::general_purpose;
@@ -67,8 +67,16 @@ pub fn add_attachment_from_path(
     datacard_id: String,
     source_path: String,
 ) -> Result<AttachmentMeta> {
+    let source = PathBuf::from(source_path);
+    add_attachment_from_fs_path(app, datacard_id, &source)
+}
+
+pub fn add_attachment_from_fs_path(
+    app: &AppHandle,
+    datacard_id: String,
+    source: &Path,
+) -> Result<AttachmentMeta> {
     let session = require_logged_in(app)?;
-    let source = Path::new(&source_path);
     if source.file_name().is_none() {
         return Err(ErrorCodeString::new("ATTACHMENT_SOURCE_NOT_FOUND"));
     }

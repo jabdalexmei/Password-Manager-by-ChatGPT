@@ -4,11 +4,11 @@ import { useTranslation } from '../../../../shared/lib/i18n';
 import { useToaster } from '../../../../shared/components/Toaster';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
 import {
-  addAttachmentFromPath,
+  addAttachmentsViaDialog,
   getAttachmentBytesBase64,
   listAttachments,
   removeAttachment,
-  saveAttachmentToPath,
+  saveAttachmentViaDialog,
 } from '../../api/vaultApi';
 import { mapAttachmentFromBackend } from '../../types/mappers';
 
@@ -194,18 +194,8 @@ export function useDetails({
   const onAddAttachment = useCallback(async () => {
     if (!card || isTrashMode) return;
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selection = await open({ multiple: true });
-      const paths = Array.isArray(selection)
-        ? selection.filter((p): p is string => typeof p === 'string')
-        : selection && typeof selection === 'string'
-          ? [selection]
-          : [];
-      if (!paths.length) return;
-
-      for (const path of paths) {
-        await addAttachmentFromPath(card.id, path);
-      }
+      const added = await addAttachmentsViaDialog(card.id);
+      if (!added.length) return;
       await refreshAttachments();
       showToast(t('toast.attachmentAddSuccess'), 'success');
     } catch (err) {
@@ -265,12 +255,8 @@ export function useDetails({
     async (attachmentId: string, defaultName: string) => {
       if (!card) return;
       try {
-        const { save } = await import('@tauri-apps/plugin-dialog');
-        const selection = await save({ defaultPath: defaultName });
-        const targetPath = Array.isArray(selection) ? selection[0] : selection;
-        if (!targetPath || typeof targetPath !== 'string') return;
-        await saveAttachmentToPath(attachmentId, targetPath);
-        showToast(t('attachments.downloadSuccess'), 'success');
+        const ok = await saveAttachmentViaDialog(attachmentId);
+        if (ok) showToast(t('attachments.downloadSuccess'), 'success');
       } catch (err) {
         console.error(err);
         showToast(t('attachments.downloadError'), 'error');

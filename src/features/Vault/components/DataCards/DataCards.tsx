@@ -328,10 +328,7 @@ export function DataCards({
     };
 
     const handleAddAttachments = async () => {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selection = await open({ multiple: true });
-      const paths = Array.isArray(selection) ? selection : selection ? [selection] : [];
-      viewModel.addCreateAttachments(paths.filter((p): p is string => typeof p === 'string'));
+      await viewModel.pickCreateAttachments();
     };
 
     const titleElementId = 'dialog-title';
@@ -694,12 +691,12 @@ export function DataCards({
                   <div className="dialog-attachments-list">
                     <div className="muted">{t('attachments.selected')}</div>
                     {viewModel.createAttachments.map((attachment) => (
-                      <div key={attachment.path} className="dialog-attachments-item">
+                      <div key={attachment.id} className="dialog-attachments-item">
                         <span className="dialog-attachments-name">{attachment.name}</span>
                         <button
                           type="button"
                           className="btn btn-ghost"
-                          onClick={() => viewModel.removeCreateAttachment(attachment.path)}
+                          onClick={() => viewModel.removeCreateAttachment(attachment.id)}
                         >
                           {t('attachments.remove')}
                         </button>

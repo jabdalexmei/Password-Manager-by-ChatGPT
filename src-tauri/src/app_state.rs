@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -12,6 +14,19 @@ pub struct VaultSession {
     pub key: Zeroizing<[u8; 32]>,
 }
 
+#[derive(Clone)]
+pub struct PendingPickedFile {
+    pub id: String,
+    pub path: PathBuf,
+    pub file_name: String,
+    pub byte_size: u64,
+}
+
+pub struct PendingAttachmentPick {
+    pub created_at_ms: u128,
+    pub files: Vec<PendingPickedFile>,
+}
+
 pub struct AppState {
     pub active_profile: Mutex<Option<String>>,
     pub storage_paths: Mutex<StoragePaths>,
@@ -21,6 +36,10 @@ pub struct AppState {
     pub vault_persist_requested: AtomicBool,
     pub vault_persist_in_flight: AtomicBool,
     pub backup_guard: Mutex<()>,
+
+    // One-time picks created by backend-native dialogs.
+    // Frontend only receives opaque ids (token + file ids), never filesystem paths.
+    pub pending_attachment_picks: Mutex<HashMap<String, PendingAttachmentPick>>,
 }
 
 impl AppState {
@@ -34,6 +53,8 @@ impl AppState {
             vault_persist_requested: AtomicBool::new(false),
             vault_persist_in_flight: AtomicBool::new(false),
             backup_guard: Mutex::new(()),
+
+            pending_attachment_picks: Mutex::new(HashMap::new()),
         }
     }
 

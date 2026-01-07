@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createDataCard,
   createFolder,
-  addAttachmentFromPath,
+  addAttachmentsViaDialog,
   deleteDataCard,
   deleteFolderAndCards,
   deleteFolderOnly,
@@ -374,17 +374,13 @@ export function useVault(profileId: string, onLocked: () => void) {
 
   const uploadAttachments = useCallback(
     async (cardId: string, paths: string[]) => {
-      const failed: string[] = [];
-      for (const path of paths) {
-        try {
-          await addAttachmentFromPath(cardId, path);
-        } catch (err) {
-          failed.push(path);
-          handleError(err);
-        }
+      try {
+        await addAttachmentsViaDialog(cardId);
+        return [];
+      } catch (err) {
+        handleError(err);
+        return paths;
       }
-
-      return failed;
     },
     [handleError]
   );

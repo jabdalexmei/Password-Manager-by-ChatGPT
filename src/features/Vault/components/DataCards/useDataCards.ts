@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { useToaster } from '../../../../shared/components/Toaster';
+import { addAttachmentsFromPick, attachmentsDiscardPick, attachmentsPickFiles } from '../../api/vaultApi';
 import {
   CreateDataCardInput,
   CustomField,
@@ -85,8 +86,8 @@ export type DataCardsViewModel = {
   showPassword: boolean;
   togglePasswordVisibility: () => void;
   createAttachments: PendingAttachment[];
-  addCreateAttachments: (paths: string[]) => void;
-  removeCreateAttachment: (path: string) => void;
+  pickCreateAttachments: () => Promise<void>;
+  removeCreateAttachment: (id: string) => void;
   addCreateCustomFieldByName: (name: string) => { ok: true } | { ok: false; reason: 'EMPTY' | 'DUPLICATE' };
   updateCreateCustomFieldValue: (rowId: string, value: string) => void;
   renameCreateCustomFieldById: (
@@ -106,8 +107,9 @@ export type DataCardsViewModel = {
 };
 
 type PendingAttachment = {
-  path: string;
+  id: string;
   name: string;
+  byteSize: number;
 };
 
 const normalizeOptional = (value: string) => {
@@ -217,6 +219,7 @@ export function useDataCards({
   const [isTrashBulkSubmitting, setIsTrashBulkSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [createAttachments, setCreateAttachments] = useState<PendingAttachment[]>([]);
+  const [createAttachmentPickToken, setCreateAttachmentPickToken] = useState<string | null>(null);
 
   const resetCreateForm = useCallback(() => {
     const folderName = findFolderName(defaultFolderId, folders);
@@ -229,6 +232,7 @@ export function useDataCards({
     setIsCreateSubmitting(false);
     resetCreateForm();
     setCreateAttachments([]);
+    setCreateAttachmentPickToken(null);
     setCreateOpen(true);
     setShowPassword(true);
   }, [resetCreateForm]);
@@ -237,7 +241,11 @@ export function useDataCards({
     setIsCreateSubmitting(false);
     setCreateOpen(false);
     setCreateAttachments([]);
-  }, []);
+    if (createAttachmentPickToken) {
+      void attachmentsDiscardPick(createAttachmentPickToken);
+    }
+    setCreateAttachmentPickToken(null);
+  }, [createAttachmentPickToken]);
 
   const openEditModal = useCallback((card: DataCard) => {
     setEditError(null);
@@ -286,23 +294,26 @@ export function useDataCards({
     }
   }, [isCreateOpen, isEditOpen]);
 
-  const addCreateAttachments = useCallback((paths: string[]) => {
-    if (paths.length === 0) return;
-    setCreateAttachments((prev) => {
-      const existing = new Set(prev.map((p) => p.path));
-      const next = [...prev];
-      paths.forEach((path) => {
-        if (existing.has(path)) return;
-        const parts = path.split(/[/\\]/);
-        const name = parts[parts.length - 1] || path;
-        next.push({ path, name });
-      });
-      return next;
-    });
-  }, []);
+  const pickCreateAttachments = useCallback(async () => {
+    const payload = await attachmentsPickFiles();
+    if (!payload) return;
 
-  const removeCreateAttachment = useCallback((path: string) => {
-    setCreateAttachments((prev) => prev.filter((item) => item.path !== path));
+    if (createAttachmentPickToken) {
+      await attachmentsDiscardPick(createAttachmentPickToken);
+    }
+
+    setCreateAttachmentPickToken(payload.token);
+    setCreateAttachments(
+      payload.files.map((f) => ({
+        id: f.id,
+        name: f.fileName,
+        byteSize: f.byteSize,
+      }))
+    );
+  }, [createAttachmentPickToken]);
+
+  const removeCreateAttachment = useCallback((id: string) => {
+    setCreateAttachments((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
   const addCreateCustomFieldByName = useCallback(
@@ -512,14 +523,20 @@ export function useDataCards({
     try {
       const created = await onCreateCard(buildCreateInput(createForm));
 
-      if (created && createAttachments.length > 0) {
-        const failed = await onUploadAttachments(
-          created.id,
-          createAttachments.map((item) => item.path)
-        );
-        if (failed.length > 0) {
+      if (created && createAttachments.length > 0 && createAttachmentPickToken) {
+        try {
+          const fileIds = createAttachments.map((a) => a.id);
+          await addAttachmentsFromPick(created.id, createAttachmentPickToken, fileIds);
+        } catch (err) {
+          console.error(err);
           showToast(t('toast.attachmentUploadError'), 'error');
+        } finally {
+          await attachmentsDiscardPick(createAttachmentPickToken);
+          setCreateAttachmentPickToken(null);
         }
+      } else if (createAttachmentPickToken) {
+        await attachmentsDiscardPick(createAttachmentPickToken);
+        setCreateAttachmentPickToken(null);
       }
 
       if (created) {
@@ -532,10 +549,10 @@ export function useDataCards({
     }
   }, [
     createAttachments,
+    createAttachmentPickToken,
     createForm,
     isCreateSubmitting,
     onCreateCard,
-    onUploadAttachments,
     resetCreateForm,
     showToast,
     t,
@@ -624,7 +641,7 @@ export function useDataCards({
     showPassword,
     togglePasswordVisibility,
     createAttachments,
-    addCreateAttachments,
+    pickCreateAttachments,
     removeCreateAttachment,
     addCreateCustomFieldByName,
     updateCreateCustomFieldValue,

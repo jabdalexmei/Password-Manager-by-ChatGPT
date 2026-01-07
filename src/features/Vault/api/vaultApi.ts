@@ -176,11 +176,47 @@ export async function listAttachments(datacardId: string): Promise<BackendAttach
   return invoke('list_attachments', { datacardId });
 }
 
-export async function addAttachmentFromPath(
+export type AttachmentPickFileDto = {
+  id: string;
+  fileName: string;
+  byteSize: number;
+};
+
+export type AttachmentPickPayloadDto = {
+  token: string;
+  files: AttachmentPickFileDto[];
+};
+
+type BackendAttachmentPickFile = { id: string; file_name: string; byte_size: number };
+type BackendAttachmentPickPayload = { token: string; files: BackendAttachmentPickFile[] };
+
+export async function attachmentsPickFiles(): Promise<AttachmentPickPayloadDto | null> {
+  const payload = await invoke<BackendAttachmentPickPayload | null>('attachments_pick_files');
+  if (!payload) return null;
+  return {
+    token: payload.token,
+    files: payload.files.map((f) => ({
+      id: f.id,
+      fileName: f.file_name,
+      byteSize: f.byte_size,
+    })),
+  };
+}
+
+export async function attachmentsDiscardPick(token: string): Promise<void> {
+  await invoke('attachments_discard_pick', { token });
+}
+
+export async function addAttachmentsFromPick(
   datacardId: string,
-  sourcePath: string
-): Promise<BackendAttachmentMeta> {
-  return invoke('add_attachment_from_path', { datacardId, sourcePath });
+  token: string,
+  fileIds?: string[]
+): Promise<BackendAttachmentMeta[]> {
+  return invoke('add_attachments_from_pick', { datacardId, token, fileIds: fileIds ?? null });
+}
+
+export async function addAttachmentsViaDialog(datacardId: string): Promise<BackendAttachmentMeta[]> {
+  return invoke('add_attachments_via_dialog', { datacardId });
 }
 
 export async function removeAttachment(attachmentId: string): Promise<void> {
@@ -191,11 +227,8 @@ export async function purgeAttachment(attachmentId: string): Promise<void> {
   return invoke('purge_attachment', { attachmentId });
 }
 
-export async function saveAttachmentToPath(
-  attachmentId: string,
-  targetPath: string
-): Promise<void> {
-  return invoke('save_attachment_to_path', { attachmentId, targetPath });
+export async function saveAttachmentViaDialog(attachmentId: string): Promise<boolean> {
+  return invoke('save_attachment_via_dialog', { attachmentId });
 }
 
 export type AttachmentPreviewDto = {

@@ -20,6 +20,19 @@ pub struct AttachmentMeta {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AttachmentPickFile {
+    pub id: String,
+    pub file_name: String,
+    pub byte_size: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AttachmentPickPayload {
+    pub token: String,
+    pub files: Vec<AttachmentPickFile>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AttachmentPreviewPayload {
     pub attachment_id: String,
     pub file_name: String,
