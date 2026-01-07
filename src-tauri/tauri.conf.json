@@ -9,6 +9,18 @@
     "devUrl": "http://localhost:5173"
   },
   "app": {
+    "security": {
+      "csp": {
+        "default-src": "'self' customprotocol: asset:",
+        "base-uri": "'none'",
+        "object-src": "'none'",
+        "frame-ancestors": "'none'",
+        "connect-src": "ipc: http://ipc.localhost",
+        "img-src": "'self' asset: http://asset.localhost blob: data:",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self' data:"
+      }
+    },
     "windows": [
       {
         "title": "Password Manager",
