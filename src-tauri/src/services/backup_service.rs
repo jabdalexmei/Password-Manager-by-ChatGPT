@@ -12,6 +12,12 @@ use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::app_state::AppState;
+
+// Restore hard limits (anti zip-bomb / decompression bomb DoS)
+const MAX_RESTORE_FILES: usize = 4096;
+const MAX_RESTORE_ENTRY_BYTES: i64 = 64 * 1024 * 1024;
+const MAX_RESTORE_TOTAL_BYTES: i64 = 512 * 1024 * 1024;
+
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
     backup_registry_path, backups_dir, kdf_salt_path, key_check_path, profile_config_path,
@@ -701,6 +707,26 @@ fn restore_archive_to_profile(
         return Err(ErrorCodeString::new("BACKUP_PROFILE_MISMATCH"));
     }
 
+    if manifest.files.len() > MAX_RESTORE_FILES {
+        return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_MANY_FILES"));
+    }
+
+    let mut total_declared: i64 = 0;
+    for f in &manifest.files {
+        if f.bytes < 0 {
+            return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
+        }
+        if f.bytes > MAX_RESTORE_ENTRY_BYTES {
+            return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"));
+        }
+        total_declared = total_declared
+            .checked_add(f.bytes)
+            .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
+        if total_declared > MAX_RESTORE_TOTAL_BYTES {
+            return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"));
+        }
+    }
+
     use std::collections::HashSet;
     let mut seen = HashSet::new();
     let mut has_vault = false;
@@ -733,6 +759,7 @@ fn restore_archive_to_profile(
         return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
     }
 
+    let mut total_written: i64 = 0;
     for entry in &manifest.files {
         let rel_path = Path::new(&entry.path);
         if !validate_zip_entry_rel_path_windows(rel_path) {
@@ -762,8 +789,16 @@ fn restore_archive_to_profile(
             writer
                 .write_all(&buffer[..read])
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+            bytes_written = bytes_written
+                .checked_add(read as i64)
+                .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
+            total_written = total_written
+                .checked_add(read as i64)
+                .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
+            if bytes_written > MAX_RESTORE_ENTRY_BYTES || total_written > MAX_RESTORE_TOTAL_BYTES {
+                return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"));
+            }
             hasher.update(&buffer[..read]);
-            bytes_written += read as i64;
         }
         writer
             .flush()

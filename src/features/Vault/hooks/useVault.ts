@@ -102,6 +102,22 @@ export function useVault(profileId: string, onLocked: () => void) {
           return tCommon('error.backupProfileMismatch', { code });
         case 'BACKUP_UNSUPPORTED_FORMAT':
           return tCommon('error.backupUnsupportedFormat', { code });
+        case 'BACKUP_ARCHIVE_TOO_MANY_FILES':
+          return tCommon('error.backupTooManyFiles', { code });
+        case 'BACKUP_ARCHIVE_TOO_LARGE':
+          return tCommon('error.backupTooLarge', { code });
+        case 'BACKUP_ARCHIVE_INVALID':
+        case 'BACKUP_MANIFEST_INVALID':
+          return tCommon('error.backupInvalid', { code });
+        case 'BACKUP_INTEGRITY_FAILED':
+          return tCommon('error.backupIntegrityFailed', { code });
+        case 'DIALOG_UNSUPPORTED_FILE_URI':
+          return tCommon('error.dialogUnsupported', { code });
+        case 'WORKSPACE_CREATE_PATH_FORBIDDEN':
+        case 'BACKUP_DESTINATION_PATH_FORBIDDEN':
+        case 'BACKUP_RESTORE_PATH_FORBIDDEN':
+        case 'BACKUP_INSPECT_PATH_FORBIDDEN':
+          return tCommon('error.operationBlocked', { code });
         case 'VALIDATION_ERROR':
           return fallback ?? tCommon('error.operationFailed', { code });
         default:
