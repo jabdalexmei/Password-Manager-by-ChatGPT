@@ -1,8 +1,69 @@
-diff --git a/package.json b/package.json
-index 4b8c3b1..0a8f4e2 100644
---- a/package.json
-+++ b/package.json
-@@ -1,27 +1,31 @@
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/tauri.conf.json b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/tauri.conf.json
+index 47b72a0..f4d8a62 100644
+--- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/tauri.conf.json
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/tauri.conf.json
+@@ -1,31 +1,55 @@
+ {
+   "productName": "Password Manager",
+   "version": "0.1.0",
+   "identifier": "PasswordManager",
+   "build": {
+     "beforeDevCommand": "npm run dev",
+     "beforeBuildCommand": "npm run build",
+     "frontendDist": "../dist",
+     "devUrl": "http://localhost:5173"
+   },
+   "app": {
++    "security": {
++      "csp": {
++        "default-src": "'self' customprotocol: asset:",
++        "base-uri": "'none'",
++        "object-src": "'none'",
++        "frame-ancestors": "'none'",
++        "connect-src": "ipc: http://ipc.localhost",
++        "img-src": "'self' asset: http://asset.localhost blob: data:",
++        "style-src": "'self' 'unsafe-inline'",
++        "font-src": "'self' data:"
++      }
++    },
+     "windows": [
+       {
+         "title": "Password Manager",
+         "width": 1200,
+         "height": 900
+       }
+     ]
+   },
+   "bundle": {
+     "active": true,
+     "targets": [
+       "nsis"
+     ],
+     "windows": {
+       "webviewInstallMode": {
+         "type": "offlineInstaller"
+       }
+     }
+   }
+ }
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/tauri.dev.conf.json b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/tauri.dev.conf.json
+new file mode 100644
+index 0000000..3e4b2a1
+--- /dev/null
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src-tauri/tauri.dev.conf.json
+@@ -0,0 +1,10 @@
++{
++  "app": {
++    "security": {
++      "csp": null
++    }
++  }
++}
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/package.json b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/package.json
+index 2a2d8f1..b0d5f6c 100644
+--- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/package.json
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/package.json
+@@ -1,27 +1,27 @@
  {
    "name": "Password-Manager",
    "version": "0.1.0",
@@ -10,109 +71,34 @@ index 4b8c3b1..0a8f4e2 100644
    "type": "module",
    "scripts": {
      "dev": "vite",
-+    "ci:install": "npm ci",
-+    "ci:build": "npm ci && npm run build",
+     "ci:install": "npm ci",
+     "ci:build": "npm ci && npm run build",
      "zxing:guard": "node scripts/check-no-zxing-imports.mjs",
      "typecheck": "tsc -p tsconfig.json --noEmit",
      "build": "npm run zxing:guard && npm run typecheck && vite build",
      "analyze": "npm run zxing:guard && npm run typecheck && vite build --mode analyze",
-     "tauri:dev": "tauri dev",
+-    "tauri:dev": "tauri dev",
++    "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
      "tauri:build": "tauri build",
      "theme:check": "node scripts/check-theme-colors.mjs",
      "icons:check": "node scripts/check-no-inline-svg.mjs"
    },
    "dependencies": {
--    "@zxing/browser": "^0.1.5",
-+    "@zxing/browser": "0.1.5",
+     "@zxing/browser": "0.1.5",
      "@tauri-apps/api": "2.0.0",
--    "@tauri-apps/plugin-dialog": "^2.0.0",
--    "lucide-react": "^0.562.0",
--    "otpauth": "^9.4.1",
--    "react": "^18.3.1",
--    "react-dom": "^18.3.1"
-+    "@tauri-apps/plugin-dialog": "2.0.0",
-+    "lucide-react": "0.562.0",
-+    "otpauth": "9.4.1",
-+    "react": "18.3.1",
-+    "react-dom": "18.3.1"
+     "@tauri-apps/plugin-dialog": "2.0.0",
+     "lucide-react": "0.562.0",
+     "otpauth": "9.4.1",
+     "react": "18.3.1",
+     "react-dom": "18.3.1"
    },
    "devDependencies": {
      "@tauri-apps/cli": "2.0.0",
--    "@types/react": "^18.3.3",
--    "@types/react-dom": "^18.3.0",
--    "@vitejs/plugin-react": "^4.3.3",
--    "rollup-plugin-visualizer": "^6.0.5",
--    "typescript": "^5.6.2",
--    "vite": "^5.4.0"
-+    "@types/react": "18.3.3",
-+    "@types/react-dom": "18.3.0",
-+    "@vitejs/plugin-react": "4.3.3",
-+    "rollup-plugin-visualizer": "6.0.5",
-+    "typescript": "5.6.2",
-+    "vite": "5.4.0"
+     "@types/react": "18.3.3",
+     "@types/react-dom": "18.3.0",
+     "@vitejs/plugin-react": "4.3.3",
+     "rollup-plugin-visualizer": "6.0.5",
+     "typescript": "5.6.2",
+     "vite": "5.4.0"
    }
  }
-diff --git a/.npmrc b/.npmrc
-new file mode 100644
-index 0000000..7c54b1d
---- /dev/null
-+++ b/.npmrc
-@@ -0,0 +1,6 @@
-+# Always write exact versions to package.json on future installs.
-+# This prevents accidental semver-range drift (e.g. "^1.2.3").
-+save-exact=true
-+
-+# Ensure a lockfile is used (default true, explicit for clarity).
-+package-lock=true
-diff --git a/README.md b/README.md
-index 6a67d2a..8c7f81d 100644
---- a/README.md
-+++ b/README.md
-@@ -1,19 +1,44 @@
- # Password Manager
- 
--## npm integrity remediation steps (Windows)
-+## Reproducible installs (recommended)
-+
-+This project relies on deterministic dependency installs.
-+
-+1) Generate `package-lock.json` once and commit it:
-+
-+```bash
-+npm install
-+```
-+
-+2) For clean/repeatable installs (CI / new machine), use:
-+
-+```bash
-+npm run ci:install
-+```
-+
-+`npm ci` installs strictly from the lockfile and will fail if the lockfile and `package.json` are out of sync.
- 
--If you encounter `npm error EINTEGRITY ... wanted sha512-PLACEHOLDER but got sha512-...` when installing dependencies:
-+## npm EINTEGRITY remediation (Windows)
-+
-+If you encounter:
-+`npm error EINTEGRITY ... wanted sha512-... but got sha512-...`
- 
- 1. Delete the existing `node_modules/` directory.
--2. Delete `package-lock.json`.
--3. Clean the npm cache:
-+2. Clean the npm cache:
- 
-    ```bash
-    npm cache clean --force
-    ```
- 
--4. Reinstall dependencies and required plugins:
-+3. Reinstall dependencies (this will re-create `package-lock.json` if missing):
- 
-    ```bash
--   npm install @tauri-apps/plugin-dialog@^2.0.0 @tauri-apps/plugin-opener@^2.0.0
-    npm install
-    ```
-+
-+Notes:
-+- Prefer keeping `package-lock.json` committed for reproducible builds.
-+- If the lockfile itself is corrupted, remove it *once*, run `npm install`, and commit the regenerated lockfile.
