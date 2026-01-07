@@ -582,4 +582,218 @@ index 8c6da3f..4f0c1a1 100644
        showToast(t('toast.attachmentAddSuccess'), 'success');
      } catch (err) {
        console.error(err);
-       showToast(t('toast.attachmentAddError'), 'erro
+       showToast(t('toast.attachmentAddError'), 'error');
+     }
+   }, [card, isTrashMode, refreshAttachments, showToast, t]);
+@@ -264,19 +256,15 @@ export function useDetails({
+   const onDownloadAttachment = useCallback(
+     async (attachmentId: string, defaultName: string) => {
+       if (!card) return;
+       try {
+-        const { save } = await import('@tauri-apps/plugin-dialog');
+-        const selection = await save({ defaultPath: defaultName });
+-        const targetPath = Array.isArray(selection) ? selection[0] : selection;
+-        if (!targetPath || typeof targetPath !== 'string') return;
+-        await saveAttachmentToPath(attachmentId, targetPath);
+-        showToast(t('attachments.downloadSuccess'), 'success');
++        const ok = await saveAttachmentViaDialog(attachmentId);
++        if (ok) showToast(t('attachments.downloadSuccess'), 'success');
+       } catch (err) {
+         console.error(err);
+         showToast(t('attachments.downloadError'), 'error');
+       }
+     },
+     [card, showToast, t]
+   );
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/DataCards.tsx b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/DataCards.tsx
+index 0c4b1c6..22cc5d2 100644
+--- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -324,11 +324,7 @@ export function DataCards(props: Props) {
+     };
+ 
+     const handleAddAttachments = async () => {
+-      const { open } = await import('@tauri-apps/plugin-dialog');
+-      const selection = await open({ multiple: true });
+-      const paths = Array.isArray(selection) ? selection : selection ? [selection] : [];
+-      viewModel.addCreateAttachments(paths.filter((p): p is string => typeof p === 'string'));
++      await viewModel.pickCreateAttachments();
+     };
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/useDataCards.ts b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/useDataCards.ts
+index 2f0c3f0..f8a0e44 100644
+--- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/useDataCards.ts
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/components/DataCards/useDataCards.ts
+@@ -1,6 +1,7 @@
+ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+ import { useToasts } from '../../../../shared/ui/ToastProvider';
+ import { useI18n } from '../../../../shared/i18n/useI18n';
++import { addAttachmentsFromPick, attachmentsDiscardPick, attachmentsPickFiles } from '../../api/vaultApi';
+ 
+ export type PendingAttachment = {
+-  path: string;
++  id: string;
+   name: string;
++  byteSize: number;
+ };
+ 
+ export type ViewModel = {
+   // ...
+-  addCreateAttachments: (paths: string[]) => void;
+-  removeCreateAttachment: (path: string) => void;
++  pickCreateAttachments: () => Promise<void>;
++  removeCreateAttachment: (id: string) => void;
+ };
+@@ -216,6 +217,7 @@ export function useDataCards(/* ... */): ViewModel {
+   const [isCreateOpen, setCreateOpen] = useState(false);
+   const [createError, setCreateError] = useState<string | null>(null);
+   const [createFolderError, setCreateFolderError] = useState<string | null>(null);
+   const [createAttachments, setCreateAttachments] = useState<PendingAttachment[]>([]);
++  const [createAttachmentPickToken, setCreateAttachmentPickToken] = useState<string | null>(null);
+ 
+   const resetCreateForm = useCallback(() => {
+     const folderName = findFolderName(defaultFolderId, folders);
+     setCreateForm(buildInitialForm(defaultFolderId, folderName));
+   }, [defaultFolderId, folders]);
+@@ -228,7 +230,9 @@ export function useDataCards(/* ... */): ViewModel {
+     setIsCreateSubmitting(false);
+     resetCreateForm();
+     setCreateAttachments([]);
++    setCreateAttachmentPickToken(null);
+     setCreateOpen(true);
+     setShowPassword(true);
+   }, [resetCreateForm]);
+ 
+   const closeCreateModal = useCallback(() => {
+     setIsCreateSubmitting(false);
+     setCreateOpen(false);
+     setCreateAttachments([]);
++    if (createAttachmentPickToken) {
++      void attachmentsDiscardPick(createAttachmentPickToken);
++    }
++    setCreateAttachmentPickToken(null);
+   }, [createAttachmentPickToken]);
+@@ -258,33 +262,44 @@ export function useDataCards(/* ... */): ViewModel {
+     }
+   }, [isCreateOpen, isEditOpen]);
+ 
+-  const addCreateAttachments = useCallback((paths: string[]) => {
+-    if (paths.length === 0) return;
+-    setCreateAttachments((prev) => {
+-      const existing = new Set(prev.map((p) => p.path));
+-      const next = [...prev];
+-      paths.forEach((path) => {
+-        if (existing.has(path)) return;
+-        const parts = path.split(/[/\\]/);
+-        const name = parts[parts.length - 1] || path;
+-        next.push({ path, name });
+-      });
+-      return next;
+-    });
+-  }, []);
+-
+-  const removeCreateAttachment = useCallback((path: string) => {
+-    setCreateAttachments((prev) => prev.filter((item) => item.path !== path));
+-  }, []);
++  const pickCreateAttachments = useCallback(async () => {
++    const payload = await attachmentsPickFiles();
++    if (!payload) return; // cancelled
++
++    // discard previous token (if user re-picked)
++    if (createAttachmentPickToken) {
++      await attachmentsDiscardPick(createAttachmentPickToken);
++    }
++
++    setCreateAttachmentPickToken(payload.token);
++    setCreateAttachments(
++      payload.files.map((f) => ({
++        id: f.id,
++        name: f.fileName,
++        byteSize: f.byteSize,
++      }))
++    );
++  }, [createAttachmentPickToken]);
++
++  const removeCreateAttachment = useCallback((id: string) => {
++    setCreateAttachments((prev) => prev.filter((item) => item.id !== id));
++  }, []);
+@@ -505,6 +520,21 @@ export function useDataCards(/* ... */): ViewModel {
+       const created = await onCreateCard(buildCreateInput(createForm));
+ 
+-      if (created && createAttachments.length > 0) {
+-        const failed = await onUploadAttachments(
+-          created.id,
+-          createAttachments.map((item) => item.path)
+-        );
+-        if (failed.length > 0) {
+-          showToast(t('toast.attachmentUploadError'), 'error');
+-        }
+-      }
++      if (created && createAttachments.length > 0 && createAttachmentPickToken) {
++        try {
++          const fileIds = createAttachments.map((a) => a.id);
++          await addAttachmentsFromPick(created.id, createAttachmentPickToken, fileIds);
++        } catch (err) {
++          console.error(err);
++          showToast(t('toast.attachmentUploadError'), 'error');
++        } finally {
++          await attachmentsDiscardPick(createAttachmentPickToken);
++          setCreateAttachmentPickToken(null);
++        }
++      } else if (createAttachmentPickToken) {
++        // nothing to upload, discard token
++        await attachmentsDiscardPick(createAttachmentPickToken);
++        setCreateAttachmentPickToken(null);
++      }
+ 
+       if (created) {
+         setCreateOpen(false);
+         resetCreateForm();
+         setCreateAttachments([]);
+       }
+@@ -602,8 +632,8 @@ export function useDataCards(/* ... */): ViewModel {
+     // ...
+-    addCreateAttachments,
++    pickCreateAttachments,
+     removeCreateAttachment,
+   };
+ }
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/hooks/useVault.ts b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/hooks/useVault.ts
+index 3f5e2f1..c1d7d1a 100644
+--- a/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/hooks/useVault.ts
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-11-after-update/src/features/Vault/hooks/useVault.ts
+@@ -1,7 +1,7 @@
+ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+ import {
+   // ...
+-  addAttachmentFromPath,
++  addAttachmentsViaDialog,
+ } from '../api/vaultApi';
+ 
+ // ...
+@@ -373,25 +373,14 @@ export function useVault(/* ... */) {
+ 
+   const uploadAttachments = useCallback(
+     async (cardId: string, paths: string[]) => {
+-      const failed: string[] = [];
+-      for (const path of paths) {
+-        try {
+-          await addAttachmentFromPath(cardId, path);
+-        } catch (err) {
+-          failed.push(path);
+-          handleError(err);
+-        }
+-      }
+-
+-      return failed;
++      // Legacy API retained for callers; we no longer accept frontend-provided paths for security.
++      // Instead, we trigger a backend-native dialog and attach what the user selected.
++      try {
++        await addAttachmentsViaDialog(cardId);
++        return [];
++      } catch (err) {
++        handleError(err);
++        return paths;
++      }
+     },
+     [handleError]
+   );
