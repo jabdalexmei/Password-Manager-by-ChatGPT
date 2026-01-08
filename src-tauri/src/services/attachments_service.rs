@@ -62,15 +62,6 @@ fn ensure_target_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn add_attachment_from_path(
-    app: &AppHandle,
-    datacard_id: String,
-    source_path: String,
-) -> Result<AttachmentMeta> {
-    let source = PathBuf::from(source_path);
-    add_attachment_from_fs_path(app, datacard_id, &source)
-}
-
 pub fn add_attachment_from_fs_path(
     app: &AppHandle,
     datacard_id: String,

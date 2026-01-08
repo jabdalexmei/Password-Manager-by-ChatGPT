@@ -172,8 +172,6 @@ pub async fn backup_pick_file(
                 crate::app_state::PendingBackupPick {
                     created_at_ms: now,
                     path: path.clone(),
-                    file_name: file_name.clone(),
-                    byte_size,
                 },
             );
         }

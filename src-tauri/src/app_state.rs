@@ -31,8 +31,6 @@ pub struct PendingAttachmentPick {
 pub struct PendingBackupPick {
     pub created_at_ms: u128,
     pub path: PathBuf,
-    pub file_name: String,
-    pub byte_size: u64,
 }
 
 pub struct AppState {
