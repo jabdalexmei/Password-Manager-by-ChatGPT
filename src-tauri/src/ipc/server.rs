@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::borrow::Cow;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
@@ -129,18 +130,33 @@ fn write_frame(mut stream: &TcpStream, bytes: &[u8]) -> Result<()> {
 }
 
 fn parse_origin(input: &str) -> Result<String> {
-    // Accept either a pure origin (https://example.com) or a full URL (https://example.com/path).
     let trimmed = input.trim();
-    let scheme_split = trimmed
+    if trimmed.is_empty() {
+        return Err(ErrorCodeString::new("INVALID_ORIGIN"));
+    }
+
+    // Accept:
+    // - origin: https://example.com
+    // - full URL: https://example.com/path
+    // - bare host: example.com (we treat as https://example.com)
+    let work: Cow<'_, str> = if trimmed.contains("://") {
+        Cow::Borrowed(trimmed)
+    } else if trimmed.starts_with("//") {
+        Cow::Owned(format!("https:{}", trimmed))
+    } else {
+        Cow::Owned(format!("https://{}", trimmed))
+    };
+
+    let scheme_split = work
         .find("://")
         .ok_or_else(|| ErrorCodeString::new("INVALID_ORIGIN"))?;
 
-    let scheme = trimmed[..scheme_split].to_ascii_lowercase();
+    let scheme = work[..scheme_split].to_ascii_lowercase();
     if scheme != "http" && scheme != "https" {
         return Err(ErrorCodeString::new("INVALID_ORIGIN"));
     }
 
-    let rest = &trimmed[(scheme_split + 3)..];
+    let rest = &work[(scheme_split + 3)..];
     let host_port = rest
         .split(|c| c == '/' || c == '?' || c == '#')
         .next()
