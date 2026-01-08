@@ -95,7 +95,7 @@ export function Folders({
             </h2>
           </div>
 
-          <form className="dialog-body" onSubmit={handleSubmit}>
+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
             <div className="form-field">
               <label className="form-label" htmlFor="folder-name">
                 {t('dialog.newFolder.label')}
@@ -103,6 +103,7 @@ export function Folders({
               <input
                 id="folder-name"
                 className="input"
+                autoComplete="off"
                 ref={nameInputRef}
                 value={dialogState.name}
                 onChange={(e) => dialogState.setName(e.target.value)}
@@ -215,7 +216,7 @@ export function Folders({
             </h2>
           </div>
 
-          <form className="dialog-body" onSubmit={handleSubmit}>
+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
             <div className="form-field">
               <label className="form-label" htmlFor="rename-folder-name">
                 {t('dialog.renameFolder.label')}
@@ -223,6 +224,7 @@ export function Folders({
               <input
                 id="rename-folder-name"
                 className="input"
+                autoComplete="off"
                 ref={renameInputRef}
                 value={renameName}
                 onChange={(e) => setRenameName(e.target.value)}

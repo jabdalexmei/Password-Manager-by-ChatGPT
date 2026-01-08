@@ -427,7 +427,7 @@ export function DataCards({
             </div>
           </div>
 
-          <form className="dialog-body" onSubmit={handleSubmit}>
+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
             <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-title`}>
                 {t('label.title')}
@@ -435,6 +435,7 @@ export function DataCards({
               <input
                 id={`${dialogId}-title`}
                 className="input"
+                autoComplete="off"
                 ref={titleRef}
                 value={form.title}
                 onChange={(e) => onFieldChange('title', e.target.value)}
@@ -450,6 +451,7 @@ export function DataCards({
                 id={`${dialogId}-url`}
                 className="input"
                 type="text"
+                autoComplete="off"
                 value={form.url}
                 onChange={(e) => onFieldChange('url', e.target.value)}
               />
@@ -463,6 +465,7 @@ export function DataCards({
                 id={`${dialogId}-email`}
                 className="input"
                 type="email"
+                autoComplete="off"
                 value={form.email}
                 onChange={(e) => onFieldChange('email', e.target.value)}
               />
@@ -475,6 +478,7 @@ export function DataCards({
               <input
                 id={`${dialogId}-username`}
                 className="input"
+                autoComplete="off"
                 value={form.username}
                 onChange={(e) => onFieldChange('username', e.target.value)}
               />
@@ -487,6 +491,7 @@ export function DataCards({
               <input
                 id={`${dialogId}-mobile`}
                 className="input"
+                autoComplete="off"
                 value={form.mobilePhone}
                 onChange={(e) => onFieldChange('mobilePhone', e.target.value)}
               />
@@ -501,6 +506,7 @@ export function DataCards({
                   id={`${dialogId}-password`}
                   className="input"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   value={form.password}
                   onChange={(e) => onFieldChange('password', e.target.value)}
                 />
@@ -581,6 +587,7 @@ export function DataCards({
                   <input
                     id={`${dialogId}-cf-${row.id}`}
                     className="input"
+                    autoComplete="off"
                     value={row.value}
                     onChange={(e) => {
                       if (dialogId === 'datacard-create-dialog') {
@@ -639,6 +646,7 @@ export function DataCards({
               <textarea
                 id={`${dialogId}-note`}
                 className="textarea"
+                autoComplete="off"
                 value={form.note}
                 onChange={(e) => onFieldChange('note', e.target.value)}
               />
@@ -652,6 +660,7 @@ export function DataCards({
                 id={`${dialogId}-folder`}
                 className="input"
                 list="folder-options"
+                autoComplete="off"
                 value={form.folderName}
                 onChange={(e) => onFieldChange('folderName', e.target.value)}
               />
@@ -672,6 +681,7 @@ export function DataCards({
               <input
                 id={`${dialogId}-tags`}
                 className="input"
+                autoComplete="off"
                 value={form.tagsText}
                 placeholder={t('label.tagsPlaceholder')}
                 onChange={(e) => onFieldChange('tagsText', e.target.value)}

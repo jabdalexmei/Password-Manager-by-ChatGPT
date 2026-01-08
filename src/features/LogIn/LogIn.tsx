@@ -66,6 +66,7 @@ const LogIn: React.FC<LogInProps> = ({
               <form
                 className="login-form form-grid"
                 onSubmit={handleSubmit}
+                autoComplete="off"
                 style={{ marginTop: 14 }}
               >
                 <div className="form-field">
@@ -76,6 +77,8 @@ const LogIn: React.FC<LogInProps> = ({
                     id="login-password"
                     type="password"
                     className="input"
+                    name="pm-login-password"
+                    autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={t('passwordPlaceholder')}

@@ -132,6 +132,7 @@ export function Details({
     const trimmed = value?.trim();
     return Boolean(trimmed);
   };
+  const hasTitle = hasValue(card.title);
   const hasUrl = hasValue(card.url);
   const hasUsername = hasValue(card.username);
   const hasEmail = hasValue(card.email);
@@ -246,13 +247,14 @@ export function Details({
           onCancel={() => setAttachmentToDelete(null)}
         />
 
-      <div className="detail-field">
-        <div className="detail-label">{t('label.title')}</div>
-        <div className="detail-value-box">
-          <div className="detail-value-text">{card.title}</div>
+      {hasTitle && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.title')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{card.title}</div>
+          </div>
         </div>
-      </div>
-
+      )}
       {hasSeedPhrase && (
         <div className="detail-field">
           <div className="detail-label">{t('label.seedPhrase')}</div>

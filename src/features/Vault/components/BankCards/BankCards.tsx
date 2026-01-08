@@ -77,7 +77,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
             </h2>
           </div>
 
-          <form className="dialog-body" onSubmit={handleSubmit}>
+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
             <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-title-input`}>
                 {t('label.title')}
@@ -85,9 +85,10 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <input
                 id={`${dialogId}-title-input`}
                 className="input"
-              ref={titleRef}
-              value={form.title}
-              onChange={(e) => onFieldChange('title', e.target.value)}
+                autoComplete="off"
+                ref={titleRef}
+                value={form.title}
+                onChange={(e) => onFieldChange('title', e.target.value)}
               placeholder={t('label.titlePlaceholder')}
             />
               {errors.title && <div className="form-error">{errors.title}</div>}
@@ -100,6 +101,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <input
                 id={`${dialogId}-holder-input`}
                 className="input"
+                autoComplete="off"
                 value={form.holder}
                 onChange={(e) => onFieldChange('holder', e.target.value)}
                 placeholder={t('label.holderPlaceholder')}
@@ -113,6 +115,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <input
                 id={`${dialogId}-number-input`}
                 className="input"
+                autoComplete="off"
                 value={form.number}
                 onChange={(e) => onFieldChange('number', e.target.value)}
                 placeholder={t('label.numberPlaceholder')}
@@ -126,9 +129,10 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <input
                 id={`${dialogId}-expiry-input`}
                 className="input"
-              value={form.expiryMmYy}
-              onChange={(e) => onFieldChange('expiryMmYy', e.target.value)}
-              placeholder={t('label.expiryPlaceholder')}
+                autoComplete="off"
+                value={form.expiryMmYy}
+                onChange={(e) => onFieldChange('expiryMmYy', e.target.value)}
+                placeholder={t('label.expiryPlaceholder')}
             />
             {errors.expiryMmYy && <div className="form-error">{errors.expiryMmYy}</div>}
           </div>
@@ -140,9 +144,10 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <input
                 id={`${dialogId}-cvc-input`}
                 className="input"
-              value={form.cvc}
-              onChange={(e) => onFieldChange('cvc', e.target.value)}
-              placeholder={t('label.cvcPlaceholder')}
+                autoComplete="off"
+                value={form.cvc}
+                onChange={(e) => onFieldChange('cvc', e.target.value)}
+                placeholder={t('label.cvcPlaceholder')}
             />
             {errors.cvc && <div className="form-error">{errors.cvc}</div>}
           </div>
@@ -154,6 +159,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <textarea
                 id={`${dialogId}-note-input`}
                 className="input"
+                autoComplete="off"
                 rows={4}
                 value={form.note}
                 onChange={(e) => onFieldChange('note', e.target.value)}
@@ -168,6 +174,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
               <input
                 id={`${dialogId}-tags-input`}
                 className="input"
+                autoComplete="off"
                 value={form.tagsText}
                 onChange={(e) => onFieldChange('tagsText', e.target.value)}
                 placeholder={t('label.tagsPlaceholder')}
