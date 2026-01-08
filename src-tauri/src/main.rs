@@ -31,6 +31,7 @@ mod data {
     }
 }
 mod error;
+mod ipc;
 mod services {
     pub mod attachments_service;
     pub mod backup_service;
@@ -53,6 +54,7 @@ use commands::{
     password_history::*, profiles::*, security::*, settings::*, workspace::*,
 };
 use data::storage_paths::StoragePaths;
+use data::workspaces::registry::{load_registry, resolve_workspace_path};
 use services::security_service;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -87,7 +89,28 @@ fn main() {
                 }
             };
 
-            app.manage(Arc::new(AppState::new(storage_paths)));
+            let app_state = Arc::new(AppState::new(storage_paths.clone()));
+
+            // Best-effort auto-select active workspace (if any) so backend services are usable
+            // without a frontend "select workspace" call.
+            let app_dir = storage_paths.app_dir().to_path_buf();
+            if let Ok(registry) = load_registry(&app_dir) {
+                if let Some(active_id) = registry.active_workspace_id.as_deref() {
+                    if let Some(record) = registry.workspaces.iter().find(|r| r.id == active_id) {
+                        let root = resolve_workspace_path(&app_dir, record);
+                        // Marker file used by workspace validation.
+                        if root.join(".pm-workspace.json").exists() {
+                            let _ = app_state.set_workspace_root(root);
+                        }
+                    }
+                }
+            }
+
+            if let Err(err) = ipc::server::start_native_bridge(app_state.clone()) {
+                log::error!("[IPC] failed to start native bridge: {err:?}");
+            }
+
+            app.manage(app_state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
