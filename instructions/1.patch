@@ -1,11 +1,19 @@
-diff --git a/src-tauri/src/services/attachments_service.rs b/src-tauri/src/services/attachments_service.rs
-index 3e8a7c1..9b2d41a 100644
---- a/src-tauri/src/services/attachments_service.rs
-+++ b/src-tauri/src/services/attachments_service.rs
-@@ -1,5 +1,5 @@
- use std::fs;
--use std::path::{Path, PathBuf};
-+use std::path::Path;
- use std::sync::Arc;
- 
- use tauri::AppHandle;
+diff --git a/package.json b/package.json
+index a4b2a6c..6d8a3a1 100644
+--- a/package.json
++++ b/package.json
+@@ -27,6 +27,10 @@
+   "devDependencies": {
+     "@tauri-apps/cli": "2.4.0",
+     "@types/react": "18.3.3",
+     "@types/react-dom": "18.3.0",
+     "@vitejs/plugin-react": "4.3.3",
+     "rollup-plugin-visualizer": "6.0.5",
+     "typescript": "5.6.2",
+-    "vite": "5.4.0"
++    "vite": "5.4.21"
++  },
++  "overrides": {
++    "esbuild": "0.25.0"
+   }
+ }
