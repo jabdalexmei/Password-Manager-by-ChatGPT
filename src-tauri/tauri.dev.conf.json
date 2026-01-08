@@ -1,7 +1,8 @@
 {
   "app": {
     "security": {
-      "csp": null
+      "csp": null,
+      "freezePrototype": false
     }
   }
 }
