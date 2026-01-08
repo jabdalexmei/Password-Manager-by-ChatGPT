@@ -1,53 +1,93 @@
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 5242a9a..b0e7c1d 100644
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -58,11 +58,15 @@ export function DataCards({
-               >
-                 <div className="datacard-top">
-                   <div className="datacard-title">{card.title}</div>
--                  {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
--                  {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-+                  <div className="datacard-badges">
-+                    {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
-+                    {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-+                  </div>
-                 </div>
+diff --git a/src-tauri/src/services/profiles_service.rs b/src-tauri/src/services/profiles_service.rs
+index 2c7d8a1..b1f0c33 100644
+--- a/src-tauri/src/services/profiles_service.rs
++++ b/src-tauri/src/services/profiles_service.rs
+@@ -1,11 +1,13 @@
+ use crate::data::crypto::kdf::{derive_master_key, generate_kdf_salt};
+ use crate::data::crypto::key_check;
+ use crate::data::fs::atomic_write::write_atomic;
+-use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path};
++use crate::data::profiles::paths::{
++    ensure_profile_dirs, ensure_profiles_dir, kdf_salt_path, key_check_path, profile_config_path,
++};
+ use crate::data::profiles::registry;
+ use crate::data::settings::config;
+ use crate::data::sqlite::init::{init_database_passwordless, init_database_protected_encrypted};
+ use crate::data::storage_paths::StoragePaths;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::services::settings_service::get_settings;
+ use crate::types::{ProfileMeta, ProfilesList};
+ use std::fs;
+ use zeroize::Zeroizing;
  
-                 <div className="datacard-meta">
-                   <span>{meta}</span>
-                   {showUpdated && <span className="muted">{updatedText}</span>}
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 0c3f0a1..e3d9c2f 100644
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -17,15 +17,26 @@
- .datacard-title {
-   font-size: 14px;
-   line-height: 18px;
-   font-weight: 700;
-   color: var(--color-text);
-+  flex: 1 1 auto;
-+  min-width: 0;
+ pub fn list_profiles(sp: &StoragePaths) -> Result<ProfilesList> {
+-    let profiles = registry::list_profiles(sp)?;
++    let mut profiles = registry::list_profiles(sp)?;
++    if profiles.is_empty() {
++        profiles = list_profiles_from_disk(sp)?;
++    }
+     Ok(ProfilesList { profiles })
  }
  
- .datacard-top {
-   display: flex;
-   align-items: flex-start;
--  justify-content: space-between;
-+  justify-content: flex-start;
-   gap: 12px;
- }
- 
-+.datacard-badges {
-+  margin-left: auto;
-+  display: flex;
-+  align-items: flex-start;
-+  gap: 8px;
-+  flex: 0 0 auto;
++fn list_profiles_from_disk(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
++    let root = ensure_profiles_dir(sp)?;
++    let rd = fs::read_dir(&root).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
++
++    let mut out: Vec<ProfileMeta> = Vec::new();
++
++    for entry in rd {
++        let entry = match entry {
++            Ok(v) => v,
++            Err(_) => continue,
++        };
++        let path = entry.path();
++        if !path.is_dir() {
++            continue;
++        }
++
++        let id_os = entry.file_name();
++        let id = match id_os.to_str() {
++            Some(s) if !s.trim().is_empty() => s.to_string(),
++            _ => continue,
++        };
++
++        // Consider it a profile dir only if it looks like one.
++        // At minimum, it should contain config.json OR key_check.bin; otherwise ignore.
++        let cfg_path = profile_config_path(sp, &id)?;
++        let kc_path = key_check_path(sp, &id)?;
++        if !cfg_path.exists() && !kc_path.exists() {
++            continue;
++        }
++
++        let name = if cfg_path.exists() {
++            match fs::read_to_string(&cfg_path) {
++                Ok(content) => serde_json::from_str::<serde_json::Value>(&content)
++                    .ok()
++                    .and_then(|v| v.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
++                    .filter(|s| !s.trim().is_empty())
++                    .unwrap_or_else(|| id.clone()),
++                Err(_) => id.clone(),
++            }
++        } else {
++            id.clone()
++        };
++
++        let has_password = kc_path.exists();
++
++        out.push(ProfileMeta {
++            id,
++            name,
++            has_password,
++        });
++    }
++
++    // Stable order (nice for UI / extension dropdown).
++    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
++    Ok(out)
 +}
 +
- .datacard-favorite {
-   flex: 0 0 auto;
-   white-space: nowrap;
- }
+ pub fn create_profile(
+     sp: &StoragePaths,
+     name: &str,
+     password: Option<String>,
+ ) -> Result<ProfileMeta> {
