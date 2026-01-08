@@ -561,13 +561,23 @@
   line-height: 18px;
   font-weight: 700;
   color: var(--color-text);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .datacard-top {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
+}
+
+.datacard-badges {
+  margin-left: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .datacard-favorite {
