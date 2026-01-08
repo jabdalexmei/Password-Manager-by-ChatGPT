@@ -184,6 +184,72 @@ fn parse_origin(input: &str) -> Result<String> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct OriginParts<'a> {
+    scheme: &'a str,
+    host: &'a str,
+    port: u16,
+}
+
+fn origin_parts(origin: &str) -> Option<OriginParts<'_>> {
+    let scheme_split = origin.find("://")?;
+    let scheme = &origin[..scheme_split];
+    let rest = &origin[(scheme_split + 3)..];
+
+    // We only expect normal hostnames here (no IPv6 literal).
+    if rest.starts_with('[') {
+        return None;
+    }
+
+    let default_port = if scheme == "http" { 80 } else { 443 };
+    let (host, port) = match rest.rsplit_once(':') {
+        Some((h, p)) if !h.is_empty() && p.chars().all(|c| c.is_ascii_digit()) => {
+            let port: u16 = p.parse().ok()?;
+            (h, port)
+        }
+        _ => (rest, default_port),
+    };
+
+    Some(OriginParts {
+        scheme,
+        host,
+        port,
+    })
+}
+
+fn strip_www(host: &str) -> &str {
+    host.strip_prefix("www.").unwrap_or(host)
+}
+
+fn is_same_or_subdomain(host: &str, base: &str) -> bool {
+    if host == base {
+        return true;
+    }
+    if host.len() <= base.len() {
+        return false;
+    }
+    // Must end with ".<base>", not just "<base>" (prevents "evil-soundcloud.com" matching "soundcloud.com").
+    let dot_pos = host.len() - base.len() - 1;
+    host.as_bytes().get(dot_pos) == Some(&b'.') && host.ends_with(base)
+}
+
+fn origin_matches_url(card_url: &str, requested_origin: &str) -> bool {
+    let Ok(card_origin) = parse_origin(card_url) else { return false; };
+    if card_origin == requested_origin {
+        return true;
+    }
+
+    let Some(req) = origin_parts(requested_origin) else { return false; };
+    let Some(card) = origin_parts(&card_origin) else { return false; };
+    if req.scheme != card.scheme || req.port != card.port {
+        return false;
+    }
+
+    let req_host = strip_www(req.host);
+    let card_base = strip_www(card.host);
+    is_same_or_subdomain(req_host, card_base)
+}
+
 fn datacard_origin(url: &str) -> Option<String> {
     parse_origin(url).ok()
 }
@@ -259,10 +325,7 @@ fn handle_request(state: &Arc<AppState>, shared_token: &str, req: BridgeRequest)
                 let mut items: Vec<CredentialListItem> = Vec::new();
                 for row in rows {
                     let Some(url) = row.url.as_deref() else { continue };
-                    let Some(card_origin) = datacard_origin(url) else { continue };
-                    if card_origin != origin {
-                        continue;
-                    }
+                    if !origin_matches_url(url, &origin) { continue; }
                     let username = row
                         .email
                         .clone()
@@ -297,10 +360,7 @@ fn handle_request(state: &Arc<AppState>, shared_token: &str, req: BridgeRequest)
                 let Some(url) = card.url.as_deref() else {
                     return Err(ErrorCodeString::new("CREDENTIAL_URL_MISSING"));
                 };
-                let Some(card_origin) = datacard_origin(url) else {
-                    return Err(ErrorCodeString::new("CREDENTIAL_URL_INVALID"));
-                };
-                if card_origin != origin {
+                if !origin_matches_url(url, &origin) {
                     return Err(ErrorCodeString::new("ORIGIN_MISMATCH"));
                 }
 
