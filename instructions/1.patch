@@ -1,42 +1,71 @@
+diff --git a/src-tauri/src/app_state.rs b/src-tauri/src/app_state.rs
+index a43b8a2..6e9c7d1 100644
+--- a/src-tauri/src/app_state.rs
++++ b/src-tauri/src/app_state.rs
+@@ -28,13 +28,10 @@ pub struct PendingAttachmentPick {
+     pub files: Vec<PendingPickedFile>,
+ }
+ 
+ #[derive(Clone)]
+ pub struct PendingBackupPick {
+     pub created_at_ms: u128,
+     pub path: PathBuf,
+-    pub file_name: String,
+-    pub byte_size: u64,
+ }
+ 
+ pub struct AppState {
 diff --git a/src-tauri/src/commands/backup.rs b/src-tauri/src/commands/backup.rs
-index 8d2c1aa..1a5b23d 100644
+index 1a5b23d..2c5c9c4 100644
 --- a/src-tauri/src/commands/backup.rs
 +++ b/src-tauri/src/commands/backup.rs
-@@ -9,11 +9,11 @@ use uuid::Uuid;
- 
- use crate::app_state::AppState;
- use crate::error::{ErrorCodeString, Result};
- use crate::services::backup_service::{
-     backup_create as backup_create_service, backup_create_if_due_auto as backup_create_if_due_auto_service,
-     backup_inspect as backup_inspect_service, backup_list as backup_list_service,
--    backup_restore as backup_restore_service, backup_restore_workflow as backup_restore_workflow_service,
-+    backup_restore_workflow as backup_restore_workflow_service,
-     BackupInspectResult, BackupListItem,
- };
- use crate::types::BackupPickPayload;
-@@ -131,9 +131,10 @@ pub async fn backup_pick_file(
-     app: AppHandle,
-     state: State<'_, Arc<AppState>>,
- ) -> Result<Option<BackupPickPayload>> {
-+    let st = state.inner().clone();
-     tauri::async_runtime::spawn_blocking(move || {
--        let st = state.inner().clone();
-         let now = now_ms()?;
-         cleanup_stale_backup_picks(&st, now)?;
- 
-         let selection = app
-diff --git a/src-tauri/src/types.rs b/src-tauri/src/types.rs
-index 9c1f0b2..8f1c6b0 100644
---- a/src-tauri/src/types.rs
-+++ b/src-tauri/src/types.rs
-@@ -34,7 +34,7 @@ use crate::services::backup_service::BackupInspectResult;
+@@ -168,8 +168,6 @@ pub async fn backup_pick_file(app: AppHandle, state: State<'_, Arc<AppState>>) ->
+                 crate::app_state::PendingBackupPick {
+                     created_at_ms: now,
+                     path: path.clone(),
+-                    file_name: file_name.clone(),
+-                    byte_size,
+                 },
+             );
+         }
+diff --git a/src-tauri/src/services/attachments_service.rs b/src-tauri/src/services/attachments_service.rs
+index 8c3bda2..3e8a7c1 100644
+--- a/src-tauri/src/services/attachments_service.rs
++++ b/src-tauri/src/services/attachments_service.rs
+@@ -62,14 +62,6 @@ fn ensure_parent_dir(path: &Path) -> Result<()> {
+     Ok(())
  }
  
--#[derive(Debug, Serialize, Deserialize, Clone)]
-+#[derive(Debug, Serialize, Deserialize)]
- pub struct BackupPickPayload {
-     pub token: String,
-     pub file_name: String,
-     pub byte_size: i64,
-     pub inspect: BackupInspectResult,
+-pub fn add_attachment_from_path(
+-    app: &AppHandle,
+-    datacard_id: String,
+-    source_path: String,
+-) -> Result<AttachmentMeta> {
+-    let source = PathBuf::from(source_path);
+-    add_attachment_from_fs_path(app, datacard_id, &source)
+-}
+-
+ pub fn add_attachments_from_pick(
+     state: &Arc<AppState>,
+     token: String,
+diff --git a/src-tauri/src/services/backup_service.rs b/src-tauri/src/services/backup_service.rs
+index 91f2a33..6e3f1c2 100644
+--- a/src-tauri/src/services/backup_service.rs
++++ b/src-tauri/src/services/backup_service.rs
+@@ -906,14 +906,6 @@ fn restore_db_files(
+     Ok(true)
  }
+ 
+-pub fn backup_restore(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
+-    let _guard = ensure_backup_guard(state)?;
+-
+-    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+-    security_service::drop_active_session_without_persist(state)?;
+-    let sp = state.get_storage_paths()?;
+-
+-    let backup_path = PathBuf::from(&backup_path);
+-    restore_archive_to_profile(state, &sp, &profile_id, &backup_path)
+-}
+-
+ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
+     let _guard = ensure_backup_guard(state)?;
