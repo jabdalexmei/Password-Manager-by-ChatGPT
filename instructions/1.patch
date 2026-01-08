@@ -1,49 +1,161 @@
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/tauri.conf.json b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/tauri.conf.json
-index 47b72a0..a1c2d33 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/tauri.conf.json
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/tauri.conf.json
-@@ -6,15 +6,21 @@
-     "beforeDevCommand": "npm run dev",
-     "beforeBuildCommand": "npm run build",
-     "frontendDist": "../dist",
--    "devUrl": "http://localhost:5173"
-+    "devUrl": "http://localhost:5173",
-+    "removeUnusedCommands": true
-   },
-   "app": {
-     "security": {
-+      "freezePrototype": true,
-       "csp": {
-         "default-src": "'self' customprotocol: asset:",
-         "base-uri": "'none'",
-         "object-src": "'none'",
-         "frame-ancestors": "'none'",
-+        "frame-src": "'none'",
-+        "child-src": "'none'",
-+        "form-action": "'none'",
-+        "navigate-to": "'self'",
-         "connect-src": "ipc: http://ipc.localhost",
-         "img-src": "'self' asset: http://asset.localhost blob: data:",
-         "style-src": "'self' 'unsafe-inline'",
-@@ -23,6 +29,7 @@
-     },
-     "windows": [
-       {
-+        "label": "main",
-         "title": "Password Manager",
-         "width": 1200,
-         "height": 900
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/tauri.dev.conf.json b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/tauri.dev.conf.json
-index 3e4b2a1..bf2ac91 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/tauri.dev.conf.json
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/tauri.dev.conf.json
-@@ -1,7 +1,8 @@
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json
+index b0d5f6c..a4f2ed1 100644
+--- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json
+@@ -1,27 +1,32 @@
  {
-   "app": {
-     "security": {
--      "csp": null
-+      "csp": null,
-+      "freezePrototype": false
-     }
+   "name": "Password-Manager",
+   "version": "0.1.0",
+   "private": true,
+   "type": "module",
+   "scripts": {
+     "dev": "vite",
+     "ci:install": "npm ci",
+-    "ci:build": "npm ci && npm run build",
++    "ci:build": "npm ci && npm run build",
++    "ci:verify": "npm ci && npm run build && npm run security:all",
+     "zxing:guard": "node scripts/check-no-zxing-imports.mjs",
+     "typecheck": "tsc -p tsconfig.json --noEmit",
+     "build": "npm run zxing:guard && npm run typecheck && vite build",
+     "analyze": "npm run zxing:guard && npm run typecheck && vite build --mode analyze",
+     "tauri:dev": "tauri dev",
+     "tauri:build": "tauri build",
++    "security:all": "node scripts/security-audit.mjs all",
++    "security:js": "node scripts/security-audit.mjs js",
++    "security:rust": "node scripts/security-audit.mjs rust",
+     "theme:check": "node scripts/check-theme-colors.mjs",
+     "icons:check": "node scripts/check-no-inline-svg.mjs"
+   },
+   "dependencies": {
+     "@zxing/browser": "0.1.5",
+     "@tauri-apps/api": "2.0.0",
+     "lucide-react": "0.562.0",
+     "otpauth": "9.4.1",
+     "react": "18.3.1",
+     "react-dom": "18.3.1"
+   },
+   "devDependencies": {
+     "@tauri-apps/cli": "2.0.0",
+     "@types/react": "18.3.3",
+     "@types/react-dom": "18.3.0",
+     "@vitejs/plugin-react": "4.3.3",
+     "rollup-plugin-visualizer": "6.0.5",
+     "typescript": "5.6.2",
+     "vite": "5.4.0"
    }
  }
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/scripts/security-audit.mjs b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/scripts/security-audit.mjs
+new file mode 100644
+index 0000000..5c7b7cf
+--- /dev/null
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/scripts/security-audit.mjs
+@@ -0,0 +1,154 @@
++import { spawnSync } from 'node:child_process';
++import { existsSync } from 'node:fs';
++import process from 'node:process';
++
++function die(msg) {
++  // eslint-disable-next-line no-console
++  console.error(msg);
++  process.exit(1);
++}
++
++function run(cmd, args, opts = {}) {
++  const res = spawnSync(cmd, args, {
++    stdio: 'inherit',
++    shell: process.platform === 'win32',
++    ...opts,
++  });
++  if (res.error) {
++    // eslint-disable-next-line no-console
++    console.error(res.error);
++    process.exit(1);
++  }
++  if (typeof res.status === 'number' && res.status !== 0) {
++    process.exit(res.status);
++  }
++}
++
++function tryRun(cmd, args, opts = {}) {
++  const res = spawnSync(cmd, args, {
++    stdio: 'ignore',
++    shell: process.platform === 'win32',
++    ...opts,
++  });
++  return res.status === 0;
++}
++
++function ensureFile(path, hint) {
++  if (!existsSync(path)) {
++    die(`Missing required file: ${path}${hint ? ` (${hint})` : ''}`);
++  }
++}
++
++function auditJs() {
++  ensureFile('package.json', 'run from repo root');
++  // package-lock.json is expected for deterministic installs via `npm ci`
++  ensureFile('package-lock.json', 'commit lockfile; use `npm ci` in CI');
++
++  // Fail CI only on high+ by default; adjust if you want stricter.
++  run('npm', ['audit', '--audit-level=high']);
++}
++
++function ensureCargoAuditInstalled() {
++  if (tryRun('cargo', ['audit', '--version'])) {
++    return;
++  }
++  // Install cargo-audit deterministically.
++  run('cargo', ['install', 'cargo-audit', '--locked']);
++}
++
++function auditRust() {
++  // Tauri Rust workspace lives under src-tauri/
++  ensureFile('src-tauri/Cargo.toml', 'expected Tauri Rust crate');
++
++  // Cargo.lock is required for deterministic auditing and locked builds.
++  ensureFile('src-tauri/Cargo.lock', 'commit lockfile for deterministic dependency graph');
++
++  ensureCargoAuditInstalled();
++
++  // Run audit in src-tauri directory. Using `cargo -C` keeps this script cross-platform.
++  run('cargo', ['-C', 'src-tauri', 'audit']);
++
++  // Ensure builds are "locked": no lockfile updates, no silent dependency drift.
++  run('cargo', ['-C', 'src-tauri', 'build', '--locked']);
++}
++
++const mode = (process.argv[2] ?? 'all').toLowerCase();
++
++switch (mode) {
++  case 'all':
++    auditJs();
++    auditRust();
++    break;
++  case 'js':
++    auditJs();
++    break;
++  case 'rust':
++    auditRust();
++    break;
++  default:
++    die(`Unknown mode "${mode}". Use: all | js | rust`);
++}
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/.github/dependabot.yml b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/.github/dependabot.yml
+new file mode 100644
+index 0000000..fe7f7c1
+--- /dev/null
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/.github/dependabot.yml
+@@ -0,0 +1,23 @@
++version: 2
++updates:
++  - package-ecosystem: "npm"
++    directory: "/"
++    schedule:
++      interval: "weekly"
++    open-pull-requests-limit: 10
++
++  - package-ecosystem: "cargo"
++    directory: "/src-tauri"
++    schedule:
++      interval: "weekly"
++    open-pull-requests-limit: 10
