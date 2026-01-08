@@ -34,7 +34,7 @@ pub struct AttachmentPickPayload {
     pub files: Vec<AttachmentPickFile>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BackupPickPayload {
     pub token: String,
     pub file_name: String,
