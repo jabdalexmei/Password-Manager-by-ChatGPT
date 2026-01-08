@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::services::backup_service::BackupInspectResult;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProfileMeta {
     pub id: String,
@@ -30,6 +32,14 @@ pub struct AttachmentPickFile {
 pub struct AttachmentPickPayload {
     pub token: String,
     pub files: Vec<AttachmentPickFile>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BackupPickPayload {
+    pub token: String,
+    pub file_name: String,
+    pub byte_size: i64,
+    pub inspect: BackupInspectResult,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

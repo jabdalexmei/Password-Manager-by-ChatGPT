@@ -27,6 +27,14 @@ pub struct PendingAttachmentPick {
     pub files: Vec<PendingPickedFile>,
 }
 
+#[derive(Clone)]
+pub struct PendingBackupPick {
+    pub created_at_ms: u128,
+    pub path: PathBuf,
+    pub file_name: String,
+    pub byte_size: u64,
+}
+
 pub struct AppState {
     pub active_profile: Mutex<Option<String>>,
     pub storage_paths: Mutex<StoragePaths>,
@@ -40,6 +48,9 @@ pub struct AppState {
     // One-time picks created by backend-native dialogs.
     // Frontend only receives opaque ids (token + file ids), never filesystem paths.
     pub pending_attachment_picks: Mutex<HashMap<String, PendingAttachmentPick>>,
+
+    // Same idea for backups: frontend must not pass arbitrary paths.
+    pub pending_backup_picks: Mutex<HashMap<String, PendingBackupPick>>,
 }
 
 impl AppState {
@@ -55,6 +66,7 @@ impl AppState {
             backup_guard: Mutex::new(()),
 
             pending_attachment_picks: Mutex::new(HashMap::new()),
+            pending_backup_picks: Mutex::new(HashMap::new()),
         }
     }
 

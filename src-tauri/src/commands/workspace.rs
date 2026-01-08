@@ -2,7 +2,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use tauri::AppHandle;
 use tauri::State;
+use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
 
 use crate::app_state::AppState;
@@ -50,6 +52,29 @@ fn ensure_workspace_root(root: &Path) -> Result<()> {
     std::fs::create_dir_all(&profiles_dir)
         .map_err(|_| ErrorCodeString::new("WORKSPACE_PROFILES_CREATE_FAILED"))?;
     Ok(())
+}
+
+fn file_path_to_pathbuf(fp: FilePath) -> Result<PathBuf> {
+    match fp {
+        FilePath::Path(p) => Ok(p),
+        _ => Err(ErrorCodeString::new("DIALOG_UNSUPPORTED_FILE_URI")),
+    }
+}
+
+fn workspace_create_impl(app_state: Arc<AppState>, root: PathBuf) -> Result<bool> {
+    let app_dir = app_dir_from_state(&app_state)?;
+    ensure_workspace_root(&root)?;
+
+    let mut registry = load_registry(&app_dir)?;
+    let record = upsert_workspace(&mut registry.workspaces, &app_dir, &root);
+    app_state.logout_and_cleanup()?;
+    app_state.set_workspace_root(root)?;
+    registry.active_workspace_id = Some(record.id.clone());
+    if let Err(err) = save_registry(&app_dir, &registry) {
+        let _ = app_state.clear_workspace_root();
+        return Err(err);
+    }
+    Ok(true)
 }
 
 fn validate_workspace_root(root: &Path) -> Result<()> {
@@ -184,22 +209,24 @@ pub async fn workspace_select(
 
 #[tauri::command]
 pub async fn workspace_create(path: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
+    let _ = path;
+    let _ = state;
+    Err(ErrorCodeString::new("WORKSPACE_CREATE_PATH_FORBIDDEN"))
+}
+
+#[tauri::command]
+pub async fn workspace_create_via_dialog(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool> {
     let app_state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let app_dir = app_dir_from_state(&app_state)?;
-        let root = PathBuf::from(path);
-        ensure_workspace_root(&root)?;
-
-        let mut registry = load_registry(&app_dir)?;
-        let record = upsert_workspace(&mut registry.workspaces, &app_dir, &root);
-        app_state.logout_and_cleanup()?;
-        app_state.set_workspace_root(root)?;
-        registry.active_workspace_id = Some(record.id.clone());
-        if let Err(err) = save_registry(&app_dir, &registry) {
-            let _ = app_state.clear_workspace_root();
-            return Err(err);
-        }
-        Ok(true)
+        let selection = app.dialog().file().blocking_pick_folder();
+        let Some(fp) = selection else {
+            return Ok(false);
+        };
+        let root = file_path_to_pathbuf(fp)?;
+        workspace_create_impl(app_state, root)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
@@ -211,18 +238,7 @@ pub async fn workspace_create_default(state: State<'_, Arc<AppState>>) -> Result
     tauri::async_runtime::spawn_blocking(move || {
         let app_dir = app_dir_from_state(&app_state)?;
         let root = app_dir.join("Password Manager Vault");
-        ensure_workspace_root(&root)?;
-
-        let mut registry = load_registry(&app_dir)?;
-        let record = upsert_workspace(&mut registry.workspaces, &app_dir, &root);
-        app_state.logout_and_cleanup()?;
-        app_state.set_workspace_root(root)?;
-        registry.active_workspace_id = Some(record.id.clone());
-        if let Err(err) = save_registry(&app_dir, &registry) {
-            let _ = app_state.clear_workspace_root();
-            return Err(err);
-        }
-        Ok(true)
+        workspace_create_impl(app_state, root)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?

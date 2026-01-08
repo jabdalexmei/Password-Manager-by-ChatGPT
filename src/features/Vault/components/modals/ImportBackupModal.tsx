@@ -3,7 +3,7 @@ import { useTranslation } from '../../../../shared/lib/i18n';
 
 export type ImportBackupModalProps = {
   open: boolean;
-  backupPath: string | null;
+  backupPath: string | null; // now used as display label (e.g. profile name)
   isSubmitting: boolean;
   onCancel: () => void;
   onConfirm: () => void;

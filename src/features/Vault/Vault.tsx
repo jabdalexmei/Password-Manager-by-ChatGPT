@@ -8,7 +8,12 @@ import { useDataCards } from './components/DataCards/useDataCards';
 import { useFolders } from './components/Folders/useFolders';
 import { useTranslation } from '../../shared/lib/i18n';
 import { useToaster } from '../../shared/components/Toaster';
-import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
+import {
+  backupPickFile,
+  backupDiscardPick,
+  createBackupIfDueAuto,
+  restoreBackupWorkflowFromPick,
+} from './api/vaultApi';
 import { BackendUserSettings } from './types/backend';
 import type { FolderDialogState } from './components/Folders/useFolders';
 
@@ -62,7 +67,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
+  const [pendingImportToken, setPendingImportToken] = useState<string | null>(null);
+  const [pendingImportProfileName, setPendingImportProfileName] = useState<string | null>(null);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<{
@@ -122,23 +128,21 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
   const handleExportBackup = () => setExportModalOpen(true);
 
   const handleImportBackup = async () => {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const selection = await open({
-      multiple: false,
-      filters: [{ name: 'Password Manager Backup', extensions: ['pmbackup', 'zip'] }],
-    });
-    const selectedPath = Array.isArray(selection) ? selection[0] : selection;
-    if (typeof selectedPath !== 'string') return;
-    setPendingImportPath(selectedPath);
+    const picked = await backupPickFile();
+    if (!picked) return;
+    setPendingImportToken(picked.token);
+    setPendingImportProfileName(picked.inspect.profile_name);
   };
 
   const handleConfirmImport = async () => {
-    if (!pendingImportPath) return;
+    if (!pendingImportToken) return;
     setIsRestoringBackup(true);
     try {
-      await restoreBackup(pendingImportPath);
+      await restoreBackupWorkflowFromPick(pendingImportToken);
+      await backupDiscardPick(pendingImportToken);
       showToast(tVault('backup.import.success'), 'success');
-      setPendingImportPath(null);
+      setPendingImportToken(null);
+      setPendingImportProfileName(null);
       onLocked();
     } catch (err) {
       handleBackupError(err);
@@ -149,7 +153,9 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const handleCloseImport = () => {
     if (isRestoringBackup) return;
-    setPendingImportPath(null);
+    if (pendingImportToken) void backupDiscardPick(pendingImportToken);
+    setPendingImportToken(null);
+    setPendingImportProfileName(null);
   };
 
   const handleOpenSettings = () => setSettingsModalOpen(true);
@@ -342,11 +348,11 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
         </Suspense>
       )}
 
-      {pendingImportPath !== null && (
+      {pendingImportToken !== null && (
         <Suspense fallback={null}>
           <LazyImportBackupModal
-            open={pendingImportPath !== null}
-            backupPath={pendingImportPath}
+            open={pendingImportToken !== null}
+            backupPath={pendingImportProfileName}
             isSubmitting={isRestoringBackup}
             onCancel={handleCloseImport}
             onConfirm={handleConfirmImport}

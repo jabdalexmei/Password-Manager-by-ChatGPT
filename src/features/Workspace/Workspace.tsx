@@ -1,9 +1,10 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../../shared/lib/i18n';
 import {
-  backupInspect,
-  backupRestoreWorkflow,
-  workspaceCreate,
+  backupPickFile,
+  backupRestoreWorkflowFromPick,
+  backupDiscardPick,
+  workspaceCreateViaDialog,
   workspaceCreateDefault,
   workspaceOpenInExplorer,
   workspaceSelect,
@@ -32,8 +33,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const [busy, setBusy] = useState(false);
   const [actionsMenu, setActionsMenu] = useState<ActionsMenuState | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingBackupPath, setPendingBackupPath] = useState<string | null>(null);
-  const [pendingProfileName, setPendingProfileName] = useState<string>('');
+  const [pendingBackupToken, setPendingBackupToken] = useState<string | null>(null);
+  const [pendingProfileName, setPendingProfileName] = useState<string | null>(null);
 
   const closeActionsMenu = useCallback(() => setActionsMenu(null), []);
 
@@ -76,8 +77,6 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
     [actionsMenu, workspaces]
   );
 
-  const activeWorkspace = useMemo(() => workspaces.find((w) => w.is_active) ?? null, [workspaces]);
-
   const handleSelect = useCallback(
     async (id: string) => {
       setBusy(true);
@@ -96,14 +95,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const handleCreate = useCallback(async () => {
     setBusy(true);
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: t('chooseFolder'),
-      });
-      if (typeof selected !== 'string') return;
-      await workspaceCreate(selected);
+      const ok = await workspaceCreateViaDialog();
+      if (!ok) return;
       await refresh();
       onWorkspaceReady();
     } finally {
@@ -126,36 +119,25 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const handleRestoreFromBackup = useCallback(async () => {
     setBusy(true);
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const backup = await open({
-        directory: false,
-        multiple: false,
-        title: t('chooseBackupFile'),
-        filters: [{ name: 'Backup', extensions: ['zip'] }],
-      });
-      if (typeof backup !== 'string') return;
-
-      const targetFolder = await open({
-        directory: true,
-        multiple: false,
-        title: t('chooseFolder'),
-      });
-      if (typeof targetFolder !== 'string') return;
-
-      await workspaceCreate(targetFolder);
+      const ok = await workspaceCreateViaDialog();
+      if (!ok) return;
       await refresh();
 
-      const info = await backupInspect(backup);
-      setPendingBackupPath(backup);
-      setPendingProfileName(info.profile_name);
+      const picked = await backupPickFile();
+      if (!picked) return;
+      setPendingBackupToken(picked.token);
+      setPendingProfileName(picked.inspect.profile_name);
 
-      if (info.will_overwrite) {
+      if (picked.inspect.will_overwrite) {
         setConfirmOpen(true);
         return;
       }
 
-      showToast(t('restoreInfoCreate', { name: info.profile_name }), 'success');
-      await backupRestoreWorkflow(backup);
+      showToast(t('restoreInfoCreate', { name: picked.inspect.profile_name }), 'success');
+      await backupRestoreWorkflowFromPick(picked.token);
+      await backupDiscardPick(picked.token);
+      setPendingBackupToken(null);
+      setPendingProfileName(null);
       showToast(t('restoreSuccess'), 'success');
       onWorkspaceReady();
     } finally {
@@ -169,38 +151,15 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
   const handleOpenDataFolder = useCallback(async () => {
     setBusy(true);
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      // Always open directory picker first (acts as "Browse…")
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: t('chooseFolder'),
-      });
-
-      if (typeof selected !== 'string') {
-        return; // cancelled
-      }
-
-      // If user picked the currently active valid workspace -> just reveal it in Explorer
-      if (
-        activeWorkspace &&
-        activeWorkspace.exists &&
-        activeWorkspace.valid &&
-        activeWorkspace.path === selected
-      ) {
-        await workspaceOpenInExplorer(activeWorkspace.id);
-        return;
-      }
-
-      // Otherwise initialize/add this folder as a workspace
-      await workspaceCreate(selected);
+      const ok = await workspaceCreateViaDialog();
+      if (!ok) return;
 
       await refresh();
       onWorkspaceReady();
     } finally {
       setBusy(false);
     }
-  }, [activeWorkspace, onWorkspaceReady, refresh, t]);
+  }, [onWorkspaceReady, refresh]);
 
   const workspaceListContent = useMemo(() => {
     if (loading) return <p className="muted centered">{t('loading')}</p>;
@@ -417,16 +376,22 @@ const Workspace: React.FC<WorkspaceProps> = ({ onWorkspaceReady }) => {
             cancelLabel={t('cancel')}
             onCancel={() => {
               setConfirmOpen(false);
-              setPendingBackupPath(null);
+              if (pendingBackupToken) {
+                void backupDiscardPick(pendingBackupToken);
+              }
+              setPendingBackupToken(null);
+              setPendingProfileName(null);
             }}
             onConfirm={async () => {
-              const path = pendingBackupPath;
+              const token = pendingBackupToken;
               setConfirmOpen(false);
-              setPendingBackupPath(null);
-              if (!path) return;
+              setPendingBackupToken(null);
+              setPendingProfileName(null);
+              if (!token) return;
               setBusy(true);
               try {
-                await backupRestoreWorkflow(path);
+                await backupRestoreWorkflowFromPick(token);
+                await backupDiscardPick(token);
                 showToast(t('restoreSuccess'), 'success');
                 onWorkspaceReady();
               } finally {

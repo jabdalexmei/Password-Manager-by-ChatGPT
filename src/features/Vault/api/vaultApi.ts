@@ -140,14 +140,32 @@ export async function updateSettings(settings: BackendUserSettings): Promise<boo
 }
 
 export async function createBackup(
-  destinationPath: string | null,
-  useDefaultPath: boolean
-): Promise<string> {
-  return invoke('backup_create', { destinationPath, useDefaultPath });
+  useDefaultPath: boolean,
+  suggestedFileName?: string
+): Promise<string | null> {
+  if (useDefaultPath) {
+    return invoke('backup_create', { destinationPath: null, useDefaultPath: true });
+  }
+  return invoke('backup_create_via_dialog', { suggestedFileName: suggestedFileName ?? null });
 }
 
-export async function restoreBackup(backupPath: string): Promise<boolean> {
-  return invoke('backup_restore', { backupPath });
+export type BackupPickPayload = {
+  token: string;
+  file_name: string;
+  byte_size: number;
+  inspect: { profile_id: string; profile_name: string; vault_mode: string; will_overwrite: boolean };
+};
+
+export async function backupPickFile(): Promise<BackupPickPayload | null> {
+  return invoke('backup_pick_file');
+}
+
+export async function backupDiscardPick(token: string): Promise<void> {
+  await invoke('backup_discard_pick', { token });
+}
+
+export async function restoreBackupWorkflowFromPick(token: string): Promise<boolean> {
+  return invoke('backup_restore_workflow_from_pick', { token });
 }
 
 export async function listBackups(): Promise<

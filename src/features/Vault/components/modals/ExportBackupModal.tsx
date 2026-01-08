@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { save } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { useToaster } from '../../../../shared/components/Toaster';
 import { createBackup } from '../../api/vaultApi';
@@ -24,14 +23,12 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
   const { t: tCommon } = useTranslation('Common');
   const { show: showToast } = useToaster();
   const [useDefaultPath, setUseDefaultPath] = useState(true);
-  const [destinationPath, setDestinationPath] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [suggestedFileName, setSuggestedFileName] = useState('');
 
   useEffect(() => {
     if (!open) return;
     setUseDefaultPath(true);
-    setDestinationPath(null);
     setIsSaving(false);
     const timestamp = formatTimestamp();
     setSuggestedFileName(`backup_${timestamp}_${profileId}.pmbackup.zip`);
@@ -39,23 +36,12 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
 
   if (!open) return null;
 
-  const handleChoosePath = async () => {
-    const selection = await save({
-      defaultPath: suggestedFileName,
-      filters: [{ name: 'Password Manager Backup', extensions: ['pmbackup', 'zip'] }],
-    });
-
-    if (typeof selection === 'string') {
-      setDestinationPath(selection);
-    }
-  };
-
   const handleCreate = async () => {
-    if (!useDefaultPath && !destinationPath) return;
     setIsSaving(true);
 
     try {
-      await createBackup(useDefaultPath ? null : destinationPath, useDefaultPath);
+      const path = await createBackup(useDefaultPath, suggestedFileName);
+      if (!path) return;
       showToast(t('backup.export.success'), 'success');
       onClose();
     } catch (err: any) {
@@ -138,11 +124,8 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
               <label className="form-label" htmlFor="export-backup-path">
                 {t('backup.export.choosePath')}
               </label>
-              <button className="btn btn-secondary" type="button" onClick={handleChoosePath} disabled={isSaving}>
-                {t('backup.export.choosePath')}
-              </button>
               <p id="export-backup-path" className="dialog-description">
-                {destinationPath ?? suggestedFileName}
+                {suggestedFileName}
               </p>
             </div>
           )}
@@ -159,7 +142,7 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
               className="btn btn-primary"
               type="button"
               onClick={handleCreate}
-              disabled={isSaving || (!useDefaultPath && !destinationPath)}
+              disabled={isSaving}
             >
               {t('backup.export.create')}
             </button>

@@ -63,8 +63,8 @@ export function workspaceSelect(id: string): Promise<boolean> {
   return invoke('workspace_select', { id });
 }
 
-export function workspaceCreate(path: string): Promise<boolean> {
-  return invoke('workspace_create', { path });
+export function workspaceCreateViaDialog(): Promise<boolean> {
+  return invoke('workspace_create_via_dialog');
 }
 
 export function workspaceCreateDefault(): Promise<boolean> {
@@ -87,12 +87,23 @@ export type BackupInspectResult = {
   will_overwrite: boolean;
 };
 
-export function backupInspect(backupPath: string): Promise<BackupInspectResult> {
-  return invoke('backup_inspect', { backup_path: backupPath });
+export type BackupPickPayload = {
+  token: string;
+  file_name: string;
+  byte_size: number;
+  inspect: BackupInspectResult;
+};
+
+export function backupPickFile(): Promise<BackupPickPayload | null> {
+  return invoke('backup_pick_file');
 }
 
-export function backupRestoreWorkflow(backupPath: string): Promise<boolean> {
-  return invoke('backup_restore_workflow', { backup_path: backupPath });
+export function backupDiscardPick(token: string): Promise<void> {
+  return invoke('backup_discard_pick', { token });
+}
+
+export function backupRestoreWorkflowFromPick(token: string): Promise<boolean> {
+  return invoke('backup_restore_workflow_from_pick', { token });
 }
 
 export async function clipboardClearAll(): Promise<void> {
