@@ -374,7 +374,14 @@ pub fn start_native_bridge(state: Arc<AppState>) -> Result<()> {
         token: token.clone(),
         created_at_ms: now_ms(),
     };
-    let _written_to = write_ipc_info(&app_dir, &info)?;
+    let written_to = match write_ipc_info(&app_dir, &info) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[IPC] write_ipc_info failed: {}", e.code);
+            return Err(e);
+        }
+    };
+    eprintln!("[IPC] native-host.json written: {}", written_to.display());
 
     thread::spawn(move || {
         for incoming in listener.incoming() {
