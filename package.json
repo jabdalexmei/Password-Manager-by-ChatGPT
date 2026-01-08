@@ -22,14 +22,14 @@
   },
   "dependencies": {
     "@zxing/browser": "0.1.5",
-    "@tauri-apps/api": "2.0.0",
+    "@tauri-apps/api": "2.4.0",
     "lucide-react": "0.562.0",
     "otpauth": "9.4.1",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.0.0",
+    "@tauri-apps/cli": "2.4.0",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "@vitejs/plugin-react": "4.3.3",
