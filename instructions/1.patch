@@ -1,326 +1,45 @@
-diff --git a/src/features/LogIn/LogIn.tsx b/src/features/LogIn/LogIn.tsx
-index fbde0ef..e6ac638 100644
---- a/src/features/LogIn/LogIn.tsx
-+++ b/src/features/LogIn/LogIn.tsx
-@@ -66,6 +66,7 @@ const LogIn: React.FC<LogInProps> = ({
-               <form
-                 className="login-form form-grid"
-                 onSubmit={handleSubmit}
-+                autoComplete="off"
-                 style={{ marginTop: 14 }}
-               >
-                 <div className="form-field">
-@@ -76,6 +77,8 @@ const LogIn: React.FC<LogInProps> = ({
-                     id="login-password"
-                     type="password"
-                     className="input"
-+                    name="pm-login-password"
-+                    autoComplete="new-password"
-                     value={password}
-                     onChange={(e) => setPassword(e.target.value)}
-                     placeholder={t('passwordPlaceholder')}
-diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
-index c388e5f..a6c1aea 100644
---- a/src/features/Vault/components/BankCards/BankCards.tsx
-+++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -77,7 +77,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-             </h2>
-           </div>
- 
--          <form className="dialog-body" onSubmit={handleSubmit}>
-+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
-             <div className="form-field">
-               <label className="form-label" htmlFor={`${dialogId}-title-input`}>
-                 {t('label.title')}
-@@ -85,6 +85,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-               <input
-                 id={`${dialogId}-title-input`}
-                 className="input"
-+                autoComplete="off"
-               ref={titleRef}
-               value={form.title}
-               onChange={(e) => onFieldChange('title', e.target.value)}
-@@ -100,6 +101,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-               <input
-                 id={`${dialogId}-holder-input`}
-                 className="input"
-+                autoComplete="off"
-                 value={form.holder}
-                 onChange={(e) => onFieldChange('holder', e.target.value)}
-                 placeholder={t('label.holderPlaceholder')}
-@@ -113,6 +115,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-               <input
-                 id={`${dialogId}-number-input`}
-                 className="input"
-+                autoComplete="off"
-                 value={form.number}
-                 onChange={(e) => onFieldChange('number', e.target.value)}
-                 placeholder={t('label.numberPlaceholder')}
-@@ -126,6 +129,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-               <input
-                 id={`${dialogId}-expiry-input`}
-                 className="input"
-+                autoComplete="off"
-               value={form.expiryMmYy}
-               onChange={(e) => onFieldChange('expiryMmYy', e.target.value)}
-               placeholder={t('label.expiryPlaceholder')}
-@@ -140,6 +144,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-               <input
-                 id={`${dialogId}-cvc-input`}
-                 className="input"
-+                autoComplete="off"
-               value={form.cvc}
-               onChange={(e) => onFieldChange('cvc', e.target.value)}
-               placeholder={t('label.cvcPlaceholder')}
-@@ -154,6 +159,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-               <textarea
-                 id={`${dialogId}-note-input`}
-                 className="input"
-+                autoComplete="off"
-                 rows={4}
-                 value={form.note}
-                 onChange={(e) => onFieldChange('note', e.target.value)}
-@@ -168,6 +174,7 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
-               <input
-                 id={`${dialogId}-tags-input`}
-                 className="input"
-+                autoComplete="off"
-                 value={form.tagsText}
-                 onChange={(e) => onFieldChange('tagsText', e.target.value)}
-                 placeholder={t('label.tagsPlaceholder')}
 diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 8f47885..5242a9a 100644
+index fc1ed55..b8c2f7a 100644
 --- a/src/features/Vault/components/DataCards/DataCards.tsx
 +++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -427,7 +427,7 @@ export function DataCards({
-             </div>
-           </div>
- 
--          <form className="dialog-body" onSubmit={handleSubmit}>
-+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
-             <div className="form-field">
-               <label className="form-label" htmlFor={`${dialogId}-title`}>
-                 {t('label.title')}
-@@ -435,6 +435,7 @@ export function DataCards({
-               <input
-                 id={`${dialogId}-title`}
-                 className="input"
-+                autoComplete="off"
-                 ref={titleRef}
-                 value={form.title}
-                 onChange={(e) => onFieldChange('title', e.target.value)}
-@@ -450,6 +451,7 @@ export function DataCards({
-                 id={`${dialogId}-url`}
-                 className="input"
-                 type="text"
-+                autoComplete="off"
-                 value={form.url}
-                 onChange={(e) => onFieldChange('url', e.target.value)}
-               />
-@@ -463,6 +465,7 @@ export function DataCards({
-                 id={`${dialogId}-email`}
-                 className="input"
-                 type="email"
-+                autoComplete="off"
-                 value={form.email}
-                 onChange={(e) => onFieldChange('email', e.target.value)}
-               />
-@@ -475,6 +478,7 @@ export function DataCards({
-               <input
-                 id={`${dialogId}-username`}
-                 className="input"
-+                autoComplete="off"
-                 value={form.username}
-                 onChange={(e) => onFieldChange('username', e.target.value)}
-               />
-@@ -487,6 +491,7 @@ export function DataCards({
-               <input
-                 id={`${dialogId}-mobile`}
-                 className="input"
-+                autoComplete="off"
-                 value={form.mobilePhone}
-                 onChange={(e) => onFieldChange('mobilePhone', e.target.value)}
-               />
-@@ -501,6 +506,7 @@ export function DataCards({
-                   id={`${dialogId}-password`}
-                   className="input"
-                   type={showPassword ? 'text' : 'password'}
-+                  autoComplete="new-password"
-                   value={form.password}
-                   onChange={(e) => onFieldChange('password', e.target.value)}
-                 />
-@@ -581,6 +587,7 @@ export function DataCards({
-                   <input
-                     id={`${dialogId}-cf-${row.id}`}
-                     className="input"
-+                    autoComplete="off"
-                     value={row.value}
-                     onChange={(e) => {
-                       if (dialogId === 'datacard-create-dialog') {
-@@ -639,6 +646,7 @@ export function DataCards({
-               <textarea
-                 id={`${dialogId}-note`}
-                 className="textarea"
-+                autoComplete="off"
-                 value={form.note}
-                 onChange={(e) => onFieldChange('note', e.target.value)}
-               />
-@@ -652,6 +660,7 @@ export function DataCards({
-                 id={`${dialogId}-folder`}
-                 className="input"
-                 list="folder-options"
-+                autoComplete="off"
-                 value={form.folderName}
-                 onChange={(e) => onFieldChange('folderName', e.target.value)}
-               />
-@@ -672,6 +681,7 @@ export function DataCards({
-               <input
-                 id={`${dialogId}-tags`}
-                 className="input"
-+                autoComplete="off"
-                 value={form.tagsText}
-                 placeholder={t('label.tagsPlaceholder')}
-                 onChange={(e) => onFieldChange('tagsText', e.target.value)}
-diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
-index 729e149..2807117 100644
---- a/src/features/Vault/components/Details/Details.tsx
-+++ b/src/features/Vault/components/Details/Details.tsx
-@@ -132,6 +132,7 @@ export function Details({
-     const trimmed = value?.trim();
-     return Boolean(trimmed);
-   };
-+  const hasTitle = hasValue(card.title);
-   const hasUrl = hasValue(card.url);
-   const hasUsername = hasValue(card.username);
-   const hasEmail = hasValue(card.email);
-@@ -246,13 +247,14 @@ export function Details({
-           onCancel={() => setAttachmentToDelete(null)}
-         />
- 
--      <div className="detail-field">
--        <div className="detail-label">{t('label.title')}</div>
--        <div className="detail-value-box">
--          <div className="detail-value-text">{card.title}</div>
-+      {hasTitle && (
-+        <div className="detail-field">
-+          <div className="detail-label">{t('label.title')}</div>
-+          <div className="detail-value-box">
-+            <div className="detail-value-text">{card.title}</div>
-+          </div>
-         </div>
--      </div>
--
-+      )}
-       {hasSeedPhrase && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.seedPhrase')}</div>
-diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
-index a7bea37..13dfb51 100644
---- a/src/features/Vault/components/Folders/Folders.tsx
-+++ b/src/features/Vault/components/Folders/Folders.tsx
-@@ -95,7 +95,7 @@ export function Folders({
-             </h2>
-           </div>
- 
--          <form className="dialog-body" onSubmit={handleSubmit}>
-+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
-             <div className="form-field">
-               <label className="form-label" htmlFor="folder-name">
-                 {t('dialog.newFolder.label')}
-@@ -103,6 +103,7 @@ export function Folders({
-               <input
-                 id="folder-name"
-                 className="input"
-+                autoComplete="off"
-                 ref={nameInputRef}
-                 value={dialogState.name}
-                 onChange={(e) => dialogState.setName(e.target.value)}
-@@ -215,7 +216,7 @@ export function Folders({
-             </h2>
-           </div>
- 
--          <form className="dialog-body" onSubmit={handleSubmit}>
-+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
-             <div className="form-field">
-               <label className="form-label" htmlFor="rename-folder-name">
-                 {t('dialog.renameFolder.label')}
-@@ -223,6 +224,7 @@ export function Folders({
-               <input
-                 id="rename-folder-name"
-                 className="input"
-+                autoComplete="off"
-                 ref={renameInputRef}
-                 value={renameName}
-                 onChange={(e) => setRenameName(e.target.value)}
-diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
-index d66e0d0..9c3f09e 100644
---- a/src/shared/styles/ui.css
-+++ b/src/shared/styles/ui.css
-@@ -371,7 +371,10 @@ select:-webkit-autofill:hover,
- select:-webkit-autofill:focus,
- input:-internal-autofill-selected,
- textarea:-internal-autofill-selected,
--select:-internal-autofill-selected {
-+select:-internal-autofill-selected,
-+input:-internal-autofill-previewed,
-+textarea:-internal-autofill-previewed,
-+select:-internal-autofill-previewed {
-   -webkit-text-fill-color: var(--color-text) !important;
-   caret-color: var(--color-text) !important;
-   background-color: var(--input-surface) !important;
-
-
-
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 5242a9a..b0e7c1d 100644
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -58,11 +58,15 @@ export function DataCards({
-               >
-                 <div className="datacard-top">
-                   <div className="datacard-title">{card.title}</div>
--                  {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
--                  {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-+                  <div className="datacard-badges">
-+                    {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
-+                    {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-+                  </div>
-                 </div>
- 
-                 <div className="datacard-meta">
-                   <span>{meta}</span>
-                   {showUpdated && <span className="muted">{updatedText}</span>}
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 0c3f0a1..e3d9c2f 100644
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -17,15 +17,26 @@
- .datacard-title {
-   font-size: 14px;
-   line-height: 18px;
-   font-weight: 700;
-   color: var(--color-text);
-+  flex: 1 1 auto;
-+  min-width: 0;
- }
- 
- .datacard-top {
-   display: flex;
-   align-items: flex-start;
--  justify-content: space-between;
-+  justify-content: flex-start;
-   gap: 12px;
- }
- 
-+.datacard-badges {
-+  margin-left: auto;
-+  display: flex;
-+  align-items: flex-start;
-+  gap: 8px;
-+  flex: 0 0 auto;
-+}
+@@ -806,9 +806,20 @@ export function DataCards({
+ 	        <div className="vault-datacard-list">
+ 	          {cards.map((card) => {
+ 	            const isActive = selectedCardId === card.id;
+ 	            const isFavorite = card.isFavorite;
+-	            const meta = card.metaLine || t('label.noMeta');
++	            const titleText = card.title.trim();
++	            const usernameText = (card.username ?? '').trim();
++	            const emailText = (card.email ?? '').trim();
++	            const urlText = (card.url ?? '').trim();
 +
- .datacard-favorite {
-   flex: 0 0 auto;
-   white-space: nowrap;
- }
++	            // "Explicit title" means user actually set a title, not just a fallback equal to username/email/url.
++	            const hasExplicitTitle =
++	              titleText.length > 0 &&
++	              titleText !== usernameText &&
++	              titleText !== emailText &&
++	              titleText !== urlText;
++
++	            const shouldShowMeta = hasExplicitTitle ? urlText.length > 0 : true;
++	            const metaText = hasExplicitTitle ? urlText : card.metaLine || t('label.noMeta');
+ 	            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
+ 	            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
+ 
+@@ -828,11 +839,13 @@ export function DataCards({
+ 	                  </div>
+ 	                </div>
+ 
+-	                <div className="datacard-meta">
+-	                  <span>{meta}</span>
+-	                  {showUpdated && <span className="muted">{updatedText}</span>}
+-	                </div>
++	                {shouldShowMeta && (
++	                  <div className="datacard-meta">
++	                    <span>{metaText}</span>
++	                    {showUpdated && <span className="muted">{updatedText}</span>}
++	                  </div>
++	                )}
+ 	              </button>
+ 	            );
+ 	          })}
+ 	        </div>
