@@ -1,780 +1,110 @@
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/app_state.rs b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/app_state.rs
-index 2b6c51e..b4af03d 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/app_state.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/app_state.rs
-@@ -1,6 +1,7 @@
- use std::collections::HashMap;
- use std::path::PathBuf;
- use std::sync::atomic::AtomicBool;
- use std::sync::{Arc, Mutex};
- 
- use crate::data::storage_paths::StoragePaths;
- use crate::error::{ErrorCodeString, Result};
- 
- use zeroize::Zeroizing;
-@@ -26,6 +27,14 @@ pub struct PendingAttachmentPick {
-     pub created_at_ms: u128,
-     pub files: Vec<PendingPickedFile>,
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/capabilities/default.json b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/capabilities/default.json
+index 3e11a8b..4c2b5a9 100644
+--- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/capabilities/default.json
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/capabilities/default.json
+@@ -1,12 +1,13 @@
+ {
+   "$schema": "../gen/schemas/desktop-schema.json",
+   "identifier": "default",
+   "description": "Default permissions for main window.",
+   "windows": [
+     "main"
+   ],
+   "permissions": [
+-    "core:default"
++    "core:default",
++    "app-default"
+   ]
  }
- 
-+#[derive(Clone)]
-+pub struct PendingBackupPick {
-+    pub created_at_ms: u128,
-+    pub path: PathBuf,
-+    pub file_name: String,
-+    pub byte_size: u64,
-+}
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/permissions/app-default.toml b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/permissions/app-default.toml
+new file mode 100644
+index 0000000..b3b3d1f
+--- /dev/null
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/permissions/app-default.toml
+@@ -0,0 +1,79 @@
++[[permission]]
++identifier = "app-default"
++description = """
++Allows frontend to invoke only the application-defined Rust commands that the UI relies on.
 +
- pub struct AppState {
-     pub active_profile: Mutex<Option<String>>,
-     pub storage_paths: Mutex<StoragePaths>,
-@@ -40,6 +49,9 @@ pub struct AppState {
-     // One-time picks created by backend-native dialogs.
-     // Frontend only receives opaque ids (token + file ids), never filesystem paths.
-     pub pending_attachment_picks: Mutex<HashMap<String, PendingAttachmentPick>>,
++This is an explicit allowlist to reduce accidental exposure of new commands.
++"""
 +
-+    // Same idea for backups: frontend must not pass arbitrary paths.
-+    pub pending_backup_picks: Mutex<HashMap<String, PendingBackupPick>>,
- }
- 
- impl AppState {
-     pub fn new(storage_paths: StoragePaths) -> Self {
-         Self {
-@@ -56,6 +68,7 @@ impl AppState {
-             backup_guard: Mutex::new(()),
- 
-             pending_attachment_picks: Mutex::new(HashMap::new()),
-+            pending_backup_picks: Mutex::new(HashMap::new()),
-         }
-     }
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/types.rs b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/types.rs
-index 53aa0d9..a9b1e72 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/types.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/types.rs
-@@ -1,6 +1,7 @@
- use serde::{Deserialize, Serialize};
- 
-+use crate::services::backup_service::BackupInspectResult;
- 
- #[derive(Debug, Serialize, Deserialize, Clone)]
- pub struct AttachmentMeta {
-     pub id: String,
-@@ -35,6 +36,14 @@ pub struct AttachmentPickPayload {
-     pub token: String,
-     pub files: Vec<AttachmentPickFile>,
- }
- 
-+#[derive(Debug, Serialize, Deserialize, Clone)]
-+pub struct BackupPickPayload {
-+    pub token: String,
-+    pub file_name: String,
-+    pub byte_size: i64,
-+    pub inspect: BackupInspectResult,
-+}
++commands.allow = [
++  "profiles_list",
++  "profile_create",
++  "profile_delete",
++  "get_active_profile",
++  "set_active_profile",
++  "login_vault",
++  "lock_vault",
++  "is_logged_in",
++  "health_check",
 +
- #[derive(Debug, Serialize, Deserialize, Clone)]
- pub struct AttachmentPreviewPayload {
-     pub attachment_id: String,
-     pub file_name: String,
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/commands/workspace.rs b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/commands/workspace.rs
-index 3b7e2b4..0b00b5d 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/commands/workspace.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/commands/workspace.rs
-@@ -1,9 +1,12 @@
- use std::io::Write;
- use std::path::{Path, PathBuf};
- use std::sync::Arc;
- 
-+use tauri::AppHandle;
- use tauri::State;
-+use tauri_plugin_dialog::{DialogExt, FilePath};
- use uuid::Uuid;
- 
- use crate::app_state::AppState;
- use crate::data::fs::atomic_write::write_atomic;
- use crate::data::workspaces::registry::{
-@@ -201,6 +204,28 @@ fn ensure_workspace_root(root: &Path) -> Result<()> {
-     Ok(())
- }
- 
-+fn file_path_to_pathbuf(fp: FilePath) -> Result<PathBuf> {
-+    match fp {
-+        FilePath::Path(p) => Ok(p),
-+        _ => Err(ErrorCodeString::new("DIALOG_UNSUPPORTED_FILE_URI")),
-+    }
-+}
++  "list_attachments",
++  "attachments_pick_files",
++  "attachments_discard_pick",
++  "add_attachments_from_pick",
++  "add_attachments_via_dialog",
++  "remove_attachment",
++  "purge_attachment",
++  "get_attachment_bytes_base64",
++  "get_attachment_preview",
++  "save_attachment_via_dialog",
 +
-+fn workspace_create_impl(app_state: Arc<AppState>, root: PathBuf) -> Result<bool> {
-+    let app_dir = app_dir_from_state(&app_state)?;
-+    ensure_workspace_root(&root)?;
++  "backup_create",
++  "backup_restore",
++  "backup_inspect",
++  "backup_restore_workflow",
++  "backup_list",
++  "backup_create_if_due_auto",
 +
-+    let mut registry = load_registry(&app_dir)?;
-+    let record = upsert_workspace(&mut registry.workspaces, &app_dir, &root);
-+    app_state.logout_and_cleanup()?;
-+    app_state.set_workspace_root(root)?;
-+    registry.active_workspace_id = Some(record.id.clone());
-+    save_registry(&app_dir, &registry)?;
-+    Ok(true)
-+}
++  "list_folders",
++  "create_folder",
++  "rename_folder",
++  "move_folder",
++  "delete_folder_only",
++  "delete_folder_and_cards",
 +
- #[tauri::command]
- pub async fn workspace_list(state: State<'_, Arc<AppState>>) -> Result<Vec<WorkspaceItem>> {
-     let app_state = state.inner().clone();
-@@ -245,29 +270,34 @@ pub async fn workspace_select(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
- }
- 
- #[tauri::command]
- pub async fn workspace_create(path: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
--    let app_state = state.inner().clone();
--    tauri::async_runtime::spawn_blocking(move || {
--        let app_dir = app_dir_from_state(&app_state)?;
--        let root = PathBuf::from(path);
--        ensure_workspace_root(&root)?;
--
--        let mut registry = load_registry(&app_dir)?;
--        let record = upsert_workspace(&mut registry.workspaces, &app_dir, &root);
--        app_state.logout_and_cleanup()?;
--        app_state.set_workspace_root(root)?;
--        registry.active_workspace_id = Some(record.id.clone());
--        save_registry(&app_dir, &registry)?;
--        Ok(true)
--    })
--    .await
--    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+    let _ = path;
-+    let _ = state;
-+    Err(ErrorCodeString::new("WORKSPACE_CREATE_PATH_FORBIDDEN"))
-+}
++  "list_bank_cards_summary_command",
++  "list_deleted_bank_cards_summary_command",
++  "get_bank_card",
++  "create_bank_card",
++  "update_bank_card",
++  "set_bank_card_favorite",
++  "delete_bank_card",
++  "restore_bank_card",
++  "purge_bank_card",
++  "restore_all_deleted_bank_cards",
++  "purge_all_deleted_bank_cards",
 +
-+#[tauri::command]
-+pub async fn workspace_create_via_dialog(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app_state = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || {
-+        let selection = app.dialog().file().blocking_pick_folder();
-+        let Some(fp) = selection else {
-+            return Ok(false);
-+        };
-+        let root = file_path_to_pathbuf(fp)?;
-+        workspace_create_impl(app_state, root)
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
- 
- #[tauri::command]
- pub async fn workspace_create_default(state: State<'_, Arc<AppState>>) -> Result<bool> {
-     let app_state = state.inner().clone();
-     tauri::async_runtime::spawn_blocking(move || {
-         let app_dir = app_dir_from_state(&app_state)?;
--        let root = app_dir.join("Password Manager Vault");
--        ensure_workspace_root(&root)?;
--
--        let mut registry = load_registry(&app_dir)?;
--        let record = upsert_workspace(&mut registry.workspaces, &app_dir, &root);
--        app_state.logout_and_cleanup()?;
--        app_state.set_workspace_root(root)?;
--        registry.active_workspace_id = Some(record.id.clone());
--        save_registry(&app_dir, &registry)?;
--        Ok(true)
-+        let root = app_dir.join("Password Manager Vault");
-+        workspace_create_impl(app_state, root)
-     })
-     .await
-     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/commands/backup.rs b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/commands/backup.rs
-index 41a1f5c..e58c0fa 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/commands/backup.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/commands/backup.rs
-@@ -1,10 +1,20 @@
-+use std::path::PathBuf;
- use std::sync::Arc;
-+use std::time::{SystemTime, UNIX_EPOCH};
- 
--use tauri::State;
-+use tauri::{AppHandle, Manager, State};
-+use tauri_plugin_dialog::{DialogExt, FilePath};
-+use uuid::Uuid;
- 
- use crate::app_state::AppState;
- use crate::error::{ErrorCodeString, Result};
- use crate::services::backup_service::{
-     backup_create as backup_create_service, backup_create_if_due_auto as backup_create_if_due_auto_service,
-     backup_inspect as backup_inspect_service, backup_list as backup_list_service,
-     backup_restore as backup_restore_service, backup_restore_workflow as backup_restore_workflow_service,
-     BackupInspectResult, BackupListItem,
- };
-+use crate::types::BackupPickPayload;
- 
-+fn now_ms() -> Result<u128> {
-+    SystemTime::now()
-+        .duration_since(UNIX_EPOCH)
-+        .map(|d| d.as_millis())
-+        .map_err(|_| ErrorCodeString::new("TIME_UNAVAILABLE"))
-+}
++  "list_datacards",
++  "list_datacards_summary_command",
++  "get_datacard",
++  "create_datacard",
++  "update_datacard",
++  "set_datacard_favorite",
++  "move_datacard_to_folder",
++  "delete_datacard",
++  "list_deleted_datacards",
++  "list_deleted_datacards_summary_command",
++  "restore_datacard",
++  "purge_datacard",
++  "restore_all_deleted_datacards",
++  "purge_all_deleted_datacards",
 +
-+fn file_path_to_pathbuf(fp: FilePath) -> Result<PathBuf> {
-+    match fp {
-+        FilePath::Path(p) => Ok(p),
-+        _ => Err(ErrorCodeString::new("DIALOG_UNSUPPORTED_FILE_URI")),
-+    }
-+}
++  "get_datacard_password_history",
++  "clear_datacard_password_history",
 +
-+fn cleanup_stale_backup_picks(state: &AppState, now: u128) -> Result<()> {
-+    const MAX_AGE_MS: u128 = 10 * 60 * 1000;
-+    const MAX_ENTRIES: usize = 16;
-+    let mut map = state
-+        .pending_backup_picks
-+        .lock()
-+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+    map.retain(|_, v| now.saturating_sub(v.created_at_ms) <= MAX_AGE_MS);
-+    if map.len() > MAX_ENTRIES {
-+        while map.len() > MAX_ENTRIES {
-+            if let Some(key) = map.keys().next().cloned() {
-+                map.remove(&key);
-+            } else {
-+                break;
-+            }
-+        }
-+    }
-+    Ok(())
-+}
++  "get_settings",
++  "update_settings",
 +
- #[tauri::command]
- pub async fn backup_create(
-     destination_path: Option<String>,
-     use_default_path: bool,
-     state: State<'_, Arc<AppState>>,
- ) -> Result<String> {
-+    // Security hardening: do not accept filesystem paths from the frontend.
-+    if destination_path.is_some() {
-+        return Err(ErrorCodeString::new("BACKUP_DESTINATION_PATH_FORBIDDEN"));
-+    }
-     let app = state.inner().clone();
-     tauri::async_runtime::spawn_blocking(move || {
-         backup_create_service(&app, destination_path, use_default_path)
-     })
-     .await
-     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
- 
-+#[tauri::command]
-+pub async fn backup_create_via_dialog(
-+    app: AppHandle,
-+    suggested_file_name: Option<String>,
-+    state: State<'_, Arc<AppState>>,
-+) -> Result<Option<String>> {
-+    let st = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || {
-+        let mut builder = app.dialog().file();
-+        if let Some(name) = suggested_file_name {
-+            builder = builder.set_file_name(name);
-+        }
-+        let selection = builder.blocking_save_file();
-+        let Some(fp) = selection else {
-+            return Ok(None);
-+        };
-+        let path = file_path_to_pathbuf(fp)?;
-+        let destination = path.to_string_lossy().to_string();
-+        let created = backup_create_service(&st, Some(destination), false)?;
-+        Ok(Some(created))
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
++  "workspace_list",
++  "workspace_select",
++  "workspace_create",
++  "workspace_create_default",
++  "workspace_remove",
++  "workspace_open_in_explorer",
 +
- #[tauri::command]
- pub async fn backup_list(state: State<'_, Arc<AppState>>) -> Result<Vec<BackupListItem>> {
-     let app = state.inner().clone();
-     tauri::async_runtime::spawn_blocking(move || backup_list_service(&app))
-         .await
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
- 
- #[tauri::command]
- pub async fn backup_restore(backup_path: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
--    let app = state.inner().clone();
--    tauri::async_runtime::spawn_blocking(move || backup_restore_service(&app, backup_path))
--        .await
--        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+    let _ = backup_path;
-+    let _ = state;
-+    Err(ErrorCodeString::new("BACKUP_RESTORE_PATH_FORBIDDEN"))
- }
- 
- #[tauri::command]
- pub async fn backup_inspect(
-     backup_path: String,
-     state: State<'_, Arc<AppState>>,
- ) -> Result<BackupInspectResult> {
--    let app = state.inner().clone();
--    tauri::async_runtime::spawn_blocking(move || backup_inspect_service(&app, backup_path))
--        .await
--        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+    let _ = backup_path;
-+    let _ = state;
-+    Err(ErrorCodeString::new("BACKUP_INSPECT_PATH_FORBIDDEN"))
- }
- 
- #[tauri::command]
- pub async fn backup_restore_workflow(
-     backup_path: String,
-     state: State<'_, Arc<AppState>>,
- ) -> Result<bool> {
--    let app = state.inner().clone();
--    tauri::async_runtime::spawn_blocking(move || backup_restore_workflow_service(&app, backup_path))
--        .await
--        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+    let _ = backup_path;
-+    let _ = state;
-+    Err(ErrorCodeString::new("BACKUP_RESTORE_PATH_FORBIDDEN"))
- }
- 
-+#[tauri::command]
-+pub async fn backup_pick_file(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<Option<BackupPickPayload>> {
-+    tauri::async_runtime::spawn_blocking(move || {
-+        let st = state.inner().clone();
-+        let now = now_ms()?;
-+        cleanup_stale_backup_picks(&st, now)?;
-+
-+        let selection = app
-+            .dialog()
-+            .file()
-+            .add_filter("Backup", &["pmbackup", "zip"])
-+            .blocking_pick_file();
-+
-+        let Some(fp) = selection else {
-+            return Ok(None);
-+        };
-+
-+        let path = file_path_to_pathbuf(fp)?;
-+        let file_name = path
-+            .file_name()
-+            .and_then(|s| s.to_str())
-+            .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?
-+            .to_string();
-+
-+        let byte_size = std::fs::metadata(&path)
-+            .map(|m| m.len())
-+            .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
-+
-+        let inspect = backup_inspect_service(&st, path.to_string_lossy().to_string())?;
-+
-+        let token = Uuid::new_v4().to_string();
-+        {
-+            let mut map = st
-+                .pending_backup_picks
-+                .lock()
-+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+            map.insert(
-+                token.clone(),
-+                crate::app_state::PendingBackupPick {
-+                    created_at_ms: now,
-+                    path: path.clone(),
-+                    file_name: file_name.clone(),
-+                    byte_size,
-+                },
-+            );
-+        }
-+
-+        Ok(Some(BackupPickPayload {
-+            token,
-+            file_name,
-+            byte_size: byte_size as i64,
-+            inspect,
-+        }))
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn backup_discard_pick(state: State<'_, Arc<AppState>>, token: String) -> Result<()> {
-+    let st = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || {
-+        let mut map = st
-+            .pending_backup_picks
-+            .lock()
-+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+        map.remove(&token);
-+        Ok(())
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn backup_restore_workflow_from_pick(state: State<'_, Arc<AppState>>, token: String) -> Result<bool> {
-+    let st = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || {
-+        let pick = {
-+            let mut map = st
-+                .pending_backup_picks
-+                .lock()
-+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+            map.remove(&token)
-+                .ok_or_else(|| ErrorCodeString::new("BACKUP_PICK_NOT_FOUND"))?
-+        };
-+        backup_restore_workflow_service(&st, pick.path.to_string_lossy().to_string())
-+    })
-+    .await
-+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
- #[tauri::command]
- pub async fn backup_create_if_due_auto(state: State<'_, Arc<AppState>>) -> Result<Option<String>> {
-     let app = state.inner().clone();
-     tauri::async_runtime::spawn_blocking(move || backup_create_if_due_auto_service(&app))
-         .await
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/main.rs b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/main.rs
-index 7f4c7c0..df0e901 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/main.rs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/src/main.rs
-@@ -90,11 +90,14 @@ fn main() {
-             get_attachment_bytes_base64,
-             get_attachment_preview,
-             save_attachment_via_dialog,
-             backup_create,
-+            backup_create_via_dialog,
-             backup_restore,
-             backup_inspect,
-             backup_restore_workflow,
-+            backup_pick_file,
-+            backup_discard_pick,
-+            backup_restore_workflow_from_pick,
-             backup_list,
-             backup_create_if_due_auto,
-@@ -150,7 +153,8 @@ fn main() {
-             get_settings,
-             update_settings,
-             workspace_list,
-             workspace_select,
-             workspace_create,
-+            workspace_create_via_dialog,
-             workspace_create_default,
-             workspace_open_in_explorer,
-             workspace_remove,
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/shared/lib/tauri.ts b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/shared/lib/tauri.ts
-index 2c7a1a0..9c8ed11 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/shared/lib/tauri.ts
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/shared/lib/tauri.ts
-@@ -60,10 +60,10 @@ export function workspaceSelect(id: string): Promise<boolean> {
-   return invoke('workspace_select', { id });
- }
- 
--export function workspaceCreate(path: string): Promise<boolean> {
--  return invoke('workspace_create', { path });
-+export function workspaceCreateViaDialog(): Promise<boolean> {
-+  return invoke('workspace_create_via_dialog');
- }
- 
- export function workspaceCreateDefault(): Promise<boolean> {
-   return invoke('workspace_create_default');
- }
-@@ -84,14 +84,30 @@ export type BackupInspectResult = {
-   will_overwrite: boolean;
- };
- 
--export function backupInspect(backupPath: string): Promise<BackupInspectResult> {
--  return invoke('backup_inspect', { backup_path: backupPath });
-+export type BackupPickPayload = {
-+  token: string;
-+  file_name: string;
-+  byte_size: number;
-+  inspect: BackupInspectResult;
-+};
-+
-+export function backupPickFile(): Promise<BackupPickPayload | null> {
-+  return invoke('backup_pick_file');
- }
- 
--export function backupRestoreWorkflow(backupPath: string): Promise<boolean> {
--  return invoke('backup_restore_workflow', { backup_path: backupPath });
-+export function backupDiscardPick(token: string): Promise<void> {
-+  return invoke('backup_discard_pick', { token });
-+}
-+
-+export function backupRestoreWorkflowFromPick(token: string): Promise<boolean> {
-+  return invoke('backup_restore_workflow_from_pick', { token });
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Workspace/Workspace.tsx b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Workspace/Workspace.tsx
-index 4b43e91..f5a1bd1 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Workspace/Workspace.tsx
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Workspace/Workspace.tsx
-@@ -4,11 +4,11 @@ import { useTranslation } from '../../shared/lib/i18n';
- import {
--  backupInspect,
--  backupRestoreWorkflow,
--  workspaceCreate,
-+  backupPickFile,
-+  backupRestoreWorkflowFromPick,
-+  backupDiscardPick,
-+  workspaceCreateViaDialog,
-   workspaceCreateDefault,
-   workspaceOpenInExplorer,
-   workspaceSelect,
- } from '../../shared/lib/tauri';
- import { useToaster } from '../../shared/components/Toaster';
- import { useWorkspace } from './hooks/useWorkspace';
-@@ -44,7 +44,7 @@ export function Workspace({ onWorkspaceReady }: { onWorkspaceReady: () => void })
-   const [isConfirmOpen, setConfirmOpen] = useState(false);
-   const [pendingProfileName, setPendingProfileName] = useState<string | null>(null);
--  const [pendingBackupPath, setPendingBackupPath] = useState<string | null>(null);
-+  const [pendingBackupToken, setPendingBackupToken] = useState<string | null>(null);
- 
-   const refresh = useWorkspace((s) => s.refresh);
-   const showToast = useToaster();
-@@ -180,19 +180,12 @@ export function Workspace({ onWorkspaceReady }: { onWorkspaceReady: () => void })
-   const handleCreateWorkspace = useCallback(async () => {
-     setBusy(true);
-     try {
--      const { open } = await import('@tauri-apps/plugin-dialog');
--      const selected = await open({
--        directory: true,
--        multiple: false,
--        title: t('chooseFolder'),
--      });
--      if (typeof selected !== 'string') return;
--      await workspaceCreate(selected);
-+      const ok = await workspaceCreateViaDialog();
-+      if (!ok) return;
-       await refresh();
-       onWorkspaceReady();
-     } finally {
-       setBusy(false);
-     }
-   }, [onWorkspaceReady, refresh, t]);
-@@ -238,34 +231,34 @@ export function Workspace({ onWorkspaceReady }: { onWorkspaceReady: () => void })
-   const handleRestoreBackup = useCallback(async () => {
-     setBusy(true);
-     try {
--      const { open } = await import('@tauri-apps/plugin-dialog');
--      const backup = await open({
--        multiple: false,
--        title: t('chooseBackupFile'),
--        filters: [{ name: 'Backup', extensions: ['zip'] }],
--      });
--      if (typeof backup !== 'string') return;
--
--      const targetFolder = await open({
--        directory: true,
--        multiple: false,
--        title: t('chooseFolder'),
--      });
--      if (typeof targetFolder !== 'string') return;
--
--      await workspaceCreate(targetFolder);
-+      const ok = await workspaceCreateViaDialog();
-+      if (!ok) return;
-       await refresh();
- 
--      const info = await backupInspect(backup);
--      setPendingBackupPath(backup);
-+      const picked = await backupPickFile();
-+      if (!picked) return;
-+      setPendingBackupToken(picked.token);
- 
--      setPendingProfileName(info.profile_name);
-+      setPendingProfileName(picked.inspect.profile_name);
- 
--      if (info.will_overwrite) {
-+      if (picked.inspect.will_overwrite) {
-         setConfirmOpen(true);
-         return;
-       }
- 
--      showToast(t('restoreInfoCreate', { name: info.profile_name }), 'success');
--      await backupRestoreWorkflow(backup);
-+      showToast(t('restoreInfoCreate', { name: picked.inspect.profile_name }), 'success');
-+      await backupRestoreWorkflowFromPick(picked.token);
-+      await backupDiscardPick(picked.token);
-+      setPendingBackupToken(null);
-       showToast(t('restoreSuccess'), 'success');
-       onWorkspaceReady();
-     } finally {
-       setBusy(false);
-     }
-   }, [onWorkspaceReady, refresh, showToast, t]);
-@@ -275,15 +268,22 @@ export function Workspace({ onWorkspaceReady }: { onWorkspaceReady: () => void })
-   const handleCancelConfirm = useCallback(() => {
-     setConfirmOpen(false);
-+    if (pendingBackupToken) {
-+      void backupDiscardPick(pendingBackupToken);
-+    }
-+    setPendingBackupToken(null);
-     setPendingProfileName(null);
--    setPendingBackupPath(null);
--  }, []);
-+  }, [pendingBackupToken]);
- 
-   const handleConfirmRestore = useCallback(async () => {
--    if (!pendingBackupPath) return;
-+    if (!pendingBackupToken) return;
-     setConfirmOpen(false);
-     setBusy(true);
-     try {
--      await backupRestoreWorkflow(pendingBackupPath!);
-+      await backupRestoreWorkflowFromPick(pendingBackupToken);
-+      await backupDiscardPick(pendingBackupToken);
-+      setPendingBackupToken(null);
-       showToast(t('restoreSuccess'), 'success');
-       onWorkspaceReady();
-     } finally {
-       setBusy(false);
-     }
--  }, [onWorkspaceReady, pendingBackupPath, showToast, t]);
-+  }, [onWorkspaceReady, pendingBackupToken, showToast, t]);
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/api/vaultApi.ts b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/api/vaultApi.ts
-index 45b0d28..a2c4c7e 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/api/vaultApi.ts
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/api/vaultApi.ts
-@@ -4710,20 +4710,44 @@ export async function listAttachments(datacardId: string): Promise<BackendAttachm
- }
- 
- export async function createBackup(
--  destinationPath: string | null,
--  useDefaultPath: boolean
--): Promise<string> {
--  return invoke('backup_create', { destinationPath, useDefaultPath });
-+  useDefaultPath: boolean,
-+  suggestedFileName?: string
-+): Promise<string | null> {
-+  if (useDefaultPath) {
-+    return invoke('backup_create', { destinationPath: null, useDefaultPath: true });
-+  }
-+  return invoke('backup_create_via_dialog', { suggestedFileName: suggestedFileName ?? null });
- }
- 
--export async function restoreBackup(backupPath: string): Promise<boolean> {
--  return invoke('backup_restore', { backupPath });
-+export type BackupPickPayload = {
-+  token: string;
-+  file_name: string;
-+  byte_size: number;
-+  inspect: { profile_id: string; profile_name: string; vault_mode: string; will_overwrite: boolean };
-+};
-+
-+export async function backupPickFile(): Promise<BackupPickPayload | null> {
-+  return invoke('backup_pick_file');
- }
- 
-+export async function backupDiscardPick(token: string): Promise<void> {
-+  await invoke('backup_discard_pick', { token });
-+}
-+
-+export async function restoreBackupWorkflowFromPick(token: string): Promise<boolean> {
-+  return invoke('backup_restore_workflow_from_pick', { token });
-+}
-+
- export async function listBackups(): Promise<
-   Array<{ id: string; created_at_utc: string; path: string; bytes: number }>
- > {
-   return invoke('backup_list');
- }
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/components/modals/ExportBackupModal.tsx b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/components/modals/ExportBackupModal.tsx
-index 0b3c0b1..0df5e1c 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/components/modals/ExportBackupModal.tsx
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/components/modals/ExportBackupModal.tsx
-@@ -1,5 +1,4 @@
- import React, { useEffect, useState } from 'react';
--import { save } from '@tauri-apps/plugin-dialog';
- import { useTranslation } from '../../../../shared/lib/i18n';
- import { useToaster } from '../../../../shared/components/Toaster';
- import { createBackup } from '../../api/vaultApi';
-@@ -86,17 +85,10 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModal
-       try {
-         setIsSubmitting(true);
--        let destinationPath: string | null = null;
--        if (!useDefaultPath) {
--          const defaultName = `password-manager-backup-${profileId}-${formatTimestamp()}.pmbackup`;
--          const selection = await save({ defaultPath: defaultName });
--          destinationPath = Array.isArray(selection) ? selection[0] : selection;
--          if (!destinationPath || typeof destinationPath !== 'string') return;
--        }
--        const path = await createBackup(destinationPath, useDefaultPath);
-+        const suggested = `password-manager-backup-${profileId}-${formatTimestamp()}.pmbackup`;
-+        const path = await createBackup(useDefaultPath, suggested);
-+        if (!path) return;
-         showToast(t('backup.export.success'), 'success');
-         onClose();
-       } catch (err) {
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/Vault.tsx b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/Vault.tsx
-index 7a88cdb..7e9f7a9 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/Vault.tsx
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/Vault.tsx
-@@ -16,7 +16,7 @@ import { useTranslation } from '../../shared/lib/i18n';
- import { useToaster } from '../../shared/components/Toaster';
--import { createBackupIfDueAuto, restoreBackup } from './api/vaultApi';
-+import { backupPickFile, backupDiscardPick, createBackupIfDueAuto, restoreBackupWorkflowFromPick } from './api/vaultApi';
- import { BackendUserSettings } from './types/backend';
- import type { FolderDialogState } from './components/Folders/useFolders';
-@@ -98,7 +98,8 @@ export function Vault(/* ... */) {
-   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
--  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
-+  const [pendingImportToken, setPendingImportToken] = useState<string | null>(null);
-+  const [pendingImportProfileName, setPendingImportProfileName] = useState<string | null>(null);
- 
-   const handleImportBackup = async () => {
--    const { open } = await import('@tauri-apps/plugin-dialog');
--    const selection = await open({
--      multiple: false,
--      filters: [{ name: 'Password Manager Backup', extensions: ['pmbackup', 'zip'] }],
--    });
--    const selectedPath = Array.isArray(selection) ? selection[0] : selection;
--    if (typeof selectedPath !== 'string') return;
--    setPendingImportPath(selectedPath);
-+    const picked = await backupPickFile();
-+    if (!picked) return;
-+    setPendingImportToken(picked.token);
-+    setPendingImportProfileName(picked.inspect.profile_name);
-   };
- 
-   const handleConfirmImport = async () => {
--    if (!pendingImportPath) return;
-+    if (!pendingImportToken) return;
-     setIsRestoringBackup(true);
-     try {
--      await restoreBackup(pendingImportPath);
-+      await restoreBackupWorkflowFromPick(pendingImportToken);
-+      await backupDiscardPick(pendingImportToken);
-       showToast(tVault('backup.import.success'), 'success');
--      setPendingImportPath(null);
-+      setPendingImportToken(null);
-+      setPendingImportProfileName(null);
-       onLocked();
-     } catch (err) {
-       handleBackupError(err);
-     } finally {
-       setIsRestoringBackup(false);
-     }
-   };
-@@ -164,9 +165,12 @@ export function Vault(/* ... */) {
-         <LazyImportBackupModal
--          open={!!pendingImportPath}
--          backupPath={pendingImportPath}
-+          open={!!pendingImportToken}
-+          backupPath={pendingImportProfileName}
-           isSubmitting={isRestoringBackup}
--          onCancel={() => setPendingImportPath(null)}
-+          onCancel={() => {
-+            if (pendingImportToken) void backupDiscardPick(pendingImportToken);
-+            setPendingImportToken(null);
-+            setPendingImportProfileName(null);
-+          }}
-           onConfirm={handleConfirmImport}
-         />
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/components/modals/ImportBackupModal.tsx b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/components/modals/ImportBackupModal.tsx
-index 4c2a7d1..5b2e7d0 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/components/modals/ImportBackupModal.tsx
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src/features/Vault/components/modals/ImportBackupModal.tsx
-@@ -4,7 +4,7 @@ export type ImportBackupModalProps = {
-   open: boolean;
--  backupPath: string | null;
-+  backupPath: string | null; // now used as display label (e.g. profile name)
-   isSubmitting: boolean;
-   onCancel: () => void;
-   onConfirm: () => void;
- };
++  "clipboard_clear_all",
++]
