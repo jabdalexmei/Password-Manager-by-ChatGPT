@@ -14,12 +14,12 @@ struct NativeRequest {
     pub payload: Value,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct NativeError {
     pub code: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct NativeResponse {
     pub id: String,
     pub ok: bool,

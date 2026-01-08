@@ -5,7 +5,6 @@ use crate::data::fs::atomic_write::write_atomic;
 use crate::error::{ErrorCodeString, Result};
 
 const IPC_INFO_FILE: &str = "native-host.json";
-const IPC_INFO_SCHEMA_VERSION: u8 = 1;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NativeHostIpcInfo {
@@ -37,21 +36,6 @@ fn is_dir_writable(dir: &Path) -> bool {
     true
 }
 
-fn ipc_info_path_for_load(app_dir: &Path) -> PathBuf {
-    let primary = primary_ipc_info_path(app_dir);
-    if primary.exists() {
-        return primary;
-    }
-    if !is_dir_writable(app_dir) {
-        if let Some(fallback) = fallback_ipc_info_path() {
-            if fallback.exists() {
-                return fallback;
-            }
-        }
-    }
-    primary
-}
-
 fn ipc_info_path_for_write(app_dir: &Path) -> Result<PathBuf> {
     if is_dir_writable(app_dir) {
         return Ok(primary_ipc_info_path(app_dir));
@@ -62,21 +46,6 @@ fn ipc_info_path_for_write(app_dir: &Path) -> Result<PathBuf> {
             .map_err(|_| ErrorCodeString::new("IPC_INFO_WRITE_FAILED"))?;
     }
     Ok(fallback)
-}
-
-pub fn load_ipc_info(app_dir: &Path) -> Result<Option<NativeHostIpcInfo>> {
-    let path = ipc_info_path_for_load(app_dir);
-    if !path.exists() {
-        return Ok(None);
-    }
-    let content = std::fs::read_to_string(&path)
-        .map_err(|_| ErrorCodeString::new("IPC_INFO_READ_FAILED"))?;
-    let info: NativeHostIpcInfo = serde_json::from_str(&content)
-        .map_err(|_| ErrorCodeString::new("IPC_INFO_READ_FAILED"))?;
-    if info.schema_version != IPC_INFO_SCHEMA_VERSION {
-        return Err(ErrorCodeString::new("IPC_INFO_SCHEMA_MISMATCH"));
-    }
-    Ok(Some(info))
 }
 
 pub fn write_ipc_info(app_dir: &Path, info: &NativeHostIpcInfo) -> Result<PathBuf> {

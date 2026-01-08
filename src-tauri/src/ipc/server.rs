@@ -315,7 +315,7 @@ fn handle_request(state: &Arc<AppState>, shared_token: &str, req: BridgeRequest)
     }
 }
 
-fn handle_client(mut stream: TcpStream, state: Arc<AppState>, token: String) {
+fn handle_client(stream: TcpStream, state: Arc<AppState>, token: String) {
     loop {
         let frame = match read_frame(&stream) {
             Ok(Some(bytes)) => bytes,
