@@ -1,48 +1,45 @@
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/permissions/app-default.toml b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/permissions/app-default.toml
-index 2a8c2a1..9f3d9b7 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/permissions/app-default.toml
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/permissions/app-default.toml
-@@ -48,6 +48,7 @@ commands.allow = [
-   "list_deleted_datacards_summary_command",
-   "get_datacard",
-+  "list_datacards",
-   "create_datacard",
-   "update_datacard",
-   "set_datacard_favorite",
-@@ -55,9 +56,11 @@ commands.allow = [
-   "delete_datacard",
-+  "list_deleted_datacards",
-   "restore_datacard",
-   "purge_datacard",
-   "restore_all_deleted_datacards",
-   "purge_all_deleted_datacards",
-+  "get_datacard_password_history",
-   "clear_datacard_password_history",
-
-part 2
-
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/scripts/security-audit.mjs b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/scripts/security-audit.mjs
-index 5c7b7cf..b4c9b3d 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/scripts/security-audit.mjs
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/scripts/security-audit.mjs
-@@ -62,6 +62,8 @@ function auditRust() {
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json
+index a4f2ed1..a4b2a6c 100644
+--- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json
+@@ -20,7 +20,7 @@
+   },
+   "dependencies": {
+     "@zxing/browser": "0.1.5",
+-    "@tauri-apps/api": "2.0.0",
++    "@tauri-apps/api": "2.4.0",
+     "lucide-react": "0.562.0",
+     "otpauth": "9.4.1",
+     "react": "18.3.1",
+     "react-dom": "18.3.1"
+   },
+   "devDependencies": {
+-    "@tauri-apps/cli": "2.0.0",
++    "@tauri-apps/cli": "2.4.0",
+     "@types/react": "18.3.3",
+     "@types/react-dom": "18.3.0",
+     "@vitejs/plugin-react": "4.3.3",
+     "rollup-plugin-visualizer": "6.0.5",
+     "typescript": "5.6.2",
+diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/Cargo.toml b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/Cargo.toml
+index 6b8d3ef..5e75f5a 100644
+--- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/Cargo.toml
++++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/Cargo.toml
+@@ -7,10 +7,10 @@ edition = "2021"
+ [dependencies]
+ serde = { version = "1.0", features = ["derive"] }
+ serde_json = "1.0"
+-tauri = { version = "2.0.0", features = [] }
+-tauri-plugin-dialog = "2.0.0"
+-tauri-plugin-log = "2.0.0"
++tauri = { version = "2.4.0", features = [] }
++tauri-plugin-dialog = "2.4.0"
++tauri-plugin-log = "2.4.0"
+ thiserror = "1.0"
+ uuid = { version = "1.10", features = ["v4"] }
+ argon2 = "0.5"
+@@ -34,4 +34,4 @@ base64 = "0.22"
  
-   ensureCargoAuditInstalled();
- 
--  // Run audit in src-tauri directory. Using `cargo -C` keeps this script cross-platform.
--  run('cargo', ['-C', 'src-tauri', 'audit']);
-+  // Run audit in src-tauri directory (works on stable Cargo).
-+  run('cargo', ['audit'], { cwd: 'src-tauri' });
- 
-   // Ensure builds are "locked": no lockfile updates, no silent dependency drift.
--  run('cargo', ['-C', 'src-tauri', 'build', '--locked']);
-+  run('cargo', ['build', '--locked'], { cwd: 'src-tauri' });
- }
-
-
-
-
-
-
-
-
+ [build-dependencies]
+-tauri-build = { version = "2.0.0", features = [] }
++tauri-build = { version = "2.4.0", features = [] }
