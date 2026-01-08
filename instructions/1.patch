@@ -1,94 +1,20 @@
-diff --git a/src-tauri/src/bin/pm-native-host.rs b/src-tauri/src/bin/pm-native-host.rs
-index 772a901..c4d2bb6 100644
---- a/src-tauri/src/bin/pm-native-host.rs
-+++ b/src-tauri/src/bin/pm-native-host.rs
-@@ -17,19 +17,19 @@ struct NativeRequest {
-     pub payload: Value,
- }
- 
--#[derive(Debug, Serialize)]
-+#[derive(Debug, Serialize, Deserialize)]
- struct NativeError {
-     pub code: String,
- }
- 
--#[derive(Debug, Serialize)]
-+#[derive(Debug, Serialize, Deserialize)]
- struct NativeResponse {
-     pub id: String,
-     pub ok: bool,
-     pub result: Option<Value>,
-     pub error: Option<NativeError>,
- }
 diff --git a/src-tauri/src/ipc/server.rs b/src-tauri/src/ipc/server.rs
-index bd97a9e..72d0d72 100644
+index bd97a9e..d4b8f4a 100644
 --- a/src-tauri/src/ipc/server.rs
 +++ b/src-tauri/src/ipc/server.rs
-@@ -315,7 +315,7 @@ fn handle_request(state: &Arc<AppState>, shared_token: &str, req: BridgeRequest)
-     }
- }
- 
--fn handle_client(mut stream: TcpStream, state: Arc<AppState>, token: String) {
-+fn handle_client(stream: TcpStream, state: Arc<AppState>, token: String) {
-     loop {
-         let frame = match read_frame(&stream) {
-             Ok(Some(bytes)) => bytes,
-diff --git a/src-tauri/src/ipc/registry.rs b/src-tauri/src/ipc/registry.rs
-index 3bab63a..0b0c0c4 100644
---- a/src-tauri/src/ipc/registry.rs
-+++ b/src-tauri/src/ipc/registry.rs
-@@ -3,9 +3,7 @@ use std::path::{Path, PathBuf};
- 
- use crate::data::fs::atomic_write::write_atomic;
- use crate::error::{ErrorCodeString, Result};
- 
- const IPC_INFO_FILE: &str = "native-host.json";
--const IPC_INFO_SCHEMA_VERSION: u8 = 1;
- 
- #[derive(Debug, Serialize, Deserialize, Clone)]
- pub struct NativeHostIpcInfo {
-@@ -37,29 +35,6 @@ fn is_dir_writable(dir: &Path) -> bool {
-     true
- }
- 
--fn ipc_info_path_for_load(app_dir: &Path) -> PathBuf {
--    let primary = primary_ipc_info_path(app_dir);
--    if primary.exists() {
--        return primary;
--    }
--    if !is_dir_writable(app_dir) {
--        if let Some(fallback) = fallback_ipc_info_path() {
--            if fallback.exists() {
--                return fallback;
--            }
--        }
--    }
--    primary
--}
--
- fn ipc_info_path_for_write(app_dir: &Path) -> Result<PathBuf> {
-     if is_dir_writable(app_dir) {
-         return Ok(primary_ipc_info_path(app_dir));
-     }
-@@ -63,21 +38,6 @@ fn ipc_info_path_for_write(app_dir: &Path) -> Result<PathBuf> {
-     Ok(fallback)
- }
- 
--pub fn load_ipc_info(app_dir: &Path) -> Result<Option<NativeHostIpcInfo>> {
--    let path = ipc_info_path_for_load(app_dir);
--    if !path.exists() {
--        return Ok(None);
--    }
--    let content = std::fs::read_to_string(&path)
--        .map_err(|_| ErrorCodeString::new("IPC_INFO_READ_FAILED"))?;
--    let info: NativeHostIpcInfo = serde_json::from_str(&content)
--        .map_err(|_| ErrorCodeString::new("IPC_INFO_READ_FAILED"))?;
--    if info.schema_version != IPC_INFO_SCHEMA_VERSION {
--        return Err(ErrorCodeString::new("IPC_INFO_SCHEMA_MISMATCH"));
--    }
--    Ok(Some(info))
--}
--
- pub fn write_ipc_info(app_dir: &Path, info: &NativeHostIpcInfo) -> Result<PathBuf> {
-     let path = ipc_info_path_for_write(app_dir)?;
-     let serialized = serde_json::to_string_pretty(info)
+@@ -371,7 +371,13 @@ pub fn start_native_bridge(state: Arc<AppState>) -> Result<()> {
+     let info = NativeHostIpcInfo {
+         schema_version: 1,
+         port,
+         token: token.clone(),
+         created_at_ms: now_ms(),
+     };
+-    let _written_to = write_ipc_info(&app_dir, &info)?;
++    let written_to = match write_ipc_info(&app_dir, &info) {
++        Ok(p) => p,
++        Err(e) => {
++            eprintln!("[IPC] write_ipc_info failed: {}", e.code);
++            return Err(e);
++        }
++    };
++    eprintln!("[IPC] native-host.json written: {}", written_to.display());
