@@ -65,11 +65,11 @@ function auditRust() {
 
   ensureCargoAuditInstalled();
 
-  // Run audit in src-tauri directory. Using `cargo -C` keeps this script cross-platform.
-  run('cargo', ['-C', 'src-tauri', 'audit']);
+  // Run audit in src-tauri directory (works on stable Cargo).
+  run('cargo', ['audit'], { cwd: 'src-tauri' });
 
   // Ensure builds are "locked": no lockfile updates, no silent dependency drift.
-  run('cargo', ['-C', 'src-tauri', 'build', '--locked']);
+  run('cargo', ['build', '--locked'], { cwd: 'src-tauri' });
 }
 
 const mode = (process.argv[2] ?? 'all').toLowerCase();
