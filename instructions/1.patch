@@ -1,45 +1,42 @@
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json
-index a4f2ed1..a4b2a6c 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/package.json
-@@ -20,7 +20,7 @@
-   },
-   "dependencies": {
-     "@zxing/browser": "0.1.5",
--    "@tauri-apps/api": "2.0.0",
-+    "@tauri-apps/api": "2.4.0",
-     "lucide-react": "0.562.0",
-     "otpauth": "9.4.1",
-     "react": "18.3.1",
-     "react-dom": "18.3.1"
-   },
-   "devDependencies": {
--    "@tauri-apps/cli": "2.0.0",
-+    "@tauri-apps/cli": "2.4.0",
-     "@types/react": "18.3.3",
-     "@types/react-dom": "18.3.0",
-     "@vitejs/plugin-react": "4.3.3",
-     "rollup-plugin-visualizer": "6.0.5",
-     "typescript": "5.6.2",
-diff --git a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/Cargo.toml b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/Cargo.toml
-index 6b8d3ef..5e75f5a 100644
---- a/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/Cargo.toml
-+++ b/Password-Manager-by-ChatGPT-codex-github-mention-add-reproducible-install-scripts-and-documen/src-tauri/Cargo.toml
-@@ -7,10 +7,10 @@ edition = "2021"
- [dependencies]
- serde = { version = "1.0", features = ["derive"] }
- serde_json = "1.0"
--tauri = { version = "2.0.0", features = [] }
--tauri-plugin-dialog = "2.0.0"
--tauri-plugin-log = "2.0.0"
-+tauri = { version = "2.4.0", features = [] }
-+tauri-plugin-dialog = "2.4.0"
-+tauri-plugin-log = "2.4.0"
- thiserror = "1.0"
- uuid = { version = "1.10", features = ["v4"] }
- argon2 = "0.5"
-@@ -34,4 +34,4 @@ base64 = "0.22"
+diff --git a/src-tauri/src/commands/backup.rs b/src-tauri/src/commands/backup.rs
+index 8d2c1aa..1a5b23d 100644
+--- a/src-tauri/src/commands/backup.rs
++++ b/src-tauri/src/commands/backup.rs
+@@ -9,11 +9,11 @@ use uuid::Uuid;
  
- [build-dependencies]
--tauri-build = { version = "2.0.0", features = [] }
-+tauri-build = { version = "2.4.0", features = [] }
+ use crate::app_state::AppState;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::services::backup_service::{
+     backup_create as backup_create_service, backup_create_if_due_auto as backup_create_if_due_auto_service,
+     backup_inspect as backup_inspect_service, backup_list as backup_list_service,
+-    backup_restore as backup_restore_service, backup_restore_workflow as backup_restore_workflow_service,
++    backup_restore_workflow as backup_restore_workflow_service,
+     BackupInspectResult, BackupListItem,
+ };
+ use crate::types::BackupPickPayload;
+@@ -131,9 +131,10 @@ pub async fn backup_pick_file(
+     app: AppHandle,
+     state: State<'_, Arc<AppState>>,
+ ) -> Result<Option<BackupPickPayload>> {
++    let st = state.inner().clone();
+     tauri::async_runtime::spawn_blocking(move || {
+-        let st = state.inner().clone();
+         let now = now_ms()?;
+         cleanup_stale_backup_picks(&st, now)?;
+ 
+         let selection = app
+diff --git a/src-tauri/src/types.rs b/src-tauri/src/types.rs
+index 9c1f0b2..8f1c6b0 100644
+--- a/src-tauri/src/types.rs
++++ b/src-tauri/src/types.rs
+@@ -34,7 +34,7 @@ use crate::services::backup_service::BackupInspectResult;
+ }
+ 
+-#[derive(Debug, Serialize, Deserialize, Clone)]
++#[derive(Debug, Serialize, Deserialize)]
+ pub struct BackupPickPayload {
+     pub token: String,
+     pub file_name: String,
+     pub byte_size: i64,
+     pub inspect: BackupInspectResult,
+ }
