@@ -2,6 +2,8 @@
 name = "password-manager"
 version = "0.1.0"
 edition = "2021"
+default-run = "password-manager"
+
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
