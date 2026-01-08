@@ -121,11 +121,11 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
           </div>
           {!useDefaultPath && (
             <div className="form-field">
-              <label className="form-label" htmlFor="export-backup-path">
-                {t('backup.export.choosePath')}
-              </label>
-              <p id="export-backup-path" className="dialog-description">
-                {suggestedFileName}
+              <p className="dialog-description">
+                {t('backup.export.choosePath')}: {suggestedFileName}
+              </p>
+              <p className="dialog-description">
+                {tCommon('action.create')}: {t('backup.export.create')}
               </p>
             </div>
           )}

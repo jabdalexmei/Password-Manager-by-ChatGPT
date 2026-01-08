@@ -68,7 +68,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [pendingImportToken, setPendingImportToken] = useState<string | null>(null);
-  const [pendingImportProfileName, setPendingImportProfileName] = useState<string | null>(null);
+  const [pendingImportLabel, setPendingImportLabel] = useState<string | null>(null);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<{
@@ -131,7 +131,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     const picked = await backupPickFile();
     if (!picked) return;
     setPendingImportToken(picked.token);
-    setPendingImportProfileName(picked.inspect.profile_name);
+    setPendingImportLabel(picked.fileName);
   };
 
   const handleConfirmImport = async () => {
@@ -142,7 +142,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
       await backupDiscardPick(pendingImportToken);
       showToast(tVault('backup.import.success'), 'success');
       setPendingImportToken(null);
-      setPendingImportProfileName(null);
+      setPendingImportLabel(null);
       onLocked();
     } catch (err) {
       handleBackupError(err);
@@ -155,7 +155,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     if (isRestoringBackup) return;
     if (pendingImportToken) void backupDiscardPick(pendingImportToken);
     setPendingImportToken(null);
-    setPendingImportProfileName(null);
+    setPendingImportLabel(null);
   };
 
   const handleOpenSettings = () => setSettingsModalOpen(true);
@@ -352,7 +352,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
         <Suspense fallback={null}>
           <LazyImportBackupModal
             open={pendingImportToken !== null}
-            backupPath={pendingImportProfileName}
+            backupPath={pendingImportLabel}
             isSubmitting={isRestoringBackup}
             onCancel={handleCloseImport}
             onConfirm={handleConfirmImport}

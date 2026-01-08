@@ -1,9 +1,8 @@
 [[permission]]
 identifier = "app-default"
 description = """
-Allows frontend to invoke only the application-defined Rust commands that the UI relies on.
-
-This is an explicit allowlist to reduce accidental exposure of new commands.
+Allowlist for app-defined commands used by the UI.
+This reduces accidental exposure if new commands are added later.
 """
 
 commands.allow = [
@@ -29,9 +28,10 @@ commands.allow = [
   "save_attachment_via_dialog",
 
   "backup_create",
-  "backup_restore",
-  "backup_inspect",
-  "backup_restore_workflow",
+  "backup_create_via_dialog",
+  "backup_pick_file",
+  "backup_discard_pick",
+  "backup_restore_workflow_from_pick",
   "backup_list",
   "backup_create_if_due_auto",
 
@@ -54,22 +54,18 @@ commands.allow = [
   "restore_all_deleted_bank_cards",
   "purge_all_deleted_bank_cards",
 
-  "list_datacards",
   "list_datacards_summary_command",
+  "list_deleted_datacards_summary_command",
   "get_datacard",
   "create_datacard",
   "update_datacard",
   "set_datacard_favorite",
   "move_datacard_to_folder",
   "delete_datacard",
-  "list_deleted_datacards",
-  "list_deleted_datacards_summary_command",
   "restore_datacard",
   "purge_datacard",
   "restore_all_deleted_datacards",
   "purge_all_deleted_datacards",
-
-  "get_datacard_password_history",
   "clear_datacard_password_history",
 
   "get_settings",
@@ -77,7 +73,7 @@ commands.allow = [
 
   "workspace_list",
   "workspace_select",
-  "workspace_create",
+  "workspace_create_via_dialog",
   "workspace_create_default",
   "workspace_remove",
   "workspace_open_in_explorer",

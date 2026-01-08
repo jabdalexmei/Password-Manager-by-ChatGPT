@@ -149,15 +149,29 @@ export async function createBackup(
   return invoke('backup_create_via_dialog', { suggestedFileName: suggestedFileName ?? null });
 }
 
-export type BackupPickPayload = {
+export type BackupPickPayloadDto = {
   token: string;
-  file_name: string;
-  byte_size: number;
+  fileName: string;
+  byteSize: number;
   inspect: { profile_id: string; profile_name: string; vault_mode: string; will_overwrite: boolean };
 };
 
-export async function backupPickFile(): Promise<BackupPickPayload | null> {
-  return invoke('backup_pick_file');
+type BackendBackupPickPayload = {
+  token: string;
+  file_name: string;
+  byte_size: number;
+  inspect: BackupPickPayloadDto['inspect'];
+};
+
+export async function backupPickFile(): Promise<BackupPickPayloadDto | null> {
+  const payload = await invoke<BackendBackupPickPayload | null>('backup_pick_file');
+  if (!payload) return null;
+  return {
+    token: payload.token,
+    fileName: payload.file_name,
+    byteSize: payload.byte_size,
+    inspect: payload.inspect,
+  };
 }
 
 export async function backupDiscardPick(token: string): Promise<void> {
