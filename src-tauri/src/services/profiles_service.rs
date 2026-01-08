@@ -1,37 +1,144 @@
+use crate::data::crypto::kdf::{derive_master_key, generate_kdf_salt};
+use crate::data::crypto::key_check;
+use crate::data::fs::atomic_write::write_atomic;
+use crate::data::profiles::paths::{
+    ensure_profile_dirs, ensure_profiles_dir, kdf_salt_path, key_check_path, profile_config_path,
+};
 use crate::data::profiles::registry;
 use crate::data::settings::config;
+use crate::data::sqlite::init::{init_database_passwordless, init_database_protected_encrypted};
+use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
+use crate::services::settings_service::get_settings;
 use crate::types::{ProfileMeta, ProfilesList};
+use std::fs;
+use zeroize::Zeroizing;
 
-pub fn list_profiles() -> Result<ProfilesList> {
-    let profiles = registry::list_profiles()?;
+pub fn list_profiles(sp: &StoragePaths) -> Result<ProfilesList> {
+    let mut profiles = registry::list_profiles(sp)?;
+    if profiles.is_empty() {
+        profiles = list_profiles_from_disk(sp)?;
+    }
     Ok(ProfilesList { profiles })
 }
 
-pub fn create_profile(name: &str, password: Option<String>) -> Result<ProfileMeta> {
+fn list_profiles_from_disk(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
+    let root = ensure_profiles_dir(sp)?;
+    let rd = fs::read_dir(&root).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+
+    let mut out: Vec<ProfileMeta> = Vec::new();
+
+    for entry in rd {
+        let entry = match entry {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        let id_os = entry.file_name();
+        let id = match id_os.to_str() {
+            Some(s) if !s.trim().is_empty() => s.to_string(),
+            _ => continue,
+        };
+
+        // Consider it a profile dir only if it looks like one.
+        // At minimum, it should contain config.json OR key_check.bin; otherwise ignore.
+        let cfg_path = profile_config_path(sp, &id)?;
+        let kc_path = key_check_path(sp, &id)?;
+        if !cfg_path.exists() && !kc_path.exists() {
+            continue;
+        }
+
+        let name = if cfg_path.exists() {
+            match fs::read_to_string(&cfg_path) {
+                Ok(content) => serde_json::from_str::<serde_json::Value>(&content)
+                    .ok()
+                    .and_then(|v| v.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or_else(|| id.clone()),
+                Err(_) => id.clone(),
+            }
+        } else {
+            id.clone()
+        };
+
+        let has_password = kc_path.exists();
+
+        out.push(ProfileMeta {
+            id,
+            name,
+            has_password,
+        });
+    }
+
+    // Stable order (nice for UI / extension dropdown).
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(out)
+}
+
+pub fn create_profile(
+    sp: &StoragePaths,
+    name: &str,
+    password: Option<String>,
+) -> Result<ProfileMeta> {
     if name.trim().is_empty() {
         return Err(ErrorCodeString::new("PROFILE_NAME_REQUIRED"));
     }
-    registry::create_profile(name, password)
+    let profile = registry::create_profile(sp, name, password.clone())?;
+
+    let init_result: Result<()> = (|| {
+        ensure_profile_dirs(sp, &profile.id)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+        let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
+        if is_passwordless {
+            init_database_passwordless(sp, &profile.id)?;
+        } else {
+            let salt = generate_kdf_salt();
+            let salt_path = kdf_salt_path(sp, &profile.id)?;
+            write_atomic(&salt_path, &salt)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+            let pwd = password.unwrap_or_default();
+            let key = Zeroizing::new(derive_master_key(&pwd, &salt)?);
+            key_check::create_key_check_file(sp, &profile.id, &key)?;
+            init_database_protected_encrypted(sp, &profile.id, &key)?;
+        }
+
+        let _ = get_settings(sp, &profile.id)?;
+        Ok(())
+    })();
+
+    if let Err(err) = init_result {
+        let _ = registry::delete_profile(sp, &profile.id);
+        if let Ok(dir) = crate::data::profiles::paths::profile_dir(sp, &profile.id) {
+            let _ = fs::remove_dir_all(dir);
+        }
+        return Err(err);
+    }
+
+    Ok(profile)
 }
 
-pub fn delete_profile(id: &str) -> Result<bool> {
-    registry::delete_profile(id)
+pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
+    registry::delete_profile(sp, id)
 }
 
-pub fn get_active_profile() -> Result<Option<ProfileMeta>> {
-    let settings = config::load_settings()?;
+pub fn get_active_profile(sp: &StoragePaths) -> Result<Option<ProfileMeta>> {
+    let settings = config::load_settings(sp)?;
     if let Some(id) = settings.active_profile {
-        if let Some(record) = registry::get_profile(&id)? {
+        if let Some(record) = registry::get_profile(sp, &id)? {
             return Ok(Some(record.into()));
         }
     }
     Ok(None)
 }
 
-pub fn set_active_profile(id: &str) -> Result<bool> {
-    let mut settings = config::load_settings()?;
+pub fn set_active_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
+    let mut settings = config::load_settings(sp)?;
     settings.active_profile = Some(id.to_string());
-    config::save_settings(&settings)?;
+    config::save_settings(sp, &settings)?;
     Ok(true)
 }
