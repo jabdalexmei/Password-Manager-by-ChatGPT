@@ -1,56 +1,102 @@
 diff --git a/src-tauri/src/ipc/server.rs b/src-tauri/src/ipc/server.rs
-index 72d0d72..8f6e1f1 100644
+index 72d0d72..c3a0c9b 100644
 --- a/src-tauri/src/ipc/server.rs
 +++ b/src-tauri/src/ipc/server.rs
-@@ -1,6 +1,7 @@
- use serde::{Deserialize, Serialize};
- use serde_json::Value;
-+use std::borrow::Cow;
- use std::io::{Read, Write};
- use std::net::{TcpListener, TcpStream};
- use std::sync::Arc;
-@@ -141,16 +142,31 @@ fn write_frame(mut stream: &TcpStream, bytes: &[u8]) -> Result<()> {
-     Ok(())
+@@ -3210,6 +3210,64 @@ fn parse_origin(input: &str) -> Result<String> {
+     }
  }
  
- fn parse_origin(input: &str) -> Result<String> {
--    // Accept either a pure origin (https://example.com) or a full URL (https://example.com/path).
-     let trimmed = input.trim();
-+    if trimmed.is_empty() {
-+        return Err(ErrorCodeString::new("INVALID_ORIGIN"));
++#[derive(Clone, Copy)]
++struct OriginParts<'a> {
++    scheme: &'a str,
++    host: &'a str,
++    port: u16,
++}
++
++fn origin_parts(origin: &str) -> Option<OriginParts<'_>> {
++    let scheme_split = origin.find("://")?;
++    let scheme = &origin[..scheme_split];
++    let rest = &origin[(scheme_split + 3)..];
++
++    // We only expect normal hostnames here (no IPv6 literal).
++    if rest.starts_with('[') {
++        return None;
 +    }
 +
-+    // Accept:
-+    // - origin: https://example.com
-+    // - full URL: https://example.com/path
-+    // - bare host: example.com (we treat as https://example.com)
-+    let work: Cow<'_, str> = if trimmed.contains("://") {
-+        Cow::Borrowed(trimmed)
-+    } else if trimmed.starts_with("//") {
-+        Cow::Owned(format!("https:{}", trimmed))
-+    } else {
-+        Cow::Owned(format!("https://{}", trimmed))
++    let default_port = if scheme == "http" { 80 } else { 443 };
++    let (host, port) = match rest.rsplit_once(':') {
++        Some((h, p)) if !h.is_empty() && p.chars().all(|c| c.is_ascii_digit()) => {
++            let port: u16 = p.parse().ok()?;
++            (h, port)
++        }
++        _ => (rest, default_port),
 +    };
++
++    Some(OriginParts {
++        scheme,
++        host,
++        port,
++    })
++}
++
++fn strip_www(host: &str) -> &str {
++    host.strip_prefix("www.").unwrap_or(host)
++}
++
++fn is_same_or_subdomain(host: &str, base: &str) -> bool {
++    if host == base {
++        return true;
++    }
++    if host.len() <= base.len() {
++        return false;
++    }
++    // Must end with ".<base>", not just "<base>" (prevents "evil-soundcloud.com" matching "soundcloud.com").
++    let dot_pos = host.len() - base.len() - 1;
++    host.as_bytes().get(dot_pos) == Some(&b'.') && host.ends_with(base)
++}
++
++fn origin_matches_url(card_url: &str, requested_origin: &str) -> bool {
++    let Ok(card_origin) = parse_origin(card_url) else { return false; };
++    if card_origin == requested_origin {
++        return true;
++    }
++
++    let Some(req) = origin_parts(requested_origin) else { return false; };
++    let Some(card) = origin_parts(&card_origin) else { return false; };
++    if req.scheme != card.scheme || req.port != card.port {
++        return false;
++    }
++
++    let req_host = strip_www(req.host);
++    let card_base = strip_www(card.host);
++    is_same_or_subdomain(req_host, card_base)
++}
++
+ fn datacard_origin(url: &str) -> Option<String> {
+     parse_origin(url).ok()
+ }
+@@ -6734,11 +6792,8 @@ fn handle_request(state: &Arc<AppState>, shared_token: &str, req: BridgeRequest)
+                 let mut items: Vec<CredentialListItem> = Vec::new();
+                 for row in rows {
+                     let Some(url) = row.url.as_deref() else { continue };
+-                    let Some(card_origin) = datacard_origin(url) else { continue };
+-                    if card_origin != origin {
+-                        continue;
+-                    }
++                    if !origin_matches_url(url, &origin) { continue; }
+                     let username = row
+                         .email
+                         .clone()
+@@ -8671,11 +8726,9 @@ fn handle_request(state: &Arc<AppState>, shared_token: &str, req: BridgeRequest)
+                 let Some(url) = card.url.as_deref() else {
+                     return Err(ErrorCodeString::new("CREDENTIAL_URL_MISSING"));
+                 };
+-                let Some(card_origin) = datacard_origin(url) else {
+-                    return Err(ErrorCodeString::new("CREDENTIAL_URL_INVALID"));
+-                };
+-                if card_origin != origin {
++                if !origin_matches_url(url, &origin) {
+                     return Err(ErrorCodeString::new("ORIGIN_MISMATCH"));
+                 }
  
--    let scheme_split = trimmed
-+    let scheme_split = work
-         .find("://")
-         .ok_or_else(|| ErrorCodeString::new("INVALID_ORIGIN"))?;
- 
--    let scheme = trimmed[..scheme_split].to_ascii_lowercase();
-+    let scheme = work[..scheme_split].to_ascii_lowercase();
-     if scheme != "http" && scheme != "https" {
-         return Err(ErrorCodeString::new("INVALID_ORIGIN"));
-     }
- 
--    let rest = &trimmed[(scheme_split + 3)..];
-+    let rest = &work[(scheme_split + 3)..];
-     let host_port = rest
-         .split(|c| c == '/' || c == '?' || c == '#')
-         .next()
-         .unwrap_or("")
-         .trim();
- 
-     if host_port.is_empty() {
-         return Err(ErrorCodeString::new("INVALID_ORIGIN"));
-     }
+                 let username = card
