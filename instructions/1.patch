@@ -1,20 +1,56 @@
 diff --git a/src-tauri/src/ipc/server.rs b/src-tauri/src/ipc/server.rs
-index bd97a9e..d4b8f4a 100644
+index 72d0d72..8f6e1f1 100644
 --- a/src-tauri/src/ipc/server.rs
 +++ b/src-tauri/src/ipc/server.rs
-@@ -371,7 +371,13 @@ pub fn start_native_bridge(state: Arc<AppState>) -> Result<()> {
-     let info = NativeHostIpcInfo {
-         schema_version: 1,
-         port,
-         token: token.clone(),
-         created_at_ms: now_ms(),
-     };
--    let _written_to = write_ipc_info(&app_dir, &info)?;
-+    let written_to = match write_ipc_info(&app_dir, &info) {
-+        Ok(p) => p,
-+        Err(e) => {
-+            eprintln!("[IPC] write_ipc_info failed: {}", e.code);
-+            return Err(e);
-+        }
+@@ -1,6 +1,7 @@
+ use serde::{Deserialize, Serialize};
+ use serde_json::Value;
++use std::borrow::Cow;
+ use std::io::{Read, Write};
+ use std::net::{TcpListener, TcpStream};
+ use std::sync::Arc;
+@@ -141,16 +142,31 @@ fn write_frame(mut stream: &TcpStream, bytes: &[u8]) -> Result<()> {
+     Ok(())
+ }
+ 
+ fn parse_origin(input: &str) -> Result<String> {
+-    // Accept either a pure origin (https://example.com) or a full URL (https://example.com/path).
+     let trimmed = input.trim();
++    if trimmed.is_empty() {
++        return Err(ErrorCodeString::new("INVALID_ORIGIN"));
++    }
++
++    // Accept:
++    // - origin: https://example.com
++    // - full URL: https://example.com/path
++    // - bare host: example.com (we treat as https://example.com)
++    let work: Cow<'_, str> = if trimmed.contains("://") {
++        Cow::Borrowed(trimmed)
++    } else if trimmed.starts_with("//") {
++        Cow::Owned(format!("https:{}", trimmed))
++    } else {
++        Cow::Owned(format!("https://{}", trimmed))
 +    };
-+    eprintln!("[IPC] native-host.json written: {}", written_to.display());
+ 
+-    let scheme_split = trimmed
++    let scheme_split = work
+         .find("://")
+         .ok_or_else(|| ErrorCodeString::new("INVALID_ORIGIN"))?;
+ 
+-    let scheme = trimmed[..scheme_split].to_ascii_lowercase();
++    let scheme = work[..scheme_split].to_ascii_lowercase();
+     if scheme != "http" && scheme != "https" {
+         return Err(ErrorCodeString::new("INVALID_ORIGIN"));
+     }
+ 
+-    let rest = &trimmed[(scheme_split + 3)..];
++    let rest = &work[(scheme_split + 3)..];
+     let host_port = rest
+         .split(|c| c == '/' || c == '?' || c == '#')
+         .next()
+         .unwrap_or("")
+         .trim();
+ 
+     if host_port.is_empty() {
+         return Err(ErrorCodeString::new("INVALID_ORIGIN"));
+     }
