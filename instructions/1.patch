@@ -1,13 +1,609 @@
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -829,8 +829,8 @@
-                   <div className="datacard-title">{displayTitleText}</div>
-                   {(card.hasTotp || isFavorite) && (
-                     <div className="datacard-badges">
--                      {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
-                       {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-+                      {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
-                     </div>
-                   )}
-                 </div>
+Понял тебя **на 100%**: **схему базы менять можно**, просто **не надо “перетаскивать/бэкапить/конвертить” старые данные** (потому что их нет). Значит делаем нормально: **bank_cards получают folder_id как у datacards**, папки становятся “общей вселенной”, и UI в Bank cards не прячет **Add folder** и **Folders**.
+
+Схемно это самый чистый путь: добавить `folder_id` в `bank_cards`, и сделать маленький *idempotent* апгрейд схемы (добавление колонки), без “миграции данных”. SQLite это поддерживает через `ALTER TABLE ... ADD COLUMN`.
+
+Ниже — **готовые unified diff патчи**.
+
+---
+
+## 1) SQLite: добавить folder_id в bank_cards + индекс
+
+```diff
+diff --git a/src-tauri/src/data/sqlite/schema.sql b/src-tauri/src/data/sqlite/schema.sql
+--- a/src-tauri/src/data/sqlite/schema.sql
++++ b/src-tauri/src/data/sqlite/schema.sql
+@@ -81,8 +81,10 @@ CREATE INDEX IF NOT EXISTS idx_attachments_deleted
+ ON attachments(deleted_at);
+
+ CREATE TABLE IF NOT EXISTS bank_cards (
+   id TEXT PRIMARY KEY,
++  folder_id TEXT NULL,
++
+   title TEXT NOT NULL,
+   holder TEXT,
+   number TEXT,
+@@ -98,5 +100,6 @@ CREATE TABLE IF NOT EXISTS bank_cards (
+ );
+
+ CREATE INDEX IF NOT EXISTS idx_bank_cards_deleted_at ON bank_cards (deleted_at);
+ CREATE INDEX IF NOT EXISTS idx_bank_cards_is_favorite ON bank_cards (is_favorite);
++CREATE INDEX IF NOT EXISTS idx_bank_cards_folder ON bank_cards (folder_id);
+```
+
+---
+
+## 2) SQLite migrations: bump schema version + v8 → v9 (только ADD COLUMN, без данных)
+
+```diff
+diff --git a/src-tauri/src/data/sqlite/migrations.rs b/src-tauri/src/data/sqlite/migrations.rs
+--- a/src-tauri/src/data/sqlite/migrations.rs
++++ b/src-tauri/src/data/sqlite/migrations.rs
+@@ -4,7 +4,7 @@ use rusqlite::OptionalExtension;
+
+ use crate::error::{ErrorCodeString, Result};
+
+-const CURRENT_SCHEMA_VERSION: i32 = 8;
++const CURRENT_SCHEMA_VERSION: i32 = 9;
+
+ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
+@@ -83,6 +83,22 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
+         return Ok(());
+     }
+
++    // v8 -> v9: add folder_id to bank_cards (idempotent).
++    if version == 8 {
++        if !has_column(conn, "bank_cards", "folder_id")? {
++            conn.execute_batch("ALTER TABLE bank_cards ADD COLUMN folder_id TEXT NULL;")
++                .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++        }
++        // Index is safe to (re)create.
++        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_bank_cards_folder ON bank_cards (folder_id);")
++            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++
++        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
++            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++        return Ok(());
++    }
++
+     // v6 -> v8: add seed phrase columns (idempotent).
+     if version == 6 {
+         if !has_column(conn, "datacards", "seed_phrase_value")? {
+```
+
+---
+
+## 3) Rust types: folder_id у BankCard + Create/Update + Move input
+
+```diff
+diff --git a/src-tauri/src/types.rs b/src-tauri/src/types.rs
+--- a/src-tauri/src/types.rs
++++ b/src-tauri/src/types.rs
+@@ -205,6 +205,7 @@ pub struct SetDataCardFavoriteInput {
+ #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+ pub struct BankCardItem {
+     pub id: String,
++    pub folder_id: Option<String>,
+     pub title: String,
+     pub holder: Option<String>,
+     pub number: Option<String>,
+@@ -221,6 +222,7 @@ pub struct BankCardItem {
+ #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+ pub struct BankCardSummary {
+     pub id: String,
++    pub folder_id: Option<String>,
+     pub title: String,
+     pub holder: Option<String>,
+     pub number: Option<String>,
+@@ -236,6 +238,7 @@ pub struct BankCardSummary {
+ #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+ pub struct CreateBankCardInput {
++    pub folder_id: Option<String>,
+     pub title: String,
+     pub holder: Option<String>,
+     pub number: Option<String>,
+@@ -249,6 +252,7 @@ pub struct CreateBankCardInput {
+ #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+ pub struct UpdateBankCardInput {
+     pub id: String,
++    pub folder_id: Option<String>,
+     pub title: String,
+     pub holder: Option<String>,
+     pub number: Option<String>,
+@@ -266,6 +270,12 @@ pub struct SetBankCardFavoriteInput {
+     pub id: String,
+     pub is_favorite: bool,
+ }
++
++#[derive(Debug, Serialize, Deserialize, Clone)]
++pub struct MoveBankCardInput {
++    pub id: String,
++    pub folder_id: Option<String>,
++}
+```
+
+---
+
+## 4) Rust repo_impl: маппинг + SELECT/INSERT/UPDATE с folder_id + folder helpers
+
+```diff
+diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
+--- a/src-tauri/src/data/sqlite/repo_impl.rs
++++ b/src-tauri/src/data/sqlite/repo_impl.rs
+@@ -115,6 +115,7 @@ fn map_data_card_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
+ fn map_bank_card(row: &rusqlite::Row) -> rusqlite::Result<BankCardItem> {
+     Ok(BankCardItem {
+         id: row.get("id")?,
++        folder_id: row.get("folder_id")?,
+         title: row.get("title")?,
+         holder: row.get("holder")?,
+         number: row.get("number")?,
+@@ -136,6 +137,7 @@ fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummary
+     let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
+
+     Ok(BankCardSummary {
+         id: row.get("id")?,
++        folder_id: row.get("folder_id")?,
+         title: row.get("title")?,
+         holder: row.get("holder")?,
+         number: row.get("number")?,
+@@ -318,6 +320,27 @@ pub fn move_datacards_to_root(
+     })
+ }
+ 
++pub fn move_bank_cards_to_root(
++    state: &Arc<AppState>,
++    profile_id: &str,
++    folder_id: &str,
++) -> Result<bool> {
++    with_connection(state, profile_id, |conn| {
++        let now = Utc::now().to_rfc3339();
++        conn.execute(
++            "UPDATE bank_cards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2",
++            params![now, folder_id],
++        )
++        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++        Ok(true)
++    })
++}
++
+ pub fn list_datacard_ids_in_folder(
+     state: &Arc<AppState>,
+     profile_id: &str,
+@@ -742,7 +765,7 @@ pub fn list_bank_cards_summary(
+ ) -> Result<Vec<BankCardSummary>> {
+     with_connection(state, profile_id, |conn| {
+         let clause = order_clause(sort_field, sort_dir).unwrap_or("ORDER BY updated_at DESC");
+         let query = format!(
+-            "SELECT id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
++            "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
+         );
+         let mut stmt = conn.prepare(&query).map_err(|e| {
+             log_sqlite_err("list_bank_cards_summary.prepare", &query, &e);
+@@ -780,7 +803,7 @@ pub fn list_deleted_bank_cards_summary(
+     with_connection(state, profile_id, |conn| {
+         let mut stmt = conn
+             .prepare(
+-                "SELECT id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
++                "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+             )
+             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+@@ -836,8 +859,8 @@ pub fn create_bank_card(
+     with_connection(state, profile_id, |conn| {
+         let tags_json = serialize_json(&input.tags)?;
+         let now = Utc::now().to_rfc3339();
+         let id = Uuid::new_v4().to_string();
+         conn.execute(
+-            "INSERT INTO bank_cards (id, title, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, NULL)",
++            "INSERT INTO bank_cards (id, folder_id, title, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?11, NULL)",
+             params![
+                 id,
++                input.folder_id,
+                 input.title,
+                 input.holder,
+                 input.number,
+                 input.expiry_mm_yy,
+                 input.cvc,
+                 input.note,
+                 tags_json,
+                 now,
+                 now
+             ],
+         )
+         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+@@ -866,9 +889,9 @@ pub fn update_bank_card(
+         let rows = conn
+             .execute(
+-                "UPDATE bank_cards SET title = ?1, holder = ?2, number = ?3, expiry_mm_yy = ?4, cvc = ?5, note = ?6, tags_json = ?7, updated_at = ?8 WHERE id = ?9",
++                "UPDATE bank_cards SET folder_id = ?1, title = ?2, holder = ?3, number = ?4, expiry_mm_yy = ?5, cvc = ?6, note = ?7, tags_json = ?8, updated_at = ?9 WHERE id = ?10",
+                 params![
++                    input.folder_id,
+                     input.title,
+                     input.holder,
+                     input.number,
+                     input.expiry_mm_yy,
+                     input.cvc,
+                     input.note,
+                     tags_json,
+                     Utc::now().to_rfc3339(),
+                     input.id
+                 ],
+             )
+             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+@@ -971,6 +994,55 @@ pub fn purge_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Res
+     })
+ }
++
++pub fn list_bank_card_ids_in_folder(
++    state: &Arc<AppState>,
++    profile_id: &str,
++    folder_id: &str,
++    include_deleted: bool,
++) -> Result<Vec<String>> {
++    with_connection(state, profile_id, |conn| {
++        let clause = if include_deleted {
++            String::new()
++        } else {
++            " AND deleted_at IS NULL".to_string()
++        };
++        let mut stmt = conn
++            .prepare(&format!(
++                "SELECT id FROM bank_cards WHERE folder_id = ?1{clause}",
++            ))
++            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++
++        let rows = stmt
++            .query_map(params![folder_id], |row| row.get("id"))
++            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
++            .collect::<rusqlite::Result<Vec<String>>>()
++            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++
++        Ok(rows)
++    })
++}
++
++pub fn soft_delete_bank_cards_in_folder(
++    state: &Arc<AppState>,
++    profile_id: &str,
++    folder_id: &str,
++) -> Result<bool> {
++    with_connection(state, profile_id, |conn| {
++        let now = Utc::now().to_rfc3339();
++        conn.execute(
++            "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3",
++            params![now.clone(), now, folder_id],
++        )
++        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++        Ok(true)
++    })
++}
++
++pub fn purge_bank_cards_in_folder(
++    state: &Arc<AppState>,
++    profile_id: &str,
++    folder_id: &str,
++) -> Result<bool> {
++    with_connection(state, profile_id, |conn| {
++        conn.execute("DELETE FROM bank_cards WHERE folder_id = ?1", params![folder_id])
++            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++        Ok(true)
++    })
++}
+```
+
+---
+
+## 5) Rust folders_service: при удалении папки учитываем bank_cards тоже
+
+```diff
+diff --git a/src-tauri/src/services/folders_service.rs b/src-tauri/src/services/folders_service.rs
+--- a/src-tauri/src/services/folders_service.rs
++++ b/src-tauri/src/services/folders_service.rs
+@@ -50,6 +50,7 @@ pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
+     }
+
+     repo_impl::move_datacards_to_root(state, &profile_id, &id)?;
++    repo_impl::move_bank_cards_to_root(state, &profile_id, &id)?;
+     let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
+     security_service::request_persist_active_vault(state.clone());
+     Ok(deleted)
+@@ -83,6 +84,7 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
+         }
+         repo_impl::soft_delete_datacards_in_folder(state, &profile_id, &id)?;
++        repo_impl::soft_delete_bank_cards_in_folder(state, &profile_id, &id)?;
+     } else {
+         let datacard_ids = repo_impl::list_datacard_ids_in_folder(state, &profile_id, &id, true)?;
+@@ -105,6 +107,7 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
+             }
+         }
+         repo_impl::purge_datacards_in_folder(state, &profile_id, &id)?;
++        repo_impl::purge_bank_cards_in_folder(state, &profile_id, &id)?;
+     }
+
+     let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
+```
+
+---
+
+## 6) Frontend: добавить folderId в типы bank cards (UI + backend)
+
+```diff
+diff --git a/src/features/Vault/types/ui.ts b/src/features/Vault/types/ui.ts
+--- a/src/features/Vault/types/ui.ts
++++ b/src/features/Vault/types/ui.ts
+@@ -68,6 +68,7 @@ export type UpdateDataCardInput = CreateDataCardInput & {
+ 
+ export type BankCardItem = {
+   id: string;
++  folderId: string | null;
+   title: string;
+   holder: string | null;
+   number: string | null;
+@@ -94,6 +95,7 @@ export type BankCardSummary = BankCardItem & {
+ export type CreateBankCardInput = {
++  folderId?: string | null;
+   title: string;
+   holder?: string | null;
+   number?: string | null;
+diff --git a/src/features/Vault/types/backend.ts b/src/features/Vault/types/backend.ts
+--- a/src/features/Vault/types/backend.ts
++++ b/src/features/Vault/types/backend.ts
+@@ -82,6 +82,7 @@ export type BackendUpdateDataCardInput = BackendCreateDataCardInput & {
+ 
+ export type BackendBankCardItem = {
+   id: string;
++  folder_id: string | null;
+   title: string;
+   holder: string | null;
+   number: string | null;
+@@ -98,6 +99,7 @@ export type BackendBankCardItem = {
+ 
+ export type BackendBankCardSummary = {
+   id: string;
++  folder_id: string | null;
+   title: string;
+   holder: string | null;
+   number: string | null;
+@@ -110,6 +112,7 @@ export type BackendBankCardSummary = {
+ };
+ 
+ export type BackendCreateBankCardInput = {
++  folder_id: string | null;
+   title: string;
+   holder: string | null;
+   number: string | null;
+```
+
+---
+
+## 7) Frontend mappers: прокинуть folder_id ⇄ folderId
+
+```diff
+diff --git a/src/features/Vault/types/mappers.ts b/src/features/Vault/types/mappers.ts
+--- a/src/features/Vault/types/mappers.ts
++++ b/src/features/Vault/types/mappers.ts
+@@ -181,6 +181,7 @@ const maskCardNumber = (value?: string | null) => {
+ 
+ export function mapBankCardFromBackend(card: BackendBankCardItem): BankCardItem {
+   return {
+     id: card.id,
++    folderId: card.folder_id ?? null,
+     title: card.title,
+     holder: card.holder,
+     number: card.number,
+@@ -213,6 +214,7 @@ export function mapBankCardSummaryFromBackend(
+   return {
+     id: card.id,
++    folderId: card.folder_id ?? null,
+     title: card.title,
+     holder: card.holder,
+     number: card.number,
+@@ -247,6 +249,7 @@ export function mapCreateBankCardToBackend(input: CreateBankCardInput): BackendCreateBankCardInput {
+   return {
++    folder_id: input.folderId ?? null,
+     title: input.title,
+     holder: input.holder ?? null,
+     number: input.number ?? null,
+```
+
+---
+
+## 8) Frontend: useBankCards — folder nav работает, counts.folders, title по имени папки, create/update сохраняют folderId
+
+```diff
+diff --git a/src/features/Vault/hooks/useBankCards.ts b/src/features/Vault/hooks/useBankCards.ts
+--- a/src/features/Vault/hooks/useBankCards.ts
++++ b/src/features/Vault/hooks/useBankCards.ts
+@@ -17,6 +17,7 @@ import {
+ } from '../types/mappers';
+ import { BankCardItem, BankCardSummary, CreateBankCardInput, UpdateBankCardInput } from '../types/ui';
+ import { sortCards } from '../types/sort';
+ import { SelectedNav } from './useVault';
+ import { BackendUserSettings } from '../types/backend';
++import type { Folder } from '../types/ui';
+ 
+ export type BankCardsError = { code: string; message?: string } | null;
+ 
+-export function useBankCards(profileId: string, onLocked: () => void) {
++export function useBankCards(profileId: string, onLocked: () => void, folders: Folder[]) {
+@@ -62,6 +63,7 @@ export function useBankCards(profileId: string, onLocked: () => void) {
+   }, [profileId]);
+ 
+   const isTrashMode = selectedNav === 'deleted';
++  const selectedFolderId = typeof selectedNav === 'object' ? selectedNav.folderId : null;
+ 
+@@ -167,7 +169,12 @@ export function useBankCards(profileId: string, onLocked: () => void) {
+   const createCardAction = useCallback(
+     async (input: CreateBankCardInput) => {
+       try {
+-        const created = await createBankCard(mapCreateBankCardToBackend(input));
++        const effectiveFolderId =
++          input.folderId !== undefined ? input.folderId : selectedFolderId;
++        const created = await createBankCard(
++          mapCreateBankCardToBackend({ ...input, folderId: effectiveFolderId ?? null })
++        );
+         const mapped = mapBankCardFromBackend(created);
+         const summary = mapBankCardToSummary(mapped, dtf);
+@@ -194,9 +201,20 @@ export function useBankCards(profileId: string, onLocked: () => void) {
+   const updateCardAction = useCallback(
+     async (input: UpdateBankCardInput) => {
+       try {
+-        await updateBankCard(mapUpdateBankCardToBackend(input));
++        const existingFolderId =
++          cardDetailsById[input.id]?.folderId ??
++          cards.find((c) => c.id === input.id)?.folderId ??
++          deletedCards.find((c) => c.id === input.id)?.folderId ??
++          null;
++
++        const effectiveFolderId =
++          input.folderId !== undefined ? input.folderId : existingFolderId;
++
++        await updateBankCard(mapUpdateBankCardToBackend({ ...input, folderId: effectiveFolderId }));
+         await loadCard(input.id);
+         if (isTrashMode) await refreshTrash();
+       } catch (err) {
+         handleError(err);
+       }
+     },
+-    [handleError, isTrashMode, loadCard, refreshTrash]
++    [cardDetailsById, cards, deletedCards, handleError, isTrashMode, loadCard, refreshTrash]
+   );
+@@ -337,7 +355,7 @@ export function useBankCards(profileId: string, onLocked: () => void) {
+     } else if (selectedNav === 'deleted') {
+       pool = deletedCards;
+     } else {
+-      pool = activeCards;
++      pool = activeCards.filter((card) => card.folderId === selectedNav.folderId && !isArchived(card));
+     }
+@@ -401,6 +419,12 @@ export function useBankCards(profileId: string, onLocked: () => void) {
+   const currentSectionTitle = useMemo(() => {
++    if (selectedFolderId) {
++      const folder = folders.find((item) => item.id === selectedFolderId);
++      if (folder) return folder.name;
++    }
++
+     switch (selectedNav) {
+       case 'favorites':
+         return tVault('nav.favorites');
+@@ -434,6 +458,13 @@ export function useBankCards(profileId: string, onLocked: () => void) {
+         favorites: activeCards.filter((card) => card.isFavorite && !isArchived(card)).length,
+         archive: activeCards.filter((card) => isArchived(card)).length,
+         deleted: deletedCards.length,
+-        folders: {},
++        folders: activeCards.reduce<Record<string, number>>((acc, card) => {
++          if (card.folderId && !isArchived(card)) {
++            acc[card.folderId] = (acc[card.folderId] || 0) + 1;
++          }
++          return acc;
++        }, {}),
+       };
+     },
+-    [cards, deletedCards]
++    [cards, deletedCards]
+   );
+```
+
+---
+
+## 9) Frontend: BankCardsBody — не прячем Add folder/Folders, выделение папки работает
+
+```diff
+diff --git a/src/features/Vault/components/BankCards/BankCardsBody.tsx b/src/features/Vault/components/BankCards/BankCardsBody.tsx
+--- a/src/features/Vault/components/BankCards/BankCardsBody.tsx
++++ b/src/features/Vault/components/BankCards/BankCardsBody.tsx
+@@ -40,7 +40,7 @@ export function BankCardsBody({
+   onRenameFolder,
+   registerCommands,
+ }: BankCardsBodyProps) {
+-  const bankCards = useBankCards(profileId, onLocked);
++  const bankCards = useBankCards(profileId, onLocked, folders);
+ 
+   const viewModel = useBankCardsViewModel({
+     cards: bankCards.visibleCards,
+@@ -69,6 +69,8 @@ export function BankCardsBody({
+   }, [bankCards.setSettings, registerCommands, viewModel.openCreateModal]);
+ 
+   const { t: tBankCards } = useTranslation('BankCards');
++  const { t: tFolders } = useTranslation('Folders');
+   const sectionTitle = bankCards.currentSectionTitle;
++  const selectedFolderId = typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null;
+ 
+   if (!active) {
+     return null;
+   }
+@@ -90,6 +92,9 @@ export function BankCardsBody({
+         <div className="vault-sidebar-actions">
+           <button className="btn btn-primary" type="button" onClick={viewModel.openCreateModal}>
+             {tBankCards('label.addBankCard')}
+           </button>
++          <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
++            {tFolders('action.addFolder')}
++          </button>
+         </div>
+ 
+         <VaultFolders
+@@ -102,7 +107,7 @@ export function BankCardsBody({
+           folders={folders}
+           counts={bankCards.counts}
+           selectedNav={bankCards.selectedNav}
+-          selectedFolderId={null}
++          selectedFolderId={selectedFolderId}
+           onSelectNav={bankCards.selectNav}
+           dialogState={folderDialogs}
+           onDeleteFolder={onDeleteFolder}
+```
+
+---
+
+## 10) Frontend: Folders sidebar — показывать папки и диалоги и в bank_cards
+
+```diff
+diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
+--- a/src/features/Vault/components/Folders/Folders.tsx
++++ b/src/features/Vault/components/Folders/Folders.tsx
+@@ -67,7 +67,7 @@ export function Folders({
+   }, [categoryMenu, contextMenu]);
+ 
+   const renderCreateDialog = () => {
+-    if (!dialogState.isCreateOpen || selectedCategory === 'bank_cards') return null;
++    if (!dialogState.isCreateOpen) return null;
+@@ -191,7 +191,7 @@ export function Folders({
+   };
+ 
+   const renderRenameDialog = () => {
+-    if (!renameTargetId || selectedCategory === 'bank_cards') return null;
++    if (!renameTargetId) return null;
+@@ -319,13 +319,11 @@ export function Folders({
+         {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
+         {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
+       </ul>
+-      {selectedCategory === 'data_cards' && (
+-        <>
+-          <div className="vault-sidebar-title">{t('title')}</div>
+-          <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
+-        </>
+-      )}
++      <div className="vault-sidebar-title">{t('title')}</div>
++      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
+       {renderCreateDialog()}
+       {renderRenameDialog()}
+```
+
+---
+
+### Что в итоге будет
+
+* В **Bank cards** больше не исчезают **Add folder** и **Folders**
+* **Папки общие** для Data cards и Bank cards
+* Bank cards **реально лежат в папке** (через `bank_cards.folder_id`)
+* Выбор папки в Bank cards **фильтрует список** и **показывает имя папки как заголовок**
+* У папок в Bank cards появятся **счётчики** (как в Data cards)
+* Удаление папки **корректно затрагивает** и bank cards (move to root / soft delete / purge)
+
+---
+
+### Маленькая ремарка про “миграции”
+
+Тут нет “миграции данных”, только **обновление схемы** (добавление колонки), что SQLite нормально поддерживает.
+Если вообще не хочешь трогать `migrations.rs`, можно просто снести файл базы в dev, но патч выше делает всё устойчиво и без боли.
+
+Дальше логичный шаг — добавить **move bank card to folder** (как у data cards) через контекст-меню или drag&drop. Сейчас карточки уже будут “жить” в папках при создании/обновлении, но UX перемещения можно докрутить отдельно.
