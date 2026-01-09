@@ -1,13 +1,83 @@
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -829,8 +829,8 @@
-                   <div className="datacard-title">{displayTitleText}</div>
-                   {(card.hasTotp || isFavorite) && (
-                     <div className="datacard-badges">
--                      {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
-                       {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-+                      {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
-                     </div>
-                   )}
-                 </div>
+
+
+```diff
+diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
+--- a/src/features/Vault/components/Folders/Folders.tsx
++++ b/src/features/Vault/components/Folders/Folders.tsx
+@@ -79,7 +79,7 @@ export function Folders({
+   }, [categoryMenu, contextMenu]);
+
+   const renderCreateDialog = () => {
+-    if (!dialogState.isCreateOpen || selectedCategory === 'bank_cards') return null;
++    if (!dialogState.isCreateOpen) return null;
+
+     const handleSubmit = (event: React.FormEvent) => {
+       event.preventDefault();
+       void dialogState.submitCreate();
+@@ -200,7 +200,7 @@ export function Folders({
+   };
+
+   const renderRenameDialog = () => {
+-    if (!renameTargetId || selectedCategory === 'bank_cards') return null;
++    if (!renameTargetId) return null;
+
+     const handleSubmit = (event: React.FormEvent) => {
+       event.preventDefault();
+       void submitRename();
+@@ -282,13 +282,11 @@ export function Folders({
+         {renderSystemItem('favorites', t('nav.favorites'), counts.favorites, selectedNav === 'favorites')}
+         {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
+         {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
+       </ul>
+-      {selectedCategory === 'data_cards' && (
+-        <>
+-          <div className="vault-sidebar-title">{t('title')}</div>
+-          <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
+-        </>
+-      )}
++      <div className="vault-sidebar-title">{t('title')}</div>
++      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
+       {renderCreateDialog()}
+       {renderRenameDialog()}
+```
+
+### 2) Вернуть кнопку Add folder в Bank cards (и подсветку выбранной папки, если выбрана)
+
+```diff
+diff --git a/src/features/Vault/components/BankCards/BankCardsBody.tsx b/src/features/Vault/components/BankCards/BankCardsBody.tsx
+--- a/src/features/Vault/components/BankCards/BankCardsBody.tsx
++++ b/src/features/Vault/components/BankCards/BankCardsBody.tsx
+@@ -66,6 +66,7 @@ export function BankCardsBody({
+   }, [bankCards.setSettings, registerCommands, viewModel.openCreateModal]);
+
+   const { t: tBankCards } = useTranslation('BankCards');
++  const { t: tFolders } = useTranslation('Folders');
+   const sectionTitle = bankCards.currentSectionTitle;
++  const selectedFolderId = typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null;
+
+   if (!active) {
+     return null;
+   }
+@@ -88,6 +89,9 @@ export function BankCardsBody({
+         <div className="vault-sidebar-actions">
+           <button className="btn btn-primary" type="button" onClick={viewModel.openCreateModal}>
+             {tBankCards('label.addBankCard')}
+           </button>
++          <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
++            {tFolders('action.addFolder')}
++          </button>
+         </div>
+
+         <VaultFolders
+@@ -100,7 +104,7 @@ export function BankCardsBody({
+           onAddBankCard={viewModel.openCreateModal}
+           folders={folders}
+           counts={bankCards.counts}
+           selectedNav={bankCards.selectedNav}
+-          selectedFolderId={null}
++          selectedFolderId={selectedFolderId}
+           onSelectNav={bankCards.selectNav}
+           dialogState={folderDialogs}
+           onDeleteFolder={onDeleteFolder}
+```
+
