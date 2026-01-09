@@ -106,9 +106,9 @@ fn main() {
                             if let Ok(settings) = core.Settings() {
                                 if let Ok(settings4) = settings.cast::<ICoreWebView2Settings4>() {
                                     // Disable general autofill (emails/phones/names/etc) -> removes "Saved info"
-                                    let _ = settings4.put_IsGeneralAutofillEnabled(false);
+                                    let _ = settings4.SetIsGeneralAutofillEnabled(false);
                                     // Disable password autosave prompts (optional but usually desired in a password manager UI)
-                                    let _ = settings4.put_IsPasswordAutosaveEnabled(false);
+                                    let _ = settings4.SetIsPasswordAutosaveEnabled(false);
                                 }
                             }
                         }
