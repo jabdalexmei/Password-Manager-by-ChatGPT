@@ -33,6 +33,9 @@ windows-sys = { version = "0.61", features = [
 
 mime_guess = "2.0"
 
+webview2-com = "0.38.0"
+windows = "0.61"
+
 chacha20poly1305 = "0.10.1"
 zeroize = "1.8"
 base64 = "0.22"

@@ -57,6 +57,11 @@ use services::security_service;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
+#[cfg(windows)]
+use windows::core::Interface;
+#[cfg(windows)]
+use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings4;
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -88,6 +93,29 @@ fn main() {
             };
 
             app.manage(Arc::new(AppState::new(storage_paths)));
+
+            // Windows/WebView2: disable Chromium "Saved info" (form autofill suggestions)
+            // because it breaks dark theme and can expose sensitive suggestions.
+            // NOTE: HTML autocomplete="off" is not reliably respected by Chromium/WebView2.
+            #[cfg(windows)]
+            {
+                if let Some(main_webview) = app.get_webview_window("main") {
+                    let _ = main_webview.with_webview(|webview| unsafe {
+                        let controller = webview.controller();
+                        if let Ok(core) = controller.CoreWebView2() {
+                            if let Ok(settings) = core.Settings() {
+                                if let Ok(settings4) = settings.cast::<ICoreWebView2Settings4>() {
+                                    // Disable general autofill (emails/phones/names/etc) -> removes "Saved info"
+                                    let _ = settings4.put_IsGeneralAutofillEnabled(false);
+                                    // Disable password autosave prompts (optional but usually desired in a password manager UI)
+                                    let _ = settings4.put_IsPasswordAutosaveEnabled(false);
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
