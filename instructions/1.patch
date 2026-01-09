@@ -1,60 +1,21 @@
-diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
-index 9c9c6f1..bdf0dbe 100644
---- a/src-tauri/Cargo.toml
-+++ b/src-tauri/Cargo.toml
-@@ -33,6 +33,10 @@ windows-sys = { version = "0.61", features = [
- 
- mime_guess = "2.0"
- 
-+webview2-com = "0.38.0"
-+windows = "0.61"
-+
- chacha20poly1305 = "0.10.1"
- zeroize = "1.8"
- base64 = "0.22"
 diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
-index 7a6f3e2..5c1a9de 100644
+index 5c1a9de..c9d2b7a 100644
 --- a/src-tauri/src/main.rs
 +++ b/src-tauri/src/main.rs
-@@ -52,6 +52,12 @@ use services::security_service;
- use tauri::{Manager, WindowEvent};
- use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
- 
-+#[cfg(windows)]
-+use windows::core::Interface;
-+#[cfg(windows)]
-+use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings4;
-+
- fn main() {
-     tauri::Builder::default()
-         .plugin(tauri_plugin_dialog::init())
-@@ -74,6 +80,39 @@ fn main() {
-             app.manage(Arc::new(AppState::new(storage_paths)));
-+
-+            // Windows/WebView2: disable Chromium "Saved info" (form autofill suggestions)
-+            // because it breaks dark theme and can expose sensitive suggestions.
-+            // NOTE: HTML autocomplete="off" is not reliably respected by Chromium/WebView2.
-+            #[cfg(windows)]
-+            {
-+                if let Some(main_webview) = app.get_webview_window("main") {
-+                    let _ = main_webview.with_webview(|webview| unsafe {
-+                        let controller = webview.controller();
-+                        if let Ok(core) = controller.CoreWebView2() {
-+                            if let Ok(settings) = core.Settings() {
-+                                if let Ok(settings4) = settings.cast::<ICoreWebView2Settings4>() {
-+                                    // Disable general autofill (emails/phones/names/etc) -> removes "Saved info"
-+                                    let _ = settings4.put_IsGeneralAutofillEnabled(false);
-+                                    // Disable password autosave prompts (optional but usually desired in a password manager UI)
-+                                    let _ = settings4.put_IsPasswordAutosaveEnabled(false);
-+                                }
-+                            }
-+                        }
-+                    });
-+                }
-+            }
-+
-             Ok(())
-         })
-         .invoke_handler(tauri::generate_handler![
-             profiles_list,
-             profile_create,
+@@ -98,14 +98,14 @@ fn main() {
+                         let controller = webview.controller();
+                         if let Ok(core) = controller.CoreWebView2() {
+                             if let Ok(settings) = core.Settings() {
+                                 if let Ok(settings4) = settings.cast::<ICoreWebView2Settings4>() {
+                                     // Disable general autofill (emails/phones/names/etc) -> removes "Saved info"
+-                                    let _ = settings4.put_IsGeneralAutofillEnabled(false);
++                                    let _ = settings4.SetIsGeneralAutofillEnabled(false);
+                                     // Disable password autosave prompts (optional but usually desired in a password manager UI)
+-                                    let _ = settings4.put_IsPasswordAutosaveEnabled(false);
++                                    let _ = settings4.SetIsPasswordAutosaveEnabled(false);
+                                 }
+                             }
+                         }
+                     });
+                 }
+             }
