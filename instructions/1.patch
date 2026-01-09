@@ -1,65 +1,13 @@
 diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 1111111..2222222 100644
 --- a/src/features/Vault/components/DataCards/DataCards.tsx
 +++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -804,6 +804,14 @@ export function DataCards({
-           {cards.map((card) => {
-             const isActive = selectedCardId === card.id;
-             const isFavorite = card.isFavorite;
-+
-+            const titleText = (card.title ?? '').trim();
-+            const usernameText = (card.username ?? '').trim();
-+            const emailText = (card.email ?? '').trim();
-+            const urlText = (card.url ?? '').trim();
-+
-+            const isUntitledPlaceholder = titleText.length === 0 && urlText.length === 0;
-+            const displayTitleText = titleText.length > 0 ? card.title : isUntitledPlaceholder ? t('label.untitled') : card.title;
- 
--            const titleText = card.title.trim();
--            const usernameText = (card.username ?? '').trim();
--            const emailText = (card.email ?? '').trim();
--            const urlText = (card.url ?? '').trim();
--
-             // "Explicit title" means user actually set a title, not just a fallback equal to username/email/url.
-             const hasExplicitTitle =
-               titleText.length > 0 &&
-@@ -829,7 +837,13 @@ export function DataCards({
-                 onClick={() => viewModel.selectCard(card.id)}
-               >
-                 <div className="datacard-top">
--                  <div className="datacard-title">{card.title}</div>
-+                  <div
-+                    className={`datacard-title${isUntitledPlaceholder ? ' datacard-title--placeholder' : ''}`}
-+                  >
-+                    {displayTitleText}
-+                  </div>
-                   <div className="datacard-badges">
-                     {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
-                     {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-diff --git a/src/i18n/locales/en/DataCards.json b/src/i18n/locales/en/DataCards.json
-index 1111111..2222222 100644
---- a/src/i18n/locales/en/DataCards.json
-+++ b/src/i18n/locales/en/DataCards.json
-@@ -4,6 +4,7 @@
-   "label.empty": "Empty",
-   "label.noMeta": "No meta",
-+  "label.untitled": "Untitled",
-   "label.favorite": "Favorite",
-   "label.updated": "Updated",
-   "label.created": "Created",
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 1111111..2222222 100644
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -567,6 +567,11 @@
-   flex: 1 1 auto;
-   min-width: 0;
- }
-+
-+.datacard-title--placeholder {
-+  color: var(--color-text-muted);
-+  font-style: italic;
-+}
- 
- .datacard-top {
-   display: flex;
+@@ -829,8 +829,8 @@
+                   <div className="datacard-title">{displayTitleText}</div>
+                   {(card.hasTotp || isFavorite) && (
+                     <div className="datacard-badges">
+-                      {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
+                       {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
++                      {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
+                     </div>
+                   )}
+                 </div>
