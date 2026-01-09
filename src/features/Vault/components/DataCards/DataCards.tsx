@@ -806,7 +806,20 @@ export function DataCards({
           {cards.map((card) => {
             const isActive = selectedCardId === card.id;
             const isFavorite = card.isFavorite;
-            const meta = card.metaLine || t('label.noMeta');
+	            const titleText = card.title.trim();
+	            const usernameText = (card.username ?? '').trim();
+	            const emailText = (card.email ?? '').trim();
+	            const urlText = (card.url ?? '').trim();
+
+	            // "Explicit title" means user actually set a title, not just a fallback equal to username/email/url.
+	            const hasExplicitTitle =
+	              titleText.length > 0 &&
+	              titleText !== usernameText &&
+	              titleText !== emailText &&
+	              titleText !== urlText;
+
+	            const shouldShowMeta = hasExplicitTitle ? urlText.length > 0 : true;
+	            const metaText = hasExplicitTitle ? urlText : card.metaLine || t('label.noMeta');
             const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
             const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
 
@@ -825,10 +838,12 @@ export function DataCards({
                   </div>
                 </div>
 
-                <div className="datacard-meta">
-                  <span>{meta}</span>
-                  {showUpdated && <span className="muted">{updatedText}</span>}
-                </div>
+	                {shouldShowMeta && (
+	                  <div className="datacard-meta">
+	                    <span>{metaText}</span>
+	                    {showUpdated && <span className="muted">{updatedText}</span>}
+	                  </div>
+	                )}
               </button>
             );
           })}
