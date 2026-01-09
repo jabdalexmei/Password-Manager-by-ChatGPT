@@ -6,6 +6,7 @@ export type BankCardFieldErrorKey = 'title' | 'expiryMmYy' | 'cvc';
 export type BankCardFieldErrors = Partial<Record<BankCardFieldErrorKey, string>>;
 
 export type BankCardFormState = {
+  folderId: string | null;
   title: string;
   holder: string;
   number: string;
@@ -17,6 +18,7 @@ export type BankCardFormState = {
 
 type UseBankCardsParams = {
   cards: BankCardSummary[];
+  defaultFolderId: string | null;
   selectedCardId: string | null;
   isTrashMode: boolean;
   onSelectCard: (id: string | null) => void;
@@ -75,6 +77,7 @@ const normalizeTags = (value: string) => {
 };
 
 const buildCreateInput = (form: BankCardFormState): CreateBankCardInput => ({
+  folderId: form.folderId,
   title: form.title.trim(),
   holder: normalizeOptional(form.holder),
   number: normalizeOptional(form.number),
@@ -89,7 +92,8 @@ const buildUpdateInput = (form: BankCardFormState, id: string): UpdateBankCardIn
   ...buildCreateInput(form),
 });
 
-const buildInitialForm = (): BankCardFormState => ({
+const buildInitialForm = (defaultFolderId: string | null): BankCardFormState => ({
+  folderId: defaultFolderId,
   title: '',
   holder: '',
   number: '',
@@ -112,6 +116,7 @@ const formatCvc = (raw: string) => raw.replace(/\D/g, '').slice(0, 4);
 
 export function useBankCardsViewModel({
   cards,
+  defaultFolderId,
   selectedCardId,
   isTrashMode,
   onSelectCard,
@@ -124,7 +129,7 @@ export function useBankCardsViewModel({
   onPurgeAllTrash,
 }: UseBankCardsParams): BankCardsViewModel {
   const { t } = useTranslation('BankCards');
-  const [createForm, setCreateForm] = useState<BankCardFormState>(buildInitialForm);
+  const [createForm, setCreateForm] = useState<BankCardFormState>(() => buildInitialForm(defaultFolderId));
   const [editForm, setEditForm] = useState<BankCardFormState | null>(null);
   const [editCardId, setEditCardId] = useState<string | null>(null);
   const [isCreateOpen, setCreateOpen] = useState(false);
@@ -136,8 +141,8 @@ export function useBankCardsViewModel({
   const [isTrashBulkSubmitting, setIsTrashBulkSubmitting] = useState(false);
 
   const resetCreateForm = useCallback(() => {
-    setCreateForm(buildInitialForm());
-  }, []);
+    setCreateForm(buildInitialForm(defaultFolderId));
+  }, [defaultFolderId]);
 
   const resetEditForm = useCallback(() => {
     setEditForm(null);
@@ -159,6 +164,7 @@ export function useBankCardsViewModel({
 
   const openEditModal = useCallback((card: BankCardItem) => {
     setEditForm({
+      folderId: card.folderId ?? null,
       title: card.title ?? '',
       holder: card.holder ?? '',
       number: card.number ?? '',
@@ -178,6 +184,11 @@ export function useBankCardsViewModel({
   }, [resetEditForm]);
 
   const updateCreateField = useCallback((field: keyof BankCardFormState, value: string) => {
+    if (field === 'folderId') {
+      setCreateForm((prev) => ({ ...prev, folderId: value === '' ? null : value }));
+      return;
+    }
+
     const nextValue =
       field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
     setCreateForm((prev) => ({ ...prev, [field]: nextValue }));
@@ -192,6 +203,11 @@ export function useBankCardsViewModel({
   }, []);
 
   const updateEditField = useCallback((field: keyof BankCardFormState, value: string) => {
+    if (field === 'folderId') {
+      setEditForm((prev) => (prev ? { ...prev, folderId: value === '' ? null : value } : prev));
+      return;
+    }
+
     const nextValue =
       field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
     setEditForm((prev) => (prev ? { ...prev, [field]: nextValue } : prev));

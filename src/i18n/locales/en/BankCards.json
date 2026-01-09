@@ -47,5 +47,7 @@
   "validation.expiryInvalid": "Expiry date must be in MM/YY format (01-12/YY).",
   "validation.cvcInvalid": "CVC/CVV must be 3 or 4 digits.",
   "toast.copySuccess": "Copied",
-  "toast.copyError": "Unable to copy"
+  "toast.copyError": "Unable to copy",
+  "label.folder": "Folder",
+  "label.folderRoot": "No folder"
 }

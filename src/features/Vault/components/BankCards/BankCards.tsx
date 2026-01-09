@@ -1,15 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
+import type { Folder } from '../../types/ui';
 import { wasActuallyUpdated } from '../../utils/updatedAt';
 import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
 
 export type BankCardsProps = {
   viewModel: BankCardsViewModel;
   sectionTitle: string;
+  folders: Folder[];
 };
 
-export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+export function BankCards({ viewModel, sectionTitle, folders }: BankCardsProps) {
   const { t } = useTranslation('BankCards');
   const { t: tCommon } = useTranslation('Common');
   const {
@@ -92,6 +94,27 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
                 placeholder={t('label.titlePlaceholder')}
               />
               {errors.title && <div className="form-error">{errors.title}</div>}
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor={`${dialogId}-folder-input`}>
+                {t('label.folder')}
+              </label>
+              <select
+                id={`${dialogId}-folder-input`}
+                className="input"
+                value={form.folderId ?? ''}
+                onChange={(e) => onFieldChange('folderId', e.target.value)}
+              >
+                <option value="">{t('label.folderRoot')}</option>
+                {folders
+                  .filter((folder) => !folder.isSystem && !folder.deletedAt)
+                  .map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </option>
+                  ))}
+              </select>
             </div>
 
             <div className="form-field">

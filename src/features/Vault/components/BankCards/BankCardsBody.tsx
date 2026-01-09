@@ -45,6 +45,7 @@ export function BankCardsBody({
 
   const viewModel = useBankCardsViewModel({
     cards: bankCards.visibleCards,
+    defaultFolderId: typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null,
     selectedCardId: bankCards.selectedCardId,
     isTrashMode: bankCards.isTrashMode,
     onSelectCard: bankCards.selectCard,
@@ -113,7 +114,7 @@ export function BankCardsBody({
       </aside>
 
       <section className="vault-datacards">
-        <BankCards viewModel={viewModel} sectionTitle={sectionTitle} />
+        <BankCards viewModel={viewModel} sectionTitle={sectionTitle} folders={folders} />
       </section>
 
       <section className="vault-details">

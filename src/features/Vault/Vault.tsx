@@ -93,6 +93,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const bankCardsViewModel = useBankCardsViewModel({
     cards: bankCards.visibleCards,
+    defaultFolderId: typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null,
     selectedCardId: bankCards.selectedCardId,
     isTrashMode: bankCards.isTrashMode,
     onSelectCard: (id) => {
@@ -333,6 +334,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
               <BankCards
                 viewModel={bankCardsViewModel}
                 sectionTitle={`${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`}
+                folders={vault.folders}
               />
             </>
           ) : selectedCategory === 'data_cards' ? (
@@ -343,7 +345,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
               clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
             />
           ) : (
-            <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} />
+            <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} folders={vault.folders} />
           )}
         </section>
 
