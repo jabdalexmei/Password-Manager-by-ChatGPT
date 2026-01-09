@@ -248,6 +248,11 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     };
   }, [bankCards.counts, vault.counts]);
 
+  const sidebarCounts = useMemo(
+    () => (selectedCategory === 'data_cards' ? vault.counts : bankCards.counts),
+    [selectedCategory, vault.counts, bankCards.counts]
+  );
+
   const handleSelectNav = useCallback(
     async (nav: SelectedNav) => {
       await Promise.all([vault.selectNav(nav), bankCards.selectNav(nav)]);
@@ -312,7 +317,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             onSelectCategory={handleSelectCategory}
             onAddBankCard={handleAddBankCard}
             folders={vault.folders}
-            counts={combinedCounts}
+            counts={sidebarCounts}
             selectedNav={vault.selectedNav}
             selectedFolderId={vault.selectedFolderId}
             onSelectNav={(nav) => void handleSelectNav(nav)}
