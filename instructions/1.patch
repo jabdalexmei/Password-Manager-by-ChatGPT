@@ -1,43 +1,107 @@
-diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
-index bf36858..fbab55b 100644
---- a/src/features/Vault/Vault.tsx
-+++ b/src/features/Vault/Vault.tsx
-@@ -93,6 +93,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+diff --git a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+--- a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
++++ b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+@@ -6,6 +6,7 @@ export type BankCardFieldErrorKey = 'title' | 'expiryMmYy' | 'cvc';
+ export type BankCardFieldErrors = Partial<Record<BankCardFieldErrorKey, string>>;
  
-   const bankCardsViewModel = useBankCardsViewModel({
-     cards: bankCards.visibleCards,
-+    defaultFolderId: typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null,
-     selectedCardId: bankCards.selectedCardId,
-     isTrashMode: bankCards.isTrashMode,
-     onSelectCard: (id) => {
-@@ -333,6 +334,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-               <BankCards
-                 viewModel={bankCardsViewModel}
-                 sectionTitle={`${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`}
-+                folders={vault.folders}
-               />
-             </>
-           ) : selectedCategory === 'data_cards' ? (
-@@ -343,7 +345,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-               clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-             />
-           ) : (
--            <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} />
-+            <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} folders={vault.folders} />
-           )}
-         </section>
+ export type BankCardFormState = {
++  folderId: string | null;
+   title: string;
+   holder: string;
+   number: string;
+@@ -17,6 +18,7 @@ export type BankCardFormState = {
+ };
  
+ type UseBankCardsParams = {
+   cards: BankCardSummary[];
++  defaultFolderId: string | null;
+   selectedCardId: string | null;
+   isTrashMode: boolean;
+   onSelectCard: (id: string | null) => void;
+@@ -62,6 +64,7 @@ const normalizeTags = (value: string) => {
+ };
+ 
+ const buildCreateInput = (form: BankCardFormState): CreateBankCardInput => ({
++  folderId: form.folderId,
+   title: form.title.trim(),
+   holder: normalizeOptional(form.holder),
+   number: normalizeOptional(form.number),
+@@ -78,7 +81,8 @@ const buildUpdateInput = (form: BankCardFormState, id: string): UpdateBankCardIn
+   ...buildCreateInput(form),
+ });
+ 
+-const buildInitialForm = (): BankCardFormState => ({
++const buildInitialForm = (defaultFolderId: string | null): BankCardFormState => ({
++  folderId: defaultFolderId,
+   title: '',
+   holder: '',
+   number: '',
+@@ -106,6 +110,7 @@ const formatCvc = (raw: string) => raw.replace(/\D/g, '').slice(0, 4);
+ 
+ export function useBankCardsViewModel({
+   cards,
++  defaultFolderId,
+   selectedCardId,
+   isTrashMode,
+   onSelectCard,
+@@ -118,8 +123,8 @@ export function useBankCardsViewModel({
+   onPurgeAllTrash,
+ }: UseBankCardsParams): BankCardsViewModel {
+   const { t } = useTranslation('BankCards');
+-  const [createForm, setCreateForm] = useState<BankCardFormState>(buildInitialForm);
++  const [createForm, setCreateForm] = useState<BankCardFormState>(() => buildInitialForm(defaultFolderId));
+   const [editForm, setEditForm] = useState<BankCardFormState | null>(null);
+   const [editCardId, setEditCardId] = useState<string | null>(null);
+@@ -132,8 +137,8 @@ export function useBankCardsViewModel({
+   const [isTrashBulkSubmitting, setIsTrashBulkSubmitting] = useState(false);
+ 
+   const resetCreateForm = useCallback(() => {
+-    setCreateForm(buildInitialForm());
+-  }, []);
++    setCreateForm(buildInitialForm(defaultFolderId));
++  }, [defaultFolderId]);
+ 
+   const resetEditForm = useCallback(() => {
+     setEditForm(null);
+@@ -161,6 +166,7 @@ export function useBankCardsViewModel({
+ 
+   const openEditModal = useCallback((card: BankCardItem) => {
+     setEditForm({
++      folderId: card.folderId ?? null,
+       title: card.title ?? '',
+       holder: card.holder ?? '',
+       number: card.number ?? '',
+@@ -181,6 +187,11 @@ export function useBankCardsViewModel({
+   }, [resetEditForm]);
+ 
+   const updateCreateField = useCallback((field: keyof BankCardFormState, value: string) => {
++    if (field === 'folderId') {
++      setCreateForm((prev) => ({ ...prev, folderId: value === '' ? null : value }));
++      return;
++    }
+     const nextValue =
+       field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
+     setCreateForm((prev) => ({ ...prev, [field]: nextValue }));
+@@ -195,6 +206,11 @@ export function useBankCardsViewModel({
+   }, []);
+ 
+   const updateEditField = useCallback((field: keyof BankCardFormState, value: string) => {
++    if (field === 'folderId') {
++      setEditForm((prev) => (prev ? { ...prev, folderId: value === '' ? null : value } : prev));
++      return;
++    }
+     const nextValue =
+       field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
+     setEditForm((prev) => (prev ? { ...prev, [field]: nextValue } : prev));
 diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
-index 988d66e..5b4ec94 100644
 --- a/src/features/Vault/components/BankCards/BankCards.tsx
 +++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -1,15 +1,17 @@
- import React, { useEffect, useRef, useState } from 'react';
+@@ -2,16 +2,18 @@ import React, { useEffect, useRef, useState } from 'react';
  import { useTranslation } from '../../../../shared/lib/i18n';
  import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
-+import type { Folder } from '../../types/ui';
  import { wasActuallyUpdated } from '../../utils/updatedAt';
  import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
++import type { Folder } from '../../types/ui';
  
  export type BankCardsProps = {
    viewModel: BankCardsViewModel;
@@ -50,7 +114,7 @@ index 988d66e..5b4ec94 100644
    const { t } = useTranslation('BankCards');
    const { t: tCommon } = useTranslation('Common');
    const {
-@@ -94,6 +96,27 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
+@@ -72,6 +74,27 @@ export function BankCards({ viewModel, sectionTitle }: BankCardsProps) {
                {errors.title && <div className="form-error">{errors.title}</div>}
              </div>
  
@@ -79,130 +143,57 @@ index 988d66e..5b4ec94 100644
                <label className="form-label" htmlFor={`${dialogId}-holder-input`}>
                  {t('label.holder')}
 diff --git a/src/features/Vault/components/BankCards/BankCardsBody.tsx b/src/features/Vault/components/BankCards/BankCardsBody.tsx
-index 67ed43c..81a61a9 100644
 --- a/src/features/Vault/components/BankCards/BankCardsBody.tsx
 +++ b/src/features/Vault/components/BankCards/BankCardsBody.tsx
-@@ -45,6 +45,7 @@ export function BankCardsBody({
+@@ -35,6 +35,9 @@ export function BankCardsBody({
+ }: BankCardsBodyProps) {
+   const bankCards = useBankCards(profileId, onLocked, folders);
++  const defaultFolderId =
++    typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null;
  
    const viewModel = useBankCardsViewModel({
      cards: bankCards.visibleCards,
-+    defaultFolderId: typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null,
++    defaultFolderId,
      selectedCardId: bankCards.selectedCardId,
      isTrashMode: bankCards.isTrashMode,
      onSelectCard: bankCards.selectCard,
-@@ -113,7 +114,7 @@ export function BankCardsBody({
+@@ -113,7 +116,7 @@ export function BankCardsBody({
        </aside>
  
        <section className="vault-datacards">
 -        <BankCards viewModel={viewModel} sectionTitle={sectionTitle} />
 +        <BankCards viewModel={viewModel} sectionTitle={sectionTitle} folders={folders} />
        </section>
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -91,8 +91,12 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+   });
  
-       <section className="vault-details">
-diff --git a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
-index edfba3d..50bb228 100644
---- a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
-+++ b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
-@@ -6,6 +6,7 @@ export type BankCardFieldErrorKey = 'title' | 'expiryMmYy' | 'cvc';
- export type BankCardFieldErrors = Partial<Record<BankCardFieldErrorKey, string>>;
- 
- export type BankCardFormState = {
-+  folderId: string | null;
-   title: string;
-   holder: string;
-   number: string;
-@@ -17,6 +18,7 @@ export type BankCardFormState = {
- 
- type UseBankCardsParams = {
-   cards: BankCardSummary[];
-+  defaultFolderId: string | null;
-   selectedCardId: string | null;
-   isTrashMode: boolean;
-   onSelectCard: (id: string | null) => void;
-@@ -75,6 +77,7 @@ const normalizeTags = (value: string) => {
- };
- 
- const buildCreateInput = (form: BankCardFormState): CreateBankCardInput => ({
-+  folderId: form.folderId,
-   title: form.title.trim(),
-   holder: normalizeOptional(form.holder),
-   number: normalizeOptional(form.number),
-@@ -89,7 +92,8 @@ const buildUpdateInput = (form: BankCardFormState, id: string): UpdateBankCardIn
-   ...buildCreateInput(form),
- });
- 
--const buildInitialForm = (): BankCardFormState => ({
-+const buildInitialForm = (defaultFolderId: string | null): BankCardFormState => ({
-+  folderId: defaultFolderId,
-   title: '',
-   holder: '',
-   number: '',
-@@ -112,6 +116,7 @@ const formatCvc = (raw: string) => raw.replace(/\D/g, '').slice(0, 4);
- 
- export function useBankCardsViewModel({
-   cards,
-+  defaultFolderId,
-   selectedCardId,
-   isTrashMode,
-   onSelectCard,
-@@ -124,7 +129,7 @@ export function useBankCardsViewModel({
-   onPurgeAllTrash,
- }: UseBankCardsParams): BankCardsViewModel {
-   const { t } = useTranslation('BankCards');
--  const [createForm, setCreateForm] = useState<BankCardFormState>(buildInitialForm);
-+  const [createForm, setCreateForm] = useState<BankCardFormState>(() => buildInitialForm(defaultFolderId));
-   const [editForm, setEditForm] = useState<BankCardFormState | null>(null);
-   const [editCardId, setEditCardId] = useState<string | null>(null);
-   const [isCreateOpen, setCreateOpen] = useState(false);
-@@ -136,8 +141,8 @@ export function useBankCardsViewModel({
-   const [isTrashBulkSubmitting, setIsTrashBulkSubmitting] = useState(false);
- 
-   const resetCreateForm = useCallback(() => {
--    setCreateForm(buildInitialForm());
--  }, []);
-+    setCreateForm(buildInitialForm(defaultFolderId));
-+  }, [defaultFolderId]);
- 
-   const resetEditForm = useCallback(() => {
-     setEditForm(null);
-@@ -159,6 +164,7 @@ export function useBankCardsViewModel({
- 
-   const openEditModal = useCallback((card: BankCardItem) => {
-     setEditForm({
-+      folderId: card.folderId ?? null,
-       title: card.title ?? '',
-       holder: card.holder ?? '',
-       number: card.number ?? '',
-@@ -178,6 +184,11 @@ export function useBankCardsViewModel({
-   }, [resetEditForm]);
- 
-   const updateCreateField = useCallback((field: keyof BankCardFormState, value: string) => {
-+    if (field === 'folderId') {
-+      setCreateForm((prev) => ({ ...prev, folderId: value === '' ? null : value }));
-+      return;
-+    }
-+
-     const nextValue =
-       field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
-     setCreateForm((prev) => ({ ...prev, [field]: nextValue }));
-@@ -192,6 +203,11 @@ export function useBankCardsViewModel({
-   }, []);
- 
-   const updateEditField = useCallback((field: keyof BankCardFormState, value: string) => {
-+    if (field === 'folderId') {
-+      setEditForm((prev) => (prev ? { ...prev, folderId: value === '' ? null : value } : prev));
-+      return;
-+    }
-+
-     const nextValue =
-       field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
-     setEditForm((prev) => (prev ? { ...prev, [field]: nextValue } : prev));
+   const bankCardsViewModel = useBankCardsViewModel({
+     cards: bankCards.visibleCards,
++    defaultFolderId:
++      typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null,
+     selectedCardId: bankCards.selectedCardId,
+     isTrashMode: bankCards.isTrashMode,
+@@ -332,6 +336,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+               <BankCards
+                 viewModel={bankCardsViewModel}
+                 sectionTitle={`${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`}
++                folders={vault.folders}
+               />
+             </>
+@@ -343,7 +348,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+             />
+           ) : (
+-            <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} />
++            <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} folders={vault.folders} />
+           )}
+         </section>
 diff --git a/src/i18n/locales/en/BankCards.json b/src/i18n/locales/en/BankCards.json
-index be5ba58..2cafe30 100644
 --- a/src/i18n/locales/en/BankCards.json
 +++ b/src/i18n/locales/en/BankCards.json
-@@ -47,5 +47,7 @@
-   "validation.expiryInvalid": "Expiry date must be in MM/YY format (01-12/YY).",
+@@ -55,5 +55,7 @@
    "validation.cvcInvalid": "CVC/CVV must be 3 or 4 digits.",
    "toast.copySuccess": "Copied",
 -  "toast.copyError": "Unable to copy"
