@@ -79,7 +79,7 @@ export function Folders({
   }, [categoryMenu, contextMenu]);
 
   const renderCreateDialog = () => {
-    if (!dialogState.isCreateOpen || selectedCategory === 'bank_cards') return null;
+    if (!dialogState.isCreateOpen) return null;
 
     const handleSubmit = (event: React.FormEvent) => {
       event.preventDefault();
@@ -200,7 +200,7 @@ export function Folders({
   };
 
   const renderRenameDialog = () => {
-    if (!renameTargetId || selectedCategory === 'bank_cards') return null;
+    if (!renameTargetId) return null;
 
     const handleSubmit = (event: React.FormEvent) => {
       event.preventDefault();
@@ -282,12 +282,8 @@ export function Folders({
         {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
         {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
       </ul>
-      {selectedCategory === 'data_cards' && (
-        <>
-          <div className="vault-sidebar-title">{t('title')}</div>
-          <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
-        </>
-      )}
+      <div className="vault-sidebar-title">{t('title')}</div>
+      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
       {renderCreateDialog()}
       {renderRenameDialog()}
 

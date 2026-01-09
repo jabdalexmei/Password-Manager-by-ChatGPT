@@ -53,6 +53,7 @@ pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
     }
 
     repo_impl::move_datacards_to_root(state, &profile_id, &id)?;
+    repo_impl::move_bank_cards_to_root(state, &profile_id, &id)?;
     let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
     security_service::request_persist_active_vault(state.clone());
     Ok(deleted)
@@ -76,6 +77,7 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
             repo_impl::soft_delete_attachments_by_datacard(state, &profile_id, &datacard_id, &now)?;
         }
         repo_impl::soft_delete_datacards_in_folder(state, &profile_id, &id)?;
+        repo_impl::soft_delete_bank_cards_in_folder(state, &profile_id, &id)?;
     } else {
         let datacard_ids = repo_impl::list_datacard_ids_in_folder(state, &profile_id, &id, true)?;
 
@@ -95,6 +97,7 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
             }
         }
         repo_impl::purge_datacards_in_folder(state, &profile_id, &id)?;
+        repo_impl::purge_bank_cards_in_folder(state, &profile_id, &id)?;
     }
 
     let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;

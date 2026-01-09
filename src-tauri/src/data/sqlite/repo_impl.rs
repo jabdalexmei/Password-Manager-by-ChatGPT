@@ -118,6 +118,7 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
 fn map_bank_card(row: &rusqlite::Row) -> rusqlite::Result<BankCardItem> {
     Ok(BankCardItem {
         id: row.get("id")?,
+        folder_id: row.get("folder_id")?,
         title: row.get("title")?,
         holder: row.get("holder")?,
         number: row.get("number")?,
@@ -138,6 +139,7 @@ fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummar
 
     Ok(BankCardSummary {
         id: row.get("id")?,
+        folder_id: row.get("folder_id")?,
         title: row.get("title")?,
         holder: row.get("holder")?,
         number: row.get("number")?,
@@ -307,6 +309,22 @@ pub fn move_datacards_to_root(
         let now = Utc::now().to_rfc3339();
         conn.execute(
             "UPDATE datacards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2",
+            params![now, folder_id],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        Ok(true)
+    })
+}
+
+pub fn move_bank_cards_to_root(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    folder_id: &str,
+) -> Result<bool> {
+    with_connection(state, profile_id, |conn| {
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE bank_cards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2",
             params![now, folder_id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -750,7 +768,7 @@ pub fn list_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let clause = order_clause(sort_field, sort_dir).unwrap_or("ORDER BY updated_at DESC");
         let query = format!(
-            "SELECT id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
+            "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
         );
         let mut stmt = conn.prepare(&query).map_err(|e| {
             log_sqlite_err("list_bank_cards_summary.prepare", &query, &e);
@@ -780,7 +798,7 @@ pub fn list_deleted_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let mut stmt = conn
             .prepare(
-                "SELECT id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -836,9 +854,10 @@ pub fn create_bank_card(
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO bank_cards (id, title, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, NULL)",
+            "INSERT INTO bank_cards (id, folder_id, title, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?11, NULL)",
             params![
                 id,
+                input.folder_id,
                 input.title,
                 input.holder,
                 input.number,
@@ -865,8 +884,9 @@ pub fn update_bank_card(
         let tags_json = serialize_json(&input.tags)?;
         let rows = conn
             .execute(
-                "UPDATE bank_cards SET title = ?1, holder = ?2, number = ?3, expiry_mm_yy = ?4, cvc = ?5, note = ?6, tags_json = ?7, updated_at = ?8 WHERE id = ?9",
+                "UPDATE bank_cards SET folder_id = ?1, title = ?2, holder = ?3, number = ?4, expiry_mm_yy = ?5, cvc = ?6, note = ?7, tags_json = ?8, updated_at = ?9 WHERE id = ?10",
                 params![
+                    input.folder_id,
                     input.title,
                     input.holder,
                     input.number,
@@ -952,6 +972,62 @@ pub fn purge_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Res
         if rows == 0 {
             return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
         }
+        Ok(true)
+    })
+}
+
+pub fn list_bank_card_ids_in_folder(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    folder_id: &str,
+    include_deleted: bool,
+) -> Result<Vec<String>> {
+    with_connection(state, profile_id, |conn| {
+        let clause = if include_deleted {
+            String::new()
+        } else {
+            " AND deleted_at IS NULL".to_string()
+        };
+        let mut stmt = conn
+            .prepare(&format!(
+                "SELECT id FROM bank_cards WHERE folder_id = ?1{clause}",
+            ))
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        let rows = stmt
+            .query_map(params![folder_id], |row| row.get("id"))
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+            .collect::<rusqlite::Result<Vec<String>>>()
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        Ok(rows)
+    })
+}
+
+pub fn soft_delete_bank_cards_in_folder(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    folder_id: &str,
+) -> Result<bool> {
+    with_connection(state, profile_id, |conn| {
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3",
+            params![now.clone(), now, folder_id],
+        )
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        Ok(true)
+    })
+}
+
+pub fn purge_bank_cards_in_folder(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    folder_id: &str,
+) -> Result<bool> {
+    with_connection(state, profile_id, |conn| {
+        conn.execute("DELETE FROM bank_cards WHERE folder_id = ?1", params![folder_id])
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         Ok(true)
     })
 }

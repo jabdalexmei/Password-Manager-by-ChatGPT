@@ -85,6 +85,7 @@ export type BackendUpdateDataCardInput = BackendCreateDataCardInput & {
 
 export type BackendBankCardItem = {
   id: string;
+  folder_id: string | null;
   title: string;
   holder: string | null;
   number: string | null;
@@ -100,6 +101,7 @@ export type BackendBankCardItem = {
 
 export type BackendBankCardSummary = {
   id: string;
+  folder_id: string | null;
   title: string;
   holder: string | null;
   number: string | null;
@@ -111,6 +113,7 @@ export type BackendBankCardSummary = {
 };
 
 export type BackendCreateBankCardInput = {
+  folder_id: string | null;
   title: string;
   holder: string | null;
   number: string | null;

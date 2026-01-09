@@ -88,6 +88,7 @@ export type UpdateDataCardInput = CreateDataCardInput & {
 
 export type BankCardItem = {
   id: string;
+  folderId: string | null;
   title: string;
   holder: string | null;
   number: string | null;
@@ -108,6 +109,7 @@ export type BankCardSummary = BankCardItem & {
 };
 
 export type CreateBankCardInput = {
+  folderId?: string | null;
   title: string;
   holder?: string | null;
   number?: string | null;
