@@ -12,7 +12,6 @@ import {
 import { useToaster } from '../../../../shared/components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { generateTotpCode } from '../../utils/totp';
-import { wasActuallyUpdated } from '../../utils/updatedAt';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
 
@@ -808,12 +807,16 @@ export function DataCards({
             const isFavorite = card.isFavorite;
             const titleText = (card.title ?? '').trim();
             const urlText = (card.url ?? '').trim();
+            const hasTitle = titleText.length > 0;
+            const hasUrl = urlText.length > 0;
 
-            const isUntitledPlaceholder = titleText.length === 0 && urlText.length === 0;
-            const displayTitleText = isUntitledPlaceholder ? t('label.untitled') : card.title;
-            const meta = card.metaLine || t('label.noMeta');
-            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
-            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
+            const isUntitledPlaceholder = !hasTitle && !hasUrl;
+            const displayTitleText = isUntitledPlaceholder
+              ? t('label.untitled')
+              : hasTitle
+                ? titleText
+                : urlText;
+            const showUrlMeta = hasTitle && hasUrl;
 
             return (
               <button
@@ -832,10 +835,9 @@ export function DataCards({
                   )}
                 </div>
 
-                {!isUntitledPlaceholder && (
+                {showUrlMeta && (
                   <div className="datacard-meta">
-                    <span>{meta}</span>
-                    {showUpdated && <span className="muted">{updatedText}</span>}
+                    <span>{urlText}</span>
                   </div>
                 )}
               </button>
