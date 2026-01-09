@@ -578,14 +578,20 @@
 }
 
 .datacard-badges {
-  margin-left: auto;
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .datacard-favorite {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.datacard-2fa {
+  margin-left: auto;
   flex: 0 0 auto;
   white-space: nowrap;
 }

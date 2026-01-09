@@ -829,8 +829,8 @@ export function DataCards({
                   <div className="datacard-title">{displayTitleText}</div>
                   {(card.hasTotp || isFavorite) && (
                     <div className="datacard-badges">
-                      {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
                       {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
+                      {card.hasTotp && <span className="pill datacard-2fa">{t('twoFactor.pill')}</span>}
                     </div>
                   )}
                 </div>
