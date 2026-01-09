@@ -1,45 +1,60 @@
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index fc1ed55..b8c2f7a 100644
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -806,9 +806,20 @@ export function DataCards({
- 	        <div className="vault-datacard-list">
- 	          {cards.map((card) => {
- 	            const isActive = selectedCardId === card.id;
- 	            const isFavorite = card.isFavorite;
--	            const meta = card.metaLine || t('label.noMeta');
-+	            const titleText = card.title.trim();
-+	            const usernameText = (card.username ?? '').trim();
-+	            const emailText = (card.email ?? '').trim();
-+	            const urlText = (card.url ?? '').trim();
-+
-+	            // "Explicit title" means user actually set a title, not just a fallback equal to username/email/url.
-+	            const hasExplicitTitle =
-+	              titleText.length > 0 &&
-+	              titleText !== usernameText &&
-+	              titleText !== emailText &&
-+	              titleText !== urlText;
-+
-+	            const shouldShowMeta = hasExplicitTitle ? urlText.length > 0 : true;
-+	            const metaText = hasExplicitTitle ? urlText : card.metaLine || t('label.noMeta');
- 	            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
- 	            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
+diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
+index 9c9c6f1..bdf0dbe 100644
+--- a/src-tauri/Cargo.toml
++++ b/src-tauri/Cargo.toml
+@@ -33,6 +33,10 @@ windows-sys = { version = "0.61", features = [
  
-@@ -828,11 +839,13 @@ export function DataCards({
- 	                  </div>
- 	                </div>
+ mime_guess = "2.0"
  
--	                <div className="datacard-meta">
--	                  <span>{meta}</span>
--	                  {showUpdated && <span className="muted">{updatedText}</span>}
--	                </div>
-+	                {shouldShowMeta && (
-+	                  <div className="datacard-meta">
-+	                    <span>{metaText}</span>
-+	                    {showUpdated && <span className="muted">{updatedText}</span>}
-+	                  </div>
-+	                )}
- 	              </button>
- 	            );
- 	          })}
- 	        </div>
++webview2-com = "0.38.0"
++windows = "0.61"
++
+ chacha20poly1305 = "0.10.1"
+ zeroize = "1.8"
+ base64 = "0.22"
+diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
+index 7a6f3e2..5c1a9de 100644
+--- a/src-tauri/src/main.rs
++++ b/src-tauri/src/main.rs
+@@ -52,6 +52,12 @@ use services::security_service;
+ use tauri::{Manager, WindowEvent};
+ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+ 
++#[cfg(windows)]
++use windows::core::Interface;
++#[cfg(windows)]
++use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings4;
++
+ fn main() {
+     tauri::Builder::default()
+         .plugin(tauri_plugin_dialog::init())
+@@ -74,6 +80,39 @@ fn main() {
+             app.manage(Arc::new(AppState::new(storage_paths)));
++
++            // Windows/WebView2: disable Chromium "Saved info" (form autofill suggestions)
++            // because it breaks dark theme and can expose sensitive suggestions.
++            // NOTE: HTML autocomplete="off" is not reliably respected by Chromium/WebView2.
++            #[cfg(windows)]
++            {
++                if let Some(main_webview) = app.get_webview_window("main") {
++                    let _ = main_webview.with_webview(|webview| unsafe {
++                        let controller = webview.controller();
++                        if let Ok(core) = controller.CoreWebView2() {
++                            if let Ok(settings) = core.Settings() {
++                                if let Ok(settings4) = settings.cast::<ICoreWebView2Settings4>() {
++                                    // Disable general autofill (emails/phones/names/etc) -> removes "Saved info"
++                                    let _ = settings4.put_IsGeneralAutofillEnabled(false);
++                                    // Disable password autosave prompts (optional but usually desired in a password manager UI)
++                                    let _ = settings4.put_IsPasswordAutosaveEnabled(false);
++                                }
++                            }
++                        }
++                    });
++                }
++            }
++
+             Ok(())
+         })
+         .invoke_handler(tauri::generate_handler![
+             profiles_list,
+             profile_create,
