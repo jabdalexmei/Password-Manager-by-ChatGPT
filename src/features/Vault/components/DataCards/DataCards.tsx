@@ -806,20 +806,24 @@ export function DataCards({
           {cards.map((card) => {
             const isActive = selectedCardId === card.id;
             const isFavorite = card.isFavorite;
-	            const titleText = card.title.trim();
-	            const usernameText = (card.username ?? '').trim();
-	            const emailText = (card.email ?? '').trim();
-	            const urlText = (card.url ?? '').trim();
+            const titleText = (card.title ?? '').trim();
+            const usernameText = (card.username ?? '').trim();
+            const emailText = (card.email ?? '').trim();
+            const urlText = (card.url ?? '').trim();
 
-	            // "Explicit title" means user actually set a title, not just a fallback equal to username/email/url.
-	            const hasExplicitTitle =
-	              titleText.length > 0 &&
-	              titleText !== usernameText &&
-	              titleText !== emailText &&
-	              titleText !== urlText;
+            const isUntitledPlaceholder = titleText.length === 0 && urlText.length === 0;
+            const displayTitleText =
+              titleText.length > 0 ? card.title : isUntitledPlaceholder ? t('label.untitled') : card.title;
 
-	            const shouldShowMeta = hasExplicitTitle ? urlText.length > 0 : true;
-	            const metaText = hasExplicitTitle ? urlText : card.metaLine || t('label.noMeta');
+            // "Explicit title" means user actually set a title, not just a fallback equal to username/email/url.
+            const hasExplicitTitle =
+              titleText.length > 0 &&
+              titleText !== usernameText &&
+              titleText !== emailText &&
+              titleText !== urlText;
+
+            const shouldShowMeta = hasExplicitTitle ? urlText.length > 0 : true;
+            const metaText = hasExplicitTitle ? urlText : card.metaLine || t('label.noMeta');
             const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
             const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
 
@@ -831,19 +835,23 @@ export function DataCards({
                 onClick={() => viewModel.selectCard(card.id)}
               >
                 <div className="datacard-top">
-                  <div className="datacard-title">{card.title}</div>
+                  <div
+                    className={`datacard-title${isUntitledPlaceholder ? ' datacard-title--placeholder' : ''}`}
+                  >
+                    {displayTitleText}
+                  </div>
                   <div className="datacard-badges">
                     {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
                     {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
                   </div>
                 </div>
 
-	                {shouldShowMeta && (
-	                  <div className="datacard-meta">
-	                    <span>{metaText}</span>
-	                    {showUpdated && <span className="muted">{updatedText}</span>}
-	                  </div>
-	                )}
+                {shouldShowMeta && (
+                  <div className="datacard-meta">
+                    <span>{metaText}</span>
+                    {showUpdated && <span className="muted">{updatedText}</span>}
+                  </div>
+                )}
               </button>
             );
           })}

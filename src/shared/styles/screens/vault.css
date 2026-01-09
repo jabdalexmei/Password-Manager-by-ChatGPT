@@ -565,6 +565,11 @@
   min-width: 0;
 }
 
+.datacard-title--placeholder {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 .datacard-top {
   display: flex;
   align-items: flex-start;
