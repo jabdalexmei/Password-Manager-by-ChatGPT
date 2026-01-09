@@ -182,6 +182,7 @@ const maskCardNumber = (value?: string | null) => {
 export function mapBankCardFromBackend(card: BackendBankCardItem): BankCardItem {
   return {
     id: card.id,
+    folderId: card.folder_id ?? null,
     title: card.title,
     holder: card.holder,
     number: card.number,
@@ -206,6 +207,7 @@ export function mapBankCardSummaryFromBackend(
 
   return {
     id: card.id,
+    folderId: card.folder_id ?? null,
     title: card.title,
     holder: card.holder,
     number: card.number,
@@ -238,6 +240,7 @@ export function mapBankCardToSummary(card: BankCardItem, formatter: Intl.DateTim
 
 export function mapCreateBankCardToBackend(input: CreateBankCardInput): BackendCreateBankCardInput {
   return {
+    folder_id: input.folderId ?? null,
     title: input.title,
     holder: input.holder ?? null,
     number: input.number ?? null,

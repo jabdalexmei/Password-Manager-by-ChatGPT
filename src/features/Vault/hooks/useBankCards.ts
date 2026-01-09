@@ -28,10 +28,11 @@ import { BankCardItem, BankCardSummary, CreateBankCardInput, UpdateBankCardInput
 import { sortCards } from '../types/sort';
 import { SelectedNav } from './useVault';
 import { BackendUserSettings } from '../types/backend';
+import type { Folder } from '../types/ui';
 
 export type BankCardsError = { code: string; message?: string } | null;
 
-export function useBankCards(profileId: string, onLocked: () => void) {
+export function useBankCards(profileId: string, onLocked: () => void, folders: Folder[]) {
   const { show: showToast } = useToaster();
   const { t: tCommon } = useTranslation('Common');
   const { t: tVault } = useTranslation('Vault');
@@ -63,6 +64,7 @@ export function useBankCards(profileId: string, onLocked: () => void) {
   }, [profileId]);
 
   const isTrashMode = selectedNav === 'deleted';
+  const selectedFolderId = typeof selectedNav === 'object' ? selectedNav.folderId : null;
 
   const mapErrorMessage = useCallback(
     (code: string, fallback?: string) => {
@@ -216,7 +218,10 @@ export function useBankCards(profileId: string, onLocked: () => void) {
   const createCardAction = useCallback(
     async (input: CreateBankCardInput) => {
       try {
-        const created = await createBankCard(mapCreateBankCardToBackend(input));
+        const effectiveFolderId = input.folderId !== undefined ? input.folderId : selectedFolderId;
+        const created = await createBankCard(
+          mapCreateBankCardToBackend({ ...input, folderId: effectiveFolderId ?? null })
+        );
         const mapped = mapBankCardFromBackend(created);
         const summary = mapBankCardToSummary(mapped, dtf);
 
@@ -230,20 +235,26 @@ export function useBankCards(profileId: string, onLocked: () => void) {
         return null;
       }
     },
-    [dtf, handleError, sortCardsWithSettings]
+    [dtf, handleError, selectedFolderId, sortCardsWithSettings]
   );
 
   const updateCardAction = useCallback(
     async (input: UpdateBankCardInput) => {
       try {
-        await updateBankCard(mapUpdateBankCardToBackend(input));
+        const existingFolderId =
+          cardDetailsById[input.id]?.folderId ??
+          cards.find((c) => c.id === input.id)?.folderId ??
+          deletedCards.find((c) => c.id === input.id)?.folderId ??
+          null;
+        const effectiveFolderId = input.folderId !== undefined ? input.folderId : existingFolderId;
+        await updateBankCard(mapUpdateBankCardToBackend({ ...input, folderId: effectiveFolderId }));
         await loadCard(input.id);
         if (isTrashMode) await refreshTrash();
       } catch (err) {
         handleError(err);
       }
     },
-    [handleError, isTrashMode, loadCard, refreshTrash]
+    [cardDetailsById, cards, deletedCards, handleError, isTrashMode, loadCard, refreshTrash]
   );
 
   const deleteCardAction = useCallback(
@@ -371,7 +382,7 @@ export function useBankCards(profileId: string, onLocked: () => void) {
     } else if (selectedNav === 'deleted') {
       pool = deletedCards;
     } else {
-      pool = activeCards;
+      pool = activeCards.filter((card) => card.folderId === selectedNav.folderId && !isArchived(card));
     }
 
     if (!debouncedSearchQuery.trim()) return pool;
@@ -392,6 +403,11 @@ export function useBankCards(profileId: string, onLocked: () => void) {
   }, [cardDetailsById, cards, deletedCards, isTrashMode, selectedCardId]);
 
   const currentSectionTitle = useMemo(() => {
+    if (selectedFolderId) {
+      const folder = folders.find((item) => item.id === selectedFolderId);
+      if (folder) return folder.name;
+    }
+
     switch (selectedNav) {
       case 'favorites':
         return tVault('nav.favorites');
@@ -403,7 +419,7 @@ export function useBankCards(profileId: string, onLocked: () => void) {
       default:
         return tVault('nav.all_items');
     }
-  }, [selectedNav, tVault]);
+  }, [folders, selectedFolderId, selectedNav, tVault]);
 
   const toggleFavorite = useCallback(
     async (id: string) => {
@@ -440,7 +456,12 @@ export function useBankCards(profileId: string, onLocked: () => void) {
         favorites: activeCards.filter((card) => card.isFavorite && !isArchived(card)).length,
         archive: activeCards.filter((card) => isArchived(card)).length,
         deleted: deletedCards.length,
-        folders: {},
+        folders: activeCards.reduce<Record<string, number>>((acc, card) => {
+          if (card.folderId && !isArchived(card)) {
+            acc[card.folderId] = (acc[card.folderId] || 0) + 1;
+          }
+          return acc;
+        }, {}),
       };
     },
     [cards, deletedCards]

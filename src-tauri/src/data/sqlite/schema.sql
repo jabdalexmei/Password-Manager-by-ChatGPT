@@ -83,6 +83,8 @@ ON attachments(deleted_at);
 
 CREATE TABLE IF NOT EXISTS bank_cards (
   id TEXT PRIMARY KEY,
+  folder_id TEXT NULL,
+
   title TEXT NOT NULL,
   holder TEXT,
   number TEXT,
@@ -98,3 +100,4 @@ CREATE TABLE IF NOT EXISTS bank_cards (
 
 CREATE INDEX IF NOT EXISTS idx_bank_cards_deleted_at ON bank_cards (deleted_at);
 CREATE INDEX IF NOT EXISTS idx_bank_cards_is_favorite ON bank_cards (is_favorite);
+CREATE INDEX IF NOT EXISTS idx_bank_cards_folder ON bank_cards (folder_id);

@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 8;
+const CURRENT_SCHEMA_VERSION: i32 = 9;
 
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
@@ -45,6 +45,21 @@ DROP TABLE IF EXISTS bank_cards;",
         conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        return Ok(());
+    }
+
+    // v8 -> v9: add folder_id to bank_cards (idempotent).
+    if version == 8 {
+        if !has_column(conn, "bank_cards", "folder_id")? {
+            conn.execute_batch("ALTER TABLE bank_cards ADD COLUMN folder_id TEXT NULL;")
+                .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        }
+        // Index is safe to (re)create.
+        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_bank_cards_folder ON bank_cards (folder_id);")
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
         return Ok(());
     }

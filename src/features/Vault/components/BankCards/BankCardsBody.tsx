@@ -41,7 +41,7 @@ export function BankCardsBody({
   onRenameFolder,
   registerCommands,
 }: BankCardsBodyProps) {
-  const bankCards = useBankCards(profileId, onLocked);
+  const bankCards = useBankCards(profileId, onLocked, folders);
 
   const viewModel = useBankCardsViewModel({
     cards: bankCards.visibleCards,
@@ -69,7 +69,10 @@ export function BankCardsBody({
   }, [bankCards.setSettings, registerCommands, viewModel.openCreateModal]);
 
   const { t: tBankCards } = useTranslation('BankCards');
+  const { t: tFolders } = useTranslation('Folders');
   const sectionTitle = bankCards.currentSectionTitle;
+  const selectedFolderId =
+    typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null;
 
   if (!active) {
     return null;
@@ -89,6 +92,9 @@ export function BankCardsBody({
           <button className="btn btn-primary" type="button" onClick={viewModel.openCreateModal}>
             {tBankCards('label.addBankCard')}
           </button>
+          <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
+            {tFolders('action.addFolder')}
+          </button>
         </div>
 
         <VaultFolders
@@ -98,7 +104,7 @@ export function BankCardsBody({
           folders={folders}
           counts={bankCards.counts}
           selectedNav={bankCards.selectedNav}
-          selectedFolderId={null}
+          selectedFolderId={selectedFolderId}
           onSelectNav={bankCards.selectNav}
           dialogState={folderDialogs}
           onDeleteFolder={onDeleteFolder}

@@ -206,6 +206,7 @@ pub struct SetDataCardFavoriteInput {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct BankCardItem {
     pub id: String,
+    pub folder_id: Option<String>,
     pub title: String,
     pub holder: Option<String>,
     pub number: Option<String>,
@@ -222,6 +223,7 @@ pub struct BankCardItem {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct BankCardSummary {
     pub id: String,
+    pub folder_id: Option<String>,
     pub title: String,
     pub holder: Option<String>,
     pub number: Option<String>,
@@ -234,6 +236,7 @@ pub struct BankCardSummary {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CreateBankCardInput {
+    pub folder_id: Option<String>,
     pub title: String,
     pub holder: Option<String>,
     pub number: Option<String>,
@@ -246,6 +249,7 @@ pub struct CreateBankCardInput {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct UpdateBankCardInput {
     pub id: String,
+    pub folder_id: Option<String>,
     pub title: String,
     pub holder: Option<String>,
     pub number: Option<String>,
@@ -259,6 +263,12 @@ pub struct UpdateBankCardInput {
 pub struct SetBankCardFavoriteInput {
     pub id: String,
     pub is_favorite: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MoveBankCardInput {
+    pub id: String,
+    pub folder_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
