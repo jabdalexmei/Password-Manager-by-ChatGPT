@@ -1,81 +1,42 @@
-Понимаю. Сейчас у тебя **Category** выбран (Data/Bank), но при этом **Navigation** тоже подсвечивает текущий пункт (например Deleted). В новой логике Navigation должен быть **самостоятельным режимом**, как “All items”: подсветка в Navigation должна появляться **только когда мы реально в navigation-режиме** (то есть `selectedCategory === 'all_items'`). И когда пользователь кликает **любой** пункт Navigation (Favorites/Archive/Deleted/All items) — мы должны **переключаться в `all_items`**. Это ещё и по доступности правильно: “current” в группе должен быть один. ([MDN Web Docs][1])
-
-Ниже два маленьких патча.
-
----
-
-## 1) Vault.tsx — любой клик по Navigation переводит в `all_items`
-
-```diff
 diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
 --- a/src/features/Vault/Vault.tsx
 +++ b/src/features/Vault/Vault.tsx
-@@ -287,14 +287,16 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-   );
+@@ -240,29 +240,9 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+     };
+   }, [bankCards.counts, vault.counts]);
  
-   const handleNavClick = useCallback(
-     (nav: SelectedNav) => {
--      if (nav === 'all') {
-+      // Any Navigation selection is its own mode: it clears Category focus.
-+      if (typeof nav === 'string') {
-         setSelectedCategory('all_items');
-       }
-       void syncSelectNav(nav);
-     },
-     [syncSelectNav]
-   );
-```
-
----
-
-## 2) Folders.tsx — подсветка пунктов Navigation только в `all_items`
-
-```diff
-diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
---- a/src/features/Vault/components/Folders/Folders.tsx
-+++ b/src/features/Vault/components/Folders/Folders.tsx
-@@ -268,12 +268,29 @@ export function Folders({
-       </ul>
-       <div className="vault-sidebar-title">{t('nav.title')}</div>
-       <ul className="vault-folder-list">
-         {renderSystemItem(
-           'all',
-           t('nav.allItems'),
-           counts.all,
-           selectedNav === 'all' && selectedCategory === 'all_items'
-         )}
--        {renderSystemItem('favorites', t('nav.favorites'), counts.favorites, selectedNav === 'favorites')}
--        {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
--        {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
-+        {renderSystemItem(
-+          'favorites',
-+          t('nav.favorites'),
-+          counts.favorites,
-+          selectedNav === 'favorites' && selectedCategory === 'all_items'
-+        )}
-+        {renderSystemItem(
-+          'archive',
-+          t('nav.archive'),
-+          counts.archive,
-+          selectedNav === 'archive' && selectedCategory === 'all_items'
-+        )}
-+        {renderSystemItem(
-+          'deleted',
-+          t('nav.deleted'),
-+          counts.deleted,
-+          selectedNav === 'deleted' && selectedCategory === 'all_items'
-+        )}
-       </ul>
-```
-
----
-
-### Что получится по UX
-
-* Выбираешь **Category: Data cards** → сразу показываются data cards, **Navigation не подсвечивается** (даже если внутренне `selectedNav` был чем-то другим).
-* Выбираешь **Category: Bank cards** → аналогично.
-* Кликаешь **Favorites / Archive / Deleted / All items** в Navigation → **Category “снимается”**, Navigation становится активным режимом и **подсветка появляется только там**.
-
-Если хочешь, могу ещё сделать маленький полиш: когда `selectedCategory !== 'all_items'`, визуально сделать пункты Navigation “неактивными” (без обводки) но кликабельными — чтобы вообще не было ощущений “двойного выбора”.
-
-[1]: https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-current?utm_source=chatgpt.com "ARIA: aria-current attribute - MDN Web Docs - Mozilla"
+-  const sidebarCounts = useMemo(() => {
+-    const base =
+-      selectedCategory === 'all_items'
+-        ? combinedCounts
+-        : selectedCategory === 'data_cards'
+-          ? vault.counts
+-          : bankCards.counts;
+-
+-    // Navigation counters:
+-    // - "All items" should always show total across Data + Bank.
+-    // - "Deleted" (trash) should always show total across Data + Bank.
+-    // Folder view always shows both types, so folder counts should reflect combined totals.
+-    return { ...base, all: combinedCounts.all, deleted: combinedCounts.deleted, folders: combinedCounts.folders };
+-  }, [bankCards.counts, combinedCounts, selectedCategory, vault.counts]);
++  // Navigation + Folders are always global (Data + Bank), regardless of Category.
++  const sidebarCounts = useMemo(() => combinedCounts, [combinedCounts]);
+ 
+   const categoryCounts = useMemo(
+     () => ({ dataCards: vault.counts.all, bankCards: bankCards.counts.all }),
+     [bankCards.counts.all, vault.counts.all]
+@@ -377,7 +357,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+             selectedCategory={selectedCategory}
+             onSelectCategory={handleSelectCategory}
+             onAddBankCard={handleAddBankCard}
+             folders={vault.folders}
+-            counts={sidebarCounts}
++            counts={sidebarCounts}
+             categoryCounts={categoryCounts}
+             selectedNav={vault.selectedNav}
+             selectedFolderId={vault.selectedFolderId}
+             onSelectNav={(nav) => void handleNavClick(nav)}
+             dialogState={folderDialogs}
+             onDeleteFolder={handleDeleteFolder}
+             onRenameFolder={vault.renameFolder}
+           />
