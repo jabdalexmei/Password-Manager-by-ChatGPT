@@ -3,6 +3,7 @@ import { useTranslation } from '../../../../shared/lib/i18n';
 import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
 import type { Folder } from '../../types/ui';
 import { wasActuallyUpdated } from '../../utils/updatedAt';
+import { FolderSelect } from '../shared/FolderSelect';
 import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
 
 export type BankCardsProps = {
@@ -125,21 +126,15 @@ export function BankCards({
               <label className="form-label" htmlFor={`${dialogId}-folder-input`}>
                 {t('label.folder')}
               </label>
-              <select
+              <FolderSelect
                 id={`${dialogId}-folder-input`}
-                className="input"
-                value={form.folderId ?? ''}
-                onChange={(e) => onFieldChange('folderId', e.target.value)}
-              >
-                <option value="">{t('label.folderRoot')}</option>
-                {folders
+                value={form.folderId ?? null}
+                noneLabel={t('label.folderRoot')}
+                options={folders
                   .filter((folder) => !folder.isSystem && !folder.deletedAt)
-                  .map((folder) => (
-                    <option key={folder.id} value={folder.id}>
-                      {folder.name}
-                    </option>
-                  ))}
-              </select>
+                  .map((folder) => ({ id: folder.id, name: folder.name }))}
+                onChange={(folderId) => onFieldChange('folderId', folderId ?? '')}
+              />
             </div>
 
             <div className="form-field">

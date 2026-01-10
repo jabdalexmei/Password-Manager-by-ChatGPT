@@ -13,6 +13,7 @@ import { useToaster } from '../../../../shared/components/Toaster';
 import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
 import { generateTotpCode } from '../../utils/totp';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
+import { FolderSelect } from '../shared/FolderSelect';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
 
 const LazyPasswordGeneratorModal = React.lazy(async () => {
@@ -676,21 +677,15 @@ export function DataCards({
               <label className="form-label" htmlFor={`${dialogId}-folder`}>
                 {t('label.folder')}
               </label>
-              <input
+              <FolderSelect
                 id={`${dialogId}-folder`}
-                className="input"
-                list="folder-options"
-                autoComplete="off"
-                value={form.folderName}
-                onChange={(e) => onFieldChange('folderName', e.target.value)}
+                value={form.folderId ?? null}
+                noneLabel={t('label.noFolder')}
+                options={viewModel.folders
+                  .filter((folder) => !folder.isSystem && !folder.deletedAt)
+                  .map((folder) => ({ id: folder.id, name: folder.name }))}
+                onChange={(folderId) => onFieldChange('folderId', folderId)}
               />
-              <datalist id="folder-options">
-                {viewModel.folders
-                  .filter((folder) => !folder.isSystem)
-                  .map((folder) => (
-                    <option key={folder.id} value={folder.name} />
-                  ))}
-              </datalist>
               {folderError && <div className="form-error">{folderError}</div>}
             </div>
 
