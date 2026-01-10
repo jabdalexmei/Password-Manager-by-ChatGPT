@@ -1,94 +1,83 @@
-diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
---- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
-+++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
-@@ -75,6 +75,7 @@
-   };
-   const hasHolder = hasValue(card.holder);
-   const hasNumber = hasValue(card.number);
-+  const hasExpiry = hasValue(card.expiryMmYy);
-   const hasCvc = hasValue(card.cvc);
-   const hasNote = hasValue(card.note);
-   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
-@@ -84,11 +85,8 @@
-       ? card.number
-       : maskCardNumber(card.number)
-     : '';
--  const cvcDisplay = hasCvc
--    ? detailActions.showCvc
--      ? card.cvc
--      : '•••'
--    : tCommon('value.empty');
-+  const maskedCvc = card.cvc ? (card.cvc.length >= 4 ? '••••' : '•••') : '';
-+  const cvcDisplay = hasCvc ? (detailActions.showCvc ? card.cvc : maskedCvc) : '';
- 
-   const tagsText = card.tags?.join(', ') ?? '';
- 
-@@ -172,37 +170,41 @@
-             </div>
-           )}
- 
--          <div className="detail-field bankcard-compact-expiry">
--            <div className="detail-label">{t('label.expiry')}</div>
--            <div className="detail-value-box">
--              <div className="detail-value-text">{card.expiryMmYy || tCommon('value.empty')}</div>
-+          {hasExpiry && (
-+            <div className="detail-field bankcard-compact-expiry">
-+              <div className="detail-label">{t('label.expiry')}</div>
-+              <div className="detail-value-box">
-+                <div className="detail-value-text">{card.expiryMmYy ?? ''}</div>
-+              </div>
-             </div>
--          </div>
-+          )}
- 
--          <div className="detail-field bankcard-compact-cvc">
--            <div className="detail-label">{t('label.cvc')}</div>
--            <div className="detail-value-box">
--              <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
--              <div className="detail-value-actions">
--                <button
--                  className="icon-button"
--                  type="button"
--                  aria-label={t('action.copy')}
--                  onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
--                >
--                  <IconCopy />
--                </button>
--                <button
--                  className="icon-button"
--                  type="button"
--                  aria-label={detailActions.showCvc ? t('action.hide') : t('action.reveal')}
--                  onClick={detailActions.toggleCvcVisibility}
--                >
--                  {detailActions.showCvc ? <IconPreviewOff /> : <IconPreview />}
--                </button>
-+          {hasCvc && (
-+            <div className="detail-field bankcard-compact-cvc">
-+              <div className="detail-label">{t('label.cvc')}</div>
-+              <div className="detail-value-box">
-+                <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
-+                <div className="detail-value-actions">
-+                  <button
-+                    className="icon-button"
-+                    type="button"
-+                    aria-label={t('action.copy')}
-+                    onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
-+                  >
-+                    <IconCopy />
-+                  </button>
-+                  <button
-+                    className="icon-button"
-+                    type="button"
-+                    aria-label={detailActions.showCvc ? t('action.hide') : t('action.reveal')}
-+                    onClick={detailActions.toggleCvcVisibility}
-+                  >
-+                    {detailActions.showCvc ? <IconPreviewOff /> : <IconPreview />}
-+                  </button>
-+                </div>
-               </div>
-             </div>
--          </div>
-+          )}
- 
-           {hasNote && (
-             <div className="detail-field">
+diff --git a/src/i18n/locales/en/Common.json b/src/i18n/locales/en/Common.json
+--- a/src/i18n/locales/en/Common.json
++++ b/src/i18n/locales/en/Common.json
+@@ -1,5 +1,6 @@
+ {
+   "action.cancel": "Cancel",
+   "action.close": "Close",
+   "action.ok": "OK",
++  "label.empty": "Empty",
+   "aria.dismissToast": "Dismiss",
+   "error.backupProfileMismatch": "This backup belongs to a different profile.",
+   "error.backupUnsupportedFormat": "This backup format is not supported.",
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -1,6 +1,6 @@
+ import React, { useEffect, useMemo, useRef, useState } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+@@
+ export function DataCards({
+   viewModel,
+   sectionTitle,
+   clipboardAutoClearEnabled,
+   clipboardClearTimeoutSeconds,
+   showTrashActions = true,
+ }: DataCardsProps) {
+   const { t } = useTranslation('DataCards');
++  const { t: tCommon } = useTranslation('Common');
+@@
++  const emptyLabel = (() => {
++    const v = t('label.empty');
++    return v === 'label.empty' ? tCommon('label.empty') : v;
++  })();
+@@
+       {cards.length === 0 ? (
+         <div className="vault-datacard-list vault-datacard-list--empty">
+-          <div className="vault-empty">{t('label.empty')}</div>
++          <div className="vault-empty">{emptyLabel}</div>
+         </div>
+       ) : (
+         <div className="vault-datacard-list">
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -1,6 +1,6 @@
+ import React, { useEffect, useRef, useState } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+@@
+ export function BankCards({ viewModel, sectionTitle, folders, showTrashActions = true }: BankCardsProps) {
+   const { t } = useTranslation('BankCards');
++  const { t: tCommon } = useTranslation('Common');
+@@
++  const emptyLabel = (() => {
++    const v = t('label.empty');
++    return v === 'label.empty' ? tCommon('label.empty') : v;
++  })();
+@@
+       {cards.length === 0 ? (
+         <div className="vault-datacard-list vault-datacard-list--empty">
+-          <div className="vault-empty">{t('label.empty')}</div>
++          <div className="vault-empty">{emptyLabel}</div>
+         </div>
+       ) : (
+         <div className="vault-datacard-list">
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -292,6 +292,11 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+   const hasVisibleDataCards = dataCardsViewModel.cards.length > 0;
+   const hasVisibleBankCards = bankCardsViewModel.cards.length > 0;
+   const isNavigationEmpty = !hasVisibleDataCards && !hasVisibleBankCards;
++  const emptyLabel = (() => {
++    const v = tDataCards('label.empty');
++    return v === 'label.empty' ? tCommon('label.empty') : v;
++  })();
+@@ -461,7 +466,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+               {isNavigationEmpty ? (
+                 <div className="vault-datacard-list vault-datacard-list--empty">
+-                  <div className="vault-empty">{tDataCards('label.empty')}</div>
++                  <div className="vault-empty">{emptyLabel}</div>
+                 </div>
+               ) : (
+                 <>
