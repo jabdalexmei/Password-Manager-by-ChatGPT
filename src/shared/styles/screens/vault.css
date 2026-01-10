@@ -807,7 +807,7 @@
   border-color: var(--color-primary-strong);
 }
 
-.icon-button:hover {
+.icon-button:not(.icon-button-primary):not(.icon-button-danger):hover {
   border-color: var(--focus-border-strong);
   background: var(--color-surface-3);
 }
