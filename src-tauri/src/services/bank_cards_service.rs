@@ -81,9 +81,6 @@ pub fn create_bank_card(input: CreateBankCardInput, state: &Arc<AppState>) -> Re
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
-    if sanitized.title.is_empty() {
-        return Err(ErrorCodeString::new("VALIDATION_ERROR"));
-    }
     sanitized.tags = normalize_tags(sanitized.tags);
 
     let created = repo_impl::create_bank_card(state, &profile_id, &sanitized)?;
@@ -95,9 +92,6 @@ pub fn update_bank_card(input: UpdateBankCardInput, state: &Arc<AppState>) -> Re
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
-    if sanitized.title.is_empty() {
-        return Err(ErrorCodeString::new("VALIDATION_ERROR"));
-    }
     sanitized.tags = normalize_tags(sanitized.tags);
 
     let updated = repo_impl::update_bank_card(state, &profile_id, &sanitized)?;
