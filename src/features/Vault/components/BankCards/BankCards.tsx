@@ -20,9 +20,22 @@ export type BankCardsProps = {
    * the parent can render a single actions menu and suppress the per-section one.
    */
   showTrashActions?: boolean;
+  /**
+   * In combined views (Navigation/Folders), the parent may want to render a single
+   * global empty state instead of per-section "Empty" blocks. This flag suppresses
+   * the per-section empty placeholder while keeping dialogs functional.
+   */
+  suppressEmptyState?: boolean;
 };
 
-export function BankCards({ viewModel, sectionTitle, folders, fillHeight = true, showTrashActions = true }: BankCardsProps) {
+export function BankCards({
+  viewModel,
+  sectionTitle,
+  folders,
+  fillHeight = true,
+  showTrashActions = true,
+  suppressEmptyState = false,
+}: BankCardsProps) {
   const { t } = useTranslation('BankCards');
   const { t: tCommon } = useTranslation('Common');
   const {
@@ -240,6 +253,11 @@ export function BankCards({ viewModel, sectionTitle, folders, fillHeight = true,
     return v === 'label.empty' ? tCommon('label.empty') : v;
   })();
 
+  const hasAnyOverlayOpen = isCreateOpen || isEditOpen;
+  if (suppressEmptyState && cards.length === 0 && !hasAnyOverlayOpen) {
+    return null;
+  }
+
   return (
     <div className={`vault-panel-wrapper ${fillHeight ? 'vault-panel-wrapper--fill' : ''}`.trim()}>
       <div className="datacards-header">
@@ -300,9 +318,11 @@ export function BankCards({ viewModel, sectionTitle, folders, fillHeight = true,
       </div>
 
       {cards.length === 0 ? (
-        <div className="vault-datacard-list vault-datacard-list--empty">
-          <div className="vault-empty">{emptyLabel}</div>
-        </div>
+        suppressEmptyState ? null : (
+          <div className="vault-datacard-list vault-datacard-list--empty">
+            <div className="vault-empty">{emptyLabel}</div>
+          </div>
+        )
       ) : (
         <div className="vault-datacard-list">
           {cards.map((card) => {
