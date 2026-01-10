@@ -32,6 +32,14 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
 
   const bits = calculateStrengthBits(options.length, charsetSize);
 
+  const strengthRatio = Math.min(1, Math.max(0, bits / 128));
+  // hue: 0 = red, 120 = green (so we naturally pass through orange in the middle)
+  const strengthHue = Math.round(strengthRatio * 120);
+  const strengthFillStyle: React.CSSProperties = {
+    width: `${strengthRatio * 100}%`,
+    backgroundColor: `hsl(${strengthHue}, 85%, 45%)`,
+  };
+
   const handleCheckboxChange = (key: keyof PasswordGeneratorOptions) => (event: React.ChangeEvent<HTMLInputElement>) => {
     onChangeOptions({ ...options, [key]: event.target.checked });
   };
@@ -53,9 +61,6 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
             <div className="input-with-actions">
               <input id="generated-password" className="input" value={generatedPassword} readOnly />
               <div className="input-actions">
-                <button className="icon-button" type="button" aria-label={t('action.copy')} onClick={() => void onCopy()}>
-                  <IconCopy />
-                </button>
                 <button
                   className="icon-button icon-button-primary"
                   type="button"
@@ -63,6 +68,9 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
                   onClick={onRegenerate}
                 >
                   <IconRegenerate />
+                </button>
+                <button className="icon-button" type="button" aria-label={t('action.copy')} onClick={() => void onCopy()}>
+                  <IconCopy />
                 </button>
               </div>
             </div>
@@ -75,10 +83,7 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
             </div>
 
             <div className="generator-strength-bar">
-              <div
-                className="generator-strength-fill"
-                style={{ width: `${Math.min(100, (bits / 128) * 100)}%` }}
-              />
+              <div className="generator-strength-fill" style={strengthFillStyle} />
             </div>
           </div>
 

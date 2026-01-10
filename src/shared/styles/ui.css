@@ -1061,7 +1061,7 @@ select:autofill {
    - Wider dialog, footer/header layout tweaks, generator-specific blocks.
    ========================================================================== */
 .generator-dialog {
-  max-width: 640px;
+  max-width: 520px;
   width: 100%;
 }
 
@@ -1125,7 +1125,7 @@ select:autofill {
 .generator-strength-fill {
   height: 100%;
   background: var(--color-success);
-  transition: width 0.2s ease;
+  transition: width 0.2s ease, background-color 0.2s ease;
 }
 
 /* ==========================================================================
