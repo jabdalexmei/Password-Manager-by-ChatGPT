@@ -1,11 +1,15 @@
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useVault } from './hooks/useVault';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useVault, type SelectedNav } from './hooks/useVault';
 import { VaultHeader } from './components/Header/VaultHeader';
 import { Search } from './components/Search/Search';
 import { Folders } from './components/Folders/Folders';
 import { DataCards } from './components/DataCards/DataCards';
 import { useDataCards } from './components/DataCards/useDataCards';
 import { useFolders } from './components/Folders/useFolders';
+import { useBankCards } from './hooks/useBankCards';
+import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewModel';
+import { BankCards } from './components/BankCards/BankCards';
+import { BankCardDetails } from './components/BankCards/BankCardDetails';
 import { useTranslation } from '../../shared/lib/i18n';
 import { useToaster } from '../../shared/components/Toaster';
 import {
@@ -15,14 +19,7 @@ import {
   restoreBackupWorkflowFromPick,
 } from './api/vaultApi';
 import { BackendUserSettings } from './types/backend';
-import type { FolderDialogState } from './components/Folders/useFolders';
-
-type VaultCategory = 'data_cards' | 'bank_cards';
-
-type BankCardsCommands = {
-  openCreateModal: () => void;
-  setSettings: (nextSettings: BackendUserSettings) => void;
-};
+import type { VaultCategory } from './components/Folders/Folders';
 
 const LazyExportBackupModal = React.lazy(() =>
   import('./components/modals/ExportBackupModal').then((m) => ({ default: m.ExportBackupModal })),
@@ -39,9 +36,6 @@ const LazyDetails = React.lazy(() =>
 const LazyDeleteFolderModal = React.lazy(() =>
   import('./components/modals/DeleteFolderModal').then((m) => ({ default: m.DeleteFolderModal })),
 );
-const LazyBankCardsBody = React.lazy(() =>
-  import('./components/BankCards/BankCardsBody').then((m) => ({ default: m.BankCardsBody })),
-);
 
 type VaultProps = {
   profileId: string;
@@ -52,7 +46,9 @@ type VaultProps = {
 
 export default function Vault({ profileId, profileName, isPasswordless, onLocked }: VaultProps) {
   const vault = useVault(profileId, onLocked);
+  const bankCards = useBankCards(profileId, onLocked, vault.folders);
   const { t: tDataCards } = useTranslation('DataCards');
+  const { t: tBankCards } = useTranslation('BankCards');
   const { t: tFolders } = useTranslation('Folders');
   const { t: tVault } = useTranslation('Vault');
   const { t: tCommon } = useTranslation('Common');
@@ -60,10 +56,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
   const { show: showToast } = useToaster();
 
   const [selectedCategory, setSelectedCategory] = useState<VaultCategory>('data_cards');
-  const [bankCardsEnabled, setBankCardsEnabled] = useState(false);
-
-  const bankCardsCommandsRef = useRef<BankCardsCommands | null>(null);
-  const pendingOpenCreateBankCardRef = useRef(false);
+  const [activeDetailsKind, setActiveDetailsKind] = useState<'data' | 'bank'>('data');
 
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -83,7 +76,11 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     isTrashMode: vault.isTrashMode,
     folders: vault.folders,
     defaultFolderId: vault.selectedFolderId,
-    onSelectCard: vault.selectCard,
+    onSelectCard: (id) => {
+      vault.selectCard(id);
+      bankCards.selectCard(null);
+      setActiveDetailsKind('data');
+    },
     onCreateCard: vault.createCard,
     onUploadAttachments: vault.uploadAttachments,
     onUpdateCard: vault.updateCard,
@@ -92,6 +89,25 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     onPurgeCard: vault.purgeCard,
     onRestoreAllTrash: vault.restoreAllTrash,
     onPurgeAllTrash: vault.purgeAllTrash,
+  });
+
+  const bankCardsViewModel = useBankCardsViewModel({
+    cards: bankCards.visibleCards,
+    defaultFolderId: typeof bankCards.selectedNav === 'object' ? bankCards.selectedNav.folderId : null,
+    selectedCardId: bankCards.selectedCardId,
+    isTrashMode: bankCards.isTrashMode,
+    onSelectCard: (id) => {
+      bankCards.selectCard(id);
+      vault.selectCard(null);
+      setActiveDetailsKind('bank');
+    },
+    onCreateCard: bankCards.createCard,
+    onUpdateCard: bankCards.updateCard,
+    onDeleteCard: bankCards.deleteCard,
+    onRestoreCard: bankCards.restoreCard,
+    onPurgeCard: bankCards.purgeCard,
+    onRestoreAllTrash: bankCards.restoreAllTrash,
+    onPurgeAllTrash: bankCards.purgeAllTrash,
   });
 
   const folderDialogs = useFolders({ onCreateFolder: (name) => vault.createFolder(name, null) });
@@ -110,20 +126,15 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     [onLocked, showToast, tCommon],
   );
 
-  const handleSelectCategory = useCallback((category: VaultCategory) => {
-    setSelectedCategory(category);
-    if (category === 'bank_cards') {
-      setBankCardsEnabled(true);
-    }
-  }, []);
-
-  const registerBankCardsCommands = useCallback((cmds: BankCardsCommands | null) => {
-    bankCardsCommandsRef.current = cmds;
-    if (cmds && pendingOpenCreateBankCardRef.current) {
-      pendingOpenCreateBankCardRef.current = false;
-      cmds.openCreateModal();
-    }
-  }, []);
+  const handleSelectCategory = useCallback(
+    (category: VaultCategory) => {
+      setSelectedCategory(category);
+      setActiveDetailsKind(category === 'bank_cards' ? 'bank' : 'data');
+      vault.selectCard(null);
+      bankCards.selectCard(null);
+    },
+    [bankCards.selectCard, vault.selectCard]
+  );
 
   const handleExportBackup = () => setExportModalOpen(true);
 
@@ -164,7 +175,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     setIsSavingSettings(true);
     const saved = await vault.updateSettings(nextSettings);
     if (saved) {
-      bankCardsCommandsRef.current?.setSettings(nextSettings);
+      bankCards.setSettings(nextSettings);
       setSettingsModalOpen(false);
     }
     setIsSavingSettings(false);
@@ -195,7 +206,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     const target = vault.folders.find((folder) => folder.id === folderId);
     if (!target) return;
 
-    const cardsCount = vault.counts.folders[folderId] ?? 0;
+    const cardsCount = combinedCounts.folders[folderId] ?? 0;
     setPendingFolderDelete({ id: folderId, name: target.name, cardsCount });
   };
 
@@ -215,15 +226,56 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const handleAddBankCard = useCallback(() => {
     setSelectedCategory('bank_cards');
-    setBankCardsEnabled(true);
+    setActiveDetailsKind('bank');
+    bankCardsViewModel.openCreateModal();
+  }, [bankCardsViewModel.openCreateModal]);
 
-    if (bankCardsCommandsRef.current) {
-      bankCardsCommandsRef.current.openCreateModal();
-      return;
-    }
+  const combinedCounts = useMemo(() => {
+    const sumFolderCounts = (a: Record<string, number>, b: Record<string, number>) => {
+      const next: Record<string, number> = { ...a };
+      for (const [folderId, count] of Object.entries(b)) {
+        next[folderId] = (next[folderId] || 0) + count;
+      }
+      return next;
+    };
 
-    pendingOpenCreateBankCardRef.current = true;
-  }, []);
+    return {
+      all: vault.counts.all + bankCards.counts.all,
+      favorites: vault.counts.favorites + bankCards.counts.favorites,
+      archive: vault.counts.archive + bankCards.counts.archive,
+      deleted: vault.counts.deleted + bankCards.counts.deleted,
+      folders: sumFolderCounts(vault.counts.folders, bankCards.counts.folders),
+    };
+  }, [bankCards.counts, vault.counts]);
+
+  const sidebarCounts = useMemo(
+    () => (selectedCategory === 'data_cards' ? vault.counts : bankCards.counts),
+    [selectedCategory, vault.counts, bankCards.counts]
+  );
+
+  const handleSelectNav = useCallback(
+    async (nav: SelectedNav) => {
+      await Promise.all([vault.selectNav(nav), bankCards.selectNav(nav)]);
+      // When switching sections, clear selections to avoid showing stale details.
+      vault.selectCard(null);
+      bankCards.selectCard(null);
+    },
+    [bankCards.selectNav, bankCards.selectCard, vault.selectNav, vault.selectCard]
+  );
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      vault.setSearchQuery(value);
+      bankCards.setSearchQuery(value);
+    },
+    [bankCards.setSearchQuery, vault.setSearchQuery]
+  );
+
+  const showCombinedLists = useMemo(() => {
+    if (typeof vault.selectedNav === 'object') return true;
+    return vault.searchQuery.trim().length > 0;
+  }, [vault.searchQuery, vault.selectedNav]);
+  const isFolderView = typeof vault.selectedNav === 'object';
 
   return (
     <div className="vault-shell">
@@ -238,91 +290,115 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
       />
 
       <div className="vault-body">
-        {selectedCategory === 'data_cards' && (
-          <>
-            <aside className="vault-sidebar">
-              <div className="vault-sidebar-controls">
-                <Search
-                  query={vault.searchQuery}
-                  onChange={vault.setSearchQuery}
-                  filters={vault.filters}
-                  onChangeFilters={vault.setFilters}
-                />
-              </div>
-              <div className="vault-sidebar-actions">
-                <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
-                  {tDataCards('label.addDataCard')}
-                </button>
-                <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
-                  {tFolders('action.addFolder')}
-                </button>
-              </div>
-              <Folders
-                selectedCategory={selectedCategory}
-                onSelectCategory={handleSelectCategory}
-                onAddBankCard={handleAddBankCard}
-                folders={vault.folders}
-                counts={vault.counts}
-                selectedNav={vault.selectedNav}
-                selectedFolderId={vault.selectedFolderId}
-                onSelectNav={vault.selectNav}
-                dialogState={folderDialogs}
-                onDeleteFolder={handleDeleteFolder}
-                onRenameFolder={vault.renameFolder}
-              />
-            </aside>
+        <aside className="vault-sidebar">
+          <div className="vault-sidebar-controls">
+            <Search
+              query={vault.searchQuery}
+              onChange={handleSearchChange}
+              filters={selectedCategory === 'data_cards' ? vault.filters : undefined}
+              onChangeFilters={selectedCategory === 'data_cards' ? vault.setFilters : undefined}
+            />
+          </div>
+          <div className="vault-sidebar-actions">
+            {selectedCategory === 'data_cards' ? (
+              <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
+                {tDataCards('label.addDataCard')}
+              </button>
+            ) : (
+              <button className="btn btn-primary" type="button" onClick={bankCardsViewModel.openCreateModal}>
+                {tBankCards('label.addBankCard')}
+              </button>
+            )}
+            <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
+              {tFolders('action.addFolder')}
+            </button>
+          </div>
+          <Folders
+            selectedCategory={selectedCategory}
+            onSelectCategory={handleSelectCategory}
+            onAddBankCard={handleAddBankCard}
+            folders={vault.folders}
+            counts={sidebarCounts}
+            selectedNav={vault.selectedNav}
+            selectedFolderId={vault.selectedFolderId}
+            onSelectNav={(nav) => void handleSelectNav(nav)}
+            dialogState={folderDialogs}
+            onDeleteFolder={handleDeleteFolder}
+            onRenameFolder={vault.renameFolder}
+          />
+        </aside>
 
-            <section className="vault-datacards">
+        <section className="vault-datacards">
+          {showCombinedLists ? (
+            <>
+              {isFolderView && (
+                <div className="vault-folder-title">
+                  <div className="vault-section-header">{vault.currentSectionTitle}</div>
+                </div>
+              )}
               <DataCards
                 viewModel={dataCardsViewModel}
-                sectionTitle={vault.currentSectionTitle}
+                sectionTitle={
+                  isFolderView ? tFolders('category.dataCards') : `${vault.currentSectionTitle} • ${tFolders('category.dataCards')}`
+                }
                 clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
                 clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
               />
-            </section>
-
-            <section className="vault-details">
-              {vault.selectedCard ? (
-                <Suspense fallback={<p aria-busy="true">Loading…</p>}>
-                  <LazyDetails
-                    card={vault.selectedCard}
-                    folders={foldersForCards}
-                    onEdit={(card) => dataCardsViewModel.openEditModal(card)}
-                    onDelete={vault.deleteCard}
-                    onRestore={vault.restoreCard}
-                    onPurge={vault.purgeCard}
-                    onToggleFavorite={vault.toggleFavorite}
-                    isTrashMode={vault.isTrashMode}
-                    clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-                    clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-                  />
-                </Suspense>
-              ) : (
-                <div className="vault-panel-wrapper">
-                  <div className="vault-section-header">{tVault('information.title')}</div>
-                  <div className="vault-empty">{tDetails('empty.selectPrompt')}</div>
-                </div>
-              )}
-            </section>
-          </>
-        )}
-
-        {bankCardsEnabled && (
-          <Suspense fallback={<p aria-busy="true">Loading…</p>}>
-            <LazyBankCardsBody
-              active={selectedCategory === 'bank_cards'}
-              profileId={profileId}
-              onLocked={onLocked}
-              selectedCategory={selectedCategory}
-              onSelectCategory={handleSelectCategory}
-              folders={vault.folders}
-              folderDialogs={folderDialogs as FolderDialogState}
-              onDeleteFolder={handleDeleteFolder}
-              onRenameFolder={vault.renameFolder}
-              registerCommands={registerBankCardsCommands}
+              <BankCards
+                viewModel={bankCardsViewModel}
+                sectionTitle={
+                  isFolderView ? tFolders('category.bankCards') : `${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`
+                }
+                folders={vault.folders}
+              />
+            </>
+          ) : selectedCategory === 'data_cards' ? (
+            <DataCards
+              viewModel={dataCardsViewModel}
+              sectionTitle={vault.currentSectionTitle}
+              clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+              clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
             />
-          </Suspense>
-        )}
+          ) : (
+            <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} folders={vault.folders} />
+          )}
+        </section>
+
+        <section className="vault-details">
+          {activeDetailsKind === 'bank' ? (
+            <BankCardDetails
+              card={bankCards.selectedCard}
+              onEdit={(card) => bankCardsViewModel.openEditModal(card)}
+              onDelete={bankCards.deleteCard}
+              onRestore={bankCards.restoreCard}
+              onPurge={bankCards.purgeCard}
+              onToggleFavorite={bankCards.toggleFavorite}
+              isTrashMode={bankCards.isTrashMode}
+              clipboardAutoClearEnabled={bankCards.settings?.clipboard_auto_clear_enabled}
+              clipboardClearTimeoutSeconds={bankCards.settings?.clipboard_clear_timeout_seconds}
+            />
+          ) : vault.selectedCard ? (
+            <Suspense fallback={<p aria-busy="true">Loading…</p>}>
+              <LazyDetails
+                card={vault.selectedCard}
+                folders={foldersForCards}
+                onEdit={(card) => dataCardsViewModel.openEditModal(card)}
+                onDelete={vault.deleteCard}
+                onRestore={vault.restoreCard}
+                onPurge={vault.purgeCard}
+                onToggleFavorite={vault.toggleFavorite}
+                isTrashMode={vault.isTrashMode}
+                clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+                clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+              />
+            </Suspense>
+          ) : (
+            <div className="vault-panel-wrapper">
+              <div className="vault-section-header">{tVault('information.title')}</div>
+              <div className="vault-empty">{tDetails('empty.selectPrompt')}</div>
+            </div>
+          )}
+        </section>
       </div>
 
       {pendingFolderDelete !== null && (
