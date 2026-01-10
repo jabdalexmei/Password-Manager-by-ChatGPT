@@ -1,66 +1,73 @@
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
 --- a/src/features/Vault/Vault.tsx
 +++ b/src/features/Vault/Vault.tsx
-@@ -268,10 +268,16 @@
-           ? vault.counts
-           : bankCards.counts;
+@@ -330,25 +330,45 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
  
-+    // Navigation "All items" should always show total across Data + Bank.
-     // Folder view always shows both types, so folder counts should reflect combined totals.
--    return { ...base, folders: combinedCounts.folders };
-+    return { ...base, all: combinedCounts.all, folders: combinedCounts.folders };
-   }, [bankCards.counts, combinedCounts, selectedCategory, vault.counts]);
+   const isFolderView = typeof vault.selectedNav === 'object';
+   const showBothLists = isFolderView || selectedCategory === 'all_items';
++  const hasVisibleDataCards = dataCardsViewModel.cards.length > 0;
++  const hasVisibleBankCards = bankCardsViewModel.cards.length > 0;
++  const isNavigationEmpty = !hasVisibleDataCards && !hasVisibleBankCards;
  
-+  const categoryCounts = useMemo(
-+    () => ({ dataCards: vault.counts.all, bankCards: bankCards.counts.all }),
-+    [bankCards.counts.all, vault.counts.all]
-+  );
+   return (
+     <div className="vault-shell">
+@@ -398,25 +418,35 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+ 
+         <section className="vault-datacards">
+           {showBothLists ? (
+             <>
+               <div className="vault-folder-title">
+                 <div className="vault-section-header">{vault.currentSectionTitle}</div>
+               </div>
+-              <DataCards
+-                viewModel={dataCardsViewModel}
+-                sectionTitle={tFolders('category.dataCards')}
+-                clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+-                clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+-              />
+-              <BankCards
+-                viewModel={bankCardsViewModel}
+-                sectionTitle={tFolders('category.bankCards')}
+-                folders={vault.folders}
+-              />
 +
-   const handleNavClick = useCallback(
-     (nav: SelectedNav) => {
-       if (nav === 'all') {
-@@ -378,6 +384,7 @@
-             onAddBankCard={handleAddBankCard}
-             folders={vault.folders}
-             counts={sidebarCounts}
-+            categoryCounts={categoryCounts}
-             selectedNav={vault.selectedNav}
-             selectedFolderId={vault.selectedFolderId}
-             onSelectNav={(nav) => void handleNavClick(nav)}
-             dialogState={folderDialogs}
-             onDeleteFolder={handleDeleteFolder}
-             onRenameFolder={vault.renameFolder}
-           />
---- a/src/features/Vault/components/Folders/Folders.tsx
-+++ b/src/features/Vault/components/Folders/Folders.tsx
-@@ -20,6 +20,7 @@
-   onAddBankCard: () => void;
-   folders: Folder[];
-   counts: Counts;
-+  categoryCounts: { dataCards: number; bankCards: number };
-   selectedNav: SelectedNav;
-   selectedFolderId: string | null;
-   onSelectNav: (nav: SelectedNav) => void;
-@@ -34,6 +35,7 @@
-   onAddBankCard,
-   folders,
-   counts,
-+  categoryCounts,
-   selectedNav,
-   selectedFolderId,
-   onSelectNav,
-@@ -259,6 +261,7 @@
-         <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
-           <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
-             <span className="folder-name">{t('category.dataCards')}</span>
-+            <span className="folder-count">{categoryCounts.dataCards}</span>
-           </button>
-         </li>
-         <li className={selectedCategory === 'bank_cards' ? 'active' : ''}>
-@@ -272,6 +275,7 @@
-             }}
-           >
-             <span className="folder-name">{t('category.bankCards')}</span>
-+            <span className="folder-count">{categoryCounts.bankCards}</span>
-           </button>
-         </li>
-       </ul>
++              {isNavigationEmpty ? (
++                <div className="vault-datacard-list vault-datacard-list--empty">
++                  <div className="vault-empty">{tDataCards('label.empty')}</div>
++                </div>
++              ) : (
++                <>
++                  {hasVisibleDataCards && (
++                    <DataCards
++                      viewModel={dataCardsViewModel}
++                      sectionTitle={tFolders('category.dataCards')}
++                      clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
++                      clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
++                    />
++                  )}
++
++                  {hasVisibleBankCards && (
++                    <BankCards
++                      viewModel={bankCardsViewModel}
++                      sectionTitle={tFolders('category.bankCards')}
++                      folders={vault.folders}
++                    />
++                  )}
++                </>
++              )}
+             </>
+           ) : selectedCategory === 'data_cards' ? (
+             <DataCards
+               viewModel={dataCardsViewModel}
+               sectionTitle={vault.currentSectionTitle}
+               clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+               clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+             />
+           ) : (
+             <BankCards
+               viewModel={bankCardsViewModel}
+               sectionTitle={bankCards.currentSectionTitle}
+               folders={vault.folders}
+             />
+           )}
+         </section>
