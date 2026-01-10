@@ -20,6 +20,7 @@ export type FolderListProps = {
   onAddBankCard: () => void;
   folders: Folder[];
   counts: Counts;
+  categoryCounts: { dataCards: number; bankCards: number };
   selectedNav: SelectedNav;
   selectedFolderId: string | null;
   onSelectNav: (nav: SelectedNav) => void;
@@ -34,6 +35,7 @@ export function Folders({
   onAddBankCard,
   folders,
   counts,
+  categoryCounts,
   selectedNav,
   selectedFolderId,
   onSelectNav,
@@ -259,6 +261,7 @@ export function Folders({
         <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
           <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
             <span className="folder-name">{t('category.dataCards')}</span>
+            <span className="folder-count">{categoryCounts.dataCards}</span>
           </button>
         </li>
         <li className={selectedCategory === 'bank_cards' ? 'active' : ''}>
@@ -272,6 +275,7 @@ export function Folders({
             }}
           >
             <span className="folder-name">{t('category.bankCards')}</span>
+            <span className="folder-count">{categoryCounts.bankCards}</span>
           </button>
         </li>
       </ul>

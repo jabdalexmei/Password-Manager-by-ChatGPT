@@ -268,9 +268,15 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
           ? vault.counts
           : bankCards.counts;
 
+    // Navigation "All items" should always show total across Data + Bank.
     // Folder view always shows both types, so folder counts should reflect combined totals.
-    return { ...base, folders: combinedCounts.folders };
+    return { ...base, all: combinedCounts.all, folders: combinedCounts.folders };
   }, [bankCards.counts, combinedCounts, selectedCategory, vault.counts]);
+
+  const categoryCounts = useMemo(
+    () => ({ dataCards: vault.counts.all, bankCards: bankCards.counts.all }),
+    [bankCards.counts.all, vault.counts.all]
+  );
 
   const handleNavClick = useCallback(
     (nav: SelectedNav) => {
@@ -378,6 +384,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             onAddBankCard={handleAddBankCard}
             folders={vault.folders}
             counts={sidebarCounts}
+            categoryCounts={categoryCounts}
             selectedNav={vault.selectedNav}
             selectedFolderId={vault.selectedFolderId}
             onSelectNav={(nav) => void handleNavClick(nav)}
