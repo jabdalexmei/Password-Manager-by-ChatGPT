@@ -280,7 +280,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const handleNavClick = useCallback(
     (nav: SelectedNav) => {
-      if (nav === 'all') {
+      // Any Navigation selection is its own mode: it clears Category focus.
+      if (typeof nav === 'string') {
         setSelectedCategory('all_items');
       }
       void syncSelectNav(nav);
