@@ -1,19 +1,40 @@
+
+
+```diff
 diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
 --- a/src/features/Vault/Vault.tsx
 +++ b/src/features/Vault/Vault.tsx
-@@ -225,6 +225,12 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-       };
+@@ -214,6 +214,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+   const handleAddBankCard = useCallback(() => {
+     setSelectedCategory('bank_cards');
+     setActiveDetailsKind('bank');
+     bankCardsViewModel.openCreateModal();
+   }, [bankCardsViewModel.openCreateModal]);
+
+   const combinedCounts = useMemo(() => {
+@@ -243,6 +244,11 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+       folders: sumFolderCounts(vault.counts.folders, bankCards.counts.folders),
      };
- 
+   }, [bankCards.counts, vault.counts]);
++
 +  const sidebarCounts = useMemo(
 +    () => (selectedCategory === 'data_cards' ? vault.counts : bankCards.counts),
-+    [selectedCategory, vault.counts, bankCards.counts]
++    [bankCards.counts, selectedCategory, vault.counts]
 +  );
-+
+
    const handleSelectNav = useCallback(
      async (nav: SelectedNav) => {
        await Promise.all([vault.selectNav(nav), bankCards.selectNav(nav)]);
-@@ -304,7 +310,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+@@ -268,10 +274,11 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+   const showCombinedLists = useMemo(() => {
+     if (typeof vault.selectedNav === 'object') return true;
+     return vault.searchQuery.trim().length > 0;
+   }, [vault.searchQuery, vault.selectedNav]);
++  const isFolderView = typeof vault.selectedNav === 'object';
+
+   return (
+     <div className="vault-shell">
+@@ -317,7 +324,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
            <Folders
              selectedCategory={selectedCategory}
              onSelectCategory={handleSelectCategory}
@@ -29,3 +50,68 @@ diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
              onRenameFolder={vault.renameFolder}
            />
          </aside>
+
+         <section className="vault-datacards">
+           {showCombinedLists ? (
+             <>
++              {isFolderView && (
++                <div className="vault-folder-title">
++                  <div className="vault-section-header">{vault.currentSectionTitle}</div>
++                </div>
++              )}
+               <DataCards
+                 viewModel={dataCardsViewModel}
+-                sectionTitle={`${vault.currentSectionTitle} • ${tFolders('category.dataCards')}`}
++                sectionTitle={
++                  isFolderView ? tFolders('category.dataCards') : `${vault.currentSectionTitle} • ${tFolders('category.dataCards')}`
++                }
+                 clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+                 clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+               />
+               <BankCards
+                 viewModel={bankCardsViewModel}
+-                sectionTitle={`${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`}
++                sectionTitle={
++                  isFolderView ? tFolders('category.bankCards') : `${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`
++                }
+                 folders={vault.folders}
+               />
+             </>
+           ) : selectedCategory === 'data_cards' ? (
+             <DataCards
+               viewModel={dataCardsViewModel}
+               sectionTitle={vault.currentSectionTitle}
+               clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+               clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+             />
+           ) : (
+             <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} folders={vault.folders} />
+           )}
+         </section>
+```
+
+```diff
+diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
+--- a/src/shared/styles/screens/vault.css
++++ b/src/shared/styles/screens/vault.css
+@@ -402,6 +402,15 @@
+ .vault-section-header {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   font-weight: 700;
+   letter-spacing: 0.2px;
+   color: var(--color-text);
+ }
++
++.vault-folder-title {
++  padding-bottom: 4px;
++}
++
++.vault-folder-title .vault-section-header {
++  font-size: 18px;
++  line-height: 24px;
++}
+```
+
+Ч
