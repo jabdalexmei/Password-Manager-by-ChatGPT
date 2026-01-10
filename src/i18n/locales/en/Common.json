@@ -2,6 +2,7 @@
   "action.cancel": "Cancel",
   "action.close": "Close",
   "action.ok": "OK",
+  "label.empty": "Empty",
   "aria.dismissToast": "Dismiss",
   "error.backupProfileMismatch": "This backup belongs to a different profile.",
   "error.backupUnsupportedFormat": "This backup format is not supported.",

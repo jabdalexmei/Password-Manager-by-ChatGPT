@@ -744,6 +744,11 @@ export function DataCards({
     );
   };
 
+  const emptyLabel = (() => {
+    const v = t('label.empty');
+    return v === 'label.empty' ? tCommon('label.empty') : v;
+  })();
+
   return (
     <div className="vault-panel-wrapper">
       <div className="datacards-header">
@@ -805,7 +810,7 @@ export function DataCards({
 
       {cards.length === 0 ? (
         <div className="vault-datacard-list vault-datacard-list--empty">
-          <div className="vault-empty">{t('label.empty')}</div>
+          <div className="vault-empty">{emptyLabel}</div>
         </div>
       ) : (
         <div className="vault-datacard-list">

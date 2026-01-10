@@ -294,6 +294,10 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
   const hasVisibleDataCards = dataCardsViewModel.cards.length > 0;
   const hasVisibleBankCards = bankCardsViewModel.cards.length > 0;
   const isNavigationEmpty = !hasVisibleDataCards && !hasVisibleBankCards;
+  const emptyLabel = (() => {
+    const v = tDataCards('label.empty');
+    return v === 'label.empty' ? tCommon('label.empty') : v;
+  })();
   const isGlobalTrashMode = showBothLists && typeof vault.selectedNav === 'string' && vault.selectedNav === 'deleted';
   const isGlobalTrashBulkSubmitting = dataCardsViewModel.isTrashBulkSubmitting || bankCardsViewModel.isTrashBulkSubmitting;
 
@@ -461,7 +465,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
               {isNavigationEmpty ? (
                 <div className="vault-datacard-list vault-datacard-list--empty">
-                  <div className="vault-empty">{tDataCards('label.empty')}</div>
+                  <div className="vault-empty">{emptyLabel}</div>
                 </div>
               ) : (
                 <>
