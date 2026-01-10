@@ -1,42 +1,126 @@
-
-
-```diff
-diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
 --- a/src/features/Vault/Vault.tsx
 +++ b/src/features/Vault/Vault.tsx
-@@ -214,6 +214,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+@@ -126,16 +126,27 @@
+     [onLocked, showToast, tCommon],
+   );
+ 
++  const syncSelectNav = useCallback(
++    async (nav: SelectedNav) => {
++      await Promise.all([vault.selectNav(nav), bankCards.selectNav(nav)]);
++      // When switching sections, clear selections to avoid showing stale details.
++      vault.selectCard(null);
++      bankCards.selectCard(null);
++    },
++    [bankCards.selectNav, bankCards.selectCard, vault.selectNav, vault.selectCard]
++  );
++
+   const handleSelectCategory = useCallback(
+     (category: VaultCategory) => {
++      if (category === 'all_items') return;
+       setSelectedCategory(category);
+       setActiveDetailsKind(category === 'bank_cards' ? 'bank' : 'data');
+-      vault.selectCard(null);
+-      bankCards.selectCard(null);
++      void syncSelectNav('all');
+     },
+-    [bankCards.selectCard, vault.selectCard]
++    [syncSelectNav]
+   );
+ 
++
+   const handleExportBackup = () => setExportModalOpen(true);
+ 
+   const handleImportBackup = async () => {
+@@ -227,8 +238,10 @@
    const handleAddBankCard = useCallback(() => {
      setSelectedCategory('bank_cards');
      setActiveDetailsKind('bank');
++    void syncSelectNav('all');
      bankCardsViewModel.openCreateModal();
-   }, [bankCardsViewModel.openCreateModal]);
-
+-  }, [bankCardsViewModel.openCreateModal]);
++  }, [bankCardsViewModel.openCreateModal, syncSelectNav]);
++
+ 
    const combinedCounts = useMemo(() => {
-@@ -243,6 +244,11 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-       folders: sumFolderCounts(vault.counts.folders, bankCards.counts.folders),
+     const sumFolderCounts = (a: Record<string, number>, b: Record<string, number>) => {
+@@ -248,16 +261,30 @@
      };
    }, [bankCards.counts, vault.counts]);
+ 
+-  const handleSelectNav = useCallback(
+-    async (nav: SelectedNav) => {
+-      await Promise.all([vault.selectNav(nav), bankCards.selectNav(nav)]);
+-      // When switching sections, clear selections to avoid showing stale details.
+-      vault.selectCard(null);
+-      bankCards.selectCard(null);
++  const sidebarCounts = useMemo(() => {
++    const base =
++      selectedCategory === 'all_items'
++        ? combinedCounts
++        : selectedCategory === 'data_cards'
++          ? vault.counts
++          : bankCards.counts;
 +
-+  const sidebarCounts = useMemo(
-+    () => (selectedCategory === 'data_cards' ? vault.counts : bankCards.counts),
-+    [bankCards.counts, selectedCategory, vault.counts]
-+  );
-
-   const handleSelectNav = useCallback(
-     async (nav: SelectedNav) => {
-       await Promise.all([vault.selectNav(nav), bankCards.selectNav(nav)]);
-@@ -268,10 +274,11 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-   const showCombinedLists = useMemo(() => {
-     if (typeof vault.selectedNav === 'object') return true;
-     return vault.searchQuery.trim().length > 0;
-   }, [vault.searchQuery, vault.selectedNav]);
++    // Folder view always shows both types, so folder counts should reflect combined totals.
++    return { ...base, folders: combinedCounts.folders };
++  }, [bankCards.counts, combinedCounts, selectedCategory, vault.counts]);
++
++
++  const handleNavClick = useCallback(
++    (nav: SelectedNav) => {
++      if (nav === 'all') {
++        setSelectedCategory('all_items');
++      }
++      void syncSelectNav(nav);
+     },
+-    [bankCards.selectNav, bankCards.selectCard, vault.selectNav, vault.selectCard]
++    [syncSelectNav]
+   );
+ 
++
+   const handleSearchChange = useCallback(
+     (value: string) => {
+       vault.setSearchQuery(value);
+@@ -266,10 +293,9 @@
+     [bankCards.setSearchQuery, vault.setSearchQuery]
+   );
+ 
+-  const showCombinedLists = useMemo(() => {
+-    if (typeof vault.selectedNav === 'object') return true;
+-    return vault.searchQuery.trim().length > 0;
+-  }, [vault.searchQuery, vault.selectedNav]);
 +  const isFolderView = typeof vault.selectedNav === 'object';
-
++  const showBothLists = isFolderView || selectedCategory === 'all_items';
++
+ 
    return (
      <div className="vault-shell">
-@@ -317,7 +324,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-           <Folders
-             selectedCategory={selectedCategory}
+@@ -289,12 +315,21 @@
+             <Search
+               query={vault.searchQuery}
+               onChange={handleSearchChange}
+-              filters={selectedCategory === 'data_cards' ? vault.filters : undefined}
+-              onChangeFilters={selectedCategory === 'data_cards' ? vault.setFilters : undefined}
++              filters={selectedCategory === 'data_cards' && !showBothLists ? vault.filters : undefined}
++              onChangeFilters={selectedCategory === 'data_cards' && !showBothLists ? vault.setFilters : undefined}
+             />
+           </div>
+           <div className="vault-sidebar-actions">
+-            {selectedCategory === 'data_cards' ? (
++            {selectedCategory === 'all_items' ? (
++              <>
++                <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
++                  {tDataCards('label.addDataCard')}
++                </button>
++                <button className="btn btn-secondary" type="button" onClick={bankCardsViewModel.openCreateModal}>
++                  {tBankCards('label.addBankCard')}
++                </button>
++              </>
++            ) : selectedCategory === 'data_cards' ? (
+               <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
+                 {tDataCards('label.addDataCard')}
+               </button>
+@@ -312,10 +347,10 @@
              onSelectCategory={handleSelectCategory}
              onAddBankCard={handleAddBankCard}
              folders={vault.folders}
@@ -44,66 +128,65 @@ diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
 +            counts={sidebarCounts}
              selectedNav={vault.selectedNav}
              selectedFolderId={vault.selectedFolderId}
-             onSelectNav={(nav) => void handleSelectNav(nav)}
+-            onSelectNav={(nav) => void handleSelectNav(nav)}
++            onSelectNav={(nav) => handleNavClick(nav)}
              dialogState={folderDialogs}
              onDeleteFolder={handleDeleteFolder}
              onRenameFolder={vault.renameFolder}
-           />
+@@ -323,17 +358,20 @@
          </aside>
-
+ 
          <section className="vault-datacards">
-           {showCombinedLists ? (
+-          {showCombinedLists ? (
++          {showBothLists ? (
              <>
-+              {isFolderView && (
-+                <div className="vault-folder-title">
-+                  <div className="vault-section-header">{vault.currentSectionTitle}</div>
-+                </div>
-+              )}
++              <div className="vault-folder-title">
++                <div className="vault-section-header">{vault.currentSectionTitle}</div>
++              </div>
                <DataCards
                  viewModel={dataCardsViewModel}
 -                sectionTitle={`${vault.currentSectionTitle} • ${tFolders('category.dataCards')}`}
-+                sectionTitle={
-+                  isFolderView ? tFolders('category.dataCards') : `${vault.currentSectionTitle} • ${tFolders('category.dataCards')}`
-+                }
++                sectionTitle={tFolders('category.dataCards')}
                  clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
                  clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
                />
                <BankCards
                  viewModel={bankCardsViewModel}
 -                sectionTitle={`${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`}
-+                sectionTitle={
-+                  isFolderView ? tFolders('category.bankCards') : `${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`
-+                }
++                sectionTitle={tFolders('category.bankCards')}
                  folders={vault.folders}
                />
              </>
-           ) : selectedCategory === 'data_cards' ? (
-             <DataCards
-               viewModel={dataCardsViewModel}
-               sectionTitle={vault.currentSectionTitle}
-               clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+@@ -345,7 +383,11 @@
                clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
              />
            ) : (
-             <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} folders={vault.folders} />
+-            <BankCards viewModel={bankCardsViewModel} sectionTitle={bankCards.currentSectionTitle} folders={vault.folders} />
++            <BankCards
++              viewModel={bankCardsViewModel}
++              sectionTitle={bankCards.currentSectionTitle}
++              folders={vault.folders}
++            />
            )}
          </section>
-```
-
-```diff
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
+ 
+--- a/src/features/Vault/components/Folders/Folders.tsx
++++ b/src/features/Vault/components/Folders/Folders.tsx
+@@ -12,7 +12,7 @@
+   folders: Record<string, number>;
+ };
+ 
+-export type VaultCategory = 'data_cards' | 'bank_cards';
++export type VaultCategory = 'data_cards' | 'bank_cards' | 'all_items';
+ 
+ export type FolderListProps = {
+   selectedCategory: VaultCategory;
 --- a/src/shared/styles/screens/vault.css
 +++ b/src/shared/styles/screens/vault.css
-@@ -402,6 +402,15 @@
- .vault-section-header {
-   display: flex;
-   align-items: center;
-   gap: 8px;
-   font-weight: 700;
-   letter-spacing: 0.2px;
+@@ -394,6 +394,16 @@
    color: var(--color-text);
  }
-+
+ 
 +.vault-folder-title {
 +  padding-bottom: 4px;
 +}
@@ -112,6 +195,8 @@ diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vau
 +  font-size: 18px;
 +  line-height: 24px;
 +}
-```
-
-Ч
++
++
+ .datacards-header {
+   display: flex;
+   align-items: center;
