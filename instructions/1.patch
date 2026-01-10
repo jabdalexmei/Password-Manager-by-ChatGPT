@@ -1,46 +1,22 @@
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -262,6 +262,44 @@
- .vault-sidebar-actions .btn {
-   flex: 1;
- }
- 
- .vault-sidebar-addmenu {
-   position: relative;
-   flex: 1;
-+  overflow: visible;
- }
- 
- .vault-sidebar-addmenu > .btn {
-   width: 100%;
- }
-+
-+/* Keep dropdown menu inside the app/sidebar */
-+.vault-sidebar-addmenu .vault-actionmenu-backdrop {
-+  position: fixed;
-+  inset: 0;
-+  z-index: 50;
-+}
-+
-+.vault-sidebar-addmenu .vault-actionmenu-panel {
-+  position: absolute;
-+  top: calc(100% + 8px);
-+  left: 0;
-+  right: 0;
-+  z-index: 51;
-+
-+  /* Never overflow horizontally; match button width */
-+  width: auto;
-+  max-width: 100%;
-+  box-sizing: border-box;
-+
-+  /* Prevent going out of window vertically */
-+  max-height: min(320px, calc(100vh - 160px));
-+  overflow-y: auto;
-+}
-+
-+.vault-sidebar-addmenu .vault-actionmenu-item {
-+  width: 100%;
-+  text-align: left;
-+}
+diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
+--- a/src/features/Vault/components/Folders/Folders.tsx
++++ b/src/features/Vault/components/Folders/Folders.tsx
+@@ -271,10 +271,14 @@ export function Folders({
+       </ul>
+       <div className="vault-sidebar-title">{t('nav.title')}</div>
+       <ul className="vault-folder-list">
+-        {renderSystemItem('all', t('nav.allItems'), counts.all, selectedNav === 'all')}
++        {renderSystemItem(
++          'all',
++          t('nav.allItems'),
++          counts.all,
++          selectedNav === 'all' && selectedCategory === 'all_items'
++        )}
+         {renderSystemItem('favorites', t('nav.favorites'), counts.favorites, selectedNav === 'favorites')}
+         {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
+         {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
+       </ul>
+       <div className="vault-sidebar-title">{t('title')}</div>
+       <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
+       {renderCreateDialog()}
+       {renderRenameDialog()}
