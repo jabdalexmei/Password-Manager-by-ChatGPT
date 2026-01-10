@@ -1,13 +1,12 @@
 
-## Патчи
 
-### 1) `useVault.ts` — грузим trash на старте
+### 1) Data cards: грузим trash на старте
 
 ```diff
 diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
 --- a/src/features/Vault/hooks/useVault.ts
 +++ b/src/features/Vault/hooks/useVault.ts
-@@ -1,5 +1,5 @@
+@@ -232,13 +232,14 @@ export function useVault(profileId: string, onLocked: () => void) {
    useEffect(() => {
      if (initOnceRef.current) return;
      initOnceRef.current = true;
@@ -21,13 +20,15 @@ diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/use
 +  }, [handleError, refreshActive, refreshTrash]);
 ```
 
-### 2) `useBankCards.ts` — то же самое для bank cards trash
+---
+
+### 2) Bank cards: грузим trash на старте
 
 ```diff
 diff --git a/src/features/Vault/hooks/useBankCards.ts b/src/features/Vault/hooks/useBankCards.ts
 --- a/src/features/Vault/hooks/useBankCards.ts
 +++ b/src/features/Vault/hooks/useBankCards.ts
-@@ -1,5 +1,5 @@
+@@ -162,13 +162,14 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
    useEffect(() => {
      if (initOnceRef.current) return;
      initOnceRef.current = true;
@@ -41,3 +42,4 @@ diff --git a/src/features/Vault/hooks/useBankCards.ts b/src/features/Vault/hooks
 +  }, [handleError, refreshActive, refreshTrash]);
 ```
 
+-
