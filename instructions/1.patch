@@ -1,17 +1,207 @@
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -570,9 +570,12 @@
-   flex-direction: column;
-   gap: 8px;
- }
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -50,19 +50,26 @@ export type DataCardsProps = {
+   /**
+    * When DataCards is rendered as part of a combined view (e.g. global Deleted),
+    * the parent can render a single actions menu and suppress the per-section one.
+    */
+   showTrashActions?: boolean;
++  /**
++   * In combined views (Navigation/Folders), the parent may want to render a single
++   * global empty state instead of per-section "Empty" blocks. This flag suppresses
++   * the per-section empty placeholder while keeping dialogs functional.
++   */
++  suppressEmptyState?: boolean;
+ };
  
- .vault-datacard-list--empty {
--  justify-content: center;
-+  /* Empty should be shown under the section header, not vertically centered */
-+  justify-content: flex-start;
- }
- .vault-datacard {
-   width: 100%;
-   text-align: left;
-   padding: 10px 12px;
+ export function DataCards({
+   viewModel,
+   sectionTitle,
+   clipboardAutoClearEnabled,
+   clipboardClearTimeoutSeconds,
+   fillHeight = true,
+   showTrashActions = true,
++  suppressEmptyState = false,
+ }: DataCardsProps) {
+   const { t } = useTranslation('DataCards');
+   const { t: tCommon } = useTranslation('Common');
+   const { show: showToast } = useToaster();
+   const {
+@@ -754,10 +761,23 @@ export function DataCards({
+   const emptyLabel = (() => {
+     const v = t('label.empty');
+     return v === 'label.empty' ? tCommon('label.empty') : v;
+   })();
+ 
++  const hasAnyOverlayOpen =
++    isCreateOpen ||
++    isEditOpen ||
++    isGeneratorOpen ||
++    isCustomFieldModalOpen ||
++    isRenameModalOpen ||
++    is2faModalOpen ||
++    isSeedPhraseModalOpen;
++
++  if (suppressEmptyState && cards.length === 0 && !hasAnyOverlayOpen) {
++    return null;
++  }
++
+   return (
+     <div className={`vault-panel-wrapper ${fillHeight ? 'vault-panel-wrapper--fill' : ''}`.trim()}>
+       <div className="datacards-header">
+         <div className="vault-section-header">{sectionTitle}</div>
+ 
+@@ -814,13 +834,15 @@ export function DataCards({
+           )}
+         </div>
+       </div>
+ 
+       {cards.length === 0 ? (
+-        <div className="vault-datacard-list vault-datacard-list--empty">
+-          <div className="vault-empty">{emptyLabel}</div>
+-        </div>
++        suppressEmptyState ? null : (
++          <div className="vault-datacard-list vault-datacard-list--empty">
++            <div className="vault-empty">{emptyLabel}</div>
++          </div>
++        )
+       ) : (
+         <div className="vault-datacard-list">
+           {cards.map((card) => {
+             const isActive = selectedCardId === card.id;
+             const isFavorite = card.isFavorite;
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -18,13 +18,26 @@ export type BankCardsProps = {
+   /**
+    * When BankCards is rendered as part of a combined view (e.g. global Deleted),
+    * the parent can render a single actions menu and suppress the per-section one.
+    */
+   showTrashActions?: boolean;
++  /**
++   * In combined views (Navigation/Folders), the parent may want to render a single
++   * global empty state instead of per-section "Empty" blocks. This flag suppresses
++   * the per-section empty placeholder while keeping dialogs functional.
++   */
++  suppressEmptyState?: boolean;
+ };
+ 
+-export function BankCards({ viewModel, sectionTitle, folders, fillHeight = true, showTrashActions = true }: BankCardsProps) {
++export function BankCards({
++  viewModel,
++  sectionTitle,
++  folders,
++  fillHeight = true,
++  showTrashActions = true,
++  suppressEmptyState = false,
++}: BankCardsProps) {
+   const { t } = useTranslation('BankCards');
+   const { t: tCommon } = useTranslation('Common');
+   const {
+     cards,
+     selectedCardId,
+@@ -238,10 +251,15 @@ export function BankCards({ viewModel, sectionTitle, folders, fillHeight = true,
+   const emptyLabel = (() => {
+     const v = t('label.empty');
+     return v === 'label.empty' ? tCommon('label.empty') : v;
+   })();
+ 
++  const hasAnyOverlayOpen = isCreateOpen || isEditOpen;
++  if (suppressEmptyState && cards.length === 0 && !hasAnyOverlayOpen) {
++    return null;
++  }
++
+   return (
+     <div className={`vault-panel-wrapper ${fillHeight ? 'vault-panel-wrapper--fill' : ''}`.trim()}>
+       <div className="datacards-header">
+         <div className="vault-section-header">{sectionTitle}</div>
+ 
+@@ -298,13 +316,15 @@ export function BankCards({ viewModel, sectionTitle, folders, fillHeight = true,
+           )}
+         </div>
+       </div>
+ 
+       {cards.length === 0 ? (
+-        <div className="vault-datacard-list vault-datacard-list--empty">
+-          <div className="vault-empty">{emptyLabel}</div>
+-        </div>
++        suppressEmptyState ? null : (
++          <div className="vault-datacard-list vault-datacard-list--empty">
++            <div className="vault-empty">{emptyLabel}</div>
++          </div>
++        )
+       ) : (
+         <div className="vault-datacard-list">
+           {cards.map((card) => {
+             const isActive = selectedCardId === card.id;
+             const isFavorite = card.isFavorite;
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -461,38 +461,40 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+                     <div className="datacards-header__spacer" aria-hidden="true" />
+                   )}
+                 </div>
+               </div>
+ 
+-              {isNavigationEmpty ? (
++              {isNavigationEmpty && (
+                 <div className="vault-datacard-list vault-datacard-list--empty">
+                   <div className="vault-empty">{emptyLabel}</div>
+                 </div>
+-              ) : (
+-                <>
+-                  {hasVisibleDataCards && (
+-                    <DataCards
+-                      viewModel={dataCardsViewModel}
+-                      sectionTitle={tFolders('category.dataCards')}
+-                      clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+-                      clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+-                      fillHeight={false}
+-                      showTrashActions={!isGlobalTrashMode}
+-                    />
+-                  )}
+-
+-                  {hasVisibleBankCards && (
+-                    <BankCards
+-                      viewModel={bankCardsViewModel}
+-                      sectionTitle={tFolders('category.bankCards')}
+-                      folders={vault.folders}
+-                      fillHeight={false}
+-                      showTrashActions={!isGlobalTrashMode}
+-                    />
+-                  )}
+-                </>
+               )}
++
++              {/*
++               * Always mount both panels in combined views so their create/edit dialogs can open
++               * even when the corresponding list is currently empty.
++               * The panels suppress their own per-section empty placeholder; the combined view
++               * renders the global Empty state above.
++               */}
++              <DataCards
++                viewModel={dataCardsViewModel}
++                sectionTitle={tFolders('category.dataCards')}
++                clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
++                clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
++                fillHeight={false}
++                showTrashActions={!isGlobalTrashMode}
++                suppressEmptyState
++              />
++
++              <BankCards
++                viewModel={bankCardsViewModel}
++                sectionTitle={tFolders('category.bankCards')}
++                folders={vault.folders}
++                fillHeight={false}
++                showTrashActions={!isGlobalTrashMode}
++                suppressEmptyState
++              />
+             </>
+           ) : selectedCategory === 'data_cards' ? (
+             <DataCards
+               viewModel={dataCardsViewModel}
+               sectionTitle={vault.currentSectionTitle}
