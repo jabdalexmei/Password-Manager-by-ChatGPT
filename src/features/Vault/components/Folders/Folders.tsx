@@ -277,7 +277,12 @@ export function Folders({
       </ul>
       <div className="vault-sidebar-title">{t('nav.title')}</div>
       <ul className="vault-folder-list">
-        {renderSystemItem('all', t('nav.allItems'), counts.all, selectedNav === 'all')}
+        {renderSystemItem(
+          'all',
+          t('nav.allItems'),
+          counts.all,
+          selectedNav === 'all' && selectedCategory === 'all_items'
+        )}
         {renderSystemItem('favorites', t('nav.favorites'), counts.favorites, selectedNav === 'favorites')}
         {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
         {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
