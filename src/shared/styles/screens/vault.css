@@ -273,10 +273,40 @@
 .vault-sidebar-addmenu {
   position: relative;
   flex: 1;
+  overflow: visible;
 }
 
 .vault-sidebar-addmenu > .btn {
   width: 100%;
+}
+
+/* Keep dropdown menu inside the app/sidebar */
+.vault-sidebar-addmenu .vault-actionmenu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.vault-sidebar-addmenu .vault-actionmenu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 51;
+
+  /* Never overflow horizontally; match button width */
+  width: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  /* Prevent going out of window vertically */
+  max-height: min(320px, calc(100vh - 160px));
+  overflow-y: auto;
+}
+
+.vault-sidebar-addmenu .vault-actionmenu-item {
+  width: 100%;
+  text-align: left;
 }
 
 .vault-sidebar-title {
