@@ -1,42 +1,43 @@
-diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
---- a/src/features/Vault/Vault.tsx
-+++ b/src/features/Vault/Vault.tsx
-@@ -240,29 +240,9 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-     };
-   }, [bankCards.counts, vault.counts]);
+
+## Патчи
+
+### 1) `useVault.ts` — грузим trash на старте
+
+```diff
+diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
+--- a/src/features/Vault/hooks/useVault.ts
++++ b/src/features/Vault/hooks/useVault.ts
+@@ -1,5 +1,5 @@
+   useEffect(() => {
+     if (initOnceRef.current) return;
+     initOnceRef.current = true;
  
--  const sidebarCounts = useMemo(() => {
--    const base =
--      selectedCategory === 'all_items'
--        ? combinedCounts
--        : selectedCategory === 'data_cards'
--          ? vault.counts
--          : bankCards.counts;
--
--    // Navigation counters:
--    // - "All items" should always show total across Data + Bank.
--    // - "Deleted" (trash) should always show total across Data + Bank.
--    // Folder view always shows both types, so folder counts should reflect combined totals.
--    return { ...base, all: combinedCounts.all, deleted: combinedCounts.deleted, folders: combinedCounts.folders };
--  }, [bankCards.counts, combinedCounts, selectedCategory, vault.counts]);
-+  // Navigation + Folders are always global (Data + Bank), regardless of Category.
-+  const sidebarCounts = useMemo(() => combinedCounts, [combinedCounts]);
+     refreshActive();
++    refreshTrash();
+     getSettings()
+       .then(setSettings)
+       .catch(handleError);
+-  }, [handleError, refreshActive]);
++  }, [handleError, refreshActive, refreshTrash]);
+```
+
+### 2) `useBankCards.ts` — то же самое для bank cards trash
+
+```diff
+diff --git a/src/features/Vault/hooks/useBankCards.ts b/src/features/Vault/hooks/useBankCards.ts
+--- a/src/features/Vault/hooks/useBankCards.ts
++++ b/src/features/Vault/hooks/useBankCards.ts
+@@ -1,5 +1,5 @@
+   useEffect(() => {
+     if (initOnceRef.current) return;
+     initOnceRef.current = true;
  
-   const categoryCounts = useMemo(
-     () => ({ dataCards: vault.counts.all, bankCards: bankCards.counts.all }),
-     [bankCards.counts.all, vault.counts.all]
-@@ -377,7 +357,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-             selectedCategory={selectedCategory}
-             onSelectCategory={handleSelectCategory}
-             onAddBankCard={handleAddBankCard}
-             folders={vault.folders}
--            counts={sidebarCounts}
-+            counts={sidebarCounts}
-             categoryCounts={categoryCounts}
-             selectedNav={vault.selectedNav}
-             selectedFolderId={vault.selectedFolderId}
-             onSelectNav={(nav) => void handleNavClick(nav)}
-             dialogState={folderDialogs}
-             onDeleteFolder={handleDeleteFolder}
-             onRenameFolder={vault.renameFolder}
-           />
+     refreshActive();
++    refreshTrash();
+     getSettings()
+       .then(setSettings)
+       .catch(handleError);
+-  }, [handleError, refreshActive]);
++  }, [handleError, refreshActive, refreshTrash]);
+```
+
