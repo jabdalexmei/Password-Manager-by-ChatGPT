@@ -858,14 +858,21 @@ select:autofill {
   border: none;
   color: var(--color-text);
   cursor: pointer;
+  /* stable "rail" for brand highlight (prevents layout jitter) */
+  box-shadow: inset 2px 0 0 transparent;
 }
 
-.folder-select__option:hover {
-  background: var(--surface-tint-03);
+.folder-select__option:hover,
+.folder-select__option:focus-visible {
+  background: var(--primary-soft-bg);
+  box-shadow: inset 2px 0 0 var(--color-primary);
+  outline: none;
 }
 
 .folder-select__option.is-selected {
-  background: var(--surface-tint-03);
+  background: var(--primary-soft-bg);
+  box-shadow: inset 2px 0 0 var(--color-primary);
+  font-weight: 600;
 }
 
 /* "X" close button inside dialogs */

@@ -1,32 +1,90 @@
-diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
---- a/src/shared/styles/ui.css
-+++ b/src/shared/styles/ui.css
-@@ -845,21 +845,30 @@
- .folder-select__option {
-   width: 100%;
-   text-align: left;
-   padding: 10px 12px;
-   background: transparent;
-   color: var(--color-text);
-   border: 0;
-+  cursor: pointer;
-+  /* stable "rail" for brand highlight (prevents layout jitter) */
-+  box-shadow: inset 2px 0 0 transparent;
- }
+diff --git a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+--- a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
++++ b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+@@ -224,9 +224,7 @@ export function useBankCardsViewModel({
+   const submitCreate = useCallback(async () => {
+     if (isCreateSubmitting) return;
+     setCreateErrors({});
+-    const trimmedTitle = createForm.title.trim();
+     const nextErrors: BankCardFieldErrors = {};
+-    if (!trimmedTitle) nextErrors.title = t('validation.titleRequired');
  
--.folder-select__option:hover {
--  background: var(--surface-tint-02);
--}
-+.folder-select__option:hover,
-+.folder-select__option:focus-visible {
-+  background: var(--primary-soft-bg);
-+  box-shadow: inset 2px 0 0 var(--color-primary);
-+  outline: none;
-+}
+     const expiry = createForm.expiryMmYy.trim();
+     if (expiry.length > 0 && !EXPIRY_RE.test(expiry)) {
+@@ -248,7 +246,7 @@ export function useBankCardsViewModel({
+       setCreateOpen(false);
+       resetCreateForm();
+     } catch {
+-      setCreateErrors({ title: t('validation.titleRequired') });
++      // Intentionally ignore. Errors should be surfaced by the caller (toast) if needed.
+     } finally {
+       setIsCreateSubmitting(false);
+     }
+@@ -257,9 +255,7 @@ export function useBankCardsViewModel({
+   const submitEdit = useCallback(async () => {
+     if (isEditSubmitting || !editForm || !editCardId) return;
+     setEditErrors({});
+-    const trimmedTitle = editForm.title.trim();
+     const nextErrors: BankCardFieldErrors = {};
+-    if (!trimmedTitle) nextErrors.title = t('validation.titleRequired');
  
- .folder-select__option.is-selected {
--  background: var(--surface-tint-03);
-+  background: var(--primary-soft-bg);
-+  box-shadow: inset 2px 0 0 var(--color-primary);
-+  font-weight: 600;
- }
+     const expiry = editForm.expiryMmYy.trim();
+     if (expiry.length > 0 && !EXPIRY_RE.test(expiry)) {
+@@ -281,7 +277,7 @@ export function useBankCardsViewModel({
+       setEditOpen(false);
+       resetEditForm();
+     } catch {
+-      setEditErrors({ title: t('validation.titleRequired') });
++      // Intentionally ignore. Errors should be surfaced by the caller (toast) if needed.
+     } finally {
+       setIsEditSubmitting(false);
+     }
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -326,6 +326,7 @@ export function BankCards({ viewModel, sectionTitle, folders, showTrashActions =
+             const meta = card.metaLine || t('label.noMeta');
+             const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
+             const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
++            const title = card.title?.trim() ? card.title : t('label.untitled');
+ 
+             return (
+               <button
+@@ -335,7 +336,7 @@ export function BankCards({ viewModel, sectionTitle, folders, showTrashActions =
+                 onClick={() => viewModel.selectCard(card.id)}
+               >
+                 <div className="datacard-top">
+-                  <div className="datacard-title">{card.title}</div>
++                  <div className="datacard-title">{title}</div>
+                   {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
+                 </div>
+diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+--- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
++++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+@@ -78,6 +78,7 @@ export function BankCardDetails({
+   const hasExpiry = hasValue(card.expiryMmYy);
+   const hasCvc = hasValue(card.cvc);
+   const hasNote = hasValue(card.note);
++  const title = card.title?.trim() ? card.title : t('label.untitled');
+   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
+ 
+   const numberDisplay = hasNumber
+@@ -130,7 +131,7 @@ export function BankCardDetails({
+           <div className="detail-field">
+             <div className="detail-label">{t('label.title')}</div>
+             <div className="detail-value-box">
+-              <div className="detail-value-text">{card.title}</div>
++              <div className="detail-value-text">{title}</div>
+             </div>
+           </div>
+diff --git a/src/i18n/locales/en/BankCards.json b/src/i18n/locales/en/BankCards.json
+--- a/src/i18n/locales/en/BankCards.json
++++ b/src/i18n/locales/en/BankCards.json
+@@ -6,6 +6,7 @@
+   "label.favorite": "Favorite",
+   "label.updated": "Updated",
+   "label.created": "Created",
++  "label.untitled": "Untitled",
+   "label.title": "Title",
+   "label.titlePlaceholder": "Card name",
+   "label.holder": "Holder",
