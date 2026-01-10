@@ -57,6 +57,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const [selectedCategory, setSelectedCategory] = useState<VaultCategory>('data_cards');
   const [activeDetailsKind, setActiveDetailsKind] = useState<'data' | 'bank'>('data');
+  const [isAddCardMenuOpen, setIsAddCardMenuOpen] = useState(false);
 
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -316,14 +317,48 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
           </div>
           <div className="vault-sidebar-actions">
             {selectedCategory === 'all_items' ? (
-              <>
-                <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
-                  {tDataCards('label.addDataCard')}
+              <div className="vault-sidebar-addmenu">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={isAddCardMenuOpen}
+                  aria-controls="vault-addcard-menu"
+                  onClick={() => setIsAddCardMenuOpen((prev) => !prev)}
+                >
+                  {tVault('action.addCard')}
                 </button>
-                <button className="btn btn-secondary" type="button" onClick={bankCardsViewModel.openCreateModal}>
-                  {tBankCards('label.addBankCard')}
-                </button>
-              </>
+
+                {isAddCardMenuOpen && (
+                  <>
+                    <div className="vault-actionmenu-backdrop" onClick={() => setIsAddCardMenuOpen(false)} />
+                    <div className="vault-actionmenu-panel" role="menu" id="vault-addcard-menu">
+                      <button
+                        className="vault-actionmenu-item"
+                        type="button"
+                        onClick={() => {
+                          setIsAddCardMenuOpen(false);
+                          setActiveDetailsKind('data');
+                          dataCardsViewModel.openCreateModal();
+                        }}
+                      >
+                        {tFolders('category.dataCards')}
+                      </button>
+                      <button
+                        className="vault-actionmenu-item"
+                        type="button"
+                        onClick={() => {
+                          setIsAddCardMenuOpen(false);
+                          setActiveDetailsKind('bank');
+                          bankCardsViewModel.openCreateModal();
+                        }}
+                      >
+                        {tFolders('category.bankCards')}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : selectedCategory === 'data_cards' ? (
               <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
                 {tDataCards('label.addDataCard')}

@@ -270,6 +270,15 @@
   flex: 1;
 }
 
+.vault-sidebar-addmenu {
+  position: relative;
+  flex: 1;
+}
+
+.vault-sidebar-addmenu > .btn {
+  width: 100%;
+}
+
 .vault-sidebar-title {
   font-weight: 700;
   color: var(--color-text);
