@@ -122,21 +122,6 @@ export function BankCards({
             </div>
 
             <div className="form-field">
-              <label className="form-label" htmlFor={`${dialogId}-folder-input`}>
-                {t('label.folder')}
-              </label>
-              <FolderSelect
-                id={`${dialogId}-folder-input`}
-                value={form.folderId ?? null}
-                noneLabel={t('label.folderRoot')}
-                options={folders
-                  .filter((folder) => !folder.isSystem && !folder.deletedAt)
-                  .map((folder) => ({ id: folder.id, name: folder.name }))}
-                onChange={(folderId) => onFieldChange('folderId', folderId ?? '')}
-              />
-            </div>
-
-            <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-holder-input`}>
                 {t('label.holder')}
               </label>
@@ -208,6 +193,21 @@ export function BankCards({
                 value={form.note}
                 onChange={(e) => onFieldChange('note', e.target.value)}
                 placeholder={t('label.notePlaceholder')}
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor={`${dialogId}-folder-input`}>
+                {t('label.folder')}
+              </label>
+              <FolderSelect
+                id={`${dialogId}-folder-input`}
+                value={form.folderId ?? null}
+                noneLabel={t('label.folderRoot')}
+                options={folders
+                  .filter((folder) => !folder.isSystem && !folder.deletedAt)
+                  .map((folder) => ({ id: folder.id, name: folder.name }))}
+                onChange={(folderId) => onFieldChange('folderId', folderId ?? '')}
               />
             </div>
 
