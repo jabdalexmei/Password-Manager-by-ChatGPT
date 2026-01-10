@@ -42,6 +42,12 @@ export type DataCardsProps = {
   clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
   /**
+   * When true, the panel stretches to fill the center column height.
+   * This is desired for single-panel views (Category-only), so the list can scroll
+   * and the empty state can be vertically centered.
+   */
+  fillHeight?: boolean;
+  /**
    * When DataCards is rendered as part of a combined view (e.g. global Deleted),
    * the parent can render a single actions menu and suppress the per-section one.
    */
@@ -53,6 +59,7 @@ export function DataCards({
   sectionTitle,
   clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
+  fillHeight = true,
   showTrashActions = true,
 }: DataCardsProps) {
   const { t } = useTranslation('DataCards');
@@ -750,7 +757,7 @@ export function DataCards({
   })();
 
   return (
-    <div className="vault-panel-wrapper">
+    <div className={`vault-panel-wrapper ${fillHeight ? 'vault-panel-wrapper--fill' : ''}`.trim()}>
       <div className="datacards-header">
         <div className="vault-section-header">{sectionTitle}</div>
 

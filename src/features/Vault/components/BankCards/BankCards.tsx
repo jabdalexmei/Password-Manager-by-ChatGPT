@@ -10,13 +10,19 @@ export type BankCardsProps = {
   sectionTitle: string;
   folders: Folder[];
   /**
+   * When true, the panel stretches to fill the center column height.
+   * This is desired for single-panel views (Category-only), so the list can scroll
+   * and the empty state can be vertically centered.
+   */
+  fillHeight?: boolean;
+  /**
    * When BankCards is rendered as part of a combined view (e.g. global Deleted),
    * the parent can render a single actions menu and suppress the per-section one.
    */
   showTrashActions?: boolean;
 };
 
-export function BankCards({ viewModel, sectionTitle, folders, showTrashActions = true }: BankCardsProps) {
+export function BankCards({ viewModel, sectionTitle, folders, fillHeight = true, showTrashActions = true }: BankCardsProps) {
   const { t } = useTranslation('BankCards');
   const { t: tCommon } = useTranslation('Common');
   const {
@@ -235,7 +241,7 @@ export function BankCards({ viewModel, sectionTitle, folders, showTrashActions =
   })();
 
   return (
-    <div className="vault-panel-wrapper">
+    <div className={`vault-panel-wrapper ${fillHeight ? 'vault-panel-wrapper--fill' : ''}`.trim()}>
       <div className="datacards-header">
         <div className="vault-section-header">{sectionTitle}</div>
 

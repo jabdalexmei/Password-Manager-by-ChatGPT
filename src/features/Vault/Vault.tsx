@@ -475,6 +475,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
                       sectionTitle={tFolders('category.dataCards')}
                       clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
                       clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+                      fillHeight={false}
                       showTrashActions={!isGlobalTrashMode}
                     />
                   )}
@@ -484,6 +485,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
                       viewModel={bankCardsViewModel}
                       sectionTitle={tFolders('category.bankCards')}
                       folders={vault.folders}
+                      fillHeight={false}
                       showTrashActions={!isGlobalTrashMode}
                     />
                   )}

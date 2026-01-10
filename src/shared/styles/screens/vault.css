@@ -977,6 +977,12 @@
   min-height: 0; /* critical for proper inner scroll areas */
 }
 
+/* Allow a single panel (Category-only views) to occupy the full column height,
+   so inner list can scroll and the Empty state can be vertically centered. */
+.vault-panel-wrapper--fill {
+  flex: 1;
+}
+
 /* Make section headers look consistent */
 .vault-section-header {
   font-size: 14px;
