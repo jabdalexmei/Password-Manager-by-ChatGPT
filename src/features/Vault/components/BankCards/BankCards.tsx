@@ -326,6 +326,7 @@ export function BankCards({
             const meta = card.metaLine || t('label.noMeta');
             const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
             const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
+            const title = card.title?.trim() ? card.title : t('label.untitled');
 
             return (
               <button
@@ -335,7 +336,7 @@ export function BankCards({
                 onClick={() => viewModel.selectCard(card.id)}
               >
                 <div className="datacard-top">
-                  <div className="datacard-title">{card.title}</div>
+                  <div className="datacard-title">{title}</div>
                   {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
                 </div>
 

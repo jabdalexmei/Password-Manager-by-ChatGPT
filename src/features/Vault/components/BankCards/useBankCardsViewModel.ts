@@ -224,9 +224,7 @@ export function useBankCardsViewModel({
   const submitCreate = useCallback(async () => {
     if (isCreateSubmitting) return;
     setCreateErrors({});
-    const trimmedTitle = createForm.title.trim();
     const nextErrors: BankCardFieldErrors = {};
-    if (!trimmedTitle) nextErrors.title = t('validation.titleRequired');
 
     const expiry = createForm.expiryMmYy.trim();
     if (expiry.length > 0 && !EXPIRY_RE.test(expiry)) {
@@ -248,7 +246,7 @@ export function useBankCardsViewModel({
       setCreateOpen(false);
       resetCreateForm();
     } catch {
-      setCreateErrors({ title: t('validation.titleRequired') });
+      // Intentionally ignore. Errors should be surfaced by the caller (toast) if needed.
     } finally {
       setIsCreateSubmitting(false);
     }
@@ -257,9 +255,7 @@ export function useBankCardsViewModel({
   const submitEdit = useCallback(async () => {
     if (isEditSubmitting || !editForm || !editCardId) return;
     setEditErrors({});
-    const trimmedTitle = editForm.title.trim();
     const nextErrors: BankCardFieldErrors = {};
-    if (!trimmedTitle) nextErrors.title = t('validation.titleRequired');
 
     const expiry = editForm.expiryMmYy.trim();
     if (expiry.length > 0 && !EXPIRY_RE.test(expiry)) {
@@ -281,7 +277,7 @@ export function useBankCardsViewModel({
       setEditOpen(false);
       resetEditForm();
     } catch {
-      setEditErrors({ title: t('validation.titleRequired') });
+      // Intentionally ignore. Errors should be surfaced by the caller (toast) if needed.
     } finally {
       setIsEditSubmitting(false);
     }
