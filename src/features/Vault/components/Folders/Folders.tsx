@@ -20,6 +20,7 @@ export type FolderListProps = {
   onAddBankCard: () => void;
   folders: Folder[];
   counts: Counts;
+  categoryCounts: { dataCards: number; bankCards: number };
   selectedNav: SelectedNav;
   selectedFolderId: string | null;
   onSelectNav: (nav: SelectedNav) => void;
@@ -34,6 +35,7 @@ export function Folders({
   onAddBankCard,
   folders,
   counts,
+  categoryCounts,
   selectedNav,
   selectedFolderId,
   onSelectNav,
@@ -259,6 +261,7 @@ export function Folders({
         <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
           <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
             <span className="folder-name">{t('category.dataCards')}</span>
+            <span className="folder-count">{categoryCounts.dataCards}</span>
           </button>
         </li>
         <li className={selectedCategory === 'bank_cards' ? 'active' : ''}>
@@ -272,15 +275,36 @@ export function Folders({
             }}
           >
             <span className="folder-name">{t('category.bankCards')}</span>
+            <span className="folder-count">{categoryCounts.bankCards}</span>
           </button>
         </li>
       </ul>
       <div className="vault-sidebar-title">{t('nav.title')}</div>
       <ul className="vault-folder-list">
-        {renderSystemItem('all', t('nav.allItems'), counts.all, selectedNav === 'all')}
-        {renderSystemItem('favorites', t('nav.favorites'), counts.favorites, selectedNav === 'favorites')}
-        {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
-        {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
+        {renderSystemItem(
+          'all',
+          t('nav.allItems'),
+          counts.all,
+          selectedNav === 'all' && selectedCategory === 'all_items'
+        )}
+        {renderSystemItem(
+          'favorites',
+          t('nav.favorites'),
+          counts.favorites,
+          selectedNav === 'favorites' && selectedCategory === 'all_items'
+        )}
+        {renderSystemItem(
+          'archive',
+          t('nav.archive'),
+          counts.archive,
+          selectedNav === 'archive' && selectedCategory === 'all_items'
+        )}
+        {renderSystemItem(
+          'deleted',
+          t('nav.deleted'),
+          counts.deleted,
+          selectedNav === 'deleted' && selectedCategory === 'all_items'
+        )}
       </ul>
       <div className="vault-sidebar-title">{t('title')}</div>
       <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>

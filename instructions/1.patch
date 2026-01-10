@@ -1,119 +1,94 @@
-diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
---- a/src/features/Vault/Vault.tsx
-+++ b/src/features/Vault/Vault.tsx
-@@ -1,4 +1,4 @@
--import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
- import { useVault, type SelectedNav } from './hooks/useVault';
- import { VaultHeader } from './components/Header/VaultHeader';
- import { Search } from './components/Search/Search';
-@@ -56,6 +56,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+--- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
++++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+@@ -75,6 +75,7 @@
+   };
+   const hasHolder = hasValue(card.holder);
+   const hasNumber = hasValue(card.number);
++  const hasExpiry = hasValue(card.expiryMmYy);
+   const hasCvc = hasValue(card.cvc);
+   const hasNote = hasValue(card.note);
+   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
+@@ -84,11 +85,8 @@
+       ? card.number
+       : maskCardNumber(card.number)
+     : '';
+-  const cvcDisplay = hasCvc
+-    ? detailActions.showCvc
+-      ? card.cvc
+-      : '•••'
+-    : tCommon('value.empty');
++  const maskedCvc = card.cvc ? (card.cvc.length >= 4 ? '••••' : '•••') : '';
++  const cvcDisplay = hasCvc ? (detailActions.showCvc ? card.cvc : maskedCvc) : '';
  
-   const [selectedCategory, setSelectedCategory] = useState<VaultCategory>('data_cards');
-   const [activeDetailsKind, setActiveDetailsKind] = useState<'data' | 'bank'>('data');
-+  const [isAddCardMenuOpen, setIsAddCardMenuOpen] = useState(false);
+   const tagsText = card.tags?.join(', ') ?? '';
  
-   const [exportModalOpen, setExportModalOpen] = useState(false);
-   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-@@ -308,27 +309,70 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
-             />
-           </div>
-           <div className="vault-sidebar-actions">
--            {selectedCategory === 'all_items' ? (
--              <>
--                <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
--                  {tDataCards('label.addDataCard')}
--                </button>
--                <button className="btn btn-secondary" type="button" onClick={bankCardsViewModel.openCreateModal}>
--                  {tBankCards('label.addBankCard')}
--                </button>
--              </>
--            ) : selectedCategory === 'data_cards' ? (
-+            {selectedCategory === 'all_items' ? (
-+              <div className="vault-sidebar-addmenu">
-+                <button
-+                  className="btn btn-primary"
-+                  type="button"
-+                  aria-haspopup="menu"
-+                  aria-expanded={isAddCardMenuOpen}
-+                  aria-controls="vault-addcard-menu"
-+                  onClick={() => setIsAddCardMenuOpen((prev) => !prev)}
-+                >
-+                  {tVault('action.addCard')}
-+                </button>
-+
-+                {isAddCardMenuOpen && (
-+                  <>
-+                    <div className="vault-actionmenu-backdrop" onClick={() => setIsAddCardMenuOpen(false)} />
-+                    <div className="vault-actionmenu-panel" role="menu" id="vault-addcard-menu">
-+                      <button
-+                        className="vault-actionmenu-item"
-+                        type="button"
-+                        onClick={() => {
-+                          setIsAddCardMenuOpen(false);
-+                          setActiveDetailsKind('data');
-+                          dataCardsViewModel.openCreateModal();
-+                        }}
-+                      >
-+                        {tFolders('category.dataCards')}
-+                      </button>
-+                      <button
-+                        className="vault-actionmenu-item"
-+                        type="button"
-+                        onClick={() => {
-+                          setIsAddCardMenuOpen(false);
-+                          setActiveDetailsKind('bank');
-+                          bankCardsViewModel.openCreateModal();
-+                        }}
-+                      >
-+                        {tFolders('category.bankCards')}
-+                      </button>
-+                    </div>
-+                  </>
-+                )}
+@@ -172,37 +170,41 @@
+             </div>
+           )}
+ 
+-          <div className="detail-field bankcard-compact-expiry">
+-            <div className="detail-label">{t('label.expiry')}</div>
+-            <div className="detail-value-box">
+-              <div className="detail-value-text">{card.expiryMmYy || tCommon('value.empty')}</div>
++          {hasExpiry && (
++            <div className="detail-field bankcard-compact-expiry">
++              <div className="detail-label">{t('label.expiry')}</div>
++              <div className="detail-value-box">
++                <div className="detail-value-text">{card.expiryMmYy ?? ''}</div>
 +              </div>
-+            ) : selectedCategory === 'data_cards' ? (
-               <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
-                 {tDataCards('label.addDataCard')}
-               </button>
-             ) : (
-               <button className="btn btn-primary" type="button" onClick={bankCardsViewModel.openCreateModal}>
-                 {tBankCards('label.addBankCard')}
-               </button>
-             )}
-             <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
-               {tFolders('action.addFolder')}
-             </button>
-           </div>
-           <Folders
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -262,6 +262,16 @@
- .vault-sidebar-actions .btn {
-   flex: 1;
- }
+             </div>
+-          </div>
++          )}
  
-+.vault-sidebar-addmenu {
-+  position: relative;
-+  flex: 1;
-+}
-+
-+.vault-sidebar-addmenu > .btn {
-+  width: 100%;
-+}
-+
- .vault-sidebar-title {
-   font-weight: 700;
-   color: var(--color-text);
-diff --git a/src/i18n/locales/en/Vault.json b/src/i18n/locales/en/Vault.json
---- a/src/i18n/locales/en/Vault.json
-+++ b/src/i18n/locales/en/Vault.json
-@@ -1,6 +1,7 @@
- {
-   "title": "Vault",
-   "active_profile": "Active profile: {{name}} [{{id}}]",
-+  "action.addCard": "Add card",
-   "export": "Export",
-   "import": "Import",
-   "settings": "Settings",
+-          <div className="detail-field bankcard-compact-cvc">
+-            <div className="detail-label">{t('label.cvc')}</div>
+-            <div className="detail-value-box">
+-              <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
+-              <div className="detail-value-actions">
+-                <button
+-                  className="icon-button"
+-                  type="button"
+-                  aria-label={t('action.copy')}
+-                  onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
+-                >
+-                  <IconCopy />
+-                </button>
+-                <button
+-                  className="icon-button"
+-                  type="button"
+-                  aria-label={detailActions.showCvc ? t('action.hide') : t('action.reveal')}
+-                  onClick={detailActions.toggleCvcVisibility}
+-                >
+-                  {detailActions.showCvc ? <IconPreviewOff /> : <IconPreview />}
+-                </button>
++          {hasCvc && (
++            <div className="detail-field bankcard-compact-cvc">
++              <div className="detail-label">{t('label.cvc')}</div>
++              <div className="detail-value-box">
++                <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
++                <div className="detail-value-actions">
++                  <button
++                    className="icon-button"
++                    type="button"
++                    aria-label={t('action.copy')}
++                    onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
++                  >
++                    <IconCopy />
++                  </button>
++                  <button
++                    className="icon-button"
++                    type="button"
++                    aria-label={detailActions.showCvc ? t('action.hide') : t('action.reveal')}
++                    onClick={detailActions.toggleCvcVisibility}
++                  >
++                    {detailActions.showCvc ? <IconPreviewOff /> : <IconPreview />}
++                  </button>
++                </div>
+               </div>
+             </div>
+-          </div>
++          )}
+ 
+           {hasNote && (
+             <div className="detail-field">

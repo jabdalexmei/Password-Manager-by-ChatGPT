@@ -188,10 +188,11 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
     initOnceRef.current = true;
 
     refreshActive();
+    refreshTrash();
     getSettings()
       .then(setSettings)
       .catch(handleError);
-  }, [handleError, refreshActive]);
+  }, [handleError, refreshActive, refreshTrash]);
 
   const selectNav = useCallback(
     async (nav: SelectedNav) => {

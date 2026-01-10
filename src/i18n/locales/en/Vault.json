@@ -1,6 +1,7 @@
 {
   "title": "Vault",
   "active_profile": "Active profile: {{name}} [{{id}}]",
+  "action.addCard": "Add card",
   "export": "Export",
   "import": "Import",
   "settings": "Settings",

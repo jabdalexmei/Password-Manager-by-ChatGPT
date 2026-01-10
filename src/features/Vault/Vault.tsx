@@ -12,6 +12,7 @@ import { BankCards } from './components/BankCards/BankCards';
 import { BankCardDetails } from './components/BankCards/BankCardDetails';
 import { useTranslation } from '../../shared/lib/i18n';
 import { useToaster } from '../../shared/components/Toaster';
+import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
 import {
   backupPickFile,
   backupDiscardPick,
@@ -57,6 +58,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const [selectedCategory, setSelectedCategory] = useState<VaultCategory>('data_cards');
   const [activeDetailsKind, setActiveDetailsKind] = useState<'data' | 'bank'>('data');
+  const [isAddCardMenuOpen, setIsAddCardMenuOpen] = useState(false);
+  const [isGlobalTrashActionsOpen, setIsGlobalTrashActionsOpen] = useState(false);
 
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -259,21 +262,18 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     };
   }, [bankCards.counts, vault.counts]);
 
-  const sidebarCounts = useMemo(() => {
-    const base =
-      selectedCategory === 'all_items'
-        ? combinedCounts
-        : selectedCategory === 'data_cards'
-          ? vault.counts
-          : bankCards.counts;
+  // Navigation + Folders are always global (Data + Bank), regardless of Category.
+  const sidebarCounts = useMemo(() => combinedCounts, [combinedCounts]);
 
-    // Folder view always shows both types, so folder counts should reflect combined totals.
-    return { ...base, folders: combinedCounts.folders };
-  }, [bankCards.counts, combinedCounts, selectedCategory, vault.counts]);
+  const categoryCounts = useMemo(
+    () => ({ dataCards: vault.counts.all, bankCards: bankCards.counts.all }),
+    [bankCards.counts.all, vault.counts.all]
+  );
 
   const handleNavClick = useCallback(
     (nav: SelectedNav) => {
-      if (nav === 'all') {
+      // Any Navigation selection is its own mode: it clears Category focus.
+      if (typeof nav === 'string') {
         setSelectedCategory('all_items');
       }
       void syncSelectNav(nav);
@@ -291,6 +291,11 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const isFolderView = typeof vault.selectedNav === 'object';
   const showBothLists = isFolderView || selectedCategory === 'all_items';
+  const hasVisibleDataCards = dataCardsViewModel.cards.length > 0;
+  const hasVisibleBankCards = bankCardsViewModel.cards.length > 0;
+  const isNavigationEmpty = !hasVisibleDataCards && !hasVisibleBankCards;
+  const isGlobalTrashMode = showBothLists && typeof vault.selectedNav === 'string' && vault.selectedNav === 'deleted';
+  const isGlobalTrashBulkSubmitting = dataCardsViewModel.isTrashBulkSubmitting || bankCardsViewModel.isTrashBulkSubmitting;
 
   return (
     <div className="vault-shell">
@@ -316,14 +321,48 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
           </div>
           <div className="vault-sidebar-actions">
             {selectedCategory === 'all_items' ? (
-              <>
-                <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
-                  {tDataCards('label.addDataCard')}
+              <div className="vault-sidebar-addmenu">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={isAddCardMenuOpen}
+                  aria-controls="vault-addcard-menu"
+                  onClick={() => setIsAddCardMenuOpen((prev) => !prev)}
+                >
+                  {tVault('action.addCard')}
                 </button>
-                <button className="btn btn-secondary" type="button" onClick={bankCardsViewModel.openCreateModal}>
-                  {tBankCards('label.addBankCard')}
-                </button>
-              </>
+
+                {isAddCardMenuOpen && (
+                  <>
+                    <div className="vault-actionmenu-backdrop" onClick={() => setIsAddCardMenuOpen(false)} />
+                    <div className="vault-actionmenu-panel" role="menu" id="vault-addcard-menu">
+                      <button
+                        className="vault-actionmenu-item"
+                        type="button"
+                        onClick={() => {
+                          setIsAddCardMenuOpen(false);
+                          setActiveDetailsKind('data');
+                          dataCardsViewModel.openCreateModal();
+                        }}
+                      >
+                        {tFolders('category.dataCards')}
+                      </button>
+                      <button
+                        className="vault-actionmenu-item"
+                        type="button"
+                        onClick={() => {
+                          setIsAddCardMenuOpen(false);
+                          setActiveDetailsKind('bank');
+                          bankCardsViewModel.openCreateModal();
+                        }}
+                      >
+                        {tFolders('category.bankCards')}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : selectedCategory === 'data_cards' ? (
               <button className="btn btn-primary" type="button" onClick={dataCardsViewModel.openCreateModal}>
                 {tDataCards('label.addDataCard')}
@@ -343,6 +382,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             onAddBankCard={handleAddBankCard}
             folders={vault.folders}
             counts={sidebarCounts}
+            categoryCounts={categoryCounts}
             selectedNav={vault.selectedNav}
             selectedFolderId={vault.selectedFolderId}
             onSelectNav={(nav) => void handleNavClick(nav)}
@@ -355,20 +395,96 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
         <section className="vault-datacards">
           {showBothLists ? (
             <>
-              <div className="vault-folder-title">
+              <div className="datacards-header">
                 <div className="vault-section-header">{vault.currentSectionTitle}</div>
+
+                <div className="datacards-header__right">
+                  {isGlobalTrashMode ? (
+                    <div className="datacards-actions">
+                      <button
+                        className="btn btn-icon vault-actionbar"
+                        type="button"
+                        aria-label={tDataCards('trash.actions')}
+                        aria-haspopup="menu"
+                        aria-expanded={isGlobalTrashActionsOpen}
+                        disabled={isGlobalTrashBulkSubmitting || isNavigationEmpty}
+                        onClick={() => setIsGlobalTrashActionsOpen((prev) => !prev)}
+                      >
+                        <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
+                      </button>
+
+                      {isGlobalTrashActionsOpen && (
+                        <>
+                          <div
+                            className="vault-actionmenu-backdrop"
+                            onClick={() => setIsGlobalTrashActionsOpen(false)}
+                          />
+                          <div className="vault-actionmenu-panel" role="menu">
+                            <button
+                              className="vault-actionmenu-item"
+                              type="button"
+                              disabled={isGlobalTrashBulkSubmitting || isNavigationEmpty}
+                              onClick={async () => {
+                                setIsGlobalTrashActionsOpen(false);
+                                await Promise.all([
+                                  hasVisibleDataCards ? dataCardsViewModel.restoreAllTrash() : Promise.resolve(),
+                                  hasVisibleBankCards ? bankCardsViewModel.restoreAllTrash() : Promise.resolve(),
+                                ]);
+                              }}
+                            >
+                              {tDataCards('trash.restoreAll')}
+                            </button>
+
+                            <button
+                              className="vault-actionmenu-item vault-actionmenu-danger"
+                              type="button"
+                              disabled={isGlobalTrashBulkSubmitting || isNavigationEmpty}
+                              onClick={async () => {
+                                setIsGlobalTrashActionsOpen(false);
+                                await Promise.all([
+                                  hasVisibleDataCards ? dataCardsViewModel.purgeAllTrash() : Promise.resolve(),
+                                  hasVisibleBankCards ? bankCardsViewModel.purgeAllTrash() : Promise.resolve(),
+                                ]);
+                              }}
+                            >
+                              {tDataCards('trash.removeAll')}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="datacards-header__spacer" aria-hidden="true" />
+                  )}
+                </div>
               </div>
-              <DataCards
-                viewModel={dataCardsViewModel}
-                sectionTitle={tFolders('category.dataCards')}
-                clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-                clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-              />
-              <BankCards
-                viewModel={bankCardsViewModel}
-                sectionTitle={tFolders('category.bankCards')}
-                folders={vault.folders}
-              />
+
+              {isNavigationEmpty ? (
+                <div className="vault-datacard-list vault-datacard-list--empty">
+                  <div className="vault-empty">{tDataCards('label.empty')}</div>
+                </div>
+              ) : (
+                <>
+                  {hasVisibleDataCards && (
+                    <DataCards
+                      viewModel={dataCardsViewModel}
+                      sectionTitle={tFolders('category.dataCards')}
+                      clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+                      clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+                      showTrashActions={!isGlobalTrashMode}
+                    />
+                  )}
+
+                  {hasVisibleBankCards && (
+                    <BankCards
+                      viewModel={bankCardsViewModel}
+                      sectionTitle={tFolders('category.bankCards')}
+                      folders={vault.folders}
+                      showTrashActions={!isGlobalTrashMode}
+                    />
+                  )}
+                </>
+              )}
             </>
           ) : selectedCategory === 'data_cards' ? (
             <DataCards

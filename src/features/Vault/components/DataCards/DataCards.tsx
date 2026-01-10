@@ -41,6 +41,11 @@ export type DataCardsProps = {
   sectionTitle: string;
   clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
+  /**
+   * When DataCards is rendered as part of a combined view (e.g. global Deleted),
+   * the parent can render a single actions menu and suppress the per-section one.
+   */
+  showTrashActions?: boolean;
 };
 
 export function DataCards({
@@ -48,6 +53,7 @@ export function DataCards({
   sectionTitle,
   clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
+  showTrashActions = true,
 }: DataCardsProps) {
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
@@ -77,6 +83,7 @@ export function DataCards({
   const [charsetSize, setCharsetSize] = useState(0);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
+  const shouldShowTrashActions = viewModel.isTrashMode && showTrashActions;
   const [isCustomFieldModalOpen, setIsCustomFieldModalOpen] = useState(false);
   const [customFieldName, setCustomFieldName] = useState('');
   const [customFieldModalError, setCustomFieldModalError] = useState<string | null>(null);
@@ -743,7 +750,7 @@ export function DataCards({
         <div className="vault-section-header">{sectionTitle}</div>
 
         <div className="datacards-header__right">
-          {viewModel.isTrashMode ? (
+          {shouldShowTrashActions ? (
             <div className="datacards-actions">
               <button
                 className="btn btn-icon vault-actionbar"

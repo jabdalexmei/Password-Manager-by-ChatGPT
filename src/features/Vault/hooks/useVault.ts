@@ -243,10 +243,11 @@ export function useVault(profileId: string, onLocked: () => void) {
     initOnceRef.current = true;
 
     refreshActive();
+    refreshTrash();
     getSettings()
       .then(setSettings)
       .catch(handleError);
-  }, [handleError, refreshActive]);
+  }, [handleError, refreshActive, refreshTrash]);
 
   const selectNav = useCallback(
     async (nav: SelectedNav) => {
