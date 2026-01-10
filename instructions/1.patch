@@ -1,73 +1,81 @@
+Понимаю. Сейчас у тебя **Category** выбран (Data/Bank), но при этом **Navigation** тоже подсвечивает текущий пункт (например Deleted). В новой логике Navigation должен быть **самостоятельным режимом**, как “All items”: подсветка в Navigation должна появляться **только когда мы реально в navigation-режиме** (то есть `selectedCategory === 'all_items'`). И когда пользователь кликает **любой** пункт Navigation (Favorites/Archive/Deleted/All items) — мы должны **переключаться в `all_items`**. Это ещё и по доступности правильно: “current” в группе должен быть один. ([MDN Web Docs][1])
+
+Ниже два маленьких патча.
+
+---
+
+## 1) Vault.tsx — любой клик по Navigation переводит в `all_items`
+
+```diff
 diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
 --- a/src/features/Vault/Vault.tsx
 +++ b/src/features/Vault/Vault.tsx
-@@ -330,25 +330,45 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+@@ -287,14 +287,16 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+   );
  
-   const isFolderView = typeof vault.selectedNav === 'object';
-   const showBothLists = isFolderView || selectedCategory === 'all_items';
-+  const hasVisibleDataCards = dataCardsViewModel.cards.length > 0;
-+  const hasVisibleBankCards = bankCardsViewModel.cards.length > 0;
-+  const isNavigationEmpty = !hasVisibleDataCards && !hasVisibleBankCards;
- 
-   return (
-     <div className="vault-shell">
-@@ -398,25 +418,35 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
- 
-         <section className="vault-datacards">
-           {showBothLists ? (
-             <>
-               <div className="vault-folder-title">
-                 <div className="vault-section-header">{vault.currentSectionTitle}</div>
-               </div>
--              <DataCards
--                viewModel={dataCardsViewModel}
--                sectionTitle={tFolders('category.dataCards')}
--                clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
--                clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
--              />
--              <BankCards
--                viewModel={bankCardsViewModel}
--                sectionTitle={tFolders('category.bankCards')}
--                folders={vault.folders}
--              />
-+
-+              {isNavigationEmpty ? (
-+                <div className="vault-datacard-list vault-datacard-list--empty">
-+                  <div className="vault-empty">{tDataCards('label.empty')}</div>
-+                </div>
-+              ) : (
-+                <>
-+                  {hasVisibleDataCards && (
-+                    <DataCards
-+                      viewModel={dataCardsViewModel}
-+                      sectionTitle={tFolders('category.dataCards')}
-+                      clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-+                      clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-+                    />
-+                  )}
-+
-+                  {hasVisibleBankCards && (
-+                    <BankCards
-+                      viewModel={bankCardsViewModel}
-+                      sectionTitle={tFolders('category.bankCards')}
-+                      folders={vault.folders}
-+                    />
-+                  )}
-+                </>
-+              )}
-             </>
-           ) : selectedCategory === 'data_cards' ? (
-             <DataCards
-               viewModel={dataCardsViewModel}
-               sectionTitle={vault.currentSectionTitle}
-               clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-               clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-             />
-           ) : (
-             <BankCards
-               viewModel={bankCardsViewModel}
-               sectionTitle={bankCards.currentSectionTitle}
-               folders={vault.folders}
-             />
-           )}
-         </section>
+   const handleNavClick = useCallback(
+     (nav: SelectedNav) => {
+-      if (nav === 'all') {
++      // Any Navigation selection is its own mode: it clears Category focus.
++      if (typeof nav === 'string') {
+         setSelectedCategory('all_items');
+       }
+       void syncSelectNav(nav);
+     },
+     [syncSelectNav]
+   );
+```
+
+---
+
+## 2) Folders.tsx — подсветка пунктов Navigation только в `all_items`
+
+```diff
+diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
+--- a/src/features/Vault/components/Folders/Folders.tsx
++++ b/src/features/Vault/components/Folders/Folders.tsx
+@@ -268,12 +268,29 @@ export function Folders({
+       </ul>
+       <div className="vault-sidebar-title">{t('nav.title')}</div>
+       <ul className="vault-folder-list">
+         {renderSystemItem(
+           'all',
+           t('nav.allItems'),
+           counts.all,
+           selectedNav === 'all' && selectedCategory === 'all_items'
+         )}
+-        {renderSystemItem('favorites', t('nav.favorites'), counts.favorites, selectedNav === 'favorites')}
+-        {renderSystemItem('archive', t('nav.archive'), counts.archive, selectedNav === 'archive')}
+-        {renderSystemItem('deleted', t('nav.deleted'), counts.deleted, selectedNav === 'deleted')}
++        {renderSystemItem(
++          'favorites',
++          t('nav.favorites'),
++          counts.favorites,
++          selectedNav === 'favorites' && selectedCategory === 'all_items'
++        )}
++        {renderSystemItem(
++          'archive',
++          t('nav.archive'),
++          counts.archive,
++          selectedNav === 'archive' && selectedCategory === 'all_items'
++        )}
++        {renderSystemItem(
++          'deleted',
++          t('nav.deleted'),
++          counts.deleted,
++          selectedNav === 'deleted' && selectedCategory === 'all_items'
++        )}
+       </ul>
+```
+
+---
+
+### Что получится по UX
+
+* Выбираешь **Category: Data cards** → сразу показываются data cards, **Navigation не подсвечивается** (даже если внутренне `selectedNav` был чем-то другим).
+* Выбираешь **Category: Bank cards** → аналогично.
+* Кликаешь **Favorites / Archive / Deleted / All items** в Navigation → **Category “снимается”**, Navigation становится активным режимом и **подсветка появляется только там**.
+
+Если хочешь, могу ещё сделать маленький полиш: когда `selectedCategory !== 'all_items'`, визуально сделать пункты Navigation “неактивными” (без обводки) но кликабельными — чтобы вообще не было ощущений “двойного выбора”.
+
+[1]: https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-current?utm_source=chatgpt.com "ARIA: aria-current attribute - MDN Web Docs - Mozilla"
