@@ -12,6 +12,7 @@ import { BankCards } from './components/BankCards/BankCards';
 import { BankCardDetails } from './components/BankCards/BankCardDetails';
 import { useTranslation } from '../../shared/lib/i18n';
 import { useToaster } from '../../shared/components/Toaster';
+import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
 import {
   backupPickFile,
   backupDiscardPick,
@@ -58,6 +59,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
   const [selectedCategory, setSelectedCategory] = useState<VaultCategory>('data_cards');
   const [activeDetailsKind, setActiveDetailsKind] = useState<'data' | 'bank'>('data');
   const [isAddCardMenuOpen, setIsAddCardMenuOpen] = useState(false);
+  const [isGlobalTrashActionsOpen, setIsGlobalTrashActionsOpen] = useState(false);
 
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -292,6 +294,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
   const hasVisibleDataCards = dataCardsViewModel.cards.length > 0;
   const hasVisibleBankCards = bankCardsViewModel.cards.length > 0;
   const isNavigationEmpty = !hasVisibleDataCards && !hasVisibleBankCards;
+  const isGlobalTrashMode = showBothLists && typeof vault.selectedNav === 'string' && vault.selectedNav === 'deleted';
+  const isGlobalTrashBulkSubmitting = dataCardsViewModel.isTrashBulkSubmitting || bankCardsViewModel.isTrashBulkSubmitting;
 
   return (
     <div className="vault-shell">
@@ -391,8 +395,68 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
         <section className="vault-datacards">
           {showBothLists ? (
             <>
-              <div className="vault-folder-title">
+              <div className="datacards-header">
                 <div className="vault-section-header">{vault.currentSectionTitle}</div>
+
+                <div className="datacards-header__right">
+                  {isGlobalTrashMode ? (
+                    <div className="datacards-actions">
+                      <button
+                        className="btn btn-icon vault-actionbar"
+                        type="button"
+                        aria-label={tDataCards('trash.actions')}
+                        aria-haspopup="menu"
+                        aria-expanded={isGlobalTrashActionsOpen}
+                        disabled={isGlobalTrashBulkSubmitting || isNavigationEmpty}
+                        onClick={() => setIsGlobalTrashActionsOpen((prev) => !prev)}
+                      >
+                        <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
+                      </button>
+
+                      {isGlobalTrashActionsOpen && (
+                        <>
+                          <div
+                            className="vault-actionmenu-backdrop"
+                            onClick={() => setIsGlobalTrashActionsOpen(false)}
+                          />
+                          <div className="vault-actionmenu-panel" role="menu">
+                            <button
+                              className="vault-actionmenu-item"
+                              type="button"
+                              disabled={isGlobalTrashBulkSubmitting || isNavigationEmpty}
+                              onClick={async () => {
+                                setIsGlobalTrashActionsOpen(false);
+                                await Promise.all([
+                                  hasVisibleDataCards ? dataCardsViewModel.restoreAllTrash() : Promise.resolve(),
+                                  hasVisibleBankCards ? bankCardsViewModel.restoreAllTrash() : Promise.resolve(),
+                                ]);
+                              }}
+                            >
+                              {tDataCards('trash.restoreAll')}
+                            </button>
+
+                            <button
+                              className="vault-actionmenu-item vault-actionmenu-danger"
+                              type="button"
+                              disabled={isGlobalTrashBulkSubmitting || isNavigationEmpty}
+                              onClick={async () => {
+                                setIsGlobalTrashActionsOpen(false);
+                                await Promise.all([
+                                  hasVisibleDataCards ? dataCardsViewModel.purgeAllTrash() : Promise.resolve(),
+                                  hasVisibleBankCards ? bankCardsViewModel.purgeAllTrash() : Promise.resolve(),
+                                ]);
+                              }}
+                            >
+                              {tDataCards('trash.removeAll')}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="datacards-header__spacer" aria-hidden="true" />
+                  )}
+                </div>
               </div>
 
               {isNavigationEmpty ? (
@@ -407,6 +471,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
                       sectionTitle={tFolders('category.dataCards')}
                       clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
                       clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+                      showTrashActions={!isGlobalTrashMode}
                     />
                   )}
 
@@ -415,6 +480,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
                       viewModel={bankCardsViewModel}
                       sectionTitle={tFolders('category.bankCards')}
                       folders={vault.folders}
+                      showTrashActions={!isGlobalTrashMode}
                     />
                   )}
                 </>

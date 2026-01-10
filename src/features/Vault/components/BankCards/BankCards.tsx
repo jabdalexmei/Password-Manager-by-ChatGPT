@@ -9,9 +9,14 @@ export type BankCardsProps = {
   viewModel: BankCardsViewModel;
   sectionTitle: string;
   folders: Folder[];
+  /**
+   * When BankCards is rendered as part of a combined view (e.g. global Deleted),
+   * the parent can render a single actions menu and suppress the per-section one.
+   */
+  showTrashActions?: boolean;
 };
 
-export function BankCards({ viewModel, sectionTitle, folders }: BankCardsProps) {
+export function BankCards({ viewModel, sectionTitle, folders, showTrashActions = true }: BankCardsProps) {
   const { t } = useTranslation('BankCards');
   const { t: tCommon } = useTranslation('Common');
   const {
@@ -25,6 +30,7 @@ export function BankCards({ viewModel, sectionTitle, folders }: BankCardsProps) 
     closeCreateModal,
   } = viewModel;
   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
+  const shouldShowTrashActions = isTrashMode && showTrashActions;
   const createTitleRef = useRef<HTMLInputElement | null>(null);
   const editTitleRef = useRef<HTMLInputElement | null>(null);
 
@@ -229,7 +235,7 @@ export function BankCards({ viewModel, sectionTitle, folders }: BankCardsProps) 
         <div className="vault-section-header">{sectionTitle}</div>
 
         <div className="datacards-header__right">
-          {isTrashMode ? (
+          {shouldShowTrashActions ? (
             <div className="datacards-actions">
               <button
                 className="btn btn-icon vault-actionbar"
