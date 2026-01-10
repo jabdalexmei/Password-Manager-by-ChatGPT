@@ -453,15 +453,16 @@ export function useDataCards({
       if (field === 'title') {
         setCreateError(null);
       }
-      if (field === 'folderName') {
-        setCreateFolderError(null);
-      }
       setCreateForm((prev) => {
         if (field === 'folderId') {
-          return { ...prev, folderId: value === '' ? null : (value as string | null) };
+          setCreateFolderError(null);
+          const nextFolderId = value === '' ? null : (value as string | null);
+          const nextFolderName = nextFolderId ? findFolderName(nextFolderId, folders) : '';
+          return { ...prev, folderId: nextFolderId, folderName: nextFolderName };
         }
 
         if (field === 'folderName') {
+          setCreateFolderError(null);
           const name = (value ?? '') as string;
           const matchedId = name.trim() ? findFolderIdByName(name, folders) : null;
           return { ...prev, folderName: name, folderId: matchedId };
@@ -485,15 +486,15 @@ export function useDataCards({
         if (field === 'title') {
           setEditError(null);
         }
+        if (field === 'folderId') {
+          setEditFolderError(null);
+          const nextFolderId = value === '' ? null : (value as string | null);
+          const nextFolderName = nextFolderId ? findFolderName(nextFolderId, folders) : '';
+          return { ...prev, folderId: nextFolderId, folderName: nextFolderName };
+        }
+
         if (field === 'folderName') {
           setEditFolderError(null);
-        }
-
-        if (field === 'folderId') {
-          return { ...prev, folderId: value === '' ? null : (value as string | null) };
-        }
-
-        if (field === 'folderName') {
           const name = (value ?? '') as string;
           const matchedId = name.trim() ? findFolderIdByName(name, folders) : null;
           return { ...prev, folderName: name, folderId: matchedId };
