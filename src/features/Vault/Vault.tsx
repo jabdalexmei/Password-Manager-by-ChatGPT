@@ -275,6 +275,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     if (typeof vault.selectedNav === 'object') return true;
     return vault.searchQuery.trim().length > 0;
   }, [vault.searchQuery, vault.selectedNav]);
+  const isFolderView = typeof vault.selectedNav === 'object';
 
   return (
     <div className="vault-shell">
@@ -330,15 +331,24 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
         <section className="vault-datacards">
           {showCombinedLists ? (
             <>
+              {isFolderView && (
+                <div className="vault-folder-title">
+                  <div className="vault-section-header">{vault.currentSectionTitle}</div>
+                </div>
+              )}
               <DataCards
                 viewModel={dataCardsViewModel}
-                sectionTitle={`${vault.currentSectionTitle} • ${tFolders('category.dataCards')}`}
+                sectionTitle={
+                  isFolderView ? tFolders('category.dataCards') : `${vault.currentSectionTitle} • ${tFolders('category.dataCards')}`
+                }
                 clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
                 clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
               />
               <BankCards
                 viewModel={bankCardsViewModel}
-                sectionTitle={`${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`}
+                sectionTitle={
+                  isFolderView ? tFolders('category.bankCards') : `${vault.currentSectionTitle} • ${tFolders('category.bankCards')}`
+                }
                 folders={vault.folders}
               />
             </>

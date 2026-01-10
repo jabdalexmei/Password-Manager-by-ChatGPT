@@ -394,6 +394,15 @@
   color: var(--color-text);
 }
 
+.vault-folder-title {
+  padding-bottom: 4px;
+}
+
+.vault-folder-title .vault-section-header {
+  font-size: 18px;
+  line-height: 24px;
+}
+
 .datacards-header {
   display: flex;
   align-items: center;
