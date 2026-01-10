@@ -78,7 +78,8 @@ export function BankCardDetails({
   const hasExpiry = hasValue(card.expiryMmYy);
   const hasCvc = hasValue(card.cvc);
   const hasNote = hasValue(card.note);
-  const title = card.title?.trim() ? card.title : t('label.untitled');
+  const hasTitle = hasValue(card.title);
+  const title = card.title?.trim() ?? '';
   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
 
   const numberDisplay = hasNumber
@@ -128,12 +129,14 @@ export function BankCardDetails({
             </div>
           </div>
 
-          <div className="detail-field">
-            <div className="detail-label">{t('label.title')}</div>
-            <div className="detail-value-box">
-              <div className="detail-value-text">{title}</div>
+          {hasTitle && (
+            <div className="detail-field">
+              <div className="detail-label">{t('label.title')}</div>
+              <div className="detail-value-box">
+                <div className="detail-value-text">{title}</div>
+              </div>
             </div>
-          </div>
+          )}
 
           {hasHolder && (
             <div className="detail-field">

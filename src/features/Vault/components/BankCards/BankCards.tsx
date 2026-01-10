@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
 import type { Folder } from '../../types/ui';
-import { wasActuallyUpdated } from '../../utils/updatedAt';
 import { FolderSelect } from '../shared/FolderSelect';
 import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
 
@@ -159,6 +158,8 @@ export function BankCards({
                 id={`${dialogId}-number-input`}
                 className="input"
                 autoComplete="off"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={form.number}
                 onChange={(e) => onFieldChange('number', e.target.value)}
                 placeholder={t('label.numberPlaceholder')}
@@ -323,9 +324,6 @@ export function BankCards({
           {cards.map((card) => {
             const isActive = selectedCardId === card.id;
             const isFavorite = card.isFavorite;
-            const meta = card.metaLine || t('label.noMeta');
-            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
-            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
             const title = card.title?.trim() ? card.title : t('label.untitled');
 
             return (
@@ -338,11 +336,6 @@ export function BankCards({
                 <div className="datacard-top">
                   <div className="datacard-title">{title}</div>
                   {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-                </div>
-
-                <div className="datacard-meta">
-                  <span>{meta}</span>
-                  {showUpdated && <span className="muted">{updatedText}</span>}
                 </div>
               </button>
             );

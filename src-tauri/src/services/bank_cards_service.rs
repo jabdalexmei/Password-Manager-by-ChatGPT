@@ -83,6 +83,15 @@ pub fn create_bank_card(input: CreateBankCardInput, state: &Arc<AppState>) -> Re
     sanitized.title = sanitized.title.trim().to_string();
     sanitized.tags = normalize_tags(sanitized.tags);
 
+    sanitized.number = sanitized.number.take().and_then(|number| {
+        let digits: String = number.chars().filter(|c| c.is_ascii_digit()).collect();
+        if digits.is_empty() {
+            None
+        } else {
+            Some(digits)
+        }
+    });
+
     let created = repo_impl::create_bank_card(state, &profile_id, &sanitized)?;
     security_service::request_persist_active_vault(state.clone());
     Ok(created)
@@ -93,6 +102,15 @@ pub fn update_bank_card(input: UpdateBankCardInput, state: &Arc<AppState>) -> Re
     let mut sanitized = input;
     sanitized.title = sanitized.title.trim().to_string();
     sanitized.tags = normalize_tags(sanitized.tags);
+
+    sanitized.number = sanitized.number.take().and_then(|number| {
+        let digits: String = number.chars().filter(|c| c.is_ascii_digit()).collect();
+        if digits.is_empty() {
+            None
+        } else {
+            Some(digits)
+        }
+    });
 
     let updated = repo_impl::update_bank_card(state, &profile_id, &sanitized)?;
     security_service::request_persist_active_vault(state.clone());

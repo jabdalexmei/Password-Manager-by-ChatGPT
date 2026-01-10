@@ -114,6 +114,8 @@ const formatExpiryMmYy = (raw: string) => {
 
 const formatCvc = (raw: string) => raw.replace(/\D/g, '').slice(0, 4);
 
+const formatCardNumber = (raw: string) => raw.replace(/\D/g, '');
+
 export function useBankCardsViewModel({
   cards,
   defaultFolderId,
@@ -190,7 +192,13 @@ export function useBankCardsViewModel({
     }
 
     const nextValue =
-      field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
+      field === 'expiryMmYy'
+        ? formatExpiryMmYy(value)
+        : field === 'cvc'
+          ? formatCvc(value)
+          : field === 'number'
+            ? formatCardNumber(value)
+            : value;
     setCreateForm((prev) => ({ ...prev, [field]: nextValue }));
     if (field === 'title' || field === 'expiryMmYy' || field === 'cvc') {
       setCreateErrors((prev) => {
@@ -209,7 +217,13 @@ export function useBankCardsViewModel({
     }
 
     const nextValue =
-      field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
+      field === 'expiryMmYy'
+        ? formatExpiryMmYy(value)
+        : field === 'cvc'
+          ? formatCvc(value)
+          : field === 'number'
+            ? formatCardNumber(value)
+            : value;
     setEditForm((prev) => (prev ? { ...prev, [field]: nextValue } : prev));
     if (field === 'title' || field === 'expiryMmYy' || field === 'cvc') {
       setEditErrors((prev) => {
