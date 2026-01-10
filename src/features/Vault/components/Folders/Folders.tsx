@@ -12,7 +12,7 @@ type Counts = {
   folders: Record<string, number>;
 };
 
-export type VaultCategory = 'data_cards' | 'bank_cards';
+export type VaultCategory = 'data_cards' | 'bank_cards' | 'all_items';
 
 export type FolderListProps = {
   selectedCategory: VaultCategory;
