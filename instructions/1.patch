@@ -1,23 +1,20 @@
-diff --git a/src-tauri/src/services/bank_cards_service.rs b/src-tauri/src/services/bank_cards_service.rs
---- a/src-tauri/src/services/bank_cards_service.rs
-+++ b/src-tauri/src/services/bank_cards_service.rs
-@@ -81,9 +81,6 @@ pub fn create_bank_card(input: CreateBankCardInput, state: &Arc<AppState>) -> Result<BankCardItem> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-     let mut sanitized = input;
-     sanitized.title = sanitized.title.trim().to_string();
--    if sanitized.title.is_empty() {
--        return Err(ErrorCodeString::new("VALIDATION_ERROR"));
--    }
-     sanitized.tags = normalize_tags(sanitized.tags);
-
-     let created = repo_impl::create_bank_card(state, &profile_id, &sanitized)?;
-@@ -95,9 +92,6 @@ pub fn update_bank_card(input: UpdateBankCardInput, state: &Arc<AppState>) -> Result<bool> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-     let mut sanitized = input;
-     sanitized.title = sanitized.title.trim().to_string();
--    if sanitized.title.is_empty() {
--        return Err(ErrorCodeString::new("VALIDATION_ERROR"));
--    }
-     sanitized.tags = normalize_tags(sanitized.tags);
-
-     let updated = repo_impl::update_bank_card(state, &profile_id, &sanitized)?;
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -496,14 +496,14 @@
+           ) : selectedCategory === 'data_cards' ? (
+             <DataCards
+               viewModel={dataCardsViewModel}
+-              sectionTitle={vault.currentSectionTitle}
++              sectionTitle={tFolders('category.dataCards')}
+               clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+               clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+             />
+           ) : (
+             <BankCards
+               viewModel={bankCardsViewModel}
+-              sectionTitle={bankCards.currentSectionTitle}
++              sectionTitle={tFolders('category.bankCards')}
+               folders={vault.folders}
+             />
+           )}
