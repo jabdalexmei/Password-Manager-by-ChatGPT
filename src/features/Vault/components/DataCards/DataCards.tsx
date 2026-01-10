@@ -535,18 +535,19 @@ export function DataCards({
                   <button
                     className="icon-button"
                     type="button"
-                    onClick={openGenerator}
-                    aria-label={t('action.openGenerator')}
-                  >
-                    <IconRegenerate />
-                  </button>
-                  <button
-                    className="icon-button"
-                    type="button"
                     onClick={togglePasswordVisibility}
                     aria-label={t('action.togglePasswordVisibility')}
                   >
                     {showPassword ? <IconPreviewOff /> : <IconPreview />}
+                  </button>
+
+                  <button
+                    className="icon-button icon-button-primary"
+                    type="button"
+                    onClick={openGenerator}
+                    aria-label={t('action.openGenerator')}
+                  >
+                    <IconRegenerate />
                   </button>
                 </div>
               </div>

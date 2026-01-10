@@ -1,90 +1,74 @@
-diff --git a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
---- a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
-+++ b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
-@@ -224,9 +224,7 @@ export function useBankCardsViewModel({
-   const submitCreate = useCallback(async () => {
-     if (isCreateSubmitting) return;
-     setCreateErrors({});
--    const trimmedTitle = createForm.title.trim();
-     const nextErrors: BankCardFieldErrors = {};
--    if (!trimmedTitle) nextErrors.title = t('validation.titleRequired');
+diff --git a/src/features/Vault/components/modals/PasswordGeneratorModal.tsx b/src/features/Vault/components/modals/PasswordGeneratorModal.tsx
+--- a/src/features/Vault/components/modals/PasswordGeneratorModal.tsx
++++ b/src/features/Vault/components/modals/PasswordGeneratorModal.tsx
+@@ -1,4 +1,4 @@
+ import React from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import { calculateStrengthBits, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
+ import { IconCopy, IconRegenerate } from '@/shared/icons/lucide/icons';
+@@ -32,8 +32,15 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
  
-     const expiry = createForm.expiryMmYy.trim();
-     if (expiry.length > 0 && !EXPIRY_RE.test(expiry)) {
-@@ -248,7 +246,7 @@ export function useBankCardsViewModel({
-       setCreateOpen(false);
-       resetCreateForm();
-     } catch {
--      setCreateErrors({ title: t('validation.titleRequired') });
-+      // Intentionally ignore. Errors should be surfaced by the caller (toast) if needed.
-     } finally {
-       setIsCreateSubmitting(false);
-     }
-@@ -257,9 +255,7 @@ export function useBankCardsViewModel({
-   const submitEdit = useCallback(async () => {
-     if (isEditSubmitting || !editForm || !editCardId) return;
-     setEditErrors({});
--    const trimmedTitle = editForm.title.trim();
-     const nextErrors: BankCardFieldErrors = {};
--    if (!trimmedTitle) nextErrors.title = t('validation.titleRequired');
+   const bits = calculateStrengthBits(options.length, charsetSize);
  
-     const expiry = editForm.expiryMmYy.trim();
-     if (expiry.length > 0 && !EXPIRY_RE.test(expiry)) {
-@@ -281,7 +277,7 @@ export function useBankCardsViewModel({
-       setEditOpen(false);
-       resetEditForm();
-     } catch {
--      setEditErrors({ title: t('validation.titleRequired') });
-+      // Intentionally ignore. Errors should be surfaced by the caller (toast) if needed.
-     } finally {
-       setIsEditSubmitting(false);
-     }
-diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
---- a/src/features/Vault/components/BankCards/BankCards.tsx
-+++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -326,6 +326,7 @@ export function BankCards({ viewModel, sectionTitle, folders, showTrashActions =
-             const meta = card.metaLine || t('label.noMeta');
-             const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
-             const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
-+            const title = card.title?.trim() ? card.title : t('label.untitled');
- 
-             return (
-               <button
-@@ -335,7 +336,7 @@ export function BankCards({ viewModel, sectionTitle, folders, showTrashActions =
-                 onClick={() => viewModel.selectCard(card.id)}
-               >
-                 <div className="datacard-top">
--                  <div className="datacard-title">{card.title}</div>
-+                  <div className="datacard-title">{title}</div>
-                   {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-                 </div>
-diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
---- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
-+++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
-@@ -78,6 +78,7 @@ export function BankCardDetails({
-   const hasExpiry = hasValue(card.expiryMmYy);
-   const hasCvc = hasValue(card.cvc);
-   const hasNote = hasValue(card.note);
-+  const title = card.title?.trim() ? card.title : t('label.untitled');
-   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
- 
-   const numberDisplay = hasNumber
-@@ -130,7 +131,7 @@ export function BankCardDetails({
-           <div className="detail-field">
-             <div className="detail-label">{t('label.title')}</div>
-             <div className="detail-value-box">
--              <div className="detail-value-text">{card.title}</div>
-+              <div className="detail-value-text">{title}</div>
++  const strengthRatio = Math.min(1, Math.max(0, bits / 128));
++  // hue: 0 = red, 120 = green (so we naturally pass through orange in the middle)
++  const strengthHue = Math.round(strengthRatio * 120);
++  const strengthFillStyle: React.CSSProperties = {
++    width: `${strengthRatio * 100}%`,
++    backgroundColor: `hsl(${strengthHue}, 85%, 45%)`,
++  };
++
+   const handleCheckboxChange = (key: keyof PasswordGeneratorOptions) => (event: React.ChangeEvent<HTMLInputElement>) => {
+     onChangeOptions({ ...options, [key]: event.target.checked });
+   };
+@@ -55,19 +62,19 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
+             <div className="input-with-actions">
+               <input id="generated-password" className="input" value={generatedPassword} readOnly />
+               <div className="input-actions">
+-                <button className="icon-button" type="button" aria-label={t('action.copy')} onClick={() => void onCopy()}>
+-                  <IconCopy />
+-                </button>
+                 <button
+                   className="icon-button icon-button-primary"
+                   type="button"
+                   aria-label={t('generator.regenerate')}
+                   onClick={onRegenerate}
+                 >
+                   <IconRegenerate />
+                 </button>
++                <button className="icon-button" type="button" aria-label={t('action.copy')} onClick={() => void onCopy()}>
++                  <IconCopy />
++                </button>
+               </div>
              </div>
            </div>
-diff --git a/src/i18n/locales/en/BankCards.json b/src/i18n/locales/en/BankCards.json
---- a/src/i18n/locales/en/BankCards.json
-+++ b/src/i18n/locales/en/BankCards.json
-@@ -6,6 +6,7 @@
-   "label.favorite": "Favorite",
-   "label.updated": "Updated",
-   "label.created": "Created",
-+  "label.untitled": "Untitled",
-   "label.title": "Title",
-   "label.titlePlaceholder": "Card name",
-   "label.holder": "Holder",
+@@ -86,10 +93,7 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
+             </div>
+ 
+             <div className="generator-strength-bar">
+-              <div
+-                className="generator-strength-fill"
+-                style={{ width: `${Math.min(100, (bits / 128) * 100)}%` }}
+-              />
++              <div className="generator-strength-fill" style={strengthFillStyle} />
+             </div>
+           </div>
+
+diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
+--- a/src/shared/styles/ui.css
++++ b/src/shared/styles/ui.css
+@@ -1061,7 +1061,7 @@
+    - Wider dialog, footer/header layout tweaks, generator-specific blocks.
+    ========================================================================== */
+ .generator-dialog {
+-  max-width: 640px;
++  max-width: 520px;
+   width: 100%;
+ }
+@@ -1129,7 +1129,7 @@
+ .generator-strength-fill {
+   height: 100%;
+   background: var(--color-success);
+-  transition: width 0.2s ease;
++  transition: width 0.2s ease, background-color 0.2s ease;
+ }
