@@ -1,20 +1,165 @@
-diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
---- a/src/features/Vault/Vault.tsx
-+++ b/src/features/Vault/Vault.tsx
-@@ -496,14 +496,14 @@
-           ) : selectedCategory === 'data_cards' ? (
-             <DataCards
-               viewModel={dataCardsViewModel}
--              sectionTitle={vault.currentSectionTitle}
-+              sectionTitle={tFolders('category.dataCards')}
-               clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-               clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-             />
-           ) : (
-             <BankCards
-               viewModel={bankCardsViewModel}
--              sectionTitle={bankCards.currentSectionTitle}
-+              sectionTitle={tFolders('category.bankCards')}
-               folders={vault.folders}
-             />
-           )}
+
+
+```diff
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -2,7 +2,6 @@
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
+ import type { Folder } from '../../types/ui';
+-import { wasActuallyUpdated } from '../../utils/updatedAt';
+ import { FolderSelect } from '../shared/FolderSelect';
+ import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
+ 
+@@ -159,6 +158,8 @@
+                 id={`${dialogId}-number-input`}
+                 className="input"
+                 autoComplete="off"
++                inputMode="numeric"
++                pattern="[0-9]*"
+                 value={form.number}
+                 onChange={(e) => onFieldChange('number', e.target.value)}
+                 placeholder={t('label.numberPlaceholder')}
+@@ -323,9 +324,6 @@
+           {cards.map((card) => {
+             const isActive = selectedCardId === card.id;
+             const isFavorite = card.isFavorite;
+-            const meta = card.metaLine || t('label.noMeta');
+-            const showUpdated = wasActuallyUpdated(card.createdAt, card.updatedAt);
+-            const updatedText = showUpdated ? `${t('label.updated')}: ${card.updatedAtLabel}` : '';
+             const title = card.title?.trim() ? card.title : t('label.untitled');
+ 
+             return (
+@@ -339,11 +337,6 @@
+                   <div className="datacard-title">{title}</div>
+                   {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
+                 </div>
+-
+-                <div className="datacard-meta">
+-                  <span>{meta}</span>
+-                  {showUpdated && <span className="muted">{updatedText}</span>}
+-                </div>
+               </button>
+             );
+           })}
+```
+
+```diff
+diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+--- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
++++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+@@ -78,7 +78,8 @@
+   const hasExpiry = hasValue(card.expiryMmYy);
+   const hasCvc = hasValue(card.cvc);
+   const hasNote = hasValue(card.note);
+-  const title = card.title?.trim() ? card.title : t('label.untitled');
++  const hasTitle = hasValue(card.title);
++  const title = card.title?.trim() ?? '';
+   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
+ 
+   const numberDisplay = hasNumber
+@@ -128,12 +129,14 @@
+             </div>
+           </div>
+ 
+-          <div className="detail-field">
+-            <div className="detail-label">{t('label.title')}</div>
+-            <div className="detail-value-box">
+-              <div className="detail-value-text">{title}</div>
++          {hasTitle && (
++            <div className="detail-field">
++              <div className="detail-label">{t('label.title')}</div>
++              <div className="detail-value-box">
++                <div className="detail-value-text">{title}</div>
++              </div>
+             </div>
+-          </div>
++          )}
+ 
+           {hasHolder && (
+             <div className="detail-field">
+```
+
+```diff
+diff --git a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+--- a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
++++ b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+@@ -114,6 +114,8 @@
+ 
+ const formatCvc = (raw: string) => raw.replace(/\D/g, '').slice(0, 4);
+ 
++const formatCardNumber = (raw: string) => raw.replace(/\D/g, '');
++
+ export function useBankCardsViewModel({
+   cards,
+   defaultFolderId,
+@@ -190,7 +192,13 @@
+     }
+ 
+     const nextValue =
+-      field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
++      field === 'expiryMmYy'
++        ? formatExpiryMmYy(value)
++        : field === 'cvc'
++          ? formatCvc(value)
++          : field === 'number'
++            ? formatCardNumber(value)
++            : value;
+     setCreateForm((prev) => ({ ...prev, [field]: nextValue }));
+     if (field === 'title' || field === 'expiryMmYy' || field === 'cvc') {
+       setCreateErrors((prev) => {
+@@ -209,7 +217,13 @@
+     }
+ 
+     const nextValue =
+-      field === 'expiryMmYy' ? formatExpiryMmYy(value) : field === 'cvc' ? formatCvc(value) : value;
++      field === 'expiryMmYy'
++        ? formatExpiryMmYy(value)
++        : field === 'cvc'
++          ? formatCvc(value)
++          : field === 'number'
++            ? formatCardNumber(value)
++            : value;
+     setEditForm((prev) => (prev ? { ...prev, [field]: nextValue } : prev));
+     if (field === 'title' || field === 'expiryMmYy' || field === 'cvc') {
+       setEditErrors((prev) => {
+```
+
+```diff
+diff --git a/src-tauri/src/services/bank_cards_service.rs b/src-tauri/src/services/bank_cards_service.rs
+--- a/src-tauri/src/services/bank_cards_service.rs
++++ b/src-tauri/src/services/bank_cards_service.rs
+@@ -83,6 +83,17 @@
+     sanitized.title = sanitized.title.trim().to_string();
+     sanitized.tags = normalize_tags(sanitized.tags);
+ 
++    sanitized.number = sanitized.number.take().and_then(|number| {
++        let digits: String = number.chars().filter(|c| c.is_ascii_digit()).collect();
++        if digits.is_empty() {
++            None
++        } else {
++            Some(digits)
++        }
++    });
++
+     let created = repo_impl::create_bank_card(state, &profile_id, &sanitized)?;
+     security_service::request_persist_active_vault(state.clone());
+     Ok(created)
+@@ -94,6 +105,17 @@
+     sanitized.title = sanitized.title.trim().to_string();
+     sanitized.tags = normalize_tags(sanitized.tags);
+ 
++    sanitized.number = sanitized.number.take().and_then(|number| {
++        let digits: String = number.chars().filter(|c| c.is_ascii_digit()).collect();
++        if digits.is_empty() {
++            None
++        } else {
++            Some(digits)
++        }
++    });
++
+     let updated = repo_impl::update_bank_card(state, &profile_id, &sanitized)?;
+     security_service::request_persist_active_vault(state.clone());
+     Ok(updated)
+```
