@@ -571,7 +571,8 @@
 }
 
 .vault-datacard-list--empty {
-  justify-content: center;
+  /* Empty should be shown under the section header, not vertically centered */
+  justify-content: flex-start;
 }
 .vault-datacard {
   width: 100%;
@@ -975,6 +976,12 @@
   flex-direction: column;
   gap: 12px;
   min-height: 0; /* critical for proper inner scroll areas */
+}
+
+/* Allow a single panel (Category-only views) to occupy the full column height,
+   so inner list can scroll and the Empty state can be vertically centered. */
+.vault-panel-wrapper--fill {
+  flex: 1;
 }
 
 /* Make section headers look consistent */

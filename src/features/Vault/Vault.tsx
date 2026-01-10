@@ -294,6 +294,10 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
   const hasVisibleDataCards = dataCardsViewModel.cards.length > 0;
   const hasVisibleBankCards = bankCardsViewModel.cards.length > 0;
   const isNavigationEmpty = !hasVisibleDataCards && !hasVisibleBankCards;
+  const emptyLabel = (() => {
+    const v = tDataCards('label.empty');
+    return v === 'label.empty' ? tCommon('label.empty') : v;
+  })();
   const isGlobalTrashMode = showBothLists && typeof vault.selectedNav === 'string' && vault.selectedNav === 'deleted';
   const isGlobalTrashBulkSubmitting = dataCardsViewModel.isTrashBulkSubmitting || bankCardsViewModel.isTrashBulkSubmitting;
 
@@ -459,32 +463,35 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
                 </div>
               </div>
 
-              {isNavigationEmpty ? (
+              {isNavigationEmpty && (
                 <div className="vault-datacard-list vault-datacard-list--empty">
-                  <div className="vault-empty">{tDataCards('label.empty')}</div>
+                  <div className="vault-empty">{emptyLabel}</div>
                 </div>
-              ) : (
-                <>
-                  {hasVisibleDataCards && (
-                    <DataCards
-                      viewModel={dataCardsViewModel}
-                      sectionTitle={tFolders('category.dataCards')}
-                      clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-                      clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-                      showTrashActions={!isGlobalTrashMode}
-                    />
-                  )}
-
-                  {hasVisibleBankCards && (
-                    <BankCards
-                      viewModel={bankCardsViewModel}
-                      sectionTitle={tFolders('category.bankCards')}
-                      folders={vault.folders}
-                      showTrashActions={!isGlobalTrashMode}
-                    />
-                  )}
-                </>
               )}
+              {/*
+               * Always mount both panels in combined views so their create/edit dialogs can open
+               * even when the corresponding list is currently empty.
+               * The panels suppress their own per-section empty placeholder; the combined view
+               * renders the global Empty state above.
+               */}
+              <DataCards
+                viewModel={dataCardsViewModel}
+                sectionTitle={tFolders('category.dataCards')}
+                clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+                clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+                fillHeight={false}
+                showTrashActions={!isGlobalTrashMode}
+                suppressEmptyState
+              />
+
+              <BankCards
+                viewModel={bankCardsViewModel}
+                sectionTitle={tFolders('category.bankCards')}
+                folders={vault.folders}
+                fillHeight={false}
+                showTrashActions={!isGlobalTrashMode}
+                suppressEmptyState
+              />
             </>
           ) : selectedCategory === 'data_cards' ? (
             <DataCards

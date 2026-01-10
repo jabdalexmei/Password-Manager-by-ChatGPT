@@ -42,10 +42,22 @@ export type DataCardsProps = {
   clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
   /**
+   * When true, the panel stretches to fill the center column height.
+   * This is desired for single-panel views (Category-only), so the list can scroll
+   * and the empty state can be vertically centered.
+   */
+  fillHeight?: boolean;
+  /**
    * When DataCards is rendered as part of a combined view (e.g. global Deleted),
    * the parent can render a single actions menu and suppress the per-section one.
    */
   showTrashActions?: boolean;
+  /**
+   * In combined views (Navigation/Folders), the parent may want to render a single
+   * global empty state instead of per-section "Empty" blocks. This flag suppresses
+   * the per-section empty placeholder while keeping dialogs functional.
+   */
+  suppressEmptyState?: boolean;
 };
 
 export function DataCards({
@@ -53,7 +65,9 @@ export function DataCards({
   sectionTitle,
   clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
+  fillHeight = true,
   showTrashActions = true,
+  suppressEmptyState = false,
 }: DataCardsProps) {
   const { t } = useTranslation('DataCards');
   const { t: tCommon } = useTranslation('Common');
@@ -744,8 +758,26 @@ export function DataCards({
     );
   };
 
+  const emptyLabel = (() => {
+    const v = t('label.empty');
+    return v === 'label.empty' ? tCommon('label.empty') : v;
+  })();
+
+  const hasAnyOverlayOpen =
+    isCreateOpen ||
+    isEditOpen ||
+    isGeneratorOpen ||
+    isCustomFieldModalOpen ||
+    isRenameModalOpen ||
+    is2faModalOpen ||
+    isSeedPhraseModalOpen;
+
+  if (suppressEmptyState && cards.length === 0 && !hasAnyOverlayOpen) {
+    return null;
+  }
+
   return (
-    <div className="vault-panel-wrapper">
+    <div className={`vault-panel-wrapper ${fillHeight ? 'vault-panel-wrapper--fill' : ''}`.trim()}>
       <div className="datacards-header">
         <div className="vault-section-header">{sectionTitle}</div>
 
@@ -804,9 +836,11 @@ export function DataCards({
       </div>
 
       {cards.length === 0 ? (
-        <div className="vault-datacard-list vault-datacard-list--empty">
-          <div className="vault-empty">{t('label.empty')}</div>
-        </div>
+        suppressEmptyState ? null : (
+          <div className="vault-datacard-list vault-datacard-list--empty">
+            <div className="vault-empty">{emptyLabel}</div>
+          </div>
+        )
       ) : (
         <div className="vault-datacard-list">
           {cards.map((card) => {

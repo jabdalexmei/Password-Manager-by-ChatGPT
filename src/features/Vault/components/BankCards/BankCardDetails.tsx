@@ -75,6 +75,7 @@ export function BankCardDetails({
   };
   const hasHolder = hasValue(card.holder);
   const hasNumber = hasValue(card.number);
+  const hasExpiry = hasValue(card.expiryMmYy);
   const hasCvc = hasValue(card.cvc);
   const hasNote = hasValue(card.note);
   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
@@ -84,11 +85,8 @@ export function BankCardDetails({
       ? card.number
       : maskCardNumber(card.number)
     : '';
-  const cvcDisplay = hasCvc
-    ? detailActions.showCvc
-      ? card.cvc
-      : '•••'
-    : tCommon('value.empty');
+  const maskedCvc = card.cvc ? (card.cvc.length >= 4 ? '••••' : '•••') : '';
+  const cvcDisplay = hasCvc ? (detailActions.showCvc ? card.cvc : maskedCvc) : '';
 
   const tagsText = card.tags?.join(', ') ?? '';
 
@@ -172,37 +170,41 @@ export function BankCardDetails({
             </div>
           )}
 
-          <div className="detail-field bankcard-compact-expiry">
-            <div className="detail-label">{t('label.expiry')}</div>
-            <div className="detail-value-box">
-              <div className="detail-value-text">{card.expiryMmYy || tCommon('value.empty')}</div>
-            </div>
-          </div>
-
-          <div className="detail-field bankcard-compact-cvc">
-            <div className="detail-label">{t('label.cvc')}</div>
-            <div className="detail-value-box">
-              <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
-              <div className="detail-value-actions">
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label={t('action.copy')}
-                  onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
-                >
-                  <IconCopy />
-                </button>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label={detailActions.showCvc ? t('action.hide') : t('action.reveal')}
-                  onClick={detailActions.toggleCvcVisibility}
-                >
-                  {detailActions.showCvc ? <IconPreviewOff /> : <IconPreview />}
-                </button>
+          {hasExpiry && (
+            <div className="detail-field bankcard-compact-expiry">
+              <div className="detail-label">{t('label.expiry')}</div>
+              <div className="detail-value-box">
+                <div className="detail-value-text">{card.expiryMmYy ?? ''}</div>
               </div>
             </div>
-          </div>
+          )}
+
+          {hasCvc && (
+            <div className="detail-field bankcard-compact-cvc">
+              <div className="detail-label">{t('label.cvc')}</div>
+              <div className="detail-value-box">
+                <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
+                <div className="detail-value-actions">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={t('action.copy')}
+                    onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
+                  >
+                    <IconCopy />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={detailActions.showCvc ? t('action.hide') : t('action.reveal')}
+                    onClick={detailActions.toggleCvcVisibility}
+                  >
+                    {detailActions.showCvc ? <IconPreviewOff /> : <IconPreview />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {hasNote && (
             <div className="detail-field">
