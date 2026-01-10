@@ -298,6 +298,9 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
 
   const isFolderView = typeof vault.selectedNav === 'object';
   const showBothLists = isFolderView || selectedCategory === 'all_items';
+  const hasVisibleDataCards = dataCardsViewModel.cards.length > 0;
+  const hasVisibleBankCards = bankCardsViewModel.cards.length > 0;
+  const isNavigationEmpty = !hasVisibleDataCards && !hasVisibleBankCards;
 
   return (
     <div className="vault-shell">
@@ -400,17 +403,31 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
               <div className="vault-folder-title">
                 <div className="vault-section-header">{vault.currentSectionTitle}</div>
               </div>
-              <DataCards
-                viewModel={dataCardsViewModel}
-                sectionTitle={tFolders('category.dataCards')}
-                clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
-                clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
-              />
-              <BankCards
-                viewModel={bankCardsViewModel}
-                sectionTitle={tFolders('category.bankCards')}
-                folders={vault.folders}
-              />
+
+              {isNavigationEmpty ? (
+                <div className="vault-datacard-list vault-datacard-list--empty">
+                  <div className="vault-empty">{tDataCards('label.empty')}</div>
+                </div>
+              ) : (
+                <>
+                  {hasVisibleDataCards && (
+                    <DataCards
+                      viewModel={dataCardsViewModel}
+                      sectionTitle={tFolders('category.dataCards')}
+                      clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+                      clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}
+                    />
+                  )}
+
+                  {hasVisibleBankCards && (
+                    <BankCards
+                      viewModel={bankCardsViewModel}
+                      sectionTitle={tFolders('category.bankCards')}
+                      folders={vault.folders}
+                    />
+                  )}
+                </>
+              )}
             </>
           ) : selectedCategory === 'data_cards' ? (
             <DataCards
