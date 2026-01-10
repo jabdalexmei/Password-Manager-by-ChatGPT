@@ -1,49 +1,43 @@
-diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
---- a/src/features/Vault/components/BankCards/BankCards.tsx
-+++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -118,24 +118,6 @@
-               {errors.title && <div className="form-error">{errors.title}</div>}
-             </div>
- 
--            <div className="form-field">
--              <label className="form-label" htmlFor={`${dialogId}-folder-input`}>
--                {t('label.folder')}
--              </label>
--              <FolderSelect
--                id={`${dialogId}-folder-input`}
--                value={form.folderId ?? null}
--                noneLabel={t('label.folderRoot')}
--                options={folders
--                  .filter((folder) => !folder.isSystem && !folder.deletedAt)
--                  .map((folder) => ({ id: folder.id, name: folder.name }))}
--                onChange={(folderId) => onFieldChange('folderId', folderId ?? '')}
--              />
--            </div>
--
-             <div className="form-field">
-               <label className="form-label" htmlFor={`${dialogId}-holder-input`}>
-                 {t('label.holder')}
-@@ -197,6 +179,24 @@
-                 placeholder={t('label.notePlaceholder')}
-               />
-             </div>
- 
-+            <div className="form-field">
-+              <label className="form-label" htmlFor={`${dialogId}-folder-input`}>
-+                {t('label.folder')}
-+              </label>
-+              <FolderSelect
-+                id={`${dialogId}-folder-input`}
-+                value={form.folderId ?? null}
-+                noneLabel={t('label.folderRoot')}
-+                options={folders
-+                  .filter((folder) => !folder.isSystem && !folder.deletedAt)
-+                  .map((folder) => ({ id: folder.id, name: folder.name }))}
-+                onChange={(folderId) => onFieldChange('folderId', folderId ?? '')}
-+              />
-+            </div>
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -535,18 +535,19 @@
+                   <button
+                     className="icon-button"
+                     type="button"
+-                    onClick={openGenerator}
+-                    aria-label={t('action.openGenerator')}
++                    onClick={togglePasswordVisibility}
++                    aria-label={t('action.togglePasswordVisibility')}
+                   >
+-                    <IconRegenerate />
++                    {showPassword ? <IconPreviewOff /> : <IconPreview />}
+                   </button>
 +
-             <div className="form-field">
-               <label className="form-label" htmlFor={`${dialogId}-tags-input`}>
-                 {t('label.tags')}
-               </label>
+                   <button
+-                    className="icon-button"
++                    className="icon-button icon-button-primary"
+                     type="button"
+-                    onClick={togglePasswordVisibility}
+-                    aria-label={t('action.togglePasswordVisibility')}
++                    onClick={openGenerator}
++                    aria-label={t('action.openGenerator')}
+                   >
+-                    {showPassword ? <IconPreviewOff /> : <IconPreview />}
++                    <IconRegenerate />
+                   </button>
+                 </div>
+               </div>
+
+diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
+--- a/src/shared/styles/screens/vault.css
++++ b/src/shared/styles/screens/vault.css
+@@ -807,7 +807,7 @@
+   border-color: var(--color-primary-strong);
+ }
+ 
+-.icon-button:hover {
++.icon-button:not(.icon-button-primary):not(.icon-button-danger):hover {
+   border-color: var(--focus-border-strong);
+   background: var(--color-surface-3);
+ }
