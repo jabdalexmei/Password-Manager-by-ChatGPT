@@ -260,18 +260,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
     };
   }, [bankCards.counts, vault.counts]);
 
-  const sidebarCounts = useMemo(() => {
-    const base =
-      selectedCategory === 'all_items'
-        ? combinedCounts
-        : selectedCategory === 'data_cards'
-          ? vault.counts
-          : bankCards.counts;
-
-    // Navigation "All items" should always show total across Data + Bank.
-    // Folder view always shows both types, so folder counts should reflect combined totals.
-    return { ...base, all: combinedCounts.all, folders: combinedCounts.folders };
-  }, [bankCards.counts, combinedCounts, selectedCategory, vault.counts]);
+  // Navigation + Folders are always global (Data + Bank), regardless of Category.
+  const sidebarCounts = useMemo(() => combinedCounts, [combinedCounts]);
 
   const categoryCounts = useMemo(
     () => ({ dataCards: vault.counts.all, bankCards: bankCards.counts.all }),
