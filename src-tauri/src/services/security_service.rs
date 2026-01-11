@@ -125,10 +125,10 @@ pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
                 .serialize(DatabaseName::Main)
                 .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-            let bytes: Vec<u8> = serialized.to_vec();
+            let bytes = Zeroizing::new(serialized.to_vec());
 
             let profile_id = session.profile_id.clone();
-            let key_material: [u8; 32] = *session.key;
+            let key_material = Zeroizing::new(*session.key);
 
             Some((profile_id, key_material, bytes))
         } else {
@@ -138,7 +138,7 @@ pub fn persist_active_vault(state: &Arc<AppState>) -> Result<Option<String>> {
 
     if let Some((profile_id, key_material, bytes)) = maybe_bytes_and_meta {
         let storage_paths = state.get_storage_paths()?;
-        let encrypted = cipher::encrypt_vault_blob(&profile_id, &key_material, bytes.as_slice())?;
+        let encrypted = cipher::encrypt_vault_blob(&profile_id, &*key_material, bytes.as_slice())?;
         cipher::write_encrypted_file(&vault_db_path(&storage_paths, &profile_id)?, &encrypted)?;
         return Ok(Some(profile_id));
     }

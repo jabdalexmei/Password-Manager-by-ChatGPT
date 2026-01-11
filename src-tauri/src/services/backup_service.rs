@@ -162,6 +162,14 @@ fn validate_zip_entry_rel_path_windows(rel: &Path) -> bool {
     true
 }
 
+fn validate_profile_id_component(profile_id: &str) -> bool {
+    let p = Path::new(profile_id);
+    let mut components = p.components();
+
+    matches!((components.next(), components.next()), (Some(Component::Normal(_)), None))
+}
+
+
 fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::time::Duration;
 
@@ -629,6 +637,10 @@ fn read_backup_manifest_and_name(backup_path: &Path) -> Result<(BackupManifest, 
         return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));
     }
 
+    if !validate_profile_id_component(&manifest.profile_id) {
+        return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
+    }
+
     if let Some(name) = manifest.profile_name.clone() {
         return Ok((manifest, name));
     }
@@ -701,6 +713,10 @@ fn restore_archive_to_profile(
 
     if manifest.format_version != 1 {
         return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));
+    }
+
+    if !validate_profile_id_component(&manifest.profile_id) {
+        return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
     }
 
     if manifest.profile_id != target_profile_id {

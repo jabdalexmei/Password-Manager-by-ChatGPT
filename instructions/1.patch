@@ -1,187 +1,115 @@
-
-### Patch 1 — защита от path traversal через `profile_id`
-
-```diff
-*** Begin Patch
-*** Update File: src-tauri/src/data/profiles/paths.rs
-@@
- use std::fs;
--use std::path::PathBuf;
-+use std::path::{Component, Path, PathBuf};
- 
- use crate::data::storage_paths::StoragePaths;
- use crate::error::{ErrorCodeString, Result};
- 
-+fn validate_profile_id(id: &str) -> Result<()> {
-+    if id.trim().is_empty() {
-+        return Err(ErrorCodeString::new("PROFILE_ID_INVALID"));
-+    }
-+
-+    // Profile IDs are used as directory names under the workspace storage.
-+    // Reject anything that looks like a path (separators, prefixes, parent dirs, etc).
-+    let p = Path::new(id);
-+    let mut components = p.components();
-+
-+    match (components.next(), components.next()) {
-+        (Some(Component::Normal(_)), None) => Ok(()),
-+        _ => Err(ErrorCodeString::new("PROFILE_ID_INVALID")),
-+    }
-+}
-+
-+
- pub fn profiles_root(sp: &StoragePaths) -> Result<PathBuf> {
-     Ok(sp.profiles_root()?.to_path_buf())
+--- a/src-tauri/src/data/profiles/paths.rs
++++ b/src-tauri/src/data/profiles/paths.rs
+@@ -59,15 +59,6 @@ pub fn attachment_file_path(
+         .join("attachments")
+         .join(format!("{attachment_id}.bin")))
  }
-@@
- pub fn profile_dir(sp: &StoragePaths, id: &str) -> Result<PathBuf> {
-+    validate_profile_id(id)?;
-     Ok(profiles_root(sp)?.join(id))
- }
-*** End Patch
-```
-
-```diff
-*** Begin Patch
-*** Update File: src-tauri/src/services/backup_service.rs
-@@
- fn validate_zip_entry_rel_path_windows(rel: &Path) -> bool {
-@@
-     true
- }
- 
-+fn validate_profile_id_component(profile_id: &str) -> bool {
-+    let p = Path::new(profile_id);
-+    let mut components = p.components();
-+
-+    matches!((components.next(), components.next()), (Some(Component::Normal(_)), None))
-+}
-+
-+
- fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
-@@
- fn read_backup_manifest_and_name(backup_path: &Path) -> Result<(BackupManifest, String)> {
-@@
-     if manifest.format_version != 1 {
-         return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));
-     }
- 
-+    if !validate_profile_id_component(&manifest.profile_id) {
-+        return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
-+    }
-+
-     if let Some(name) = manifest.profile_name.clone() {
-         return Ok((manifest, name));
-     }
-@@
-     if manifest.format_version != 1 {
-         return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));
-     }
- 
-+    if !validate_profile_id_component(&manifest.profile_id) {
-+        return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
-+    }
-+
-     if manifest.profile_id != target_profile_id {
-         return Err(ErrorCodeString::new("BACKUP_PROFILE_MISMATCH"));
-     }
-*** End Patch
-```
-
-### Patch 2 — zeroize для ключа и plaintext DB при persist
-
-```diff
-*** Begin Patch
-*** Update File: src-tauri/src/services/security_service.rs
-@@
-             let serialized = session
-                 .conn
-                 .serialize(DatabaseName::Main)
-                 .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
--            let bytes: Vec<u8> = serialized.to_vec();
-+            let bytes = Zeroizing::new(serialized.to_vec());
- 
-             let profile_id = session.profile_id.clone();
--            let key_material: [u8; 32] = *session.key;
-+            let key_material = Zeroizing::new(*session.key);
- 
-             Some((profile_id, key_material, bytes))
-         } else {
-             None
-         }
-@@
-     if let Some((profile_id, key_material, bytes)) = maybe_bytes_and_meta {
-         let storage_paths = state.get_storage_paths()?;
--        let encrypted = cipher::encrypt_vault_blob(&profile_id, &key_material, bytes.as_slice())?;
-+        let encrypted = cipher::encrypt_vault_blob(&profile_id, &*key_material, bytes.as_slice())?;
-         cipher::write_encrypted_file(&vault_db_path(&storage_paths, &profile_id)?, &encrypted)?;
-         return Ok(Some(profile_id));
-     }
-*** End Patch
-```
-
-### Patch 3 — registry: использовать общий atomic_write (без риска “удалил старое и не записал новое”)
-
-```diff
-*** Begin Patch
-*** Update File: src-tauri/src/data/profiles/registry.rs
-@@
- use std::fs;
- use std::path::PathBuf;
- use uuid::Uuid;
- 
-+use crate::data::fs::atomic_write::write_atomic;
- use crate::data::profiles::paths::{ensure_profiles_dir, profile_config_path, registry_path};
- use crate::data::storage_paths::StoragePaths;
- use crate::error::{ErrorCodeString, Result};
- use crate::types::ProfileMeta;
-@@
- fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
-@@
-     let serialized = serde_json::to_string_pretty(registry)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--    write_atomic(&path, &serialized)
-+    write_atomic(&path, serialized.as_bytes()).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
- }
- 
--fn write_atomic(path: &PathBuf, contents: &str) -> Result<()> {
--    let parent = path
--        .parent()
--        .ok_or_else(|| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--    let file_name = path
--        .file_name()
--        .and_then(|name| name.to_str())
--        .ok_or_else(|| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--    let temp_path = parent.join(format!("{file_name}.{}.tmp", Uuid::new_v4()));
 -
--    fs::write(&temp_path, contents).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--
--    if fs::rename(&temp_path, path).is_err() {
--        if path.exists() {
--            let _ = fs::remove_file(path);
--        }
--        if let Err(_) = fs::rename(&temp_path, path) {
--            let _ = fs::remove_file(&temp_path);
--            return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
--        }
--    }
--
--    Ok(())
+-/// Root directory for cached attachment previews (used by attachments_service cleanup).
+-///
+-/// NOTE: This path is also created in `ensure_profile_dirs`.
+-pub fn attachments_preview_root(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
+-    Ok(profile_dir(sp, profile_id)?
+-        .join("tmp")
+-        .join("attachments"))
 -}
-@@
--    if let Err(err) = write_atomic(&config_path, &serialized_config) {
-+    if write_atomic(&config_path, serialized_config.as_bytes()).is_err() {
-         let _ = fs::remove_dir_all(&profile_dir);
--        return Err(err);
-+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+ 
+ pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
+     Ok(profile_dir(sp, profile_id)?.join("user_settings.json"))
+@@ -94,7 +85,7 @@ pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str) -> Result<()> {
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     fs::create_dir_all(root.join("backups"))
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+-    fs::create_dir_all(root.join("tmp").join("attachments"))
++    fs::create_dir_all(root.join("tmp"))
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     Ok(())
+ }
+--- a/src-tauri/src/services/attachments_service.rs
++++ b/src-tauri/src/services/attachments_service.rs
+@@ -13,7 +13,7 @@ use uuid::Uuid;
+ use crate::app_state::AppState;
+ use crate::data::crypto::cipher;
+ use crate::data::fs::atomic_write::write_atomic;
+-use crate::data::profiles::paths::{attachment_file_path, attachments_preview_root};
++use crate::data::profiles::paths::attachment_file_path;
+ use crate::data::sqlite::repo_impl;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::services::security_service;
+@@ -224,11 +224,10 @@ pub fn get_attachment_bytes_base64(
+     get_attachment_preview(app, attachment_id)
+ }
+ 
+-pub fn clear_previews_for_profile(state: &Arc<AppState>, profile_id: &str) -> Result<()> {
+-    let storage_paths = state.get_storage_paths()?;
+-    let preview_root = attachments_preview_root(&storage_paths, profile_id)?;
+-    if preview_root.exists() {
+-        let _ = fs::remove_dir_all(&preview_root);
+-    }
++pub fn clear_previews_for_profile(_state: &Arc<AppState>, _profile_id: &str) -> Result<()> {
++    // Attachment previews are currently streamed to the UI as base64 payloads.
++    // There is no on-disk preview cache to clear.
+     Ok(())
+ }
+--- a/src/features/Vault/components/Details/useDetails.tsx
++++ b/src/features/Vault/components/Details/useDetails.tsx
+@@ -102,6 +102,27 @@ const revokePreviewUrl = useCallback(() => {
+       previewUrlRef.current = null;
      }
-@@
--    if let Err(err) = write_atomic(&config_path, &serialized_config) {
-+    if write_atomic(&config_path, serialized_config.as_bytes()).is_err() {
-@@
--        return Err(err);
-+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
-     }
-*** End Patch
-```
-
+   }, []);
++
++  const clearClipboardBestEffort = useCallback(async () => {
++    try {
++      const expected = lastCopiedValueRef.current;
++      if (!expected) return;
++      const currentClipboard = await navigator.clipboard.readText();
++      if (currentClipboard === expected) {
++        await clipboardClearAll();
++      }
++    } catch (err) {
++      console.error(err);
++      try {
++        await clipboardClearAll();
++      } catch (wipeErr) {
++        console.error(wipeErr);
++      }
++    } finally {
++      timeoutRef.current = null;
++      lastCopiedValueRef.current = null;
++    }
++  }, []);
+   const refreshAttachments = useCallback(async () => {
+     if (!card?.id) {
+       setAttachments([]);
+@@ -142,24 +163,10 @@ const copyToClipboard = useCallback(
+         if (opts.isSecret && autoClearEnabled) {
+           lastCopiedValueRef.current = value;
+           const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
+-          timeoutRef.current = window.setTimeout(async () => {
+-            try {
+-              const currentClipboard = await navigator.clipboard.readText();
+-              if (currentClipboard === lastCopiedValueRef.current) {
+-                await clipboardClearAll();
+-              }
+-            } catch (err) {
+-              console.error(err);
+-              try {
+-                await clipboardClearAll();
+-              } catch (wipeErr) {
+-                console.error(wipeErr);
+-              }
+-            }
+-            timeoutRef.current = null;
+-            lastCopiedValueRef.current = null;
++          timeoutRef.current = window.setTimeout(() => {
++            void clearClipboardBestEffort();
+           }, timeoutMs);
+         }
+       } catch (err) {
+@@ -169,7 +176,7 @@ const copyToClipboard = useCallback(
+         lastCopiedValueRef.current = null;
+       }
+     },
+-    [clearPendingTimeout, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
++    [clearPendingTimeout, clearClipboardBestEffort, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
+   );
