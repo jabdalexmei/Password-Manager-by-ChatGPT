@@ -1,115 +1,68 @@
---- a/src-tauri/src/data/profiles/paths.rs
-+++ b/src-tauri/src/data/profiles/paths.rs
-@@ -59,15 +59,6 @@ pub fn attachment_file_path(
-         .join("attachments")
-         .join(format!("{attachment_id}.bin")))
- }
--
--/// Root directory for cached attachment previews (used by attachments_service cleanup).
--///
--/// NOTE: This path is also created in `ensure_profile_dirs`.
--pub fn attachments_preview_root(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
--    Ok(profile_dir(sp, profile_id)?
--        .join("tmp")
--        .join("attachments"))
--}
- 
- pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
-     Ok(profile_dir(sp, profile_id)?.join("user_settings.json"))
-@@ -94,7 +85,7 @@ pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str) -> Result<()> {
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-     fs::create_dir_all(root.join("backups"))
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--    fs::create_dir_all(root.join("tmp").join("attachments"))
-+    fs::create_dir_all(root.join("tmp"))
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-     Ok(())
- }
---- a/src-tauri/src/services/attachments_service.rs
-+++ b/src-tauri/src/services/attachments_service.rs
-@@ -13,7 +13,7 @@ use uuid::Uuid;
- use crate::app_state::AppState;
- use crate::data::crypto::cipher;
- use crate::data::fs::atomic_write::write_atomic;
--use crate::data::profiles::paths::{attachment_file_path, attachments_preview_root};
-+use crate::data::profiles::paths::attachment_file_path;
- use crate::data::sqlite::repo_impl;
- use crate::error::{ErrorCodeString, Result};
- use crate::services::security_service;
-@@ -224,11 +224,10 @@ pub fn get_attachment_bytes_base64(
-     get_attachment_preview(app, attachment_id)
- }
- 
--pub fn clear_previews_for_profile(state: &Arc<AppState>, profile_id: &str) -> Result<()> {
--    let storage_paths = state.get_storage_paths()?;
--    let preview_root = attachments_preview_root(&storage_paths, profile_id)?;
--    if preview_root.exists() {
--        let _ = fs::remove_dir_all(&preview_root);
--    }
-+pub fn clear_previews_for_profile(_state: &Arc<AppState>, _profile_id: &str) -> Result<()> {
-+    // Attachment previews are currently streamed to the UI as base64 payloads.
-+    // There is no on-disk preview cache to clear.
-     Ok(())
- }
---- a/src/features/Vault/components/Details/useDetails.tsx
-+++ b/src/features/Vault/components/Details/useDetails.tsx
-@@ -102,6 +102,27 @@ const revokePreviewUrl = useCallback(() => {
-       previewUrlRef.current = null;
-     }
-   }, []);
-+
-+  const clearClipboardBestEffort = useCallback(async () => {
-+    try {
-+      const expected = lastCopiedValueRef.current;
-+      if (!expected) return;
-+      const currentClipboard = await navigator.clipboard.readText();
-+      if (currentClipboard === expected) {
-+        await clipboardClearAll();
-+      }
-+    } catch (err) {
-+      console.error(err);
-+      try {
-+        await clipboardClearAll();
-+      } catch (wipeErr) {
-+        console.error(wipeErr);
-+      }
-+    } finally {
-+      timeoutRef.current = null;
-+      lastCopiedValueRef.current = null;
-+    }
-+  }, []);
-   const refreshAttachments = useCallback(async () => {
-     if (!card?.id) {
-       setAttachments([]);
-@@ -142,24 +163,10 @@ const copyToClipboard = useCallback(
-         if (opts.isSecret && autoClearEnabled) {
-           lastCopiedValueRef.current = value;
-           const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
--          timeoutRef.current = window.setTimeout(async () => {
--            try {
--              const currentClipboard = await navigator.clipboard.readText();
--              if (currentClipboard === lastCopiedValueRef.current) {
--                await clipboardClearAll();
--              }
--            } catch (err) {
--              console.error(err);
--              try {
--                await clipboardClearAll();
--              } catch (wipeErr) {
--                console.error(wipeErr);
--              }
--            }
--            timeoutRef.current = null;
--            lastCopiedValueRef.current = null;
-+          timeoutRef.current = window.setTimeout(() => {
-+            void clearClipboardBestEffort();
-           }, timeoutMs);
-         }
-       } catch (err) {
-@@ -169,7 +176,7 @@ const copyToClipboard = useCallback(
-         lastCopiedValueRef.current = null;
+## Diff-патч
+
+```diff
+--- a/src/features/Vault/hooks/useVault.ts
++++ b/src/features/Vault/hooks/useVault.ts
+@@ -89,6 +89,7 @@ export function useVault(profileId: string, onLocked: () => void) {
+         case 'BACKUP_ARCHIVE_INVALID':
+         case 'BACKUP_MANIFEST_INVALID':
++        case 'BACKUP_MANIFEST_MISSING':
+           return tCommon('error.backupInvalid', { code });
+         case 'BACKUP_INTEGRITY_FAILED':
+           return tCommon('error.backupIntegrityFailed', { code });
+@@ -106,6 +107,13 @@ export function useVault(profileId: string, onLocked: () => void) {
+         case 'BACKUP_RESTORE_PATH_FORBIDDEN':
+         case 'BACKUP_INSPECT_PATH_FORBIDDEN':
+           return tCommon('error.operationBlocked', { code });
++        case 'PROFILE_ID_INVALID':
++          return tCommon('error.profileInvalid', { code });
++        case 'DB_SCHEMA_MISSING':
++        case 'DB_MIGRATION_FAILED':
++          return tCommon('error.vaultUnsupportedOrCorrupt', { code });
+         case 'VALIDATION_ERROR':
+           return fallback ?? tCommon('error.operationFailed', { code });
+         default:
+           return fallback ?? tCommon('error.operationFailed', { code });
        }
      },
--    [clearPendingTimeout, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
-+    [clearPendingTimeout, clearClipboardBestEffort, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
+     [tCommon]
    );
+```
+
+```diff
+--- a/src/features/Vault/hooks/useBankCards.ts
++++ b/src/features/Vault/hooks/useBankCards.ts
+@@ -74,6 +74,12 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: Fo
+       switch (code) {
+         case 'NETWORK_ERROR':
+           return tCommon('error.network', { code });
++        case 'PROFILE_ID_INVALID':
++          return tCommon('error.profileInvalid', { code });
++        case 'DB_SCHEMA_MISSING':
++        case 'DB_MIGRATION_FAILED':
++          return tCommon('error.vaultUnsupportedOrCorrupt', { code });
+         case 'VALIDATION_ERROR':
+           return fallback ?? tCommon('error.operationFailed', { code });
+         default:
+           return fallback ?? tCommon('error.operationFailed', { code });
+       }
+     },
+     [tCommon]
+   );
+```
+
+```diff
+--- a/src/i18n/locales/en/Common.json
++++ b/src/i18n/locales/en/Common.json
+@@ -14,6 +14,8 @@
+   "error.dialogUnsupported": "This operation is not supported on this platform.",
+   "error.hookToaster": "useToaster must be used within ToasterProvider",
+   "error.operationBlocked": "Operation blocked for security reasons.",
++  "error.profileInvalid": "Profile data is invalid or corrupted.",
++  "error.vaultUnsupportedOrCorrupt": "Vault is corrupted or uses an unsupported format. Try restoring from a backup.",
+   "error.operationFailed": "Operation failed. Please try again.",
+   "error.network": "Network error. Please try again."
+ }
+```
+
+-
