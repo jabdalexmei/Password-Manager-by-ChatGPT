@@ -433,18 +433,18 @@ export function Details({
               <button
                 className="icon-button"
                 type="button"
-                aria-label={t('action.copy')}
-                onClick={() => detailActions.copyToClipboard(card.password, { isSecret: true })}
-              >
-                <IconCopy />
-              </button>
-              <button
-                className="icon-button"
-                type="button"
                 aria-label={detailActions.showPassword ? t('action.hide') : t('action.reveal')}
                 onClick={detailActions.togglePasswordVisibility}
               >
                 {detailActions.showPassword ? <IconPreviewOff /> : <IconPreview />}
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label={t('action.copy')}
+                onClick={() => detailActions.copyToClipboard(card.password, { isSecret: true })}
+              >
+                <IconCopy />
               </button>
               <button
                 className="icon-button"

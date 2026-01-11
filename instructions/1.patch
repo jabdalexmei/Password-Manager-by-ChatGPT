@@ -1,96 +1,109 @@
-diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
---- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
-+++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
-@@ -138,55 +138,37 @@ export function BankCardDetails({ viewModel }: BankCardDetailsProps) {
-               <div className="detail-label">{t('label.holder')}</div>
-               <div className="detail-value-box">
-                 <div className="detail-value-text">{holderDisplay}</div>
-                 <div className="detail-value-actions">
-                   <button
-                     className="icon-button"
-                     type="button"
-                     aria-label={t(`action.${showHolder ? 'hide' : 'reveal'}`)}
-                     onClick={detailActions.toggleHolderVisibility}
-                   >
-                     {showHolder ? <IconPreviewOff /> : <IconPreview />}
-                   </button>
--                  <button
--                    className="icon-button"
--                    type="button"
--                    aria-label={t(`action.${showCvc ? 'hide' : 'reveal'}`)}
--                    onClick={detailActions.toggleCvcVisibility}
--                  >
--                    {showCvc ? <IconPreviewOff /> : <IconPreview />}
--                  </button>
--                  <button
--                    className="icon-button"
--                    type="button"
--                    aria-label={t(`action.${showNumber ? 'hide' : 'reveal'}`)}
--                    onClick={detailActions.toggleNumberVisibility}
--                  >
--                    {showNumber ? <IconPreviewOff /> : <IconPreview />}
--                  </button>
-                   <button
-                     className="icon-button"
-                     type="button"
-                     aria-label={t('action.copy')}
-                     onClick={() => detailActions.copyToClipboard(card.holder, { isSecret: true })}
-                   >
-                     <IconCopy />
-                   </button>
-                 </div>
-               </div>
-             </div>
-           )}
-@@ -190,6 +172,16 @@ export function BankCardDetails({ viewModel }: BankCardDetailsProps) {
-               <div className="detail-label">{t('label.number')}</div>
-               <div className="detail-value-box">
-                 <div className="detail-value-text detail-value-text-monospace">{numberDisplay}</div>
-                 <div className="detail-value-actions">
-+                  <button
-+                    className="icon-button"
-+                    type="button"
-+                    aria-label={t(`action.${showNumber ? 'hide' : 'reveal'}`)}
-+                    onClick={detailActions.toggleNumberVisibility}
-+                  >
-+                    {showNumber ? <IconPreviewOff /> : <IconPreview />}
-+                  </button>
-                   <button
-                     className="icon-button"
-                     type="button"
-                     aria-label={t('action.copy')}
-                     onClick={() => detailActions.copyToClipboard(card.number, { isSecret: true })}
-                   >
-                     <IconCopy />
-                   </button>
--                  </div>
-+                </div>
-               </div>
-             </div>
-           )}
-@@ -223,6 +215,16 @@ export function BankCardDetails({ viewModel }: BankCardDetailsProps) {
-               <div className="detail-label">{t('label.cvc')}</div>
-               <div className="detail-value-box">
-                 <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
-                 <div className="detail-value-actions">
-+                  <button
-+                    className="icon-button"
-+                    type="button"
-+                    aria-label={t(`action.${showCvc ? 'hide' : 'reveal'}`)}
-+                    onClick={detailActions.toggleCvcVisibility}
-+                  >
-+                    {showCvc ? <IconPreviewOff /> : <IconPreview />}
-+                  </button>
-                   <button
-                     className="icon-button"
-                     type="button"
-                     aria-label={t('action.copy')}
-                     onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
-                   >
-                     <IconCopy />
-                   </button>
--                  </div>
-+                </div>
-               </div>
-             </div>
-           )}
+diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
+index 2a5d3c1..9fb8b2b 100644
+--- a/src/features/Vault/components/Details/Details.tsx
++++ b/src/features/Vault/components/Details/Details.tsx
+@@ -33,6 +33,7 @@ export type DetailsProps = {
+   onRestore: (id: string) => void;
+   onPurge: (id: string) => void;
+   onToggleFavorite: (id: string) => void;
++  onAttachmentPresenceChange?: (cardId: string, hasAttachments: boolean) => void;
+   isTrashMode: boolean;
+   clipboardAutoClearEnabled?: boolean;
+   clipboardClearTimeoutSeconds?: number;
+@@ -46,6 +47,7 @@ export function Details({
+   onRestore,
+   onPurge,
+   onToggleFavorite,
++  onAttachmentPresenceChange,
+   isTrashMode,
+   clipboardAutoClearEnabled,
+   clipboardClearTimeoutSeconds,
+@@ -60,6 +62,7 @@ export function Details({
+     onRestore,
+     onPurge,
+     onToggleFavorite,
++    onAttachmentPresenceChange,
+     isTrashMode,
+     clipboardAutoClearEnabled,
+     clipboardClearTimeoutSeconds,
+   });
+
+diff --git a/src/features/Vault/components/Details/useDetails.tsx b/src/features/Vault/components/Details/useDetails.tsx
+index 7c7a0c9..f33b7c0 100644
+--- a/src/features/Vault/components/Details/useDetails.tsx
++++ b/src/features/Vault/components/Details/useDetails.tsx
+@@ -21,6 +21,7 @@ type UseDetailsParams = {
+   onToggleFavorite: (id: string) => void;
+   onRestore: (id: string) => void;
+   onPurge: (id: string) => void;
++  onAttachmentPresenceChange?: (cardId: string, hasAttachments: boolean) => void;
+   isTrashMode: boolean;
+   clipboardAutoClearEnabled?: boolean;
+   clipboardClearTimeoutSeconds?: number;
+@@ -60,6 +61,7 @@ export function useDetails({
+   onToggleFavorite,
+   onRestore,
+   onPurge,
++  onAttachmentPresenceChange,
+   isTrashMode,
+   clipboardAutoClearEnabled,
+   clipboardClearTimeoutSeconds,
+ }: UseDetailsParams) {
+@@ -107,13 +109,16 @@ export function useDetails({
+     }
+     try {
+       const items = await listAttachments(card.id);
+-      setAttachments(items.map(mapAttachmentFromBackend));
++      const mapped = items.map(mapAttachmentFromBackend);
++      setAttachments(mapped);
++      onAttachmentPresenceChange?.(card.id, mapped.length > 0);
+     } catch (err) {
+       console.error(err);
+       setAttachments([]);
++      onAttachmentPresenceChange?.(card.id, false);
+       showToast(t('toast.attachmentLoadError'), 'error');
+     }
+-  }, [card?.id, showToast, t]);
++  }, [card?.id, onAttachmentPresenceChange, showToast, t]);
+
+diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
+index 4c9e2d1..d6b8f2e 100644
+--- a/src/features/Vault/hooks/useVault.ts
++++ b/src/features/Vault/hooks/useVault.ts
+@@ -402,6 +402,11 @@ export function useVault() {
+     [handleError]
+   );
+
++  const setCardHasAttachments = useCallback((cardId: string, hasAttachments: boolean) => {
++    setCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, hasAttachments } : card)));
++    setDeletedCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, hasAttachments } : card)));
++  }, []);
++
+   const updateCardAction = useCallback(
+     async (input: UpdateDataCardInput) => {
+       try {
+@@ -779,6 +784,7 @@ export function useVault() {
+     deleteFolderOnly: deleteFolderOnlyAction,
+     deleteFolderAndCards: deleteFolderAndCardsAction,
+     createCard: createCardAction,
++    setCardHasAttachments,
+     uploadAttachments,
+     updateCard: updateCardAction,
+     deleteCard: deleteCardAction,
+
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+index 6b62b8f..c2dd7ff 100644
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -527,6 +527,7 @@ export function Vault() {
+               <LazyDetails
+                 card={vault.selectedCard}
+                 folders={foldersForCards}
++                onAttachmentPresenceChange={vault.setCardHasAttachments}
+                 onEdit={(card) => dataCardsViewModel.openEditModal(card)}
+                 onDelete={vault.deleteCard}
+                 onRestore={vault.restoreCard}
+                 onPurge={vault.purgeCard}
+                 onToggleFavorite={vault.toggleFavorite}
+                 isTrashMode={vault.selectedNav === 'deleted'}
+               />
