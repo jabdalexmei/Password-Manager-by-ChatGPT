@@ -19,8 +19,10 @@ type UseBankCardDetailsParams = {
 };
 
 type UseBankCardDetailsResult = {
+  showHolder: boolean;
   showNumber: boolean;
   showCvc: boolean;
+  toggleHolderVisibility: () => void;
   toggleNumberVisibility: () => void;
   toggleCvcVisibility: () => void;
   copyToClipboard: (value: string | null | undefined, opts?: { isSecret?: boolean }) => Promise<void>;
@@ -42,6 +44,7 @@ export function useBankCardDetails({
   clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
 }: UseBankCardDetailsParams): UseBankCardDetailsResult {
+  const [showHolder, setShowHolder] = useState(false);
   const [showNumber, setShowNumber] = useState(false);
   const [showCvc, setShowCvc] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,6 +63,7 @@ export function useBankCardDetails({
   useEffect(() => clearPendingTimeout, [clearPendingTimeout]);
 
   useEffect(() => {
+    setShowHolder(false);
     setShowNumber(false);
     setShowCvc(false);
     clearPendingTimeout();
@@ -130,13 +134,19 @@ export function useBankCardDetails({
     setShowNumber((prev) => !prev);
   }, []);
 
+  const toggleHolderVisibility = useCallback(() => {
+    setShowHolder((prev) => !prev);
+  }, []);
+
   const toggleCvcVisibility = useCallback(() => {
     setShowCvc((prev) => !prev);
   }, []);
 
   return {
+    showHolder,
     showNumber,
     showCvc,
+    toggleHolderVisibility,
     toggleNumberVisibility,
     toggleCvcVisibility,
     copyToClipboard,

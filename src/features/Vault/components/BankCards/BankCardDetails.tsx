@@ -25,6 +25,13 @@ const maskCardNumber = (value?: string | null) => {
   return `•••• ${trimmed.slice(-4)}`;
 };
 
+const maskHolder = (value?: string | null) => {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return '';
+  // Intentionally avoid leaking length; keep the UI consistently “sealed” by default.
+  return '••••••';
+};
+
 export function BankCardDetails({
   card,
   onEdit,
@@ -81,6 +88,8 @@ export function BankCardDetails({
   const hasTitle = hasValue(card.title);
   const title = card.title?.trim() ?? '';
   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
+
+  const holderDisplay = hasHolder ? (detailActions.showHolder ? card.holder ?? '' : maskHolder(card.holder)) : '';
 
   const numberDisplay = hasNumber
     ? detailActions.showNumber
@@ -142,7 +151,25 @@ export function BankCardDetails({
             <div className="detail-field">
               <div className="detail-label">{t('label.holder')}</div>
               <div className="detail-value-box">
-                <div className="detail-value-text">{card.holder ?? ''}</div>
+                <div className="detail-value-text">{holderDisplay}</div>
+                <div className="detail-value-actions">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={t('action.copy')}
+                    onClick={() => detailActions.copyToClipboard(card.holder, { isSecret: true })}
+                  >
+                    <IconCopy />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={detailActions.showHolder ? t('action.hide') : t('action.reveal')}
+                    onClick={detailActions.toggleHolderVisibility}
+                  >
+                    {detailActions.showHolder ? <IconPreviewOff /> : <IconPreview />}
+                  </button>
+                </div>
               </div>
             </div>
           )}
