@@ -1,8 +1,25 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
+
+fn validate_profile_id(id: &str) -> Result<()> {
+    if id.trim().is_empty() {
+        return Err(ErrorCodeString::new("PROFILE_ID_INVALID"));
+    }
+
+    // Profile IDs are used as directory names under the workspace storage.
+    // Reject anything that looks like a path (separators, prefixes, parent dirs, etc).
+    let p = Path::new(id);
+    let mut components = p.components();
+
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => Err(ErrorCodeString::new("PROFILE_ID_INVALID")),
+    }
+}
+
 
 pub fn profiles_root(sp: &StoragePaths) -> Result<PathBuf> {
     Ok(sp.profiles_root()?.to_path_buf())
@@ -16,6 +33,7 @@ pub fn ensure_profiles_dir(sp: &StoragePaths) -> Result<PathBuf> {
 }
 
 pub fn profile_dir(sp: &StoragePaths, id: &str) -> Result<PathBuf> {
+    validate_profile_id(id)?;
     Ok(profiles_root(sp)?.join(id))
 }
 
