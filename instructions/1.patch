@@ -1,115 +1,134 @@
---- a/src-tauri/src/data/profiles/paths.rs
-+++ b/src-tauri/src/data/profiles/paths.rs
-@@ -59,15 +59,6 @@ pub fn attachment_file_path(
-         .join("attachments")
-         .join(format!("{attachment_id}.bin")))
- }
--
--/// Root directory for cached attachment previews (used by attachments_service cleanup).
--///
--/// NOTE: This path is also created in `ensure_profile_dirs`.
--pub fn attachments_preview_root(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
--    Ok(profile_dir(sp, profile_id)?
--        .join("tmp")
--        .join("attachments"))
--}
+--- a/src-tauri/src/data/sqlite/migrations.rs
++++ b/src-tauri/src/data/sqlite/migrations.rs
+@@ -1,11 +1,9 @@
+ use rusqlite::Connection;
+ use rusqlite::OptionalExtension;
  
- pub fn user_settings_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
-     Ok(profile_dir(sp, profile_id)?.join("user_settings.json"))
-@@ -94,7 +85,7 @@ pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str) -> Result<()> {
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-     fs::create_dir_all(root.join("backups"))
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--    fs::create_dir_all(root.join("tmp").join("attachments"))
-+    fs::create_dir_all(root.join("tmp"))
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-     Ok(())
- }
---- a/src-tauri/src/services/attachments_service.rs
-+++ b/src-tauri/src/services/attachments_service.rs
-@@ -13,7 +13,7 @@ use uuid::Uuid;
- use crate::app_state::AppState;
- use crate::data::crypto::cipher;
- use crate::data::fs::atomic_write::write_atomic;
--use crate::data::profiles::paths::{attachment_file_path, attachments_preview_root};
-+use crate::data::profiles::paths::attachment_file_path;
- use crate::data::sqlite::repo_impl;
  use crate::error::{ErrorCodeString, Result};
- use crate::services::security_service;
-@@ -224,11 +224,10 @@ pub fn get_attachment_bytes_base64(
-     get_attachment_preview(app, attachment_id)
+ 
+-const CURRENT_SCHEMA_VERSION: i32 = 9;
++const CURRENT_SCHEMA_VERSION: i32 = 1;
+ 
+ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
+     conn.execute_batch("PRAGMA foreign_keys = ON;")
+@@ -18,96 +16,40 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
+     log::info!(
+         "[DB][migrate] user_version={version}, current={CURRENT_SCHEMA_VERSION}"
+     );
+ 
+-    // Fresh DB (or reset state): create full schema at latest version.
++    // Fresh DB: create schema and stamp it with the current version.
+     if version == 0 {
+         conn.execute_batch(include_str!("schema.sql"))
+             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+         conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
+             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+         return Ok(());
+     }
+ 
+-    // Legacy versions: easiest/safest is rebuild (you said old data is not important).
+-    if version < 6 {
+-        conn.execute_batch(
+-            "PRAGMA foreign_keys = OFF;
+-DROP TABLE IF EXISTS attachments;
+-DROP TABLE IF EXISTS datacard_password_history;
+-DROP TABLE IF EXISTS password_history;
+-DROP TABLE IF EXISTS datacards;
+-DROP TABLE IF EXISTS folders;
+-DROP TABLE IF EXISTS user_settings;
+-DROP TABLE IF EXISTS bank_cards;",
+-        )
+-        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-
+-        conn.execute_batch(include_str!("schema.sql"))
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        conn.execute_batch("PRAGMA foreign_keys = ON;")
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        return Ok(());
+-    }
+-
+-    // v8 -> v9: add folder_id to bank_cards (idempotent).
+-    if version == 8 {
+-        if !has_column(conn, "bank_cards", "folder_id")? {
+-            conn.execute_batch("ALTER TABLE bank_cards ADD COLUMN folder_id TEXT NULL;")
+-                .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        }
+-        // Index is safe to (re)create.
+-        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_bank_cards_folder ON bank_cards (folder_id);")
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-
+-        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        return Ok(());
+-    }
+-
+-    // v6 -> v8: add seed phrase columns (idempotent).
+-    if version == 6 {
+-        if !has_column(conn, "datacards", "seed_phrase_value")? {
+-            conn.execute_batch("ALTER TABLE datacards ADD COLUMN seed_phrase_value TEXT NULL;")
+-                .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        }
+-        if !has_column(conn, "datacards", "seed_phrase_word_count")? {
+-            conn.execute_batch(
+-                "ALTER TABLE datacards ADD COLUMN seed_phrase_word_count INTEGER NULL;",
+-            )
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        }
+-
+-        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        return Ok(());
+-    }
+-
+-    // v7 -> v8: rename seed phrase word count column.
+-    if version == 7 {
+-        if !has_column(conn, "datacards", "seed_phrase_word_count")? {
+-            conn.execute_batch(
+-                "ALTER TABLE datacards ADD COLUMN seed_phrase_word_count INTEGER NULL;",
+-            )
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        }
+-        if has_column(conn, "datacards", "seed_phrase_words")? {
+-            conn.execute_batch(
+-                "UPDATE datacards SET seed_phrase_word_count = seed_phrase_words WHERE seed_phrase_word_count IS NULL;",
+-            )
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        }
+-
+-        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
+-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+-        return Ok(());
+-    }
+-
+     match version {
+         CURRENT_SCHEMA_VERSION => Ok(()),
+-        _ => Err(ErrorCodeString::new("DB_MIGRATION_FAILED")),
++        _ => {
++            // Development-mode behavior: we do not support upgrading legacy schemas yet.
++            // Refuse instead of attempting destructive rebuild.
++            log::warn!("[DB][migrate] unsupported schema version: {version}");
++            Err(ErrorCodeString::new("DB_MIGRATION_FAILED"))
++        }
+     }
  }
  
--pub fn clear_previews_for_profile(state: &Arc<AppState>, profile_id: &str) -> Result<()> {
--    let storage_paths = state.get_storage_paths()?;
--    let preview_root = attachments_preview_root(&storage_paths, profile_id)?;
--    if preview_root.exists() {
--        let _ = fs::remove_dir_all(&preview_root);
--    }
-+pub fn clear_previews_for_profile(_state: &Arc<AppState>, _profile_id: &str) -> Result<()> {
-+    // Attachment previews are currently streamed to the UI as base64 payloads.
-+    // There is no on-disk preview cache to clear.
-     Ok(())
+ fn has_table(conn: &Connection, name: &str) -> Result<bool> {
+@@ -124,17 +66,6 @@ fn has_table(conn: &Connection, name: &str) -> Result<bool> {
+     Ok(exists.is_some())
  }
---- a/src/features/Vault/components/Details/useDetails.tsx
-+++ b/src/features/Vault/components/Details/useDetails.tsx
-@@ -102,6 +102,27 @@ const revokePreviewUrl = useCallback(() => {
-       previewUrlRef.current = null;
-     }
-   }, []);
-+
-+  const clearClipboardBestEffort = useCallback(async () => {
-+    try {
-+      const expected = lastCopiedValueRef.current;
-+      if (!expected) return;
-+      const currentClipboard = await navigator.clipboard.readText();
-+      if (currentClipboard === expected) {
-+        await clipboardClearAll();
-+      }
-+    } catch (err) {
-+      console.error(err);
-+      try {
-+        await clipboardClearAll();
-+      } catch (wipeErr) {
-+        console.error(wipeErr);
-+      }
-+    } finally {
-+      timeoutRef.current = null;
-+      lastCopiedValueRef.current = null;
-+    }
-+  }, []);
-   const refreshAttachments = useCallback(async () => {
-     if (!card?.id) {
-       setAttachments([]);
-@@ -142,24 +163,10 @@ const copyToClipboard = useCallback(
-         if (opts.isSecret && autoClearEnabled) {
-           lastCopiedValueRef.current = value;
-           const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
--          timeoutRef.current = window.setTimeout(async () => {
--            try {
--              const currentClipboard = await navigator.clipboard.readText();
--              if (currentClipboard === lastCopiedValueRef.current) {
--                await clipboardClearAll();
--              }
--            } catch (err) {
--              console.error(err);
--              try {
--                await clipboardClearAll();
--              } catch (wipeErr) {
--                console.error(wipeErr);
--              }
--            }
--            timeoutRef.current = null;
--            lastCopiedValueRef.current = null;
-+          timeoutRef.current = window.setTimeout(() => {
-+            void clearClipboardBestEffort();
-           }, timeoutMs);
-         }
-       } catch (err) {
-@@ -169,7 +176,7 @@ const copyToClipboard = useCallback(
-         lastCopiedValueRef.current = null;
-       }
-     },
--    [clearPendingTimeout, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
-+    [clearPendingTimeout, clearClipboardBestEffort, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
-   );
+ 
+-fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+-    let sql = "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2 LIMIT 1";
+-    let exists: Option<i32> = conn
+-        .query_row(sql, [table, column], |row| row.get(0))
+-        .optional()
+-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+-    Ok(exists.is_some())
+-}
+-
+ pub fn validate_core_schema(conn: &Connection) -> Result<()> {
+     let required = ["folders", "datacards", "bank_cards"];
+     for table in required {
+
