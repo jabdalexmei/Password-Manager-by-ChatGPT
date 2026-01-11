@@ -1,67 +1,104 @@
-diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
---- a/src/features/Vault/components/Details/Details.tsx
-+++ b/src/features/Vault/components/Details/Details.tsx
-@@ -274,15 +274,6 @@
-         </div>
-       )}
+diff --git a/src/features/Vault/components/BankCards/useBankCardDetails.tsx b/src/features/Vault/components/BankCards/useBankCardDetails.tsx
+--- a/src/features/Vault/components/BankCards/useBankCardDetails.tsx
++++ b/src/features/Vault/components/BankCards/useBankCardDetails.tsx
+@@ -19,8 +19,10 @@
+ };
  
--      {hasFolderName && (
--        <div className="detail-field">
--          <div className="detail-label">{t('label.folder')}</div>
--          <div className="detail-value-box">
--            <div className="detail-value-text">{folderName}</div>
--          </div>
--        </div>
--      )}
--
-       {hasUsername && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.username')}</div>
-@@ -469,7 +460,7 @@
-       )}
+ type UseBankCardDetailsResult = {
++  showHolder: boolean;
+   showNumber: boolean;
+   showCvc: boolean;
++  toggleHolderVisibility: () => void;
+   toggleNumberVisibility: () => void;
+   toggleCvcVisibility: () => void;
+   copyToClipboard: (value: string | null | undefined, opts?: { isSecret?: boolean }) => Promise<void>;
+@@ -42,6 +44,7 @@
+   clipboardAutoClearEnabled,
+   clipboardClearTimeoutSeconds,
+ }: UseBankCardDetailsParams): UseBankCardDetailsResult {
++  const [showHolder, setShowHolder] = useState(false);
+   const [showNumber, setShowNumber] = useState(false);
+   const [showCvc, setShowCvc] = useState(false);
+   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+@@ -60,6 +63,7 @@
+   useEffect(() => clearPendingTimeout, [clearPendingTimeout]);
  
-       {hasNote && (
--        <div className="detail-field">
-+        <div className="detail-field detail-field-notes">
-           <div className="detail-label">{t('label.note')}</div>
-           <div className="detail-value-box detail-value-multiline">
-             <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
-@@ -486,6 +477,15 @@
-           </div>
-         </div>
-       )}
+   useEffect(() => {
++    setShowHolder(false);
+     setShowNumber(false);
+     setShowCvc(false);
+     clearPendingTimeout();
+@@ -130,13 +134,19 @@
+     setShowNumber((prev) => !prev);
+   }, []);
+ 
++  const toggleHolderVisibility = useCallback(() => {
++    setShowHolder((prev) => !prev);
++  }, []);
 +
-+      {hasFolderName && (
-+        <div className="detail-field">
-+          <div className="detail-label">{t('label.folder')}</div>
-+          <div className="detail-value-box">
-+            <div className="detail-value-text">{folderName}</div>
-+          </div>
-+        </div>
-+      )}
+   const toggleCvcVisibility = useCallback(() => {
+     setShowCvc((prev) => !prev);
+   }, []);
  
-       {hasTags && (
-         <div className="detail-field">
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -762,6 +762,19 @@
-   align-items: flex-start;
- }
+   return {
++    showHolder,
+     showNumber,
+     showCvc,
++    toggleHolderVisibility,
+     toggleNumberVisibility,
+     toggleCvcVisibility,
+     copyToClipboard,
+diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+--- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
++++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+@@ -25,6 +25,13 @@
+   return `•••• ${trimmed.slice(-4)}`;
+ };
  
-+/* Notes: keep the copy button aligned to the right, like other fields */
-+.detail-field-notes .detail-value-box.detail-value-multiline {
-+  position: relative;
-+  padding-right: 54px;
-+}
++const maskHolder = (value?: string | null) => {
++  const trimmed = value?.trim() ?? '';
++  if (!trimmed) return '';
++  // Intentionally avoid leaking length; keep the UI consistently “sealed” by default.
++  return '••••••';
++};
 +
-+.detail-field-notes .detail-value-actions {
-+  position: absolute;
-+  right: 12px;
-+  top: 50%;
-+  transform: translateY(-50%);
-+}
+ export function BankCardDetails({
+   card,
+   onEdit,
+@@ -82,6 +89,8 @@
+   const title = card.title?.trim() ?? '';
+   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
+ 
++  const holderDisplay = hasHolder ? (detailActions.showHolder ? card.holder ?? '' : maskHolder(card.holder)) : '';
 +
- .detail-value-text-multiline {
-   white-space: pre-wrap;
-   width: 100%;
+   const numberDisplay = hasNumber
+     ? detailActions.showNumber
+       ? card.number
+@@ -142,7 +151,25 @@
+             <div className="detail-field">
+               <div className="detail-label">{t('label.holder')}</div>
+               <div className="detail-value-box">
+-                <div className="detail-value-text">{card.holder ?? ''}</div>
++                <div className="detail-value-text">{holderDisplay}</div>
++                <div className="detail-value-actions">
++                  <button
++                    className="icon-button"
++                    type="button"
++                    aria-label={t('action.copy')}
++                    onClick={() => detailActions.copyToClipboard(card.holder, { isSecret: true })}
++                  >
++                    <IconCopy />
++                  </button>
++                  <button
++                    className="icon-button"
++                    type="button"
++                    aria-label={detailActions.showHolder ? t('action.hide') : t('action.reveal')}
++                    onClick={detailActions.toggleHolderVisibility}
++                  >
++                    {detailActions.showHolder ? <IconPreviewOff /> : <IconPreview />}
++                  </button>
++                </div>
+               </div>
+             </div>
+           )}
+
