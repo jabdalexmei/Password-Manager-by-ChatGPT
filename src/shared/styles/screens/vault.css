@@ -762,6 +762,19 @@
   align-items: flex-start;
 }
 
+/* Notes: keep the copy button aligned to the right, like other fields */
+.detail-field-notes .detail-value-box.detail-value-multiline {
+  position: relative;
+  padding-right: 54px;
+}
+
+.detail-field-notes .detail-value-actions {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 .detail-value-text-multiline {
   white-space: pre-wrap;
   width: 100%;
