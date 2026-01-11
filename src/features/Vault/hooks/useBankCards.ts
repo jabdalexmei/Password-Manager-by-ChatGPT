@@ -71,6 +71,11 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
       switch (code) {
         case 'NETWORK_ERROR':
           return tCommon('error.network', { code });
+        case 'PROFILE_ID_INVALID':
+          return tCommon('error.profileInvalid', { code });
+        case 'DB_SCHEMA_MISSING':
+        case 'DB_MIGRATION_FAILED':
+          return tCommon('error.vaultUnsupportedOrCorrupt', { code });
         case 'VALIDATION_ERROR':
           return fallback ?? tCommon('error.operationFailed', { code });
         default:

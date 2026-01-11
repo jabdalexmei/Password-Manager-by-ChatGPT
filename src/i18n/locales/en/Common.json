@@ -13,6 +13,8 @@
   "error.dialogUnsupported": "This operation is not supported on this platform.",
   "error.hookToaster": "useToaster must be used within ToasterProvider",
   "error.operationBlocked": "Operation blocked for security reasons.",
+  "error.profileInvalid": "Profile data is invalid or corrupted.",
+  "error.vaultUnsupportedOrCorrupt": "Vault is corrupted or uses an unsupported format. Try restoring from a backup.",
   "error.operationFailed": "Operation failed. Please try again.",
   "error.network": "Network error. Please try again."
 }
