@@ -4,7 +4,7 @@ import { useTranslation } from '../../../../shared/lib/i18n';
 import { useToaster } from '../../../../shared/components/Toaster';
 import { clearPasswordHistory, getPasswordHistory } from '../../api/vaultApi';
 import { PasswordHistoryEntry } from '../../types/ui';
-import { IconCopy, IconHistory, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
+import { IconCopy, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
 
 type PasswordHistoryDialogProps = {
@@ -157,8 +157,7 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="password-history-title">
           <div className="dialog-header">
             <h2 id="password-history-title" className="dialog-title">
-              <IconHistory />
-              <span>{t('dialog.passwordHistoryTitle')}</span>
+              {t('dialog.passwordHistoryTitle')}
             </h2>
           </div>
 

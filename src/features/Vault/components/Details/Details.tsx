@@ -274,15 +274,6 @@ export function Details({
         </div>
       )}
 
-      {hasFolderName && (
-        <div className="detail-field">
-          <div className="detail-label">{t('label.folder')}</div>
-          <div className="detail-value-box">
-            <div className="detail-value-text">{folderName}</div>
-          </div>
-        </div>
-      )}
-
       {hasUsername && (
         <div className="detail-field">
           <div className="detail-label">{t('label.username')}</div>
@@ -469,7 +460,7 @@ export function Details({
       )}
 
       {hasNote && (
-        <div className="detail-field">
+        <div className="detail-field detail-field-notes">
           <div className="detail-label">{t('label.note')}</div>
           <div className="detail-value-box detail-value-multiline">
             <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
@@ -483,6 +474,15 @@ export function Details({
                 <IconCopy />
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {hasFolderName && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.folder')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{folderName}</div>
           </div>
         </div>
       )}

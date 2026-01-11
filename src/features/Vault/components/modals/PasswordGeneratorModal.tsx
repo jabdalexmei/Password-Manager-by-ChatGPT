@@ -32,6 +32,28 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
 
   const bits = calculateStrengthBits(options.length, charsetSize);
 
+  // The entropy model for the generator is: bits ~= length * log2(charsetSize).
+  // Since we generate randomly, this is a decent UI proxy for "how hard to brute-force".
+  // For human-chosen passwords, this model is NOT reliable.
+  const strengthLabelKey =
+    bits < 40 ? 'generator.strengthWeakLabel' : bits < 80 ? 'generator.strengthMediumLabel' : 'generator.strengthStrongLabel';
+
+  // Meter calibration:
+  // - Start showing fill after ~20 bits so tiny passwords don't look "half full".
+  // - Consider 120+ bits as "full" (typical 20 chars from a large charset lands here).
+  const minBitsForMeter = 20;
+  const maxBitsForMeter = 120;
+  const normalizedStrength = Math.min(1, Math.max(0, (bits - minBitsForMeter) / (maxBitsForMeter - minBitsForMeter)));
+
+  // Make the early part of the scale visually "redder" (gamma curve).
+  // hue: 0 = red, 120 = green (passing through orange in the middle).
+  const strengthHue = Math.round(Math.pow(normalizedStrength, 1.6) * 120);
+
+  const strengthFillStyle: React.CSSProperties = {
+    width: `${normalizedStrength * 100}%`,
+    backgroundColor: `hsl(${strengthHue}, 85%, 45%)`,
+  };
+
   const handleCheckboxChange = (key: keyof PasswordGeneratorOptions) => (event: React.ChangeEvent<HTMLInputElement>) => {
     onChangeOptions({ ...options, [key]: event.target.checked });
   };
@@ -53,9 +75,6 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
             <div className="input-with-actions">
               <input id="generated-password" className="input" value={generatedPassword} readOnly />
               <div className="input-actions">
-                <button className="icon-button" type="button" aria-label={t('action.copy')} onClick={() => void onCopy()}>
-                  <IconCopy />
-                </button>
                 <button
                   className="icon-button icon-button-primary"
                   type="button"
@@ -64,6 +83,9 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
                 >
                   <IconRegenerate />
                 </button>
+                <button className="icon-button" type="button" aria-label={t('action.copy')} onClick={() => void onCopy()}>
+                  <IconCopy />
+                </button>
               </div>
             </div>
           </div>
@@ -71,14 +93,11 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
           <div className="generator-strength-block">
             <div className="generator-strength-header">
               <span className="generator-strength-title">{t('generator.passwordStrength')}</span>
-              <span className="generator-strength-value">{t('generator.strengthLabel', { bits })}</span>
+              <span className="generator-strength-value">{t(strengthLabelKey, { bits })}</span>
             </div>
 
             <div className="generator-strength-bar">
-              <div
-                className="generator-strength-fill"
-                style={{ width: `${Math.min(100, (bits / 128) * 100)}%` }}
-              />
+              <div className="generator-strength-fill" style={strengthFillStyle} />
             </div>
           </div>
 
