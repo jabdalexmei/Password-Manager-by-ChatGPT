@@ -88,16 +88,17 @@ export function BankCardDetails({
   const hasTitle = hasValue(card.title);
   const title = card.title?.trim() ?? '';
   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
+  const { showHolder, showNumber, showCvc } = detailActions;
 
-  const holderDisplay = hasHolder ? (detailActions.showHolder ? card.holder ?? '' : maskHolder(card.holder)) : '';
+  const holderDisplay = hasHolder ? (showHolder ? card.holder ?? '' : maskHolder(card.holder)) : '';
 
   const numberDisplay = hasNumber
-    ? detailActions.showNumber
+    ? showNumber
       ? card.number
       : maskCardNumber(card.number)
     : '';
   const maskedCvc = card.cvc ? (card.cvc.length >= 4 ? '••••' : '•••') : '';
-  const cvcDisplay = hasCvc ? (detailActions.showCvc ? card.cvc : maskedCvc) : '';
+  const cvcDisplay = hasCvc ? (showCvc ? card.cvc : maskedCvc) : '';
 
   const tagsText = card.tags?.join(', ') ?? '';
 
@@ -156,18 +157,18 @@ export function BankCardDetails({
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label={t('action.copy')}
-                    onClick={() => detailActions.copyToClipboard(card.holder, { isSecret: true })}
+                    aria-label={t(`action.${showHolder ? 'hide' : 'reveal'}`)}
+                    onClick={detailActions.toggleHolderVisibility}
                   >
-                    <IconCopy />
+                    {showHolder ? <IconPreviewOff /> : <IconPreview />}
                   </button>
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label={detailActions.showHolder ? t('action.hide') : t('action.reveal')}
-                    onClick={detailActions.toggleHolderVisibility}
+                    aria-label={t('action.copy')}
+                    onClick={() => detailActions.copyToClipboard(card.holder, { isSecret: true })}
                   >
-                    {detailActions.showHolder ? <IconPreviewOff /> : <IconPreview />}
+                    <IconCopy />
                   </button>
                 </div>
               </div>
@@ -183,18 +184,18 @@ export function BankCardDetails({
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label={t('action.copy')}
-                    onClick={() => detailActions.copyToClipboard(card.number, { isSecret: true })}
+                    aria-label={t(`action.${showNumber ? 'hide' : 'reveal'}`)}
+                    onClick={detailActions.toggleNumberVisibility}
                   >
-                    <IconCopy />
+                    {showNumber ? <IconPreviewOff /> : <IconPreview />}
                   </button>
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label={detailActions.showNumber ? t('action.hide') : t('action.reveal')}
-                    onClick={detailActions.toggleNumberVisibility}
+                    aria-label={t('action.copy')}
+                    onClick={() => detailActions.copyToClipboard(card.number, { isSecret: true })}
                   >
-                    {detailActions.showNumber ? <IconPreviewOff /> : <IconPreview />}
+                    <IconCopy />
                   </button>
                 </div>
               </div>
@@ -219,18 +220,18 @@ export function BankCardDetails({
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label={t('action.copy')}
-                    onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
+                    aria-label={t(`action.${showCvc ? 'hide' : 'reveal'}`)}
+                    onClick={detailActions.toggleCvcVisibility}
                   >
-                    <IconCopy />
+                    {showCvc ? <IconPreviewOff /> : <IconPreview />}
                   </button>
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label={detailActions.showCvc ? t('action.hide') : t('action.reveal')}
-                    onClick={detailActions.toggleCvcVisibility}
+                    aria-label={t('action.copy')}
+                    onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
                   >
-                    {detailActions.showCvc ? <IconPreviewOff /> : <IconPreview />}
+                    <IconCopy />
                   </button>
                 </div>
               </div>
