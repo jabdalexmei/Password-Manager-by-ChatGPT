@@ -102,6 +102,27 @@ export function useDetails({
       previewUrlRef.current = null;
     }
   }, []);
+
+  const clearClipboardBestEffort = useCallback(async () => {
+    try {
+      const expected = lastCopiedValueRef.current;
+      if (!expected) return;
+      const currentClipboard = await navigator.clipboard.readText();
+      if (currentClipboard === expected) {
+        await clipboardClearAll();
+      }
+    } catch (err) {
+      console.error(err);
+      try {
+        await clipboardClearAll();
+      } catch (wipeErr) {
+        console.error(wipeErr);
+      }
+    } finally {
+      timeoutRef.current = null;
+      lastCopiedValueRef.current = null;
+    }
+  }, []);
   const refreshAttachments = useCallback(async () => {
     if (!card?.id) {
       setAttachments([]);
@@ -142,22 +163,8 @@ export function useDetails({
         if (opts.isSecret && autoClearEnabled) {
           lastCopiedValueRef.current = value;
           const timeoutMs = (clipboardClearTimeoutSeconds ?? DEFAULT_CLIPBOARD_CLEAR_TIMEOUT_SECONDS) * 1000;
-          timeoutRef.current = window.setTimeout(async () => {
-            try {
-              const currentClipboard = await navigator.clipboard.readText();
-              if (currentClipboard === lastCopiedValueRef.current) {
-                await clipboardClearAll();
-              }
-            } catch (err) {
-              console.error(err);
-              try {
-                await clipboardClearAll();
-              } catch (wipeErr) {
-                console.error(wipeErr);
-              }
-            }
-            timeoutRef.current = null;
-            lastCopiedValueRef.current = null;
+          timeoutRef.current = window.setTimeout(() => {
+            void clearClipboardBestEffort();
           }, timeoutMs);
         }
       } catch (err) {
@@ -166,7 +173,7 @@ export function useDetails({
         lastCopiedValueRef.current = null;
       }
     },
-    [clearPendingTimeout, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
+    [clearPendingTimeout, clearClipboardBestEffort, clipboardAutoClearEnabled, clipboardClearTimeoutSeconds, showToast, t]
   );
 
   const deleteCard = useCallback(() => {

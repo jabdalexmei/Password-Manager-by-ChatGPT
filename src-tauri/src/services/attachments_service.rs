@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::app_state::AppState;
 use crate::data::crypto::cipher;
 use crate::data::fs::atomic_write::write_atomic;
-use crate::data::profiles::paths::{attachment_file_path, attachments_preview_root};
+use crate::data::profiles::paths::attachment_file_path;
 use crate::data::sqlite::repo_impl;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::security_service;
@@ -224,11 +224,8 @@ pub fn get_attachment_bytes_base64(
     get_attachment_preview(app, attachment_id)
 }
 
-pub fn clear_previews_for_profile(state: &Arc<AppState>, profile_id: &str) -> Result<()> {
-    let storage_paths = state.get_storage_paths()?;
-    let preview_root = attachments_preview_root(&storage_paths, profile_id)?;
-    if preview_root.exists() {
-        let _ = fs::remove_dir_all(&preview_root);
-    }
+pub fn clear_previews_for_profile(_state: &Arc<AppState>, _profile_id: &str) -> Result<()> {
+    // Attachment previews are currently streamed to the UI as base64 payloads.
+    // There is no on-disk preview cache to clear.
     Ok(())
 }
