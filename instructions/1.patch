@@ -1,22 +1,67 @@
-diff --git a/src/features/Vault/components/modals/PasswordHistoryDialog.tsx b/src/features/Vault/components/modals/PasswordHistoryDialog.tsx
---- a/src/features/Vault/components/modals/PasswordHistoryDialog.tsx
-+++ b/src/features/Vault/components/modals/PasswordHistoryDialog.tsx
-@@ -5,7 +5,7 @@
- import { useToaster } from '../../../../shared/components/Toaster';
- import { clearPasswordHistory, getPasswordHistory } from '../../api/vaultApi';
- import { PasswordHistoryEntry } from '../../types/ui';
--import { IconCopy, IconHistory, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
-+import { IconCopy, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
- import { clipboardClearAll } from '../../../../shared/lib/tauri';
+diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
+--- a/src/features/Vault/components/Details/Details.tsx
++++ b/src/features/Vault/components/Details/Details.tsx
+@@ -274,15 +274,6 @@
+         </div>
+       )}
  
- type PasswordHistoryDialogProps = {
-@@ -126,10 +126,7 @@
-         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="password-history-title">
-           <div className="dialog-header">
-             <h2 id="password-history-title" className="dialog-title">
--              <IconHistory />
--              <span>{t('dialog.passwordHistoryTitle')}</span>
-+              {t('dialog.passwordHistoryTitle')}
-             </h2>
+-      {hasFolderName && (
+-        <div className="detail-field">
+-          <div className="detail-label">{t('label.folder')}</div>
+-          <div className="detail-value-box">
+-            <div className="detail-value-text">{folderName}</div>
+-          </div>
+-        </div>
+-      )}
+-
+       {hasUsername && (
+         <div className="detail-field">
+           <div className="detail-label">{t('label.username')}</div>
+@@ -469,7 +460,7 @@
+       )}
+ 
+       {hasNote && (
+-        <div className="detail-field">
++        <div className="detail-field detail-field-notes">
+           <div className="detail-label">{t('label.note')}</div>
+           <div className="detail-value-box detail-value-multiline">
+             <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
+@@ -486,6 +477,15 @@
            </div>
+         </div>
+       )}
++
++      {hasFolderName && (
++        <div className="detail-field">
++          <div className="detail-label">{t('label.folder')}</div>
++          <div className="detail-value-box">
++            <div className="detail-value-text">{folderName}</div>
++          </div>
++        </div>
++      )}
  
+       {hasTags && (
+         <div className="detail-field">
+diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
+--- a/src/shared/styles/screens/vault.css
++++ b/src/shared/styles/screens/vault.css
+@@ -762,6 +762,19 @@
+   align-items: flex-start;
+ }
+ 
++/* Notes: keep the copy button aligned to the right, like other fields */
++.detail-field-notes .detail-value-box.detail-value-multiline {
++  position: relative;
++  padding-right: 54px;
++}
++
++.detail-field-notes .detail-value-actions {
++  position: absolute;
++  right: 12px;
++  top: 50%;
++  transform: translateY(-50%);
++}
++
+ .detail-value-text-multiline {
+   white-space: pre-wrap;
+   width: 100%;
