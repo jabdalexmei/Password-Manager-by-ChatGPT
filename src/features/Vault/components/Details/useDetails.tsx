@@ -21,6 +21,7 @@ type UseDetailsParams = {
   onToggleFavorite: (id: string) => void;
   onRestore: (id: string) => void;
   onPurge: (id: string) => void;
+  onAttachmentPresenceChange?: (cardId: string, hasAttachments: boolean) => void;
   isTrashMode: boolean;
   clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
@@ -60,6 +61,7 @@ export function useDetails({
   onToggleFavorite,
   onRestore,
   onPurge,
+  onAttachmentPresenceChange,
   isTrashMode,
   clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
@@ -107,13 +109,16 @@ export function useDetails({
     }
     try {
       const items = await listAttachments(card.id);
-      setAttachments(items.map(mapAttachmentFromBackend));
+      const mapped = items.map(mapAttachmentFromBackend);
+      setAttachments(mapped);
+      onAttachmentPresenceChange?.(card.id, mapped.length > 0);
     } catch (err) {
       console.error(err);
       setAttachments([]);
+      onAttachmentPresenceChange?.(card.id, false);
       showToast(t('toast.attachmentLoadError'), 'error');
     }
-  }, [card?.id, showToast, t]);
+  }, [card?.id, onAttachmentPresenceChange, showToast, t]);
 
   useEffect(() => {
     setShowPassword(false);

@@ -33,6 +33,7 @@ export type DetailsProps = {
   onRestore: (id: string) => void;
   onPurge: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  onAttachmentPresenceChange?: (cardId: string, hasAttachments: boolean) => void;
   isTrashMode: boolean;
   clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
@@ -46,6 +47,7 @@ export function Details({
   onRestore,
   onPurge,
   onToggleFavorite,
+  onAttachmentPresenceChange,
   isTrashMode,
   clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
@@ -60,6 +62,7 @@ export function Details({
     onRestore,
     onPurge,
     onToggleFavorite,
+    onAttachmentPresenceChange,
     isTrashMode,
     clipboardAutoClearEnabled,
     clipboardClearTimeoutSeconds,

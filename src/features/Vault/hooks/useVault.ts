@@ -402,6 +402,11 @@ export function useVault(profileId: string, onLocked: () => void) {
     [handleError]
   );
 
+  const setCardHasAttachments = useCallback((cardId: string, hasAttachments: boolean) => {
+    setCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, hasAttachments } : card)));
+    setDeletedCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, hasAttachments } : card)));
+  }, []);
+
   const updateCardAction = useCallback(
     async (input: UpdateDataCardInput) => {
       try {
@@ -779,6 +784,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     deleteFolderOnly: deleteFolderOnlyAction,
     deleteFolderAndCards: deleteFolderAndCardsAction,
     createCard: createCardAction,
+    setCardHasAttachments,
     uploadAttachments,
     updateCard: updateCardAction,
     deleteCard: deleteCardAction,

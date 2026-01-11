@@ -527,6 +527,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
               <LazyDetails
                 card={vault.selectedCard}
                 folders={foldersForCards}
+                onAttachmentPresenceChange={vault.setCardHasAttachments}
                 onEdit={(card) => dataCardsViewModel.openEditModal(card)}
                 onDelete={vault.deleteCard}
                 onRestore={vault.restoreCard}
