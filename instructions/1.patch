@@ -1,68 +1,65 @@
-## Diff-патч
-
-```diff
---- a/src/features/Vault/hooks/useVault.ts
-+++ b/src/features/Vault/hooks/useVault.ts
-@@ -89,6 +89,7 @@ export function useVault(profileId: string, onLocked: () => void) {
-         case 'BACKUP_ARCHIVE_INVALID':
-         case 'BACKUP_MANIFEST_INVALID':
-+        case 'BACKUP_MANIFEST_MISSING':
-           return tCommon('error.backupInvalid', { code });
-         case 'BACKUP_INTEGRITY_FAILED':
-           return tCommon('error.backupIntegrityFailed', { code });
-@@ -106,6 +107,13 @@ export function useVault(profileId: string, onLocked: () => void) {
-         case 'BACKUP_RESTORE_PATH_FORBIDDEN':
-         case 'BACKUP_INSPECT_PATH_FORBIDDEN':
-           return tCommon('error.operationBlocked', { code });
-+        case 'PROFILE_ID_INVALID':
-+          return tCommon('error.profileInvalid', { code });
-+        case 'DB_SCHEMA_MISSING':
-+        case 'DB_MIGRATION_FAILED':
-+          return tCommon('error.vaultUnsupportedOrCorrupt', { code });
-         case 'VALIDATION_ERROR':
-           return fallback ?? tCommon('error.operationFailed', { code });
-         default:
-           return fallback ?? tCommon('error.operationFailed', { code });
-       }
-     },
-     [tCommon]
-   );
-```
-
-```diff
---- a/src/features/Vault/hooks/useBankCards.ts
-+++ b/src/features/Vault/hooks/useBankCards.ts
-@@ -74,6 +74,12 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: Fo
-       switch (code) {
-         case 'NETWORK_ERROR':
-           return tCommon('error.network', { code });
-+        case 'PROFILE_ID_INVALID':
-+          return tCommon('error.profileInvalid', { code });
-+        case 'DB_SCHEMA_MISSING':
-+        case 'DB_MIGRATION_FAILED':
-+          return tCommon('error.vaultUnsupportedOrCorrupt', { code });
-         case 'VALIDATION_ERROR':
-           return fallback ?? tCommon('error.operationFailed', { code });
-         default:
-           return fallback ?? tCommon('error.operationFailed', { code });
-       }
-     },
-     [tCommon]
-   );
-```
-
-```diff
---- a/src/i18n/locales/en/Common.json
-+++ b/src/i18n/locales/en/Common.json
-@@ -14,6 +14,8 @@
-   "error.dialogUnsupported": "This operation is not supported on this platform.",
-   "error.hookToaster": "useToaster must be used within ToasterProvider",
-   "error.operationBlocked": "Operation blocked for security reasons.",
-+  "error.profileInvalid": "Profile data is invalid or corrupted.",
-+  "error.vaultUnsupportedOrCorrupt": "Vault is corrupted or uses an unsupported format. Try restoring from a backup.",
-   "error.operationFailed": "Operation failed. Please try again.",
-   "error.network": "Network error. Please try again."
+--- a/src-tauri/src/services/bank_cards_service.rs
++++ b/src-tauri/src/services/bank_cards_service.rs
+@@ -3,7 +3,7 @@
+ 
+ use crate::app_state::AppState;
+ use crate::data::sqlite::repo_impl;
+-use crate::error::{ErrorCodeString, Result};
++use crate::error::Result;
+ use crate::services::security_service;
+ use crate::services::settings_service::get_settings;
+ use crate::types::{
+--- a/src-tauri/src/types.rs
++++ b/src-tauri/src/types.rs
+@@ -265,11 +265,6 @@ pub struct SetBankCardFavoriteInput {
+     pub is_favorite: bool,
  }
-```
-
+ 
+-#[derive(Debug, Serialize, Deserialize, Clone)]
+-pub struct MoveBankCardInput {
+-    pub id: String,
+-    pub folder_id: Option<String>,
+-}
 -
+ #[derive(Debug, Serialize, Deserialize, Clone)]
+ pub struct UserSettings {
+     pub auto_hide_secret_timeout_seconds: i64,
+--- a/src-tauri/src/data/sqlite/repo_impl.rs
++++ b/src-tauri/src/data/sqlite/repo_impl.rs
+@@ -976,34 +976,6 @@ pub fn purge_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Res
+     })
+ }
+ 
+-pub fn list_bank_card_ids_in_folder(
+-    state: &Arc<AppState>,
+-    profile_id: &str,
+-    folder_id: &str,
+-    include_deleted: bool,
+-) -> Result<Vec<String>> {
+-    with_connection(state, profile_id, |conn| {
+-        let clause = if include_deleted {
+-            String::new()
+-        } else {
+-            " AND deleted_at IS NULL".to_string()
+-        };
+-        let mut stmt = conn
+-            .prepare(&format!(
+-                "SELECT id FROM bank_cards WHERE folder_id = ?1{clause}",
+-            ))
+-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+-
+-        let rows = stmt
+-            .query_map(params![folder_id], |row| row.get("id"))
+-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+-            .collect::<rusqlite::Result<Vec<String>>>()
+-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+-
+-        Ok(rows)
+-    })
+-}
+-
+ pub fn soft_delete_bank_cards_in_folder(
+     state: &Arc<AppState>,
+     profile_id: &str,
+     folder_id: &str,
+ ) -> Result<bool> {
