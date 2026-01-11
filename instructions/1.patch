@@ -1,65 +1,69 @@
---- a/src-tauri/src/services/bank_cards_service.rs
-+++ b/src-tauri/src/services/bank_cards_service.rs
-@@ -3,7 +3,7 @@
+--- a/src/features/Vault/components/Folders/Folders.tsx
++++ b/src/features/Vault/components/Folders/Folders.tsx
+@@ -17,7 +17,7 @@ export type FolderListProps = {
+   onSelectCategory: (category: VaultCategory) => void;
+   onAddBankCard: () => void;
+   folders: Folder[];
+   counts: Counts;
+-  categoryCounts: { dataCards: number; bankCards: number };
++  categoryCounts?: { dataCards: number; bankCards: number };
+   selectedNav: SelectedNav;
+   selectedFolderId: string | null;
+   onSelectNav: (nav: SelectedNav) => void;
+   dialogState: FolderDialogState;
+   onDeleteFolder: (id: string) => void;
+   onRenameFolder: (id: string, name: string) => void | Promise<void>;
+ };
  
- use crate::app_state::AppState;
- use crate::data::sqlite::repo_impl;
--use crate::error::{ErrorCodeString, Result};
-+use crate::error::Result;
- use crate::services::security_service;
- use crate::services::settings_service::get_settings;
- use crate::types::{
---- a/src-tauri/src/types.rs
-+++ b/src-tauri/src/types.rs
-@@ -265,11 +265,6 @@ pub struct SetBankCardFavoriteInput {
-     pub is_favorite: bool,
- }
+ export function Folders({
+   selectedCategory,
+   onSelectCategory,
+   onAddBankCard,
+   folders,
+   counts,
+   categoryCounts,
+   selectedNav,
+   selectedFolderId,
+   onSelectNav,
+   dialogState,
+   onDeleteFolder,
+   onRenameFolder,
+ }: FolderListProps) {
+@@ -248,6 +248,9 @@ export function Folders({
  
--#[derive(Debug, Serialize, Deserialize, Clone)]
--pub struct MoveBankCardInput {
--    pub id: String,
--    pub folder_id: Option<String>,
--}
--
- #[derive(Debug, Serialize, Deserialize, Clone)]
- pub struct UserSettings {
-     pub auto_hide_secret_timeout_seconds: i64,
---- a/src-tauri/src/data/sqlite/repo_impl.rs
-+++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -976,34 +976,6 @@ pub fn purge_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Res
-     })
- }
- 
--pub fn list_bank_card_ids_in_folder(
--    state: &Arc<AppState>,
--    profile_id: &str,
--    folder_id: &str,
--    include_deleted: bool,
--) -> Result<Vec<String>> {
--    with_connection(state, profile_id, |conn| {
--        let clause = if include_deleted {
--            String::new()
--        } else {
--            " AND deleted_at IS NULL".to_string()
--        };
--        let mut stmt = conn
--            .prepare(&format!(
--                "SELECT id FROM bank_cards WHERE folder_id = ?1{clause}",
--            ))
--            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
--
--        let rows = stmt
--            .query_map(params![folder_id], |row| row.get("id"))
--            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
--            .collect::<rusqlite::Result<Vec<String>>>()
--            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
--
--        Ok(rows)
--    })
--}
--
- pub fn soft_delete_bank_cards_in_folder(
-     state: &Arc<AppState>,
-     profile_id: &str,
-     folder_id: &str,
- ) -> Result<bool> {
+   return (
+     <div>
+       <div className="vault-sidebar-title">{t('category.title')}</div>
+       <ul className="vault-folder-list">
+-        <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
+-          <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
+-            <span className="folder-name">{t('category.dataCards')}</span>
+-            <span className="folder-count">{categoryCounts.dataCards}</span>
+-          </button>
+-        </li>
++        {categoryCounts && (
++          <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
++            <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
++              <span className="folder-name">{t('category.dataCards')}</span>
++              <span className="folder-count">{categoryCounts.dataCards}</span>
++            </button>
++          </li>
++        )}
+         <li className={selectedCategory === 'bank_cards' ? 'active' : ''}>
+           <button
+             className="vault-folder"
+             type="button"
+             onClick={() => onSelectCategory('bank_cards')}
+             onContextMenu={(event) => {
+               event.preventDefault();
+               setCategoryMenu({ x: event.clientX, y: event.clientY });
+             }}
+           >
+             <span className="folder-name">{t('category.bankCards')}</span>
+-            <span className="folder-count">{categoryCounts.bankCards}</span>
++            <span className="folder-count">{categoryCounts?.bankCards ?? counts.all}</span>
+           </button>
+         </li>
+       </ul>
+       <div className="vault-sidebar-title">{t('nav.title')}</div>
+       <ul className="vault-folder-list">
