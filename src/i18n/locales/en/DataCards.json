@@ -117,5 +117,8 @@
       "INVALID_SECRET": "Invalid Base32 secret",
       "QR_DECODE_FAILED": "Unable to decode QR from image"
     }
-  }
+  },
+  "generator.strengthWeakLabel": "Weak ({{bits}} bits)",
+  "generator.strengthMediumLabel": "Medium ({{bits}} bits)",
+  "generator.strengthStrongLabel": "Strong ({{bits}} bits)"
 }
