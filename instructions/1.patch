@@ -1,96 +1,44 @@
-diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
---- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
-+++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
-@@ -138,55 +138,37 @@ export function BankCardDetails({ viewModel }: BankCardDetailsProps) {
-               <div className="detail-label">{t('label.holder')}</div>
-               <div className="detail-value-box">
-                 <div className="detail-value-text">{holderDisplay}</div>
-                 <div className="detail-value-actions">
-                   <button
-                     className="icon-button"
-                     type="button"
-                     aria-label={t(`action.${showHolder ? 'hide' : 'reveal'}`)}
-                     onClick={detailActions.toggleHolderVisibility}
-                   >
-                     {showHolder ? <IconPreviewOff /> : <IconPreview />}
-                   </button>
--                  <button
--                    className="icon-button"
--                    type="button"
--                    aria-label={t(`action.${showCvc ? 'hide' : 'reveal'}`)}
--                    onClick={detailActions.toggleCvcVisibility}
--                  >
--                    {showCvc ? <IconPreviewOff /> : <IconPreview />}
--                  </button>
--                  <button
--                    className="icon-button"
--                    type="button"
--                    aria-label={t(`action.${showNumber ? 'hide' : 'reveal'}`)}
--                    onClick={detailActions.toggleNumberVisibility}
--                  >
--                    {showNumber ? <IconPreviewOff /> : <IconPreview />}
--                  </button>
-                   <button
-                     className="icon-button"
-                     type="button"
-                     aria-label={t('action.copy')}
-                     onClick={() => detailActions.copyToClipboard(card.holder, { isSecret: true })}
-                   >
-                     <IconCopy />
-                   </button>
-                 </div>
-               </div>
+diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
+--- a/src/features/Vault/components/Details/Details.tsx
++++ b/src/features/Vault/components/Details/Details.tsx
+@@ -430,27 +430,27 @@
+       {hasPassword && (
+         <div className="detail-field">
+           <div className="detail-label">{t('label.password')}</div>
+           <div className="detail-value-box">
+             <div className="detail-value-text">{passwordDisplay}</div>
+             <div className="detail-value-actions">
+               <button
+                 className="icon-button"
+                 type="button"
+-                onClick={() => copy(t('label.password'), card.password || '')}
+-                aria-label={t('action.copyPassword')}
++                onClick={() => setIsPasswordRevealed((v) => !v)}
++                aria-label={t('action.revealPassword')}
+               >
+-                <IconCopy />
++                {isPasswordRevealed ? <IconPreviewOff /> : <IconPreview />}
+               </button>
+               <button
+                 className="icon-button"
+                 type="button"
+-                onClick={() => setIsPasswordRevealed((v) => !v)}
+-                aria-label={t('action.revealPassword')}
++                onClick={() => copy(t('label.password'), card.password || '')}
++                aria-label={t('action.copyPassword')}
+               >
+-                {isPasswordRevealed ? <IconPreviewOff /> : <IconPreview />}
++                <IconCopy />
+               </button>
+               <button
+                 className="icon-button"
+                 type="button"
+                 onClick={openPasswordHistory}
+                 aria-label={t('action.passwordHistory')}
+               >
+                 <IconHistory />
+               </button>
              </div>
-           )}
-@@ -190,6 +172,16 @@ export function BankCardDetails({ viewModel }: BankCardDetailsProps) {
-               <div className="detail-label">{t('label.number')}</div>
-               <div className="detail-value-box">
-                 <div className="detail-value-text detail-value-text-monospace">{numberDisplay}</div>
-                 <div className="detail-value-actions">
-+                  <button
-+                    className="icon-button"
-+                    type="button"
-+                    aria-label={t(`action.${showNumber ? 'hide' : 'reveal'}`)}
-+                    onClick={detailActions.toggleNumberVisibility}
-+                  >
-+                    {showNumber ? <IconPreviewOff /> : <IconPreview />}
-+                  </button>
-                   <button
-                     className="icon-button"
-                     type="button"
-                     aria-label={t('action.copy')}
-                     onClick={() => detailActions.copyToClipboard(card.number, { isSecret: true })}
-                   >
-                     <IconCopy />
-                   </button>
--                  </div>
-+                </div>
-               </div>
-             </div>
-           )}
-@@ -223,6 +215,16 @@ export function BankCardDetails({ viewModel }: BankCardDetailsProps) {
-               <div className="detail-label">{t('label.cvc')}</div>
-               <div className="detail-value-box">
-                 <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
-                 <div className="detail-value-actions">
-+                  <button
-+                    className="icon-button"
-+                    type="button"
-+                    aria-label={t(`action.${showCvc ? 'hide' : 'reveal'}`)}
-+                    onClick={detailActions.toggleCvcVisibility}
-+                  >
-+                    {showCvc ? <IconPreviewOff /> : <IconPreview />}
-+                  </button>
-                   <button
-                     className="icon-button"
-                     type="button"
-                     aria-label={t('action.copy')}
-                     onClick={() => detailActions.copyToClipboard(card.cvc, { isSecret: true })}
-                   >
-                     <IconCopy />
-                   </button>
--                  </div>
-+                </div>
-               </div>
-             </div>
-           )}
+           </div>
+         </div>
+       )}
