@@ -1,44 +1,109 @@
 diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
+index 2a5d3c1..9fb8b2b 100644
 --- a/src/features/Vault/components/Details/Details.tsx
 +++ b/src/features/Vault/components/Details/Details.tsx
-@@ -430,27 +430,27 @@
-       {hasPassword && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.password')}</div>
-           <div className="detail-value-box">
-             <div className="detail-value-text">{passwordDisplay}</div>
-             <div className="detail-value-actions">
-               <button
-                 className="icon-button"
-                 type="button"
--                onClick={() => copy(t('label.password'), card.password || '')}
--                aria-label={t('action.copyPassword')}
-+                onClick={() => setIsPasswordRevealed((v) => !v)}
-+                aria-label={t('action.revealPassword')}
-               >
--                <IconCopy />
-+                {isPasswordRevealed ? <IconPreviewOff /> : <IconPreview />}
-               </button>
-               <button
-                 className="icon-button"
-                 type="button"
--                onClick={() => setIsPasswordRevealed((v) => !v)}
--                aria-label={t('action.revealPassword')}
-+                onClick={() => copy(t('label.password'), card.password || '')}
-+                aria-label={t('action.copyPassword')}
-               >
--                {isPasswordRevealed ? <IconPreviewOff /> : <IconPreview />}
-+                <IconCopy />
-               </button>
-               <button
-                 className="icon-button"
-                 type="button"
-                 onClick={openPasswordHistory}
-                 aria-label={t('action.passwordHistory')}
-               >
-                 <IconHistory />
-               </button>
-             </div>
-           </div>
-         </div>
-       )}
+@@ -33,6 +33,7 @@ export type DetailsProps = {
+   onRestore: (id: string) => void;
+   onPurge: (id: string) => void;
+   onToggleFavorite: (id: string) => void;
++  onAttachmentPresenceChange?: (cardId: string, hasAttachments: boolean) => void;
+   isTrashMode: boolean;
+   clipboardAutoClearEnabled?: boolean;
+   clipboardClearTimeoutSeconds?: number;
+@@ -46,6 +47,7 @@ export function Details({
+   onRestore,
+   onPurge,
+   onToggleFavorite,
++  onAttachmentPresenceChange,
+   isTrashMode,
+   clipboardAutoClearEnabled,
+   clipboardClearTimeoutSeconds,
+@@ -60,6 +62,7 @@ export function Details({
+     onRestore,
+     onPurge,
+     onToggleFavorite,
++    onAttachmentPresenceChange,
+     isTrashMode,
+     clipboardAutoClearEnabled,
+     clipboardClearTimeoutSeconds,
+   });
+
+diff --git a/src/features/Vault/components/Details/useDetails.tsx b/src/features/Vault/components/Details/useDetails.tsx
+index 7c7a0c9..f33b7c0 100644
+--- a/src/features/Vault/components/Details/useDetails.tsx
++++ b/src/features/Vault/components/Details/useDetails.tsx
+@@ -21,6 +21,7 @@ type UseDetailsParams = {
+   onToggleFavorite: (id: string) => void;
+   onRestore: (id: string) => void;
+   onPurge: (id: string) => void;
++  onAttachmentPresenceChange?: (cardId: string, hasAttachments: boolean) => void;
+   isTrashMode: boolean;
+   clipboardAutoClearEnabled?: boolean;
+   clipboardClearTimeoutSeconds?: number;
+@@ -60,6 +61,7 @@ export function useDetails({
+   onToggleFavorite,
+   onRestore,
+   onPurge,
++  onAttachmentPresenceChange,
+   isTrashMode,
+   clipboardAutoClearEnabled,
+   clipboardClearTimeoutSeconds,
+ }: UseDetailsParams) {
+@@ -107,13 +109,16 @@ export function useDetails({
+     }
+     try {
+       const items = await listAttachments(card.id);
+-      setAttachments(items.map(mapAttachmentFromBackend));
++      const mapped = items.map(mapAttachmentFromBackend);
++      setAttachments(mapped);
++      onAttachmentPresenceChange?.(card.id, mapped.length > 0);
+     } catch (err) {
+       console.error(err);
+       setAttachments([]);
++      onAttachmentPresenceChange?.(card.id, false);
+       showToast(t('toast.attachmentLoadError'), 'error');
+     }
+-  }, [card?.id, showToast, t]);
++  }, [card?.id, onAttachmentPresenceChange, showToast, t]);
+
+diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
+index 4c9e2d1..d6b8f2e 100644
+--- a/src/features/Vault/hooks/useVault.ts
++++ b/src/features/Vault/hooks/useVault.ts
+@@ -402,6 +402,11 @@ export function useVault() {
+     [handleError]
+   );
+
++  const setCardHasAttachments = useCallback((cardId: string, hasAttachments: boolean) => {
++    setCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, hasAttachments } : card)));
++    setDeletedCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, hasAttachments } : card)));
++  }, []);
++
+   const updateCardAction = useCallback(
+     async (input: UpdateDataCardInput) => {
+       try {
+@@ -779,6 +784,7 @@ export function useVault() {
+     deleteFolderOnly: deleteFolderOnlyAction,
+     deleteFolderAndCards: deleteFolderAndCardsAction,
+     createCard: createCardAction,
++    setCardHasAttachments,
+     uploadAttachments,
+     updateCard: updateCardAction,
+     deleteCard: deleteCardAction,
+
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+index 6b62b8f..c2dd7ff 100644
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -527,6 +527,7 @@ export function Vault() {
+               <LazyDetails
+                 card={vault.selectedCard}
+                 folders={foldersForCards}
++                onAttachmentPresenceChange={vault.setCardHasAttachments}
+                 onEdit={(card) => dataCardsViewModel.openEditModal(card)}
+                 onDelete={vault.deleteCard}
+                 onRestore={vault.restoreCard}
+                 onPurge={vault.purgeCard}
+                 onToggleFavorite={vault.toggleFavorite}
+                 isTrashMode={vault.selectedNav === 'deleted'}
+               />
