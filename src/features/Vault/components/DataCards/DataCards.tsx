@@ -21,6 +21,12 @@ import {
   sortDataCardSummaries,
   type VaultSortMode,
 } from '../../lib/vaultSort';
+import {
+  loadPreviewFields,
+  onPreviewFieldsChanged,
+  type DataCardPreviewField,
+  MAX_DATA_CARD_PREVIEW_FIELDS,
+} from '../../lib/datacardPreviewFields';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
 
 const LazyPasswordGeneratorModal = React.lazy(async () => {
@@ -109,6 +115,7 @@ export function DataCards({
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
   const shouldShowTrashActions = viewModel.isTrashMode && showTrashActions;
+  const [previewFields, setPreviewFields] = useState<DataCardPreviewField[]>([]);
   const [isCustomFieldModalOpen, setIsCustomFieldModalOpen] = useState(false);
   const [customFieldName, setCustomFieldName] = useState('');
   const [customFieldModalError, setCustomFieldModalError] = useState<string | null>(null);
@@ -141,6 +148,18 @@ export function DataCards({
   useEffect(() => {
     setVaultSortMode('data_cards', profileId, sortMode);
   }, [profileId, sortMode]);
+
+  useEffect(() => {
+    let isMounted = true;
+    loadPreviewFields().then((fields) => {
+      if (isMounted) setPreviewFields(fields);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => onPreviewFieldsChanged(setPreviewFields), []);
 
   const cards = useMemo(() => sortDataCardSummaries(rawCards, sortMode), [rawCards, sortMode]);
 
@@ -878,13 +897,44 @@ export function DataCards({
                   ? urlText
                   : emailText;
 
-            const metaLines: string[] = [];
-            if (hasTitle) {
-              if (hasUrl) metaLines.push(urlText);
-              if (hasEmail) metaLines.push(emailText);
-            } else if (hasUrl) {
-              if (hasEmail) metaLines.push(emailText);
-            }
+            const metaLine1 = hasTitle ? (hasUrl ? urlText : null) : hasUrl ? (hasEmail ? emailText : null) : null;
+            const metaLine2 = hasTitle && hasEmail ? emailText : null;
+
+            const getExtraLine = (field: DataCardPreviewField): string | null => {
+              switch (field) {
+                case 'username': {
+                  const v = (card.username ?? '').trim();
+                  return v.length > 0 ? v : null;
+                }
+                case 'mobile_phone': {
+                  const v = (card.mobilePhone ?? '').trim();
+                  return v.length > 0 ? v : null;
+                }
+                case 'note': {
+                  const v = (card.note ?? '').split(/\r?\n/)[0]?.trim() ?? '';
+                  return v.length > 0 ? v : null;
+                }
+                case 'folder': {
+                  if (!card.folderId) return null;
+                  const v = (viewModel.folders.find((f) => f.id === card.folderId)?.name ?? '').trim();
+                  return v.length > 0 ? v : null;
+                }
+                case 'tags': {
+                  const v = Array.isArray(card.tags) ? card.tags.join(', ').trim() : '';
+                  return v.length > 0 ? v : null;
+                }
+                default:
+                  return null;
+              }
+            };
+
+            const extraLines = previewFields
+              .map((field) => getExtraLine(field))
+              .filter((value): value is string => Boolean(value))
+              .slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);
+
+            const metaLines: Array<string | null> = [metaLine1, metaLine2, ...extraLines];
+            while (metaLines.length < 2 + MAX_DATA_CARD_PREVIEW_FIELDS) metaLines.push(null);
 
             return (
               <button
@@ -903,15 +953,13 @@ export function DataCards({
                   )}
                 </div>
 
-                {metaLines.length > 0 && (
-                  <div className="datacard-meta-lines">
-                    {metaLines.map((line, idx) => (
-                      <div key={`${card.id}-meta-${idx}`} className="datacard-meta">
-                        <span>{line}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div className="datacard-meta-lines">
+                  {metaLines.map((line, idx) => (
+                    <div key={`${card.id}-meta-${idx}`} className="datacard-meta">
+                      <span className={line ? undefined : 'datacard-meta-empty'}>{line ?? '\u00A0'}</span>
+                    </div>
+                  ))}
+                </div>
               </button>
             );
           })}

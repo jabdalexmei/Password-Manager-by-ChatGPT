@@ -42,6 +42,7 @@ mod services {
     pub mod profiles_service;
     pub mod security_service;
     pub mod settings_service;
+    pub mod ui_prefs_service;
 }
 mod types;
 
@@ -50,7 +51,7 @@ use std::sync::Arc;
 use app_state::AppState;
 use commands::{
     attachments::*, backup::*, bank_cards::*, clipboard::*, datacards::*, folders::*,
-    password_history::*, profiles::*, security::*, settings::*, workspace::*,
+    password_history::*, profiles::*, security::*, settings::*, ui_prefs::*, workspace::*,
 };
 use data::storage_paths::StoragePaths;
 use services::security_service;
@@ -183,6 +184,8 @@ fn main() {
             clear_datacard_password_history,
             get_settings,
             update_settings,
+            get_datacard_preview_fields,
+            set_datacard_preview_fields,
             workspace_list,
             workspace_select,
             workspace_create,

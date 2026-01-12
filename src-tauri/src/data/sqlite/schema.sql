@@ -101,3 +101,10 @@ CREATE TABLE IF NOT EXISTS bank_cards (
 CREATE INDEX IF NOT EXISTS idx_bank_cards_deleted_at ON bank_cards (deleted_at);
 CREATE INDEX IF NOT EXISTS idx_bank_cards_is_favorite ON bank_cards (is_favorite);
 CREATE INDEX IF NOT EXISTS idx_bank_cards_folder ON bank_cards (folder_id);
+
+-- UI preferences for frontend-only settings that should live with the vault DB.
+CREATE TABLE IF NOT EXISTS ui_preferences (
+  key        TEXT PRIMARY KEY,
+  value_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

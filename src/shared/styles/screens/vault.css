@@ -491,7 +491,7 @@
 /* Lighter hover for the sort menu items (keep other context menus unchanged). */
 .vault-sortmenu-panel .vault-context-item:hover,
 .vault-sortmenu-panel .vault-context-item:focus-visible {
-  background: var(--color-surface-2);
+  background: color-mix(in srgb, var(--color-surface-1) 96%, var(--color-text) 4%);
 }
 
 .vault-sortmenu-divider {
@@ -596,9 +596,16 @@
 
 @supports (color: color-mix(in srgb, black 50%, white 50%)) {
   .vault-actionmenu-panel {
-    --menu-hover-bg: color-mix(in srgb, var(--panel-bg) 92%, var(--color-text) 8%);
-    --menu-hover-border: color-mix(in srgb, var(--panel-bg) 78%, var(--color-text) 22%);
+    --menu-hover-bg: color-mix(in srgb, var(--panel-bg) 96%, var(--color-text) 4%);
+    --menu-hover-border: color-mix(in srgb, var(--panel-bg) 86%, var(--color-text) 14%);
   }
+}
+
+.vault-contextmenu-panel {
+  position: fixed;
+  left: var(--menu-x, 0px);
+  top: var(--menu-y, 0px);
+  right: auto;
 }
 
 /* Cards list */
@@ -694,6 +701,10 @@
   color: var(--color-text-muted);
   font-size: 12px;
   line-height: 16px;
+}
+
+.datacard-meta-empty {
+  opacity: 0;
 }
 
 .datacard-meta-lines {

@@ -109,3 +109,11 @@ export function backupRestoreWorkflowFromPick(token: string): Promise<boolean> {
 export async function clipboardClearAll(): Promise<void> {
   await invoke('clipboard_clear_all');
 }
+
+export function getDataCardPreviewFields(): Promise<string[]> {
+  return invoke('get_datacard_preview_fields');
+}
+
+export function setDataCardPreviewFields(fields: string[]): Promise<boolean> {
+  return invoke('set_datacard_preview_fields', { fields });
+}
