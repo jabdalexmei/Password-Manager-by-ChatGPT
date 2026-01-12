@@ -1,479 +1,98 @@
-diff -ruN a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
---- a/src/features/Vault/components/DataCards/DataCards.tsx	2026-01-12 06:11:05.000000000 +0000
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx	2026-01-12 06:35:38.491191390 +0000
-@@ -27,6 +27,11 @@
-   type DataCardPreviewField,
-   MAX_DATA_CARD_PREVIEW_FIELDS,
- } from '../../lib/datacardPreviewFields';
-+import {
-+  loadCoreHiddenFields,
-+  onCoreHiddenFieldsChanged,
-+  type DataCardCoreField,
-+} from '../../lib/datacardCoreHiddenFields';
- import { clipboardClearAll } from '../../../../shared/lib/tauri';
+
+
+```diff
+*** a/src/shared/styles/ui.css
+--- b/src/shared/styles/ui.css
+***************
+*** 19,70 ****
+ :root {
+   /* Keep them subtle and small; users still can scroll with wheel/touchpad. */
+   --scrollbar-size: 10px;
+   /* Fallbacks for engines without color-mix(). */
+   --scrollbar-thumb: var(--color-border);
+   --scrollbar-thumb-hover: var(--color-text-muted);
++  --scrollbar-thumb-hidden: transparent;
+ }
  
- const LazyPasswordGeneratorModal = React.lazy(async () => {
-@@ -116,6 +121,7 @@
-   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
-   const shouldShowTrashActions = viewModel.isTrashMode && showTrashActions;
-   const [previewFields, setPreviewFields] = useState<DataCardPreviewField[]>([]);
-+  const [coreHiddenFields, setCoreHiddenFields] = useState<DataCardCoreField[]>([]);
-   const [isCustomFieldModalOpen, setIsCustomFieldModalOpen] = useState(false);
-   const [customFieldName, setCustomFieldName] = useState('');
-   const [customFieldModalError, setCustomFieldModalError] = useState<string | null>(null);
-@@ -161,6 +167,18 @@
+ @supports (background: color-mix(in srgb, white 50%, black)) {
+   :root {
+     --scrollbar-thumb: color-mix(in srgb, var(--color-text) 22%, transparent);
+     --scrollbar-thumb-hover: color-mix(in srgb, var(--color-text) 32%, transparent);
+   }
+ }
  
-   useEffect(() => onPreviewFieldsChanged(setPreviewFields), []);
+ /* Firefox */
+-* {
+-  scrollbar-width: thin;
+-  scrollbar-color: var(--scrollbar-thumb) transparent;
+-}
++* { scrollbar-width: thin; }
++html.scrollbars-active * { scrollbar-color: var(--scrollbar-thumb) transparent; }
++html:not(.scrollbars-active) * { scrollbar-color: var(--scrollbar-thumb-hidden) transparent; }
  
-+  useEffect(() => {
-+    let isMounted = true;
-+    loadCoreHiddenFields().then((fields) => {
-+      if (isMounted) setCoreHiddenFields(fields);
-+    });
-+    return () => {
-+      isMounted = false;
-+    };
-+  }, []);
+ /* Chromium/WebKit */
+ *::-webkit-scrollbar {
+   width: var(--scrollbar-size);
+   height: var(--scrollbar-size);
+ }
+ 
+ *::-webkit-scrollbar-track {
+   background: transparent;
+ }
+ 
+ *::-webkit-scrollbar-thumb {
+-  background-color: var(--scrollbar-thumb);
++  background-color: var(--scrollbar-thumb-hidden);
+   border-radius: 999px;
+   /* Creates padding so the thumb doesn't look chunky. */
+   border: 3px solid transparent;
+   background-clip: content-box;
+ }
+ 
++html.scrollbars-active *::-webkit-scrollbar-thumb {
++  background-color: var(--scrollbar-thumb);
++}
 +
-+  useEffect(() => onCoreHiddenFieldsChanged(setCoreHiddenFields), []);
+ *::-webkit-scrollbar-thumb:hover {
+   background-color: var(--scrollbar-thumb-hover);
+ }
+ 
+ *::-webkit-scrollbar-corner {
+   background: transparent;
+ }
+```
+
+```diff
+*** a/src/app/main.tsx
+--- b/src/app/main.tsx
+***************
+*** 1,10 ****
+ import React from 'react';
+ import ReactDOM from 'react-dom/client';
+ import App from './App';
+ import '../shared/styles/app.css';
+ import '../shared/lib/i18n';
+ 
++// Auto-hide native scrollbars: show while scrolling, then hide again.
++{
++  const root = document.documentElement;
++  let timeoutId: number | undefined;
 +
-   const cards = useMemo(() => sortDataCardSummaries(rawCards, sortMode), [rawCards, sortMode]);
- 
-   const [totpNow, setTotpNow] = useState(() => Date.now());
-@@ -884,21 +902,35 @@
-             const isActive = selectedCardId === card.id;
-             const isFavorite = card.isFavorite;
-             const titleText = (card.title ?? '').trim();
-             const urlText = (card.url ?? '').trim();
-             const emailText = (card.email ?? '').trim();
--            const hasTitle = titleText.length > 0;
--            const hasUrl = urlText.length > 0;
--            const hasEmail = emailText.length > 0;
--
--            const isUntitledPlaceholder = !hasTitle && !hasUrl && !hasEmail;
--            const displayTitleText = isUntitledPlaceholder
--              ? t('label.untitled')
--              : hasTitle
--                ? titleText
--                : hasUrl
--                  ? urlText
--                  : emailText;
--
--            const metaLine1 = hasTitle ? (hasUrl ? urlText : null) : hasUrl ? (hasEmail ? emailText : null) : null;
--            const metaLine2 = hasTitle && hasEmail ? emailText : null;
-+
-+            const isTitleVisible = !coreHiddenFields.includes('title');
-+            const isUrlVisible = !coreHiddenFields.includes('url');
-+            const isEmailVisible = !coreHiddenFields.includes('email');
-+
-+            const coreValues: string[] = [];
-+            if (isTitleVisible && titleText.length > 0) coreValues.push(titleText);
-+            if (isUrlVisible && urlText.length > 0) coreValues.push(urlText);
-+            if (isEmailVisible && emailText.length > 0) coreValues.push(emailText);
-+
-+            const isUntitledPlaceholder = coreValues.length === 0;
-+            const displayTitleText = isUntitledPlaceholder ? t('label.untitled') : coreValues[0];
-+            const metaCoreLines = coreValues.slice(1, 3);
- 
-             const getExtraLine = (field: DataCardPreviewField): string | null => {
-               switch (field) {
-                 case 'username': {
-                   const v = (card.username ?? '').trim();
-@@ -932,9 +964,7 @@
-               .map((field) => getExtraLine(field))
-               .filter((value): value is string => Boolean(value))
-               .slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);
- 
--            const metaLines = [metaLine1, metaLine2, ...extraLines].filter(
--              (line): line is string => Boolean(line)
--            );
-+            const metaLines = [...metaCoreLines, ...extraLines];
- 
-             return (
-               <button
-                 key={card.id}
-diff -ruN a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
---- a/src/features/Vault/components/Details/Details.tsx	2026-01-12 06:11:05.000000000 +0000
-+++ b/src/features/Vault/components/Details/Details.tsx	2026-01-12 06:39:33.148571595 +0000
-@@ -18,6 +18,12 @@
-   type DataCardPreviewField,
-   MAX_DATA_CARD_PREVIEW_FIELDS,
- } from '../../lib/datacardPreviewFields';
-+import {
-+  loadCoreHiddenFields,
-+  onCoreHiddenFieldsChanged,
-+  saveCoreHiddenFields,
-+  type DataCardCoreField,
-+} from '../../lib/datacardCoreHiddenFields';
- 
- const LazyAttachmentPreviewModal = React.lazy(() =>
-   import('../modals/AttachmentPreviewModal').then((m) => ({ default: m.default })),
-@@ -88,12 +94,21 @@
-   const [revealedCustomFields, setRevealedCustomFields] = useState<Record<string, boolean>>({});
-   const [totpNow, setTotpNow] = useState(() => Date.now());
-   const [previewFields, setPreviewFields] = useState<DataCardPreviewField[]>([]);
-+  const [coreHiddenFields, setCoreHiddenFields] = useState<DataCardCoreField[]>([]);
-   const [previewMenu, setPreviewMenu] = useState<{
-     x: number;
-     y: number;
-     field: DataCardPreviewField;
-   } | null>(null);
-+  const [coreMenu, setCoreMenu] = useState<{
-+    x: number;
-+    y: number;
-+    field: DataCardCoreField;
-+  } | null>(null);
-@@ -140,20 +155,30 @@
- 
-   useEffect(() => onPreviewFieldsChanged(setPreviewFields), []);
- 
-   useEffect(() => {
-+    let isMounted = true;
-+    loadCoreHiddenFields().then((fields) => {
-+      if (isMounted) setCoreHiddenFields(fields);
-+    });
-+    return () => {
-+      isMounted = false;
-+    };
-+  }, []);
-+
-+  useEffect(() => onCoreHiddenFieldsChanged(setCoreHiddenFields), []);
-+
-+  useEffect(() => {
--    if (!previewMenu) return;
-+    if (!previewMenu && !coreMenu) return;
- 
-     const onKeyDown = (e: KeyboardEvent) => {
--      if (e.key === 'Escape') setPreviewMenu(null);
-+      if (e.key !== 'Escape') return;
-+      setPreviewMenu(null);
-+      setCoreMenu(null);
-     };
- 
-     window.addEventListener('keydown', onKeyDown);
-     return () => window.removeEventListener('keydown', onKeyDown);
--  }, [previewMenu]);
-+  }, [previewMenu, coreMenu]);
-@@ -153,9 +178,17 @@
-   const openPreviewMenu = (field: DataCardPreviewField, e: React.MouseEvent) => {
-     e.preventDefault();
-     e.stopPropagation();
-+    setCoreMenu(null);
-     setPreviewMenu({ x: e.clientX, y: e.clientY, field });
-   };
- 
-+  const openCoreMenu = (field: DataCardCoreField, e: React.MouseEvent) => {
-+    e.preventDefault();
-+    e.stopPropagation();
-+    setPreviewMenu(null);
-+    setCoreMenu({ x: e.clientX, y: e.clientY, field });
++  const activate = () => {
++    root.classList.add('scrollbars-active');
++    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
++    timeoutId = window.setTimeout(() => {
++      root.classList.remove('scrollbars-active');
++      timeoutId = undefined;
++    }, 700);
 +  };
 +
-   const isFieldInPreview = (field: DataCardPreviewField) => previewFields.includes(field);
-@@ -180,6 +213,15 @@
-     setPreviewMenu(null);
-   };
- 
-+  const isCoreFieldHidden = (field: DataCardCoreField) => coreHiddenFields.includes(field);
-+
-+  const toggleCoreFieldHidden = async (field: DataCardCoreField) => {
-+    const isHidden = isCoreFieldHidden(field);
-+    const next = isHidden ? coreHiddenFields.filter((f) => f !== field) : [...coreHiddenFields, field];
-+    await saveCoreHiddenFields(next);
-+    setCoreMenu(null);
-+  };
-+
-@@ -357,7 +399,7 @@
-       {hasTitle && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.title')}</div>
--          <div className="detail-value-box">
-+          <div className="detail-value-box" onContextMenu={(e) => openCoreMenu('title', e)}>
-             <div className="detail-value-text">{card.title}</div>
-           </div>
-         </div>
-@@ -368,7 +410,7 @@
-       {hasUrl && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.url')}</div>
--          <div className="detail-value-box">
-+          <div className="detail-value-box" onContextMenu={(e) => openCoreMenu('url', e)}>
-             <div className="detail-value-text">{card.url ?? ''}</div>
-             <div className="detail-value-actions">
-               <button
-@@ -387,7 +429,7 @@
-       {hasEmail && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.email')}</div>
--          <div className="detail-value-box">
-+          <div className="detail-value-box" onContextMenu={(e) => openCoreMenu('email', e)}>
-             <div className="detail-value-text">{card.email ?? ''}</div>
-             <div className="detail-value-actions">
-               <button
-@@ -612,6 +654,33 @@
-       </div>
-     </div>
- 
-+      {coreMenu && (
-+        <>
-+          <div className="vault-actionmenu-backdrop" onClick={() => setCoreMenu(null)} />
-+          <div
-+            className="vault-actionmenu-panel vault-contextmenu-panel"
-+            role="menu"
-+            style={
-+              {
-+                '--menu-x': `${coreMenu.x}px`,
-+                '--menu-y': `${coreMenu.y}px`,
-+              } as React.CSSProperties
-+            }
-+          >
-+            <button
-+              className="vault-actionmenu-item"
-+              type="button"
-+              onClick={() => toggleCoreFieldHidden(coreMenu.field)}
-+            >
-+              {isCoreFieldHidden(coreMenu.field) ? 'Show in list' : 'Hide in list'}
-+            </button>
-+          </div>
-+        </>
-+      )}
-+
-       {previewMenu && (
-         <>
-           <div className="vault-actionmenu-backdrop" onClick={() => setPreviewMenu(null)} />
-diff -ruN a/src/features/Vault/lib/datacardCoreHiddenFields.ts b/src/features/Vault/lib/datacardCoreHiddenFields.ts
---- a/src/features/Vault/lib/datacardCoreHiddenFields.ts	1970-01-01 00:00:00.000000000 +0000
-+++ b/src/features/Vault/lib/datacardCoreHiddenFields.ts	2026-01-12 06:33:28.373297966 +0000
-@@ -0,0 +1,51 @@
-+import { getDataCardCoreHiddenFields, setDataCardCoreHiddenFields } from '@/shared/lib/tauri';
-+
-+export type DataCardCoreField = 'title' | 'url' | 'email';
-+
-+const EVENT_NAME = 'datacard-core-hidden-fields-changed';
-+
-+const isAllowed = (value: string): value is DataCardCoreField =>
-+  value === 'title' || value === 'url' || value === 'email';
-+
-+export async function loadCoreHiddenFields(): Promise<DataCardCoreField[]> {
-+  try {
-+    const raw = await getDataCardCoreHiddenFields();
-+    const out: DataCardCoreField[] = [];
-+    for (const item of raw) {
-+      if (!isAllowed(item)) continue;
-+      if (out.includes(item)) continue;
-+      out.push(item);
-+    }
-+    return out;
-+  } catch {
-+    return [];
-+  }
++  window.addEventListener('scroll', activate, { capture: true, passive: true });
 +}
 +
-+export async function saveCoreHiddenFields(fields: DataCardCoreField[]): Promise<void> {
-+  const unique: DataCardCoreField[] = [];
-+  for (const f of fields) {
-+    if (!unique.includes(f)) unique.push(f);
-+  }
-+  await setDataCardCoreHiddenFields(unique);
-+  window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: unique }));
-+}
-+
-+export function onCoreHiddenFieldsChanged(handler: (fields: DataCardCoreField[]) => void): () => void {
-+  const listener = (evt: Event) => {
-+    const custom = evt as CustomEvent;
-+    const raw = Array.isArray(custom.detail) ? custom.detail : [];
-+    const fields: DataCardCoreField[] = raw.filter(isAllowed);
-+    handler(fields);
-+  };
-+
-+  window.addEventListener(EVENT_NAME, listener as EventListener);
-+  return () => window.removeEventListener(EVENT_NAME, listener as EventListener);
-+}
-diff -ruN a/src/shared/lib/tauri.ts b/src/shared/lib/tauri.ts
---- a/src/shared/lib/tauri.ts	2026-01-12 06:11:05.000000000 +0000
-+++ b/src/shared/lib/tauri.ts	2026-01-12 06:32:06.941454120 +0000
-@@ -118,3 +118,11 @@
- export function setDataCardPreviewFields(fields: string[]): Promise<boolean> {
-   return invoke('set_datacard_preview_fields', { fields });
- }
-+
-+export function getDataCardCoreHiddenFields(): Promise<string[]> {
-+  return invoke('get_datacard_core_hidden_fields');
-+}
-+
-+export function setDataCardCoreHiddenFields(fields: string[]): Promise<boolean> {
-+  return invoke('set_datacard_core_hidden_fields', { fields });
-+}
-diff -ruN a/src-tauri/permissions/app-default.toml b/src-tauri/permissions/app-default.toml
---- a/src-tauri/permissions/app-default.toml	2026-01-12 06:11:05.000000000 +0000
-+++ b/src-tauri/permissions/app-default.toml	2026-01-12 06:31:16.173125005 +0000
-@@ -78,6 +78,9 @@
-   "get_datacard_preview_fields",
-   "set_datacard_preview_fields",
- 
-+  "get_datacard_core_hidden_fields",
-+  "set_datacard_core_hidden_fields",
-+
-   "workspace_list",
-   "workspace_select",
-   "workspace_create_via_dialog",
-diff -ruN a/src-tauri/src/commands/ui_prefs.rs b/src-tauri/src/commands/ui_prefs.rs
---- a/src-tauri/src/commands/ui_prefs.rs	2026-01-12 06:11:05.000000000 +0000
-+++ b/src-tauri/src/commands/ui_prefs.rs	2026-01-12 06:31:03.813574995 +0000
-@@ -24,3 +24,25 @@
-     tauri::async_runtime::spawn_blocking(move || ui_prefs_service::set_datacard_preview_fields(fields, &app))
-         .await
-         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
- }
-+
-+#[tauri::command]
-+pub async fn get_datacard_core_hidden_fields(state: State<'_, Arc<AppState>>) -> Result<Vec<String>> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || ui_prefs_service::get_datacard_core_hidden_fields(&app))
-+        .await
-+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-+
-+#[tauri::command]
-+pub async fn set_datacard_core_hidden_fields(
-+    fields: Vec<String>,
-+    state: State<'_, Arc<AppState>>,
-+) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || ui_prefs_service::set_datacard_core_hidden_fields(fields, &app))
-+        .await
-+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-diff -ruN a/src-tauri/src/main.rs b/src-tauri/src/main.rs
---- a/src-tauri/src/main.rs	2026-01-12 06:11:05.000000000 +0000
-+++ b/src-tauri/src/main.rs	2026-01-12 06:31:08.173671089 +0000
-@@ -186,6 +186,8 @@
-             update_settings,
-             get_datacard_preview_fields,
-             set_datacard_preview_fields,
-+            get_datacard_core_hidden_fields,
-+            set_datacard_core_hidden_fields,
-             workspace_list,
-             workspace_select,
-             workspace_create,
-diff -ruN a/src-tauri/src/services/ui_prefs_service.rs b/src-tauri/src/services/ui_prefs_service.rs
---- a/src-tauri/src/services/ui_prefs_service.rs	2026-01-12 06:11:05.000000000 +0000
-+++ b/src-tauri/src/services/ui_prefs_service.rs	2026-01-12 06:30:43.945310170 +0000
-@@ -5,18 +5,44 @@
- use crate::error::{ErrorCodeString, Result};
- use crate::services::security_service;
- 
- const PREF_KEY_DATACARD_PREVIEW_FIELDS: &str = "datacard.preview_fields";
-+const PREF_KEY_DATACARD_CORE_HIDDEN_FIELDS: &str = "datacard.core_hidden_fields";
- const MAX_PREVIEW_FIELDS: usize = 3;
-+const MAX_CORE_HIDDEN_FIELDS: usize = 3;
- 
--fn is_allowed_field(value: &str) -> bool {
-+fn is_allowed_preview_field(value: &str) -> bool {
-     matches!(value, "username" | "mobile_phone" | "note" | "folder" | "tags")
- }
- 
--fn normalize_fields(input: Vec<String>) -> Vec<String> {
-+fn is_allowed_core_field(value: &str) -> bool {
-+    matches!(value, "title" | "url" | "email")
-+}
-+
-+fn normalize_preview_fields(input: Vec<String>) -> Vec<String> {
-     let mut out: Vec<String> = Vec::new();
-     for raw in input {
-         let trimmed = raw.trim();
-         if trimmed.is_empty() {
-             continue;
-         }
--        if !is_allowed_field(trimmed) {
-+        if !is_allowed_preview_field(trimmed) {
-             continue;
-         }
-         if out.iter().any(|v| v == trimmed) {
-             continue;
-         }
-         out.push(trimmed.to_string());
-         if out.len() >= MAX_PREVIEW_FIELDS {
-             break;
-         }
-     }
-     out
- }
-+
-+fn normalize_core_hidden_fields(input: Vec<String>) -> Vec<String> {
-+    let mut out: Vec<String> = Vec::new();
-+    for raw in input {
-+        let trimmed = raw.trim();
-+        if trimmed.is_empty() {
-+            continue;
-+        }
-+        if !is_allowed_core_field(trimmed) {
-+            continue;
-+        }
-+        if out.iter().any(|v| v == trimmed) {
-+            continue;
-+        }
-+        out.push(trimmed.to_string());
-+        if out.len() >= MAX_CORE_HIDDEN_FIELDS {
-+            break;
-+        }
-+    }
-+    out
-+}
-@@ -32,7 +58,7 @@
-         let parsed: Result<Vec<String>> =
-             serde_json::from_str(&value_json).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"));
-         if let Ok(v) = parsed {
--            return Ok(normalize_fields(v));
-+            return Ok(normalize_preview_fields(v));
-         }
-     }
- 
-@@ -43,7 +69,7 @@
- pub fn set_datacard_preview_fields(fields: Vec<String>, state: &Arc<AppState>) -> Result<bool> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
- 
--    let cleaned = normalize_fields(fields);
-+    let cleaned = normalize_preview_fields(fields);
-     let value_json =
-         serde_json::to_string(&cleaned).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -58,3 +84,33 @@
-         &now_utc,
-     )
- }
-+
-+pub fn get_datacard_core_hidden_fields(state: &Arc<AppState>) -> Result<Vec<String>> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+
-+    let raw = repo_impl::get_ui_preference_value_json(
-+        state,
-+        &profile_id,
-+        PREF_KEY_DATACARD_CORE_HIDDEN_FIELDS,
-+    )?;
-+    if let Some(value_json) = raw {
-+        let parsed: Result<Vec<String>> =
-+            serde_json::from_str(&value_json).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"));
-+        if let Ok(v) = parsed {
-+            return Ok(normalize_core_hidden_fields(v));
-+        }
-+    }
-+
-+    Ok(Vec::new())
-+}
-+
-+pub fn set_datacard_core_hidden_fields(fields: Vec<String>, state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+
-+    let cleaned = normalize_core_hidden_fields(fields);
-+    let value_json =
-+        serde_json::to_string(&cleaned).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+    let now_utc = Utc::now().to_rfc3339();
-+    repo_impl::set_ui_preference_value_json(
-+        state,
-+        &profile_id,
-+        PREF_KEY_DATACARD_CORE_HIDDEN_FIELDS,
-+        &value_json,
-+        &now_utc,
-+    )
-+}
+ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+   <React.StrictMode>
+     <App />
+   </React.StrictMode>
+ );
+
