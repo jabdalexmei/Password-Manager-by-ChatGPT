@@ -1,10 +1,38 @@
+
+
+### 1) Перестать прятать ошибку (чтобы увидеть причину)
+
+`catch {}` → `catch (err) { console.error(...) }`
+
+```diff
+--- a/src/features/Vault/components/modals/Add2FAModal.tsx
++++ b/src/features/Vault/components/modals/Add2FAModal.tsx
+@@ -63,8 +63,9 @@ export const Add2FAModal: React.FC<Props> = ({
+       }
+       setTextValue(norm.uri);
+-    } catch {
++    } catch (err) {
++      console.error('[2FA] Failed to decode QR image', err);
+       setError(t('twoFactor.error.QR_DECODE_FAILED'));
+     } finally {
+       setBusy(false);
+     }
+```
+
+После этого в build (особенно `tauri build --debug`) ты **увидишь настоящую причину** (часто это CSP или freezePrototype).
+
+---
+
+### 2) Починить CSP для воркеров (без трогания `style-src`)
+
+Сейчас у тебя `child-src: 'none'`. По CSP правилам `child-src` управляет web workers (если `worker-src` не задан) — то есть workers запрещены, и браузер/вебвью трактует это как “фатальная сетевая ошибка”. ([MDN Web Docs][1])
+
+Добавляем `worker-src`, чтобы даже если какая-то зависимость пытается создать worker (или Vite/библиотека делает это под капотом), оно не отваливалось в production:
+
+```diff
 --- a/src-tauri/tauri.conf.json
 +++ b/src-tauri/tauri.conf.json
-@@ -22,6 +22,7 @@
-       "csp": {
-         "default-src": "'self' customprotocol: asset:",
-         "base-uri": "'none'",
-         "object-src": "'none'",
+@@ -18,6 +18,7 @@
          "frame-ancestors": "'none'",
          "frame-src": "'none'",
          "child-src": "'none'",
@@ -16,6 +44,26 @@
          "style-src": "'self' 'unsafe-inline'",
          "font-src": "'self' data:"
        }
-     }
-   }
- }
+```
+
+---
+
+### 3) Если после этого всё ещё не работает — отключить `freezePrototype`
+
+Это **очень частая** причина “в dev норм, в build нет”: freezePrototype делает прототипы/объекты “замороженными”, и некоторые библиотеки падают с ошибками вида “Cannot assign to read only property…”. В issue Tauri прямо говорят: решение — поставить `freezePrototype: false`. ([GitHub][2])
+
+Твой dev уже так делает (`freezePrototype: false`), а build — нет. Если QR оживает после отключения — значит это оно.
+
+```diff
+--- a/src-tauri/tauri.conf.json
++++ b/src-tauri/tauri.conf.json
+@@ -15,7 +15,7 @@
+   "app": {
+     "security": {
+-      "freezePrototype": true,
++      "freezePrototype": false,
+       "csp": {
+         "default-src": "'self' customprotocol: asset:",
+         "base-uri": "'none'",
+```
+
