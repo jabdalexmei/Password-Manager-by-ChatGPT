@@ -259,35 +259,17 @@ export function Details({
         </div>
       )}
 
-      {hasSeedPhrase && (
+      {hasUrl && (
         <div className="detail-field">
-          <div className="detail-label">{t('label.seedPhrase')}</div>
+          <div className="detail-label">{t('label.url')}</div>
           <div className="detail-value-box">
-            <div className="detail-value-text">{t('seedPhrase.wordsCount', { count: seedPhraseWordCount })}</div>
-            <div className="detail-value-actions">
-              <button
-                className="btn btn-secondary btn-compact"
-                type="button"
-                onClick={() => setSeedPhraseViewOpen(true)}
-              >
-                {t('action.open')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {hasUsername && (
-        <div className="detail-field">
-          <div className="detail-label">{t('label.username')}</div>
-          <div className="detail-value-box">
-            <div className="detail-value-text">{card.username ?? ''}</div>
+            <div className="detail-value-text">{card.url ?? ''}</div>
             <div className="detail-value-actions">
               <button
                 className="icon-button"
                 type="button"
                 aria-label={t('action.copy')}
-                onClick={() => detailActions.copyToClipboard(card.username)}
+                onClick={() => detailActions.copyToClipboard(card.url)}
               >
                 <IconCopy />
               </button>
@@ -315,17 +297,17 @@ export function Details({
         </div>
       )}
 
-      {hasUrl && (
+      {hasUsername && (
         <div className="detail-field">
-          <div className="detail-label">{t('label.url')}</div>
+          <div className="detail-label">{t('label.username')}</div>
           <div className="detail-value-box">
-            <div className="detail-value-text">{card.url ?? ''}</div>
+            <div className="detail-value-text">{card.username ?? ''}</div>
             <div className="detail-value-actions">
               <button
                 className="icon-button"
                 type="button"
                 aria-label={t('action.copy')}
-                onClick={() => detailActions.copyToClipboard(card.url)}
+                onClick={() => detailActions.copyToClipboard(card.username)}
               >
                 <IconCopy />
               </button>
@@ -349,6 +331,92 @@ export function Details({
                 <IconCopy />
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {hasPassword && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.password')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{passwordDisplay}</div>
+            <div className="detail-value-actions">
+              <button
+                className="icon-button"
+                type="button"
+                aria-label={detailActions.showPassword ? t('action.hide') : t('action.reveal')}
+                onClick={detailActions.togglePasswordVisibility}
+              >
+                {detailActions.showPassword ? <IconPreviewOff /> : <IconPreview />}
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label={t('action.copy')}
+                onClick={() => detailActions.copyToClipboard(card.password, { isSecret: true })}
+              >
+                <IconCopy />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label={t('action.passwordHistory')}
+                onClick={() => setHistoryOpen(true)}
+              >
+                <IconHistory />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasSeedPhrase && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.seedPhrase')}</div>
+          <div className="detail-value-box">
+            <div className="detail-value-text">{t('seedPhrase.wordsCount', { count: seedPhraseWordCount })}</div>
+            <div className="detail-value-actions">
+              <button
+                className="btn btn-secondary btn-compact"
+                type="button"
+                onClick={() => setSeedPhraseViewOpen(true)}
+              >
+                {t('action.open')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {card.totpUri && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.totp')}</div>
+
+          <div className="detail-value-box">
+            <div className="detail-value-text" style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: 2 }}>
+                {totpData ? totpData.token : t('totp.invalid')}
+              </span>
+
+              {totpData && (
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {t('totp.expiresIn', { seconds: totpData.remaining })}
+                </span>
+              )}
+            </div>
+
+            {totpData && (
+              <div className="detail-value-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label={t('action.copy')}
+                  onClick={() => detailActions.copyToClipboard(totpData.token, { isSecret: true })}
+                >
+                  <IconCopy />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -393,74 +461,6 @@ export function Details({
             </div>
           );
         })}
-
-      {card.totpUri && (
-        <div className="detail-field">
-          <div className="detail-label">{t('label.totp')}</div>
-
-          <div className="detail-value-box">
-            <div className="detail-value-text" style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: 2 }}>
-                {totpData ? totpData.token : t('totp.invalid')}
-              </span>
-
-              {totpData && (
-                <span className="muted" style={{ fontSize: 12 }}>
-                  {t('totp.expiresIn', { seconds: totpData.remaining })}
-                </span>
-              )}
-            </div>
-
-            {totpData && (
-              <div className="detail-value-actions">
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label={t('action.copy')}
-                  onClick={() => detailActions.copyToClipboard(totpData.token, { isSecret: true })}
-                >
-                  <IconCopy />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {hasPassword && (
-        <div className="detail-field">
-          <div className="detail-label">{t('label.password')}</div>
-          <div className="detail-value-box">
-            <div className="detail-value-text">{passwordDisplay}</div>
-            <div className="detail-value-actions">
-              <button
-                className="icon-button"
-                type="button"
-                aria-label={detailActions.showPassword ? t('action.hide') : t('action.reveal')}
-                onClick={detailActions.togglePasswordVisibility}
-              >
-                {detailActions.showPassword ? <IconPreviewOff /> : <IconPreview />}
-              </button>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label={t('action.copy')}
-                onClick={() => detailActions.copyToClipboard(card.password, { isSecret: true })}
-              >
-                <IconCopy />
-              </button>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label={t('action.passwordHistory')}
-                onClick={() => setHistoryOpen(true)}
-              >
-                <IconHistory />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {hasNote && (
         <div className="detail-field detail-field-notes">
