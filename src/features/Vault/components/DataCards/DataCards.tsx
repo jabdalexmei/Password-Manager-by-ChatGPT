@@ -844,16 +844,27 @@ export function DataCards({
             const isFavorite = card.isFavorite;
             const titleText = (card.title ?? '').trim();
             const urlText = (card.url ?? '').trim();
+            const emailText = (card.email ?? '').trim();
             const hasTitle = titleText.length > 0;
             const hasUrl = urlText.length > 0;
+            const hasEmail = emailText.length > 0;
 
-            const isUntitledPlaceholder = !hasTitle && !hasUrl;
+            const isUntitledPlaceholder = !hasTitle && !hasUrl && !hasEmail;
             const displayTitleText = isUntitledPlaceholder
               ? t('label.untitled')
               : hasTitle
                 ? titleText
-                : urlText;
-            const showUrlMeta = hasTitle && hasUrl;
+                : hasUrl
+                  ? urlText
+                  : emailText;
+
+            const metaLines: string[] = [];
+            if (hasTitle) {
+              if (hasUrl) metaLines.push(urlText);
+              if (hasEmail) metaLines.push(emailText);
+            } else if (hasUrl) {
+              if (hasEmail) metaLines.push(emailText);
+            }
 
             return (
               <button
@@ -872,9 +883,13 @@ export function DataCards({
                   )}
                 </div>
 
-                {showUrlMeta && (
-                  <div className="datacard-meta">
-                    <span>{urlText}</span>
+                {metaLines.length > 0 && (
+                  <div className="datacard-meta-lines">
+                    {metaLines.map((line, idx) => (
+                      <div key={`${card.id}-meta-${idx}`} className="datacard-meta">
+                        <span>{line}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </button>

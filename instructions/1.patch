@@ -1,92 +1,285 @@
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -836,21 +836,42 @@
-           {cards.map((card) => {
-             const isActive = selectedCardId === card.id;
-             const isFavorite = card.isFavorite;
-             const titleText = (card.title ?? '').trim();
-             const urlText = (card.url ?? '').trim();
-+            const emailText = (card.email ?? '').trim();
-             const hasTitle = titleText.length > 0;
-             const hasUrl = urlText.length > 0;
-+            const hasEmail = emailText.length > 0;
- 
--            const isUntitledPlaceholder = !hasTitle && !hasUrl;
-+            const isUntitledPlaceholder = !hasTitle && !hasUrl && !hasEmail;
-             const displayTitleText = isUntitledPlaceholder
-               ? t('label.untitled')
-               : hasTitle
-                 ? titleText
--                : urlText;
--            const showUrlMeta = hasTitle && hasUrl;
-+                : hasUrl
-+                  ? urlText
-+                  : emailText;
-+
-+            const metaLines: string[] = [];
-+            if (hasTitle) {
-+              if (hasUrl) metaLines.push(urlText);
-+              if (hasEmail) metaLines.push(emailText);
-+            } else if (hasUrl) {
-+              if (hasEmail) metaLines.push(emailText);
-+            }
- 
-             return (
+--- a/src/features/Vault/components/Details/Details.tsx
++++ b/src/features/Vault/components/Details/Details.tsx
+@@ -253,51 +253,49 @@ export function Details({
+       )}
+
+-      {hasSeedPhrase && (
+-        <div className="detail-field">
+-          <div className="detail-label">{t('label.seedPhrase')}</div>
+-          <div className="detail-value-box">
+-            <div className="detail-value-text">{t('seedPhrase.wordsCount', { count: seedPhraseWordCount })}</div>
+-            <div className="detail-value-actions">
+-              <button
+-                className="btn btn-secondary btn-compact"
+-                type="button"
+-                onClick={() => setSeedPhraseViewOpen(true)}
+-              >
+-                {t('action.open')}
+-              </button>
+-            </div>
+-          </div>
+-        </div>
+-      )}
+-
+-      {hasUsername && (
++      {hasUrl && (
+         <div className="detail-field">
+-          <div className="detail-label">{t('label.username')}</div>
++          <div className="detail-label">{t('label.url')}</div>
+           <div className="detail-value-box">
+-            <div className="detail-value-text">{card.username ?? ''}</div>
++            <div className="detail-value-text">{card.url ?? ''}</div>
+             <div className="detail-value-actions">
                <button
-                 key={card.id}
-                 className={`vault-datacard ${isActive ? 'active' : ''}`}
+                 className="icon-button"
                  type="button"
-                 onClick={() => viewModel.selectCard(card.id)}
+                 aria-label={t('action.copy')}
+-                onClick={() => detailActions.copyToClipboard(card.username)}
++                onClick={() => detailActions.copyToClipboard(card.url)}
                >
-                 <div className="datacard-top">
-                   <div className="datacard-title">{displayTitleText}</div>
-                   {(card.hasTotp || isFavorite) && (
-                     <div className="datacard-badges">
-                       {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-                       {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
-                     </div>
-                   )}
-                 </div>
- 
--                {showUrlMeta && (
--                  <div className="datacard-meta">
--                    <span>{urlText}</span>
--                  </div>
--                )}
-+                {metaLines.length > 0 && (
-+                  <div className="datacard-meta-lines">
-+                    {metaLines.map((line, idx) => (
-+                      <div key={`${card.id}-meta-${idx}`} className="datacard-meta">
-+                        <span>{line}</span>
-+                      </div>
-+                    ))}
-+                  </div>
-+                )}
+                 <IconCopy />
                </button>
-             );
-           })}
+             </div>
+           </div>
          </div>
        )}
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -642,6 +642,13 @@
- .datacard-meta {
-   display: flex;
-   flex-wrap: nowrap;
-   gap: 10px;
-   align-items: center;
-   color: var(--color-text-muted);
-   font-size: 12px;
-   line-height: 16px;
- }
+
+       {hasEmail && (
+         <div className="detail-field">
+           <div className="detail-label">{t('label.email')}</div>
+           <div className="detail-value-box">
+             <div className="detail-value-text">{card.email ?? ''}</div>
+             <div className="detail-value-actions">
+               <button
+                 className="icon-button"
+                 type="button"
+                 aria-label={t('action.copy')}
+                 onClick={() => detailActions.copyToClipboard(card.email)}
+               >
+                 <IconCopy />
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
+
+-      {hasUrl && (
++      {hasUsername && (
+         <div className="detail-field">
+-          <div className="detail-label">{t('label.url')}</div>
++          <div className="detail-label">{t('label.username')}</div>
+           <div className="detail-value-box">
+-            <div className="detail-value-text">{card.url ?? ''}</div>
++            <div className="detail-value-text">{card.username ?? ''}</div>
+             <div className="detail-value-actions">
+               <button
+                 className="icon-button"
+                 type="button"
+                 aria-label={t('action.copy')}
+-                onClick={() => detailActions.copyToClipboard(card.url)}
++                onClick={() => detailActions.copyToClipboard(card.username)}
+               >
+                 <IconCopy />
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
+
+       {hasMobilePhone && (
+         <div className="detail-field">
+           <div className="detail-label">{t('label.mobile')}</div>
+           <div className="detail-value-box">
+             <div className="detail-value-text">{card.mobilePhone ?? ''}</div>
+             <div className="detail-value-actions">
+               <button
+                 className="icon-button"
+                 type="button"
+                 aria-label={t('action.copy')}
+                 onClick={() => detailActions.copyToClipboard(card.mobilePhone)}
+               >
+                 <IconCopy />
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
  
-+.datacard-meta-lines {
-+  display: flex;
-+  flex-direction: column;
-+  align-items: flex-start;
-+  gap: 2px;
-+}
+-      {(card.customFields ?? [])
+-        .filter((field) => Boolean(field.value?.trim()))
+-        .map((field: CustomField, index: number) => {
+-          const fieldId = `custom-field-${index}-${field.key}`;
+-          const isSecret = field.type === 'secret';
+-          const isRevealed = Boolean(revealedCustomFields[fieldId]);
+-          const displayValue = isSecret ? (isRevealed ? field.value : '••••••••••••') : field.value;
+-
+-          return (
+-            <div key={fieldId} className="detail-field">
+-              <div className="detail-label">{field.key}</div>
+-
+-              <div className="detail-value-box">
+-                <div className="detail-value-text">{displayValue}</div>
+-
+-                <div className="detail-value-actions">
+-                  <button
+-                    className="icon-button"
+-                    type="button"
+-                    aria-label={t('action.copy')}
+-                    onClick={() => detailActions.copyToClipboard(field.value, { isSecret })}
+-                  >
+-                    <IconCopy />
+-                  </button>
+-
+-                  {isSecret && (
+-                    <button
+-                      className="icon-button"
+-                      type="button"
+-                      aria-label={isRevealed ? t('action.hide') : t('action.reveal')}
+-                      onClick={() => toggleCustomFieldVisibility(fieldId)}
+-                    >
+-                      {isRevealed ? <IconPreviewOff /> : <IconPreview />}
+-                    </button>
+-                  )}
+-                </div>
+-              </div>
+-            </div>
+-          );
+-        })}
+-
+-      {card.totpUri && (
+-        <div className="detail-field">
+-          <div className="detail-label">{t('label.totp')}</div>
+-
+-          <div className="detail-value-box">
+-            <div className="detail-value-text" style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+-              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: 2 }}>
+-                {totpData ? totpData.token : t('totp.invalid')}
+-              </span>
+-
+-              {totpData && (
+-                <span className="muted" style={{ fontSize: 12 }}>
+-                  {t('totp.expiresIn', { seconds: totpData.remaining })}
+-                </span>
+-              )}
+-            </div>
+-
+-            {totpData && (
+-              <div className="detail-value-actions">
+-                <button
+-                  className="icon-button"
+-                  type="button"
+-                  aria-label={t('action.copy')}
+-                  onClick={() => detailActions.copyToClipboard(totpData.token, { isSecret: true })}
+-                >
+-                  <IconCopy />
+-                </button>
+-              </div>
+-            )}
+-          </div>
+-        </div>
+-      )}
+-
+       {hasPassword && (
+         <div className="detail-field">
+           <div className="detail-label">{t('label.password')}</div>
+           <div className="detail-value-box">
+             <div className="detail-value-text">{passwordDisplay}</div>
+@@ -356,6 +354,108 @@ export function Details({
+           </div>
+         </div>
+       )}
+ 
++      {hasSeedPhrase && (
++        <div className="detail-field">
++          <div className="detail-label">{t('label.seedPhrase')}</div>
++          <div className="detail-value-box">
++            <div className="detail-value-text">{t('seedPhrase.wordsCount', { count: seedPhraseWordCount })}</div>
++            <div className="detail-value-actions">
++              <button
++                className="btn btn-secondary btn-compact"
++                type="button"
++                onClick={() => setSeedPhraseViewOpen(true)}
++              >
++                {t('action.open')}
++              </button>
++            </div>
++          </div>
++        </div>
++      )}
 +
- .vault-datacard.active .datacard-title {
-   color: var(--color-text);
- }
++      {card.totpUri && (
++        <div className="detail-field">
++          <div className="detail-label">{t('label.totp')}</div>
++
++          <div className="detail-value-box">
++            <div className="detail-value-text" style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
++              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: 2 }}>
++                {totpData ? totpData.token : t('totp.invalid')}
++              </span>
++
++              {totpData && (
++                <span className="muted" style={{ fontSize: 12 }}>
++                  {t('totp.expiresIn', { seconds: totpData.remaining })}
++                </span>
++              )}
++            </div>
++
++            {totpData && (
++              <div className="detail-value-actions">
++                <button
++                  className="icon-button"
++                  type="button"
++                  aria-label={t('action.copy')}
++                  onClick={() => detailActions.copyToClipboard(totpData.token, { isSecret: true })}
++                >
++                  <IconCopy />
++                </button>
++              </div>
++            )}
++          </div>
++        </div>
++      )}
++
++      {(card.customFields ?? [])
++        .filter((field) => Boolean(field.value?.trim()))
++        .map((field: CustomField, index: number) => {
++          const fieldId = `custom-field-${index}-${field.key}`;
++          const isSecret = field.type === 'secret';
++          const isRevealed = Boolean(revealedCustomFields[fieldId]);
++          const displayValue = isSecret ? (isRevealed ? field.value : '••••••••••••') : field.value;
++
++          return (
++            <div key={fieldId} className="detail-field">
++              <div className="detail-label">{field.key}</div>
++
++              <div className="detail-value-box">
++                <div className="detail-value-text">{displayValue}</div>
++
++                <div className="detail-value-actions">
++                  <button
++                    className="icon-button"
++                    type="button"
++                    aria-label={t('action.copy')}
++                    onClick={() => detailActions.copyToClipboard(field.value, { isSecret })}
++                  >
++                    <IconCopy />
++                  </button>
++
++                  {isSecret && (
++                    <button
++                      className="icon-button"
++                      type="button"
++                      aria-label={isRevealed ? t('action.hide') : t('action.reveal')}
++                      onClick={() => toggleCustomFieldVisibility(fieldId)}
++                    >
++                      {isRevealed ? <IconPreviewOff /> : <IconPreview />}
++                    </button>
++                  )}
++                </div>
++              </div>
++            </div>
++          );
++        })}
++
+       {hasNote && (
+         <div className="detail-field detail-field-notes">
