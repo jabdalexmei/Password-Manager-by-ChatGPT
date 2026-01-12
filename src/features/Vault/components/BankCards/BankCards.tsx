@@ -1,11 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
 import type { Folder } from '../../types/ui';
 import { FolderSelect } from '../shared/FolderSelect';
+import { VaultSortControl } from '../shared/VaultSortControl';
+import {
+  getVaultSortMode,
+  setVaultSortMode,
+  sortBankCardSummaries,
+  type VaultSortMode,
+} from '../../lib/vaultSort';
 import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
 
 export type BankCardsProps = {
+  profileId: string;
   viewModel: BankCardsViewModel;
   sectionTitle: string;
   folders: Folder[];
@@ -29,6 +37,7 @@ export type BankCardsProps = {
 };
 
 export function BankCards({
+  profileId,
   viewModel,
   sectionTitle,
   folders,
@@ -39,7 +48,7 @@ export function BankCards({
   const { t } = useTranslation('BankCards');
   const { t: tCommon } = useTranslation('Common');
   const {
-    cards,
+    cards: rawCards,
     selectedCardId,
     isTrashMode,
     isCreateOpen,
@@ -48,6 +57,17 @@ export function BankCards({
     isEditSubmitting,
     closeCreateModal,
   } = viewModel;
+  const [sortMode, setSortMode] = useState<VaultSortMode>(() => getVaultSortMode('bank_cards', profileId));
+
+  useEffect(() => {
+    setSortMode(getVaultSortMode('bank_cards', profileId));
+  }, [profileId]);
+
+  useEffect(() => {
+    setVaultSortMode('bank_cards', profileId, sortMode);
+  }, [profileId, sortMode]);
+
+  const cards = useMemo(() => sortBankCardSummaries(rawCards, sortMode), [rawCards, sortMode]);
   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
   const shouldShowTrashActions = isTrashMode && showTrashActions;
   const createTitleRef = useRef<HTMLInputElement | null>(null);
@@ -260,6 +280,8 @@ export function BankCards({
         <div className="vault-section-header">{sectionTitle}</div>
 
         <div className="datacards-header__right">
+          <VaultSortControl value={sortMode} onChange={setSortMode} disabled={cards.length < 2} />
+
           {shouldShowTrashActions ? (
             <div className="datacards-actions">
               <button
@@ -307,9 +329,7 @@ export function BankCards({
                 </>
               )}
             </div>
-          ) : (
-            <div className="datacards-header__spacer" aria-hidden="true" />
-          )}
+          ) : null}
         </div>
       </div>
 

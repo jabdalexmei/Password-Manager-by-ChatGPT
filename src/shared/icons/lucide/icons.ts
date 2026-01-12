@@ -23,6 +23,9 @@ export {
   SlidersHorizontal as IconFilter,
   MoreHorizontal as IconMoreHorizontal,
 
+  ArrowDownUp as IconSort,
+  Check as IconCheck,
+
   RefreshCw as IconRegenerate,
   History as IconHistory,
 } from "lucide-react";

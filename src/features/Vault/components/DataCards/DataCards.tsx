@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import {
   IconAttachment,
@@ -14,6 +14,13 @@ import { generatePassword, PasswordGeneratorOptions } from '../../utils/password
 import { generateTotpCode } from '../../utils/totp';
 import { DataCardFormState, DataCardsViewModel } from './useDataCards';
 import { FolderSelect } from '../shared/FolderSelect';
+import { VaultSortControl } from '../shared/VaultSortControl';
+import {
+  getVaultSortMode,
+  setVaultSortMode,
+  sortDataCardSummaries,
+  type VaultSortMode,
+} from '../../lib/vaultSort';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
 
 const LazyPasswordGeneratorModal = React.lazy(async () => {
@@ -38,6 +45,7 @@ const LazySeedPhraseModal = React.lazy(async () => {
 });
 
 export type DataCardsProps = {
+  profileId: string;
   viewModel: DataCardsViewModel;
   sectionTitle: string;
   clipboardAutoClearEnabled?: boolean;
@@ -62,6 +70,7 @@ export type DataCardsProps = {
 };
 
 export function DataCards({
+  profileId,
   viewModel,
   sectionTitle,
   clipboardAutoClearEnabled,
@@ -74,7 +83,7 @@ export function DataCards({
   const { t: tCommon } = useTranslation('Common');
   const { show: showToast } = useToaster();
   const {
-    cards,
+    cards: rawCards,
     selectedCardId,
     showPassword,
     isCreateOpen,
@@ -83,6 +92,7 @@ export function DataCards({
     isEditSubmitting,
     togglePasswordVisibility,
   } = viewModel;
+  const [sortMode, setSortMode] = useState<VaultSortMode>(() => getVaultSortMode('data_cards', profileId));
   const createTitleRef = useRef<HTMLInputElement | null>(null);
   const editTitleRef = useRef<HTMLInputElement | null>(null);
   const [isGeneratorOpen, setGeneratorOpen] = useState(false);
@@ -123,6 +133,16 @@ export function DataCards({
   const genPwdLastCopiedRef = useRef<string | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    setSortMode(getVaultSortMode('data_cards', profileId));
+  }, [profileId]);
+
+  useEffect(() => {
+    setVaultSortMode('data_cards', profileId, sortMode);
+  }, [profileId, sortMode]);
+
+  const cards = useMemo(() => sortDataCardSummaries(rawCards, sortMode), [rawCards, sortMode]);
 
   const [totpNow, setTotpNow] = useState(() => Date.now());
 
@@ -778,6 +798,8 @@ export function DataCards({
         <div className="vault-section-header">{sectionTitle}</div>
 
         <div className="datacards-header__right">
+          <VaultSortControl value={sortMode} onChange={setSortMode} disabled={cards.length < 2} />
+
           {shouldShowTrashActions ? (
             <div className="datacards-actions">
               <button
@@ -825,9 +847,7 @@ export function DataCards({
                 </>
               )}
             </div>
-          ) : (
-            <div className="datacards-header__spacer" aria-hidden="true" />
-          )}
+          ) : null}
         </div>
       </div>
 
