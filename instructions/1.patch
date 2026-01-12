@@ -1,50 +1,705 @@
---- a/src/features/Vault/lib/vaultSort.ts
-+++ b/src/features/Vault/lib/vaultSort.ts
-@@ -84,16 +84,25 @@
- }
+diff -ruN orig/src/features/Vault/components/DataCards/DataCards.tsx mod/src/features/Vault/components/DataCards/DataCards.tsx
+--- orig/src/features/Vault/components/DataCards/DataCards.tsx	2026-01-12 05:20:41.878727637 +0000
++++ mod/src/features/Vault/components/DataCards/DataCards.tsx	2026-01-12 05:35:15.441094642 +0000
+@@ -21,6 +21,12 @@
+   sortDataCardSummaries,
+   type VaultSortMode,
+ } from '../../lib/vaultSort';
++import {
++  loadPreviewFields,
++  onPreviewFieldsChanged,
++  type DataCardPreviewField,
++  MAX_DATA_CARD_PREVIEW_FIELDS,
++} from '../../lib/datacardPreviewFields';
+ import { clipboardClearAll } from '../../../../shared/lib/tauri';
  
- function compareNameAsc(aKey: string, bKey: string): number {
--  const byKey = collator.compare(aKey, bKey);
--  if (byKey !== 0) return byKey;
--  // Stable-ish: keep empty keys after non-empty ones when equal under collator.
--  if (aKey.length === 0 && bKey.length > 0) return 1;
--  if (aKey.length > 0 && bKey.length === 0) return -1;
--  return 0;
-+  const aEmpty = aKey.length === 0;
-+  const bEmpty = bKey.length === 0;
-+
-+  // Always keep "empty" names at the end.
-+  if (aEmpty && !bEmpty) return 1;
-+  if (!aEmpty && bEmpty) return -1;
-+
-+  return collator.compare(aKey, bKey);
- }
+ const LazyPasswordGeneratorModal = React.lazy(async () => {
+@@ -109,6 +115,7 @@
+   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
+   const shouldShowTrashActions = viewModel.isTrashMode && showTrashActions;
++  const [previewFields, setPreviewFields] = useState<DataCardPreviewField[]>([]);
+   const [isCustomFieldModalOpen, setIsCustomFieldModalOpen] = useState(false);
+   const [customFieldName, setCustomFieldName] = useState('');
+   const [customFieldModalError, setCustomFieldModalError] = useState<string | null>(null);
+@@ -142,6 +149,18 @@
+     setVaultSortMode('data_cards', profileId, sortMode);
+   }, [profileId, sortMode]);
  
- function compareNameDesc(aKey: string, bKey: string): number {
--  return -compareNameAsc(aKey, bKey);
-+  const aEmpty = aKey.length === 0;
-+  const bEmpty = bKey.length === 0;
++  useEffect(() => {
++    let isMounted = true;
++    loadPreviewFields().then((fields) => {
++      if (isMounted) setPreviewFields(fields);
++    });
++    return () => {
++      isMounted = false;
++    };
++  }, []);
 +
-+  // Always keep "empty" names at the end.
-+  if (aEmpty && !bEmpty) return 1;
-+  if (!aEmpty && bEmpty) return -1;
++  useEffect(() => onPreviewFieldsChanged(setPreviewFields), []);
 +
-+  return collator.compare(bKey, aKey);
- }
+   useEffect(() => {
+     if (!shouldShowTrashActions) {
+       setIsTrashActionsOpen(false);
+@@ -889,15 +908,69 @@
+           const urlText = card.url ?? '';
+           const emailText = card.email ?? '';
  
- export function sortDataCardSummaries(list: DataCardSummary[], mode: VaultSortMode): DataCardSummary[] {
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -501,6 +501,12 @@
-   gap: 12px;
- }
+-          const metaLines: string[] = [];
+-          if (hasTitle) {
+-            if (hasUrl) metaLines.push(urlText);
+-            if (hasEmail) metaLines.push(emailText);
+-          } else if (hasUrl) {
+-            if (hasEmail) metaLines.push(emailText);
+-          }
++          const metaLine1 = hasTitle ? (hasUrl ? urlText : null) : hasUrl ? (hasEmail ? emailText : null) : null;
++          const metaLine2 = hasTitle && hasEmail ? emailText : null;
++
++          const getExtraLine = (field: DataCardPreviewField): string | null => {
++            switch (field) {
++              case 'username': {
++                const v = (card.username ?? '').trim();
++                return v.length > 0 ? v : null;
++              }
++              case 'mobile_phone': {
++                const v = (card.mobilePhone ?? '').trim();
++                return v.length > 0 ? v : null;
++              }
++              case 'note': {
++                const v = (card.note ?? '').split(/\r?\n/)[0]?.trim() ?? '';
++                return v.length > 0 ? v : null;
++              }
++              case 'folder': {
++                if (!card.folderId) return null;
++                const v = (viewModel.folders.find((f) => f.id === card.folderId)?.name ?? '').trim();
++                return v.length > 0 ? v : null;
++              }
++              case 'tags': {
++                const v = Array.isArray(card.tags) ? card.tags.join(', ').trim() : '';
++                return v.length > 0 ? v : null;
++              }
++              default:
++                return null;
++            }
++          };
++
++          const extraLines = previewFields
++            .map((field) => getExtraLine(field))
++            .filter((value): value is string => Boolean(value))
++            .slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);
++
++          const metaLines: Array<string | null> = [metaLine1, metaLine2, ...extraLines];
++          while (metaLines.length < 2 + MAX_DATA_CARD_PREVIEW_FIELDS) metaLines.push(null);
  
-+/* Lighter hover for the sort menu items (keep other context menus unchanged). */
-+.vault-sortmenu-panel .vault-context-item:hover,
-+.vault-sortmenu-panel .vault-context-item:focus-visible {
-+  background: var(--color-surface-2);
+           return (
+             <button
+               key={card.id}
+               type="button"
+@@ -915,17 +988,13 @@
+                   <span className="datacard-title">{displayTitleText}</span>
+                 </div>
+ 
+-                {metaLines.length > 0 && (
+-                  <div className="datacard-meta-lines">
+-                    {metaLines.map((line, idx) => (
+-                      <div key={`${card.id}-meta-${idx}`} className="datacard-meta">
+-                        <span>{line}</span>
+-                      </div>
+-                    ))}
+-                  </div>
+-                )}
++                <div className="datacard-meta-lines">
++                  {metaLines.map((line, idx) => (
++                    <div key={`${card.id}-meta-${idx}`} className="datacard-meta">
++                      <span className={line ? undefined : 'datacard-meta-empty'}>{line ?? '\u00A0'}</span>
++                    </div>
++                  ))}
++                </div>
+               </button>
+           );
+         })}
+diff -ruN orig/src/features/Vault/components/Details/Details.tsx mod/src/features/Vault/components/Details/Details.tsx
+--- orig/src/features/Vault/components/Details/Details.tsx	2026-01-12 05:20:41.878727637 +0000
++++ mod/src/features/Vault/components/Details/Details.tsx	2026-01-12 05:36:01.222443992 +0000
+@@ -12,6 +12,13 @@
+ import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
++import {
++  loadPreviewFields,
++  onPreviewFieldsChanged,
++  savePreviewFields,
++  type DataCardPreviewField,
++  MAX_DATA_CARD_PREVIEW_FIELDS,
++} from '../../lib/datacardPreviewFields';
+ import type { VaultCategory } from '../../types/ui';
+ import { formatVaultCategoryName } from '../../utils/formatting';
+ 
+@@ -68,6 +75,15 @@
+   const [revealedCustomFields, setRevealedCustomFields] = useState<Record<string, boolean>>({});
+   const [totpNow, setTotpNow] = useState(() => Date.now());
++  const [previewFields, setPreviewFields] = useState<DataCardPreviewField[]>([]);
++  const [previewMenu, setPreviewMenu] = useState<{
++    x: number;
++    y: number;
++    field: DataCardPreviewField;
++  } | null>(null);
+ 
+   useEffect(() => {
+     setRevealedCustomFields({});
+   }, [card?.id]);
++
++  useEffect(() => {
++    let isMounted = true;
++    loadPreviewFields().then((fields) => {
++      if (isMounted) setPreviewFields(fields);
++    });
++    return () => {
++      isMounted = false;
++    };
++  }, []);
++
++  useEffect(() => onPreviewFieldsChanged(setPreviewFields), []);
++
++  useEffect(() => {
++    if (!previewMenu) return;
++
++    const onKeyDown = (e: KeyboardEvent) => {
++      if (e.key === 'Escape') setPreviewMenu(null);
++    };
++
++    window.addEventListener('keydown', onKeyDown);
++    return () => window.removeEventListener('keydown', onKeyDown);
++  }, [previewMenu]);
+@@ -133,6 +149,33 @@
+   const toggleCustomFieldVisibility = (fieldId: string) => {
+     setRevealedCustomFields((prev) => ({ ...prev, [fieldId]: !prev[fieldId] }));
+   };
+ 
++  const openPreviewMenu = (field: DataCardPreviewField, e: React.MouseEvent) => {
++    e.preventDefault();
++    e.stopPropagation();
++    setPreviewMenu({ x: e.clientX, y: e.clientY, field });
++  };
++
++  const isFieldInPreview = (field: DataCardPreviewField) => previewFields.includes(field);
++
++  const togglePreviewField = async (field: DataCardPreviewField) => {
++    const isSelected = isFieldInPreview(field);
++
++    if (isSelected) {
++      await savePreviewFields(previewFields.filter((f) => f !== field));
++      setPreviewMenu(null);
++      return;
++    }
++
++    if (previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) return;
++    await savePreviewFields([...previewFields, field]);
++    setPreviewMenu(null);
++  };
++
+   const informationTitle = useMemo(() => {
+     if (cardType === 'data_card') return t('Details.informationTitleDataCard');
+     if (cardType === 'bank_card') return t('Details.informationTitleBankCard');
+@@ -297,7 +340,7 @@
+         <div className="detail-field">
+           <div className="detail-label">{t('Details.label.username')}</div>
+-          <div className="detail-value-box">
++          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('username', e)}>
+             <div className="detail-value-text">{card.username ?? ''}</div>
+           </div>
+         </div>
+@@ -322,7 +365,7 @@
+         <div className="detail-field">
+           <div className="detail-label">{t('Details.label.mobilePhone')}</div>
+-          <div className="detail-value-box">
++          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('mobile_phone', e)}>
+             <div className="detail-value-text">{card.mobilePhone ?? ''}</div>
+           </div>
+         </div>
+@@ -465,7 +508,7 @@
+       <div className="detail-field">
+         <div className="detail-label">{t('Details.label.note')}</div>
+-        <div className="detail-value-box detail-value-multiline">
++        <div className="detail-value-box detail-value-multiline" onContextMenu={(e) => openPreviewMenu('note', e)}>
+           <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
+         </div>
+       </div>
+@@ -497,7 +540,7 @@
+       <div className="detail-field">
+         <div className="detail-label">{t('Details.label.folder')}</div>
+-        <div className="detail-value-box">
++        <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('folder', e)}>
+           <div className="detail-value-text">{folderName}</div>
+         </div>
+       </div>
+@@ -515,7 +558,7 @@
+       <div className="detail-field">
+         <div className="detail-label">{t('Details.label.tags')}</div>
+-        <div className="detail-value-box">
++        <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('tags', e)}>
+           <div className="detail-value-text">{card.tags?.join(', ')}</div>
+         </div>
+       </div>
+@@ -656,6 +699,35 @@
+         </Suspense>
+       )}
+ 
++      {previewMenu && (
++        <>
++          <div className="vault-actionmenu-backdrop" onClick={() => setPreviewMenu(null)} />
++          <div
++            className="vault-actionmenu-panel vault-contextmenu-panel"
++            role="menu"
++            style={
++              {
++                '--menu-x': `${previewMenu.x}px`,
++                '--menu-y': `${previewMenu.y}px`,
++              } as React.CSSProperties
++            }
++          >
++            <button
++              className="vault-actionmenu-item"
++              type="button"
++              onClick={() => togglePreviewField(previewMenu.field)}
++              disabled={!isFieldInPreview(previewMenu.field) && previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS}
++            >
++              {isFieldInPreview(previewMenu.field) ? 'Hide in preview' : 'Show in preview'}
++            </button>
++            {!isFieldInPreview(previewMenu.field) && previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
++              <button className="vault-actionmenu-item" type="button" disabled>
++                Max {MAX_DATA_CARD_PREVIEW_FIELDS} fields
++              </button>
++            )}
++          </div>
++        </>
++      )}
++
+       {seedPhraseViewOpen && (
+         <Suspense fallback={null}>
+           <LazySeedPhraseViewModal
+diff -ruN orig/src/features/Vault/lib/datacardPreviewFields.ts mod/src/features/Vault/lib/datacardPreviewFields.ts
+--- orig/src/features/Vault/lib/datacardPreviewFields.ts	1970-01-01 00:00:00.000000000 +0000
++++ mod/src/features/Vault/lib/datacardPreviewFields.ts	2026-01-12 05:35:40.771509540 +0000
+@@ -0,0 +1,57 @@
++import { getDataCardPreviewFields, setDataCardPreviewFields } from '@/shared/lib/tauri';
++
++export type DataCardPreviewField = 'username' | 'mobile_phone' | 'note' | 'folder' | 'tags';
++
++export const MAX_DATA_CARD_PREVIEW_FIELDS = 3;
++
++const EVENT_NAME = 'datacard-preview-fields-changed';
++
++const isAllowed = (value: string): value is DataCardPreviewField =>
++  value === 'username' ||
++  value === 'mobile_phone' ||
++  value === 'note' ||
++  value === 'folder' ||
++  value === 'tags';
++
++export async function loadPreviewFields(): Promise<DataCardPreviewField[]> {
++  try {
++    const raw = await getDataCardPreviewFields();
++    const out: DataCardPreviewField[] = [];
++    for (const item of raw) {
++      if (!isAllowed(item)) continue;
++      if (out.includes(item)) continue;
++      out.push(item);
++      if (out.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
++    }
++    return out;
++  } catch {
++    return [];
++  }
 +}
 +
- .vault-sortmenu-label {
-   overflow: hidden;
-   text-overflow: ellipsis;
++export async function savePreviewFields(fields: DataCardPreviewField[]): Promise<void> {
++  const unique: DataCardPreviewField[] = [];
++  for (const f of fields) {
++    if (!unique.includes(f)) unique.push(f);
++    if (unique.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
++  }
++  await setDataCardPreviewFields(unique);
++  window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: unique }));
++}
++
++export function onPreviewFieldsChanged(handler: (fields: DataCardPreviewField[]) => void): () => void {
++  const listener = (evt: Event) => {
++    const custom = evt as CustomEvent;
++    const raw = Array.isArray(custom.detail) ? custom.detail : [];
++    const fields: DataCardPreviewField[] = raw.filter(isAllowed).slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);
++    handler(fields);
++  };
++
++  window.addEventListener(EVENT_NAME, listener as EventListener);
++  return () => window.removeEventListener(EVENT_NAME, listener as EventListener);
++}
+diff -ruN orig/src/features/Vault/types/backend.ts mod/src/features/Vault/types/backend.ts
+--- orig/src/features/Vault/types/backend.ts	2026-01-12 05:20:41.878727637 +0000
++++ mod/src/features/Vault/types/backend.ts	2026-01-12 05:33:56.095375039 +0000
+@@ -43,6 +43,8 @@
+   totp_uri: string | null;
+   url: string | null;
+   username: string | null;
++  mobile_phone: string | null;
++  note: string | null;
+   created_at: string;
+   updated_at: string;
+ };
+diff -ruN orig/src/features/Vault/types/mappers.ts mod/src/features/Vault/types/mappers.ts
+--- orig/src/features/Vault/types/mappers.ts	2026-01-12 05:20:41.878727637 +0000
++++ mod/src/features/Vault/types/mappers.ts	2026-01-12 05:34:10.811553509 +0000
+@@ -24,8 +24,8 @@
+     url: card.url,
+     email: card.email,
+     username: card.username,
+-    mobilePhone: null,
+-    note: null,
++    mobilePhone: card.mobile_phone,
++    note: card.note,
+     folderId: card.folder_id,
+     tags: card.tags ?? [],
+     createdAt: card.created_at,
+diff -ruN orig/src/shared/lib/tauri.ts mod/src/shared/lib/tauri.ts
+--- orig/src/shared/lib/tauri.ts	2026-01-12 05:20:41.878727637 +0000
++++ mod/src/shared/lib/tauri.ts	2026-01-12 05:34:43.291930824 +0000
+@@ -266,3 +266,11 @@
+ export function clipboardClearAll(): Promise<void> {
+   return invoke('clipboard_clear_all');
+ }
++
++export function getDataCardPreviewFields(): Promise<string[]> {
++  return invoke('get_datacard_preview_fields');
++}
++
++export function setDataCardPreviewFields(fields: string[]): Promise<boolean> {
++  return invoke('set_datacard_preview_fields', { fields });
++}
+diff -ruN orig/src/shared/styles/screens/vault.css mod/src/shared/styles/screens/vault.css
+--- orig/src/shared/styles/screens/vault.css	2026-01-12 05:20:41.878727637 +0000
++++ mod/src/shared/styles/screens/vault.css	2026-01-12 05:37:08.151245761 +0000
+@@ -560,8 +560,8 @@
+ @supports (color: color-mix(in srgb, white, black)) {
+   :root {
+-    --menu-hover-bg: color-mix(in srgb, var(--panel-bg) 92%, var(--color-text) 8%);
+-    --menu-hover-border: color-mix(in srgb, var(--panel-bg) 78%, var(--color-text) 22%);
++    --menu-hover-bg: color-mix(in srgb, var(--panel-bg) 96%, var(--color-text) 4%);
++    --menu-hover-border: color-mix(in srgb, var(--panel-bg) 86%, var(--color-text) 14%);
+   }
+ }
+ 
++.vault-contextmenu-panel {
++  position: fixed;
++  left: var(--menu-x, 0px);
++  top: var(--menu-y, 0px);
++  right: auto;
++}
++
+@@ -612,7 +612,7 @@
+ .vault-sortmenu-panel .vault-context-item:hover,
+ .vault-sortmenu-panel .vault-context-item:focus-visible {
+-  background: var(--color-surface-2);
++  background: color-mix(in srgb, var(--color-surface-1) 96%, var(--color-text) 4%);
+ }
+ 
+@@ -690,6 +690,10 @@
+ .datacard-meta {
+   display: flex;
+   gap: 8px;
+ }
++
++.datacard-meta-empty {
++  opacity: 0;
++}
+diff -ruN orig/src-tauri/permissions/app-default.toml mod/src-tauri/permissions/app-default.toml
+--- orig/src-tauri/permissions/app-default.toml	2026-01-12 05:20:41.878727637 +0000
++++ mod/src-tauri/permissions/app-default.toml	2026-01-12 05:37:25.903774692 +0000
+@@ -74,6 +74,9 @@
+ 
+   "get_settings",
+   "update_settings",
++
++  "get_datacard_preview_fields",
++  "set_datacard_preview_fields",
+ 
+   "workspace_list",
+   "workspace_select",
+diff -ruN orig/src-tauri/src/commands/mod.rs mod/src-tauri/src/commands/mod.rs
+--- orig/src-tauri/src/commands/mod.rs	2026-01-12 05:20:41.878727637 +0000
++++ mod/src-tauri/src/commands/mod.rs	2026-01-12 05:28:31.619451488 +0000
+@@ -8,3 +8,4 @@
+ pub mod password_history;
+ pub mod profiles;
+ pub mod security;
+ pub mod settings;
++pub mod ui_prefs;
+ pub mod workspace;
+diff -ruN orig/src-tauri/src/commands/ui_prefs.rs mod/src-tauri/src/commands/ui_prefs.rs
+--- orig/src-tauri/src/commands/ui_prefs.rs	1970-01-01 00:00:00.000000000 +0000
++++ mod/src-tauri/src/commands/ui_prefs.rs	2026-01-12 05:30:15.445248791 +0000
+@@ -0,0 +1,28 @@
++use std::sync::Arc;
++
++use tauri::State;
++
++use crate::app_state::AppState;
++use crate::error::{ErrorCodeString, Result};
++use crate::services::ui_prefs_service;
++
++#[tauri::command]
++pub async fn get_datacard_preview_fields(state: State<'_, Arc<AppState>>) -> Result<Vec<String>> {
++    let app = state.inner().clone();
++    tauri::async_runtime::spawn_blocking(move || ui_prefs_service::get_datacard_preview_fields(&app))
++        .await
++        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
++}
++
++#[tauri::command]
++pub async fn set_datacard_preview_fields(
++    fields: Vec<String>,
++    state: State<'_, Arc<AppState>>,
++) -> Result<bool> {
++    let app = state.inner().clone();
++    tauri::async_runtime::spawn_blocking(move || ui_prefs_service::set_datacard_preview_fields(fields, &app))
++        .await
++        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
++}
+diff -ruN orig/src-tauri/src/data/sqlite/migrations.rs mod/src-tauri/src/data/sqlite/migrations.rs
+--- orig/src-tauri/src/data/sqlite/migrations.rs	2026-01-12 05:20:41.878727637 +0000
++++ mod/src-tauri/src/data/sqlite/migrations.rs	2026-01-12 05:28:07.771187659 +0000
+@@ -12,6 +12,21 @@
+ 
+ const CURRENT_SCHEMA_VERSION: i32 = 1;
+ 
++fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
++    // Dev-mode friendly: create idempotently so existing schema=1 DBs also get it.
++    conn.execute_batch(
++        r#"
++CREATE TABLE IF NOT EXISTS ui_preferences (
++  key        TEXT PRIMARY KEY,
++  value_json TEXT NOT NULL,
++  updated_at TEXT NOT NULL
++);
++"#,
++    )
++    .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++    Ok(())
++}
++
+ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
+     conn.pragma_update(None, "foreign_keys", "ON")
+         .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+@@ -34,6 +49,7 @@
+         conn.execute_batch(include_str!("schema.sql"))
+             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++        ensure_ui_preferences_table(conn)?;
+ 
+         conn.pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)
+             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+@@ -41,7 +57,10 @@
+     }
+ 
+     match version {
+-        CURRENT_SCHEMA_VERSION => Ok(()),
++        CURRENT_SCHEMA_VERSION => {
++            ensure_ui_preferences_table(conn)?;
++            Ok(())
++        },
+         _ => Err(ErrorCodeString::new("UNSUPPORTED_SCHEMA_VERSION")),
+     }
+ }
+diff -ruN orig/src-tauri/src/data/sqlite/repo_impl.rs mod/src-tauri/src/data/sqlite/repo_impl.rs
+--- orig/src-tauri/src/data/sqlite/repo_impl.rs	2026-01-12 05:20:41.878727637 +0000
++++ mod/src-tauri/src/data/sqlite/repo_impl.rs	2026-01-12 05:33:04.662577508 +0000
+@@ -83,7 +83,9 @@
+         url: row.get("url")?,
+         email: row.get("email")?,
+         username: row.get("username")?,
++        mobile_phone: row.get("mobile_phone")?,
++        note: row.get("note")?,
+         has_password: row.get("has_password")?,
+         has_2fa: row.get("has_2fa")?,
+         has_seed_phrase: row.get("has_seed_phrase")?,
+@@ -410,6 +412,8 @@
+                 d.email,
+                 d.username,
++                d.mobile_phone,
++                d.note,
+                 d.totp_uri,
+                 d.folder_id,
+                 COALESCE((
+@@ -578,6 +582,8 @@
+                     d.email,
+                     d.username,
++                    d.mobile_phone,
++                    d.note,
+                     d.totp_uri,
+                     d.folder_id,
+                     COALESCE((
+@@ -2016,3 +2022,46 @@
+ }
++
++pub fn get_ui_preference_value_json(
++    state: &Arc<AppState>,
++    profile_id: &str,
++    key: &str,
++) -> Result<Option<String>> {
++    with_connection(state, profile_id, |conn| {
++        let sql = "SELECT value_json FROM ui_preferences WHERE key=?1";
++        let value: Option<String> = conn
++            .query_row(sql, [key], |row| row.get(0))
++            .optional()
++            .map_err(|err| {
++                log_sqlite_err("ui_preferences.get", err);
++                ErrorCodeString::new("DB_QUERY_FAILED")
++            })?;
++        Ok(value)
++    })
++}
++
++pub fn set_ui_preference_value_json(
++    state: &Arc<AppState>,
++    profile_id: &str,
++    key: &str,
++    value_json: &str,
++    now_utc: &str,
++) -> Result<bool> {
++    with_connection(state, profile_id, |conn| {
++        let sql = r#"
++INSERT INTO ui_preferences(key, value_json, updated_at)
++VALUES (?1, ?2, ?3)
++ON CONFLICT(key) DO UPDATE SET
++  value_json = excluded.value_json,
++  updated_at = excluded.updated_at
++"#;
++        let changed = conn
++            .execute(sql, params![key, value_json, now_utc])
++            .map_err(|err| {
++                log_sqlite_err("ui_preferences.set", err);
++                ErrorCodeString::new("DB_QUERY_FAILED")
++            })?;
++        Ok(changed > 0)
++    })
++}
+diff -ruN orig/src-tauri/src/data/sqlite/schema.sql mod/src-tauri/src/data/sqlite/schema.sql
+--- orig/src-tauri/src/data/sqlite/schema.sql	2026-01-12 05:20:41.878727637 +0000
++++ mod/src-tauri/src/data/sqlite/schema.sql	2026-01-12 05:26:11.132246195 +0000
+@@ -206,3 +206,12 @@
+ CREATE INDEX IF NOT EXISTS idx_bank_cards_created_at ON bank_cards(created_at);
+ CREATE INDEX IF NOT EXISTS idx_bank_cards_updated_at ON bank_cards(updated_at);
++
++-- UI preferences for frontend-only settings that should live with the vault DB.
++CREATE TABLE IF NOT EXISTS ui_preferences (
++  key        TEXT PRIMARY KEY,
++  value_json TEXT NOT NULL,
++  updated_at TEXT NOT NULL
++);
+diff -ruN orig/src-tauri/src/main.rs mod/src-tauri/src/main.rs
+--- orig/src-tauri/src/main.rs	2026-01-12 05:20:41.878727637 +0000
++++ mod/src-tauri/src/main.rs	2026-01-12 05:31:32.265903214 +0000
+@@ -50,7 +50,7 @@
+     attachments::*, backup::*, bank_cards::*, clipboard::*, data_cards::*, folders::*,
+-    password_history::*, profiles::*, security::*, settings::*, workspace::*,
++    password_history::*, profiles::*, security::*, settings::*, ui_prefs::*, workspace::*,
+ };
+ 
+ mod commands;
+@@ -83,6 +83,7 @@
+     pub mod profiles_service;
+     pub mod security_service;
+     pub mod settings_service;
++    pub mod ui_prefs_service;
+ }
+ 
+ fn main() {
+@@ -173,6 +174,8 @@
+             clear_datacard_password_history,
+             get_settings,
+             update_settings,
++            get_datacard_preview_fields,
++            set_datacard_preview_fields,
+             workspace_list,
+             workspace_select,
+             workspace_create_via_dialog,
+diff -ruN orig/src-tauri/src/services/ui_prefs_service.rs mod/src-tauri/src/services/ui_prefs_service.rs
+--- orig/src-tauri/src/services/ui_prefs_service.rs	1970-01-01 00:00:00.000000000 +0000
++++ mod/src-tauri/src/services/ui_prefs_service.rs	2026-01-12 05:32:21.219143002 +0000
+@@ -0,0 +1,86 @@
++use chrono::Utc;
++use std::sync::Arc;
++
++use crate::app_state::AppState;
++use crate::data::sqlite::repo_impl;
++use crate::error::{ErrorCodeString, Result};
++use crate::services::security_service;
++
++const PREF_KEY_DATACARD_PREVIEW_FIELDS: &str = "datacard.preview_fields";
++const MAX_PREVIEW_FIELDS: usize = 3;
++
++fn is_allowed_field(value: &str) -> bool {
++    matches!(value, "username" | "mobile_phone" | "note" | "folder" | "tags")
++}
++
++fn normalize_fields(input: Vec<String>) -> Vec<String> {
++    let mut out: Vec<String> = Vec::new();
++    for raw in input {
++        let trimmed = raw.trim();
++        if trimmed.is_empty() {
++            continue;
++        }
++        if !is_allowed_field(trimmed) {
++            continue;
++        }
++        if out.iter().any(|v| v == trimmed) {
++            continue;
++        }
++        out.push(trimmed.to_string());
++        if out.len() >= MAX_PREVIEW_FIELDS {
++            break;
++        }
++    }
++    out
++}
++
++pub fn get_datacard_preview_fields(state: &Arc<AppState>) -> Result<Vec<String>> {
++    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
++
++    let raw =
++        repo_impl::get_ui_preference_value_json(state, &profile_id, PREF_KEY_DATACARD_PREVIEW_FIELDS)?;
++    if let Some(value_json) = raw {
++        let parsed: Result<Vec<String>> =
++            serde_json::from_str(&value_json).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"));
++        if let Ok(v) = parsed {
++            return Ok(normalize_fields(v));
++        }
++    }
++
++    Ok(Vec::new())
++}
++
++pub fn set_datacard_preview_fields(fields: Vec<String>, state: &Arc<AppState>) -> Result<bool> {
++    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
++
++    let cleaned = normalize_fields(fields);
++    let value_json =
++        serde_json::to_string(&cleaned).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++
++    let now_utc = Utc::now().to_rfc3339();
++    repo_impl::set_ui_preference_value_json(
++        state,
++        &profile_id,
++        PREF_KEY_DATACARD_PREVIEW_FIELDS,
++        &value_json,
++        &now_utc,
++    )
++}
+diff -ruN orig/src-tauri/src/types.rs mod/src-tauri/src/types.rs
+--- orig/src-tauri/src/types.rs	2026-01-12 05:20:41.878727637 +0000
++++ mod/src-tauri/src/types.rs	2026-01-12 05:32:47.823437180 +0000
+@@ -128,6 +128,8 @@
+     pub url: Option<String>,
+     pub email: Option<String>,
+     pub username: Option<String>,
++    pub mobile_phone: Option<String>,
++    pub note: Option<String>,
+     pub has_password: bool,
+     pub has_2fa: bool,
+     pub has_seed_phrase: bool,
