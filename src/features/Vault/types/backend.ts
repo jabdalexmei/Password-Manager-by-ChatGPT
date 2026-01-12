@@ -51,6 +51,8 @@ export type BackendDataCardSummary = {
   url: string | null;
   email: string | null;
   username: string | null;
+  mobile_phone: string | null;
+  note: string | null;
   tags: string[];
   created_at: string;
   updated_at: string;

@@ -14,6 +14,13 @@ import {
   IconPreviewOff,
 } from '@/shared/icons/lucide/icons';
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
+import {
+  loadPreviewFields,
+  onPreviewFieldsChanged,
+  savePreviewFields,
+  type DataCardPreviewField,
+  MAX_DATA_CARD_PREVIEW_FIELDS,
+} from '../../lib/datacardPreviewFields';
 
 const LazyAttachmentPreviewModal = React.lazy(() =>
   import('../modals/AttachmentPreviewModal').then((m) => ({ default: m.default })),
@@ -80,6 +87,12 @@ export function Details({
   const [seedPhraseViewOpen, setSeedPhraseViewOpen] = useState(false);
   const [revealedCustomFields, setRevealedCustomFields] = useState<Record<string, boolean>>({});
   const [totpNow, setTotpNow] = useState(() => Date.now());
+  const [previewFields, setPreviewFields] = useState<DataCardPreviewField[]>([]);
+  const [previewMenu, setPreviewMenu] = useState<{
+    x: number;
+    y: number;
+    field: DataCardPreviewField;
+  } | null>(null);
 
   const totpData = useMemo(() => {
     const uri = card?.totpUri;
@@ -107,11 +120,56 @@ export function Details({
     setRevealedCustomFields({});
   }, [card?.id]);
 
+  useEffect(() => {
+    let isMounted = true;
+    loadPreviewFields().then((fields) => {
+      if (isMounted) setPreviewFields(fields);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => onPreviewFieldsChanged(setPreviewFields), []);
+
+  useEffect(() => {
+    if (!previewMenu) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewMenu(null);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewMenu]);
+
   const toggleCustomFieldVisibility = (fieldId: string) => {
     setRevealedCustomFields((prev) => ({
       ...prev,
       [fieldId]: !prev[fieldId],
     }));
+  };
+
+  const openPreviewMenu = (field: DataCardPreviewField, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPreviewMenu({ x: e.clientX, y: e.clientY, field });
+  };
+
+  const isFieldInPreview = (field: DataCardPreviewField) => previewFields.includes(field);
+
+  const togglePreviewField = async (field: DataCardPreviewField) => {
+    const isSelected = isFieldInPreview(field);
+
+    if (isSelected) {
+      await savePreviewFields(previewFields.filter((f) => f !== field));
+      setPreviewMenu(null);
+      return;
+    }
+
+    if (previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) return;
+    await savePreviewFields([...previewFields, field]);
+    setPreviewMenu(null);
   };
 
   const informationTitle = (
@@ -300,7 +358,7 @@ export function Details({
       {hasUsername && (
         <div className="detail-field">
           <div className="detail-label">{t('label.username')}</div>
-          <div className="detail-value-box">
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('username', e)}>
             <div className="detail-value-text">{card.username ?? ''}</div>
             <div className="detail-value-actions">
               <button
@@ -319,7 +377,7 @@ export function Details({
       {hasMobilePhone && (
         <div className="detail-field">
           <div className="detail-label">{t('label.mobile')}</div>
-          <div className="detail-value-box">
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('mobile_phone', e)}>
             <div className="detail-value-text">{card.mobilePhone ?? ''}</div>
             <div className="detail-value-actions">
               <button
@@ -465,7 +523,7 @@ export function Details({
       {hasNote && (
         <div className="detail-field detail-field-notes">
           <div className="detail-label">{t('label.note')}</div>
-          <div className="detail-value-box detail-value-multiline">
+          <div className="detail-value-box detail-value-multiline" onContextMenu={(e) => openPreviewMenu('note', e)}>
             <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
             <div className="detail-value-actions">
               <button
@@ -484,7 +542,7 @@ export function Details({
       {hasFolderName && (
         <div className="detail-field">
           <div className="detail-label">{t('label.folder')}</div>
-          <div className="detail-value-box">
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('folder', e)}>
             <div className="detail-value-text">{folderName}</div>
           </div>
         </div>
@@ -493,7 +551,7 @@ export function Details({
       {hasTags && (
         <div className="detail-field">
           <div className="detail-label">{t('label.tags')}</div>
-          <div className="detail-value-box">
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('tags', e)}>
             <div className="detail-value-text">{card.tags?.join(', ')}</div>
           </div>
         </div>
@@ -559,6 +617,36 @@ export function Details({
       </div>
       </div>
     </div>
+
+      {previewMenu && (
+        <>
+          <div className="vault-actionmenu-backdrop" onClick={() => setPreviewMenu(null)} />
+          <div
+            className="vault-actionmenu-panel vault-contextmenu-panel"
+            role="menu"
+            style={
+              {
+                '--menu-x': `${previewMenu.x}px`,
+                '--menu-y': `${previewMenu.y}px`,
+              } as React.CSSProperties
+            }
+          >
+            <button
+              className="vault-actionmenu-item"
+              type="button"
+              onClick={() => togglePreviewField(previewMenu.field)}
+              disabled={!isFieldInPreview(previewMenu.field) && previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS}
+            >
+              {isFieldInPreview(previewMenu.field) ? 'Hide in preview' : 'Show in preview'}
+            </button>
+            {!isFieldInPreview(previewMenu.field) && previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
+              <button className="vault-actionmenu-item" type="button" disabled>
+                Max {MAX_DATA_CARD_PREVIEW_FIELDS} fields
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       {seedPhraseViewOpen && (
         <Suspense fallback={null}>

@@ -126,6 +126,8 @@ pub struct DataCardSummary {
     pub url: Option<String>,
     pub email: Option<String>,
     pub username: Option<String>,
+    pub mobile_phone: Option<String>,
+    pub note: Option<String>,
     pub tags: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
