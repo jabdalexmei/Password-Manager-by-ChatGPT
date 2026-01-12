@@ -19,6 +19,7 @@
         "frame-ancestors": "'none'",
         "frame-src": "'none'",
         "child-src": "'none'",
+        "worker-src": "'self' asset: customprotocol: blob:",
         "form-action": "'none'",
         "navigate-to": "'self'",
         "connect-src": "ipc: http://ipc.localhost",
