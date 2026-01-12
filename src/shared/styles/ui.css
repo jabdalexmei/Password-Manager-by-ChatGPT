@@ -42,6 +42,13 @@ html:not(.scrollbars-active) * { scrollbar-color: var(--scrollbar-thumb-hidden) 
   height: var(--scrollbar-size);
 }
 
+/* Remove up/down (and left/right) scrollbar arrow buttons */
+*::-webkit-scrollbar-button {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 *::-webkit-scrollbar-track {
   background: transparent;
 }
