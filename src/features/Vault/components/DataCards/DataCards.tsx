@@ -933,8 +933,9 @@ export function DataCards({
               .filter((value): value is string => Boolean(value))
               .slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);
 
-            const metaLines: Array<string | null> = [metaLine1, metaLine2, ...extraLines];
-            while (metaLines.length < 2 + MAX_DATA_CARD_PREVIEW_FIELDS) metaLines.push(null);
+            const metaLines = [metaLine1, metaLine2, ...extraLines].filter(
+              (line): line is string => Boolean(line)
+            );
 
             return (
               <button
@@ -953,13 +954,15 @@ export function DataCards({
                   )}
                 </div>
 
-                <div className="datacard-meta-lines">
-                  {metaLines.map((line, idx) => (
-                    <div key={`${card.id}-meta-${idx}`} className="datacard-meta">
-                      <span className={line ? undefined : 'datacard-meta-empty'}>{line ?? '\u00A0'}</span>
-                    </div>
-                  ))}
-                </div>
+                {metaLines.length > 0 && (
+                  <div className="datacard-meta-lines">
+                    {metaLines.map((line, idx) => (
+                      <div key={`${card.id}-meta-${idx}`} className="datacard-meta">
+                        <span>{line}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </button>
             );
           })}
