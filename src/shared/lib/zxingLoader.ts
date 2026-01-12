@@ -9,14 +9,30 @@ async function loadZxingBrowser(): Promise<ZxingBrowserModule> {
   return zxingBrowserPromise;
 }
 
+async function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error('Unable to read QR file data.'));
+    };
+
+    reader.onerror = () => {
+      reject(reader.error ?? new Error('Unable to read QR file data.'));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function decodeQrFromImageFile(file: File): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    const { BrowserQRCodeReader } = await loadZxingBrowser();
-    const reader = new BrowserQRCodeReader();
-    const decoded = await reader.decodeFromImageUrl(url);
-    return decoded.getText();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  const dataUrl = await readFileAsDataUrl(file);
+  const { BrowserQRCodeReader } = await loadZxingBrowser();
+  const reader = new BrowserQRCodeReader();
+  const decoded = await reader.decodeFromImageUrl(dataUrl);
+  return decoded.getText();
 }
