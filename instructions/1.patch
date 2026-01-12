@@ -1,6 +1,8 @@
 --- a/src/features/Vault/components/DataCards/DataCards.tsx
 +++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -844,8 +844,10 @@
+@@ -836,21 +836,42 @@
+           {cards.map((card) => {
+             const isActive = selectedCardId === card.id;
              const isFavorite = card.isFavorite;
              const titleText = (card.title ?? '').trim();
              const urlText = (card.url ?? '').trim();
@@ -9,33 +11,72 @@
              const hasUrl = urlText.length > 0;
 +            const hasEmail = emailText.length > 0;
  
-             const isUntitledPlaceholder = !hasTitle && !hasUrl;
+-            const isUntitledPlaceholder = !hasTitle && !hasUrl;
++            const isUntitledPlaceholder = !hasTitle && !hasUrl && !hasEmail;
              const displayTitleText = isUntitledPlaceholder
-@@ -872,9 +874,18 @@
+               ? t('label.untitled')
+               : hasTitle
+                 ? titleText
+-                : urlText;
+-            const showUrlMeta = hasTitle && hasUrl;
++                : hasUrl
++                  ? urlText
++                  : emailText;
++
++            const metaLines: string[] = [];
++            if (hasTitle) {
++              if (hasUrl) metaLines.push(urlText);
++              if (hasEmail) metaLines.push(emailText);
++            } else if (hasUrl) {
++              if (hasEmail) metaLines.push(emailText);
++            }
+ 
+             return (
+               <button
+                 key={card.id}
+                 className={`vault-datacard ${isActive ? 'active' : ''}`}
+                 type="button"
+                 onClick={() => viewModel.selectCard(card.id)}
+               >
+                 <div className="datacard-top">
+                   <div className="datacard-title">{displayTitleText}</div>
+                   {(card.hasTotp || isFavorite) && (
+                     <div className="datacard-badges">
+                       {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
+                       {card.hasTotp && <span className="pill">{t('twoFactor.pill')}</span>}
+                     </div>
                    )}
                  </div>
  
 -                {showUrlMeta && (
 -                  <div className="datacard-meta">
 -                    <span>{urlText}</span>
-+                {(showUrlMeta || hasEmail) && (
+-                  </div>
+-                )}
++                {metaLines.length > 0 && (
 +                  <div className="datacard-meta-lines">
-+                    {showUrlMeta && (
-+                      <div className="datacard-meta">
-+                        <span>{urlText}</span>
++                    {metaLines.map((line, idx) => (
++                      <div key={`${card.id}-meta-${idx}`} className="datacard-meta">
++                        <span>{line}</span>
 +                      </div>
-+                    )}
-+                    {hasEmail && (
-+                      <div className="datacard-meta">
-+                        <span>{emailText}</span>
-+                      </div>
-+                    )}
-                   </div>
-                 )}
++                    ))}
++                  </div>
++                )}
                </button>
+             );
+           })}
+         </div>
+       )}
 --- a/src/shared/styles/screens/vault.css
 +++ b/src/shared/styles/screens/vault.css
-@@ -649,6 +649,13 @@
+@@ -642,6 +642,13 @@
+ .datacard-meta {
+   display: flex;
+   flex-wrap: nowrap;
+   gap: 10px;
+   align-items: center;
+   color: var(--color-text-muted);
+   font-size: 12px;
    line-height: 16px;
  }
  
