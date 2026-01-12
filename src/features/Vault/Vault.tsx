@@ -475,6 +475,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
                * renders the global Empty state above.
                */}
               <DataCards
+                profileId={profileId}
                 viewModel={dataCardsViewModel}
                 sectionTitle={tFolders('category.dataCards')}
                 clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
@@ -485,6 +486,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
               />
 
               <BankCards
+                profileId={profileId}
                 viewModel={bankCardsViewModel}
                 sectionTitle={tFolders('category.bankCards')}
                 folders={vault.folders}
@@ -495,6 +497,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             </>
           ) : selectedCategory === 'data_cards' ? (
             <DataCards
+              profileId={profileId}
               viewModel={dataCardsViewModel}
               sectionTitle={tFolders('category.dataCards')}
               clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
@@ -502,6 +505,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             />
           ) : (
             <BankCards
+              profileId={profileId}
               viewModel={bankCardsViewModel}
               sectionTitle={tFolders('category.bankCards')}
               folders={vault.folders}

@@ -114,7 +114,12 @@ export function BankCardsBody({
       </aside>
 
       <section className="vault-datacards">
-        <BankCards viewModel={viewModel} sectionTitle={sectionTitle} folders={folders} />
+        <BankCards
+          profileId={profileId}
+          viewModel={viewModel}
+          sectionTitle={sectionTitle}
+          folders={folders}
+        />
       </section>
 
       <section className="vault-details">

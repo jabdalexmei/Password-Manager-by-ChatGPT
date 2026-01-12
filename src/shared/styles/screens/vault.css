@@ -455,9 +455,9 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  /* Reserve space for the actions button even when it isn't shown */
-  width: 32px;
-  flex: 0 0 32px;
+  gap: 8px;
+  min-width: 32px;
+  flex: 0 0 auto;
 }
 
 .datacards-header__spacer {
@@ -475,6 +475,47 @@
   inset: 0;
   background: transparent;
   z-index: 14;
+}
+
+.vault-sortmenu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 15;
+  min-width: 260px;
+  max-width: min(340px, calc(100vw - 32px));
+  max-height: min(340px, calc(100vh - 160px));
+  overflow-y: auto;
+}
+
+.vault-sortmenu-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 6px 0;
+}
+
+.vault-sortmenu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vault-sortmenu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-sortmenu-check {
+  flex: 0 0 auto;
+  color: var(--color-primary);
+}
+
+.vault-sortmenu-check-spacer {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
 }
 
 /* --------------------------------------------------------------------------
