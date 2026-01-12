@@ -1,69 +1,51 @@
---- a/src/features/Vault/components/Folders/Folders.tsx
-+++ b/src/features/Vault/components/Folders/Folders.tsx
-@@ -17,7 +17,7 @@ export type FolderListProps = {
-   onSelectCategory: (category: VaultCategory) => void;
-   onAddBankCard: () => void;
-   folders: Folder[];
-   counts: Counts;
--  categoryCounts: { dataCards: number; bankCards: number };
-+  categoryCounts?: { dataCards: number; bankCards: number };
-   selectedNav: SelectedNav;
-   selectedFolderId: string | null;
-   onSelectNav: (nav: SelectedNav) => void;
-   dialogState: FolderDialogState;
-   onDeleteFolder: (id: string) => void;
-   onRenameFolder: (id: string, name: string) => void | Promise<void>;
- };
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -844,8 +844,10 @@
+             const isFavorite = card.isFavorite;
+             const titleText = (card.title ?? '').trim();
+             const urlText = (card.url ?? '').trim();
++            const emailText = (card.email ?? '').trim();
+             const hasTitle = titleText.length > 0;
+             const hasUrl = urlText.length > 0;
++            const hasEmail = emailText.length > 0;
  
- export function Folders({
-   selectedCategory,
-   onSelectCategory,
-   onAddBankCard,
-   folders,
-   counts,
-   categoryCounts,
-   selectedNav,
-   selectedFolderId,
-   onSelectNav,
-   dialogState,
-   onDeleteFolder,
-   onRenameFolder,
- }: FolderListProps) {
-@@ -248,6 +248,9 @@ export function Folders({
+             const isUntitledPlaceholder = !hasTitle && !hasUrl;
+             const displayTitleText = isUntitledPlaceholder
+@@ -872,9 +874,18 @@
+                   )}
+                 </div>
  
-   return (
-     <div>
-       <div className="vault-sidebar-title">{t('category.title')}</div>
-       <ul className="vault-folder-list">
--        <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
--          <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
--            <span className="folder-name">{t('category.dataCards')}</span>
--            <span className="folder-count">{categoryCounts.dataCards}</span>
--          </button>
--        </li>
-+        {categoryCounts && (
-+          <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
-+            <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
-+              <span className="folder-name">{t('category.dataCards')}</span>
-+              <span className="folder-count">{categoryCounts.dataCards}</span>
-+            </button>
-+          </li>
-+        )}
-         <li className={selectedCategory === 'bank_cards' ? 'active' : ''}>
-           <button
-             className="vault-folder"
-             type="button"
-             onClick={() => onSelectCategory('bank_cards')}
-             onContextMenu={(event) => {
-               event.preventDefault();
-               setCategoryMenu({ x: event.clientX, y: event.clientY });
-             }}
-           >
-             <span className="folder-name">{t('category.bankCards')}</span>
--            <span className="folder-count">{categoryCounts.bankCards}</span>
-+            <span className="folder-count">{categoryCounts?.bankCards ?? counts.all}</span>
-           </button>
-         </li>
-       </ul>
-       <div className="vault-sidebar-title">{t('nav.title')}</div>
-       <ul className="vault-folder-list">
+-                {showUrlMeta && (
+-                  <div className="datacard-meta">
+-                    <span>{urlText}</span>
++                {(showUrlMeta || hasEmail) && (
++                  <div className="datacard-meta-lines">
++                    {showUrlMeta && (
++                      <div className="datacard-meta">
++                        <span>{urlText}</span>
++                      </div>
++                    )}
++                    {hasEmail && (
++                      <div className="datacard-meta">
++                        <span>{emailText}</span>
++                      </div>
++                    )}
+                   </div>
+                 )}
+               </button>
+--- a/src/shared/styles/screens/vault.css
++++ b/src/shared/styles/screens/vault.css
+@@ -649,6 +649,13 @@
+   line-height: 16px;
+ }
+ 
++.datacard-meta-lines {
++  display: flex;
++  flex-direction: column;
++  align-items: flex-start;
++  gap: 2px;
++}
++
+ .vault-datacard.active .datacard-title {
+   color: var(--color-text);
+ }
