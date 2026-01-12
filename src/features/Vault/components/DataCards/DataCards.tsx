@@ -27,6 +27,11 @@ import {
   type DataCardPreviewField,
   MAX_DATA_CARD_PREVIEW_FIELDS,
 } from '../../lib/datacardPreviewFields';
+import {
+  loadCoreHiddenFields,
+  onCoreHiddenFieldsChanged,
+  type DataCardCoreField,
+} from '../../lib/datacardCoreHiddenFields';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
 
 const LazyPasswordGeneratorModal = React.lazy(async () => {
@@ -116,6 +121,7 @@ export function DataCards({
   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
   const shouldShowTrashActions = viewModel.isTrashMode && showTrashActions;
   const [previewFields, setPreviewFields] = useState<DataCardPreviewField[]>([]);
+  const [coreHiddenFields, setCoreHiddenFields] = useState<DataCardCoreField[]>([]);
   const [isCustomFieldModalOpen, setIsCustomFieldModalOpen] = useState(false);
   const [customFieldName, setCustomFieldName] = useState('');
   const [customFieldModalError, setCustomFieldModalError] = useState<string | null>(null);
@@ -160,6 +166,18 @@ export function DataCards({
   }, []);
 
   useEffect(() => onPreviewFieldsChanged(setPreviewFields), []);
+
+  useEffect(() => {
+    let isMounted = true;
+    loadCoreHiddenFields().then((fields) => {
+      if (isMounted) setCoreHiddenFields(fields);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => onCoreHiddenFieldsChanged(setCoreHiddenFields), []);
 
   const cards = useMemo(() => sortDataCardSummaries(rawCards, sortMode), [rawCards, sortMode]);
 
@@ -884,21 +902,19 @@ export function DataCards({
             const titleText = (card.title ?? '').trim();
             const urlText = (card.url ?? '').trim();
             const emailText = (card.email ?? '').trim();
-            const hasTitle = titleText.length > 0;
-            const hasUrl = urlText.length > 0;
-            const hasEmail = emailText.length > 0;
 
-            const isUntitledPlaceholder = !hasTitle && !hasUrl && !hasEmail;
-            const displayTitleText = isUntitledPlaceholder
-              ? t('label.untitled')
-              : hasTitle
-                ? titleText
-                : hasUrl
-                  ? urlText
-                  : emailText;
+            const isTitleVisible = !coreHiddenFields.includes('title');
+            const isUrlVisible = !coreHiddenFields.includes('url');
+            const isEmailVisible = !coreHiddenFields.includes('email');
 
-            const metaLine1 = hasTitle ? (hasUrl ? urlText : null) : hasUrl ? (hasEmail ? emailText : null) : null;
-            const metaLine2 = hasTitle && hasEmail ? emailText : null;
+            const coreValues: string[] = [];
+            if (isTitleVisible && titleText.length > 0) coreValues.push(titleText);
+            if (isUrlVisible && urlText.length > 0) coreValues.push(urlText);
+            if (isEmailVisible && emailText.length > 0) coreValues.push(emailText);
+
+            const isUntitledPlaceholder = coreValues.length === 0;
+            const displayTitleText = isUntitledPlaceholder ? t('label.untitled') : coreValues[0];
+            const metaCoreLines = coreValues.slice(1, 3);
 
             const getExtraLine = (field: DataCardPreviewField): string | null => {
               switch (field) {
@@ -933,9 +949,7 @@ export function DataCards({
               .filter((value): value is string => Boolean(value))
               .slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);
 
-            const metaLines = [metaLine1, metaLine2, ...extraLines].filter(
-              (line): line is string => Boolean(line)
-            );
+            const metaLines = [...metaCoreLines, ...extraLines];
 
             return (
               <button
