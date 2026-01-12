@@ -266,12 +266,6 @@ pub struct SetBankCardFavoriteInput {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct MoveBankCardInput {
-    pub id: String,
-    pub folder_id: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserSettings {
     pub auto_hide_secret_timeout_seconds: i64,
     #[serde(default = "default_auto_lock_enabled")]

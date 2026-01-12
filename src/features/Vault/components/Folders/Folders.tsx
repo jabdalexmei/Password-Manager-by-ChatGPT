@@ -20,7 +20,7 @@ export type FolderListProps = {
   onAddBankCard: () => void;
   folders: Folder[];
   counts: Counts;
-  categoryCounts: { dataCards: number; bankCards: number };
+  categoryCounts?: { dataCards: number; bankCards: number };
   selectedNav: SelectedNav;
   selectedFolderId: string | null;
   onSelectNav: (nav: SelectedNav) => void;
@@ -258,12 +258,14 @@ export function Folders({
     <div>
       <div className="vault-sidebar-title">{t('category.title')}</div>
       <ul className="vault-folder-list">
-        <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
-          <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
-            <span className="folder-name">{t('category.dataCards')}</span>
-            <span className="folder-count">{categoryCounts.dataCards}</span>
-          </button>
-        </li>
+        {categoryCounts && (
+          <li className={selectedCategory === 'data_cards' ? 'active' : ''}>
+            <button className="vault-folder" type="button" onClick={() => onSelectCategory('data_cards')}>
+              <span className="folder-name">{t('category.dataCards')}</span>
+              <span className="folder-count">{categoryCounts.dataCards}</span>
+            </button>
+          </li>
+        )}
         <li className={selectedCategory === 'bank_cards' ? 'active' : ''}>
           <button
             className="vault-folder"
@@ -275,7 +277,7 @@ export function Folders({
             }}
           >
             <span className="folder-name">{t('category.bankCards')}</span>
-            <span className="folder-count">{categoryCounts.bankCards}</span>
+            <span className="folder-count">{categoryCounts?.bankCards ?? counts.all}</span>
           </button>
         </li>
       </ul>

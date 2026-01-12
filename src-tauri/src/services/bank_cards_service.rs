@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::app_state::AppState;
 use crate::data::sqlite::repo_impl;
-use crate::error::{ErrorCodeString, Result};
+use crate::error::Result;
 use crate::services::security_service;
 use crate::services::settings_service::get_settings;
 use crate::types::{

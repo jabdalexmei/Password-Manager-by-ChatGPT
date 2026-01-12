@@ -976,34 +976,6 @@ pub fn purge_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Res
     })
 }
 
-pub fn list_bank_card_ids_in_folder(
-    state: &Arc<AppState>,
-    profile_id: &str,
-    folder_id: &str,
-    include_deleted: bool,
-) -> Result<Vec<String>> {
-    with_connection(state, profile_id, |conn| {
-        let clause = if include_deleted {
-            String::new()
-        } else {
-            " AND deleted_at IS NULL".to_string()
-        };
-        let mut stmt = conn
-            .prepare(&format!(
-                "SELECT id FROM bank_cards WHERE folder_id = ?1{clause}",
-            ))
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-        let rows = stmt
-            .query_map(params![folder_id], |row| row.get("id"))
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-            .collect::<rusqlite::Result<Vec<String>>>()
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-        Ok(rows)
-    })
-}
-
 pub fn soft_delete_bank_cards_in_folder(
     state: &Arc<AppState>,
     profile_id: &str,
