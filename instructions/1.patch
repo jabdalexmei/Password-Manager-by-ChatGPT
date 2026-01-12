@@ -1,0 +1,803 @@
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+index 652dd58..15e27d7 100644
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -475,6 +475,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+                * renders the global Empty state above.
+                */}
+               <DataCards
++                profileId={profileId}
+                 viewModel={dataCardsViewModel}
+                 sectionTitle={tFolders('category.dataCards')}
+                 clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+@@ -485,6 +486,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+               />
+ 
+               <BankCards
++                profileId={profileId}
+                 viewModel={bankCardsViewModel}
+                 sectionTitle={tFolders('category.bankCards')}
+                 folders={vault.folders}
+@@ -495,6 +497,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+             </>
+           ) : selectedCategory === 'data_cards' ? (
+             <DataCards
++              profileId={profileId}
+               viewModel={dataCardsViewModel}
+               sectionTitle={tFolders('category.dataCards')}
+               clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
+@@ -502,6 +505,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+             />
+           ) : (
+             <BankCards
++              profileId={profileId}
+               viewModel={bankCardsViewModel}
+               sectionTitle={tFolders('category.bankCards')}
+               folders={vault.folders}
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+index 4bbad0d..0e4b8f1 100644
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -1,11 +1,20 @@
+-import React, { useEffect, useRef, useState } from 'react';
++import React, { useEffect, useMemo, useRef, useState } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import { BankCardFieldErrors, BankCardFormState, BankCardsViewModel } from './useBankCardsViewModel';
+ import type { Folder } from '../../types/ui';
+ import { FolderSelect } from '../shared/FolderSelect';
++import { VaultSortControl } from '../shared/VaultSortControl';
++import {
++  getVaultSortMode,
++  setVaultSortMode,
++  sortBankCardSummaries,
++  type VaultSortMode,
++} from '../../lib/vaultSort';
+ import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
+ 
+ export type BankCardsProps = {
++  profileId: string;
+   viewModel: BankCardsViewModel;
+   sectionTitle: string;
+   folders: Folder[];
+@@ -33,6 +42,7 @@ export type BankCardsProps = {
+ };
+ 
+ export function BankCards({
++  profileId,
+   viewModel,
+   sectionTitle,
+   folders,
+@@ -57,7 +67,7 @@ export function BankCards({
+   const { t } = useTranslation('BankCards');
+ 
+   const {
+-    cards,
++    cards: rawCards,
+     selectedCardId,
+     isTrashMode,
+     isCreateOpen,
+@@ -73,6 +83,21 @@ export function BankCards({
+     toggleFavorite,
+   } = viewModel;
+ 
++  const [sortMode, setSortMode] = useState<VaultSortMode>(() => getVaultSortMode('bank_cards', profileId));
++
++  useEffect(() => {
++    setSortMode(getVaultSortMode('bank_cards', profileId));
++  }, [profileId]);
++
++  useEffect(() => {
++    setVaultSortMode('bank_cards', profileId, sortMode);
++  }, [profileId, sortMode]);
++
++  const cards = useMemo(() => sortBankCardSummaries(rawCards, sortMode), [rawCards, sortMode]);
++
+   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
+   const shouldShowTrashActions = showTrashActions && isTrashMode;
+ 
+@@ -120,62 +145,60 @@ export function BankCards({
+       <div className="datacards-header">
+         <div className="vault-section-header">{sectionTitle}</div>
+ 
+-        <div className="datacards-header__right">
+-          {shouldShowTrashActions ? (
+-            <div className="datacards-actions">
+-              <button
+-                className="btn btn-icon vault-actionbar"
+-                type="button"
+-                aria-label={t('trash.actions')}
+-                aria-haspopup="menu"
+-                aria-expanded={isTrashActionsOpen}
+-                onClick={() => setIsTrashActionsOpen((prev) => !prev)}
+-              >
+-                <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
+-              </button>
+-
+-              {isTrashActionsOpen && (
+-                <>
+-                  <div
+-                    className="vault-actionmenu-backdrop"
+-                    onClick={() => setIsTrashActionsOpen(false)}
+-                  />
+-                  <div className="vault-actionmenu-panel" role="menu">
+-                    <button
+-                      className="vault-actionmenu-item"
+-                      type="button"
+-                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+-                      onClick={async () => {
+-                        setIsTrashActionsOpen(false);
+-                        await viewModel.restoreAllTrash();
+-                      }}
+-                    >
+-                      {t('trash.restoreAll')}
+-                    </button>
+-                    <button
+-                      className="vault-actionmenu-item"
+-                      type="button"
+-                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+-                      onClick={async () => {
+-                        setIsTrashActionsOpen(false);
+-                        await viewModel.purgeAllTrash();
+-                      }}
+-                    >
+-                      {t('trash.deleteAll')}
+-                    </button>
+-                  </div>
+-                </>
+-              )}
+-            </div>
+-          ) : (
+-            <div className="datacards-actions" />
+-          )}
+-        </div>
++        <div className="datacards-header__right">
++          <VaultSortControl value={sortMode} onChange={setSortMode} disabled={cards.length < 2} />
++
++          {shouldShowTrashActions ? (
++            <div className="datacards-actions">
++              <button
++                className="btn btn-icon vault-actionbar"
++                type="button"
++                aria-label={t('trash.actions')}
++                aria-haspopup="menu"
++                aria-expanded={isTrashActionsOpen}
++                onClick={() => setIsTrashActionsOpen((prev) => !prev)}
++              >
++                <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
++              </button>
++
++              {isTrashActionsOpen && (
++                <>
++                  <div
++                    className="vault-actionmenu-backdrop"
++                    onClick={() => setIsTrashActionsOpen(false)}
++                  />
++                  <div className="vault-actionmenu-panel" role="menu">
++                    <button
++                      className="vault-actionmenu-item"
++                      type="button"
++                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                      onClick={async () => {
++                        setIsTrashActionsOpen(false);
++                        await viewModel.restoreAllTrash();
++                      }}
++                    >
++                      {t('trash.restoreAll')}
++                    </button>
++                    <button
++                      className="vault-actionmenu-item"
++                      type="button"
++                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                      onClick={async () => {
++                        setIsTrashActionsOpen(false);
++                        await viewModel.purgeAllTrash();
++                      }}
++                    >
++                      {t('trash.deleteAll')}
++                    </button>
++                  </div>
++                </>
++              )}
++            </div>
++          ) : null}
++        </div>
+       </div>
+ 
+       {isTrashMode ? (
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 8b17733..c0bc35a 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -1,4 +1,4 @@
+-import React, { useCallback, useEffect, useRef, useState } from 'react';
++import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import {
+   IconAttachment,
+@@ -16,6 +16,13 @@ import {
+ } from '@/shared/icons/lucide/icons';
+ import { useToaster } from '../../../../shared/components/Toaster';
+ import { generatePassword, PasswordGeneratorOptions } from '../../utils/passwordGenerator';
+ import { generateTotpCode } from '../../utils/totp';
+ import { DataCardFormState, DataCardsViewModel } from './useDataCards';
+ import { FolderSelect } from '../shared/FolderSelect';
++import { VaultSortControl } from '../shared/VaultSortControl';
++import {
++  getVaultSortMode,
++  setVaultSortMode,
++  sortDataCardSummaries,
++  type VaultSortMode,
++} from '../../lib/vaultSort';
+ import { VaultDetails } from './VaultDetails';
+ import { PasswordHistoryDialog } from '../modals/PasswordHistoryDialog';
+ import { ConfirmDialog } from '../modals/ConfirmDialog';
+@@ -65,6 +72,7 @@ const LazySeedPhraseModal = React.lazy(async () => {
+   return { default: m.SeedPhraseModal };
+ });
+ 
+ export type DataCardsProps = {
++  profileId: string;
+   viewModel: DataCardsViewModel;
+   sectionTitle: string;
+   clipboardAutoClearEnabled?: boolean;
+@@ -94,6 +102,7 @@ export type DataCardsProps = {
+ };
+ 
+ export function DataCards({
++  profileId,
+   viewModel,
+   sectionTitle,
+   clipboardAutoClearEnabled,
+@@ -121,7 +130,7 @@ export function DataCards({
+   const { t: tCommon } = useTranslation('Common');
+   const { show: showToast } = useToaster();
+ 
+   const {
+-    cards,
++    cards: rawCards,
+     selectedCardId,
+     showPassword,
+     isCreateOpen,
+@@ -137,6 +146,21 @@ export function DataCards({
+     togglePasswordVisibility,
+   } = viewModel;
+ 
++  const [sortMode, setSortMode] = useState<VaultSortMode>(() => getVaultSortMode('data_cards', profileId));
++
++  useEffect(() => {
++    setSortMode(getVaultSortMode('data_cards', profileId));
++  }, [profileId]);
++
++  useEffect(() => {
++    setVaultSortMode('data_cards', profileId, sortMode);
++  }, [profileId, sortMode]);
++
++  const cards = useMemo(() => sortDataCardSummaries(rawCards, sortMode), [rawCards, sortMode]);
++
+   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
+   const shouldShowTrashActions = showTrashActions && viewModel.isTrashMode;
+ 
+@@ -775,62 +799,60 @@ export function DataCards({
+       <div className="datacards-header">
+         <div className="vault-section-header">{sectionTitle}</div>
+ 
+-        <div className="datacards-header__right">
+-          {shouldShowTrashActions ? (
+-            <div className="datacards-actions">
+-              <button
+-                className="btn btn-icon vault-actionbar"
+-                type="button"
+-                aria-label={t('trash.actions')}
+-                aria-haspopup="menu"
+-                aria-expanded={isTrashActionsOpen}
+-                onClick={() => setIsTrashActionsOpen((prev) => !prev)}
+-              >
+-                <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
+-              </button>
+-
+-              {isTrashActionsOpen && (
+-                <>
+-                  <div
+-                    className="vault-actionmenu-backdrop"
+-                    onClick={() => setIsTrashActionsOpen(false)}
+-                  />
+-                  <div className="vault-actionmenu-panel" role="menu">
+-                    <button
+-                      className="vault-actionmenu-item"
+-                      type="button"
+-                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+-                      onClick={async () => {
+-                        setIsTrashActionsOpen(false);
+-                        await viewModel.restoreAllTrash();
+-                      }}
+-                    >
+-                      {t('trash.restoreAll')}
+-                    </button>
+-                    <button
+-                      className="vault-actionmenu-item"
+-                      type="button"
+-                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
+-                      onClick={async () => {
+-                        setIsTrashActionsOpen(false);
+-                        await viewModel.purgeAllTrash();
+-                      }}
+-                    >
+-                      {t('trash.deleteAll')}
+-                    </button>
+-                  </div>
+-                </>
+-              )}
+-            </div>
+-          ) : (
+-            <div className="datacards-actions" />
+-          )}
+-        </div>
++        <div className="datacards-header__right">
++          <VaultSortControl value={sortMode} onChange={setSortMode} disabled={cards.length < 2} />
++
++          {shouldShowTrashActions ? (
++            <div className="datacards-actions">
++              <button
++                className="btn btn-icon vault-actionbar"
++                type="button"
++                aria-label={t('trash.actions')}
++                aria-haspopup="menu"
++                aria-expanded={isTrashActionsOpen}
++                onClick={() => setIsTrashActionsOpen((prev) => !prev)}
++              >
++                <IconMoreHorizontal className="vault-actionbar-icon" size={18} />
++              </button>
++
++              {isTrashActionsOpen && (
++                <>
++                  <div
++                    className="vault-actionmenu-backdrop"
++                    onClick={() => setIsTrashActionsOpen(false)}
++                  />
++                  <div className="vault-actionmenu-panel" role="menu">
++                    <button
++                      className="vault-actionmenu-item"
++                      type="button"
++                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                      onClick={async () => {
++                        setIsTrashActionsOpen(false);
++                        await viewModel.restoreAllTrash();
++                      }}
++                    >
++                      {t('trash.restoreAll')}
++                    </button>
++                    <button
++                      className="vault-actionmenu-item"
++                      type="button"
++                      disabled={viewModel.isTrashBulkSubmitting || viewModel.cards.length === 0}
++                      onClick={async () => {
++                        setIsTrashActionsOpen(false);
++                        await viewModel.purgeAllTrash();
++                      }}
++                    >
++                      {t('trash.deleteAll')}
++                    </button>
++                  </div>
++                </>
++              )}
++            </div>
++          ) : null}
++        </div>
+       </div>
+ 
+       <div className={`vault-columns ${fillHeight ? 'vault-columns--fill' : ''}`}>
+diff --git a/src/features/Vault/components/shared/VaultSortControl.tsx b/src/features/Vault/components/shared/VaultSortControl.tsx
+new file mode 100644
+index 0000000..f3a8b70
+--- /dev/null
++++ b/src/features/Vault/components/shared/VaultSortControl.tsx
+@@ -0,0 +1,84 @@
++import React, { useMemo, useState } from 'react';
++import { useTranslation } from '@/shared/lib/i18n';
++import { IconCheck, IconSort } from '@/shared/icons/lucide/icons';
++import type { VaultSortMode } from '../../lib/vaultSort';
++
++type SortOption = {
++  value: VaultSortMode;
++  label: string;
++};
++
++export type VaultSortControlProps = {
++  value: VaultSortMode;
++  onChange: (mode: VaultSortMode) => void;
++  disabled?: boolean;
++};
++
++export function VaultSortControl({ value, onChange, disabled }: VaultSortControlProps) {
++  const { t } = useTranslation('Common');
++  const [open, setOpen] = useState(false);
++
++  const options = useMemo<SortOption[]>(
++    () => [
++      { value: 'name_asc', label: t('sort.nameAsc') },
++      { value: 'name_desc', label: t('sort.nameDesc') },
++      // Divider
++      { value: 'updated_desc', label: t('sort.updatedDesc') },
++      { value: 'updated_asc', label: t('sort.updatedAsc') },
++      // Divider
++      { value: 'created_desc', label: t('sort.createdDesc') },
++      { value: 'created_asc', label: t('sort.createdAsc') },
++    ],
++    [t]
++  );
++
++  const isDividerIndex = (idx: number) => idx === 2 || idx === 4;
++
++  return (
++    <div className="datacards-actions vault-sortmenu">
++      <button
++        className="btn btn-icon vault-actionbar"
++        type="button"
++        aria-label={t('sort.aria.open')}
++        aria-haspopup="menu"
++        aria-expanded={open}
++        disabled={disabled}
++        onClick={() => setOpen((prev) => !prev)}
++      >
++        <IconSort className="vault-actionbar-icon" size={18} />
++      </button>
++
++      {open && (
++        <>
++          <div className="vault-actionmenu-backdrop" onClick={() => setOpen(false)} />
++          <div className="vault-sortmenu-panel vault-context-menu" role="menu">
++            {options.map((opt, idx) => (
++              <React.Fragment key={opt.value}>
++                {isDividerIndex(idx) && <div className="vault-sortmenu-divider" role="separator" />}
++                <button
++                  className="vault-context-item vault-sortmenu-item"
++                  type="button"
++                  onClick={() => {
++                    onChange(opt.value);
++                    setOpen(false);
++                  }}
++                >
++                  <span className="vault-sortmenu-label">{opt.label}</span>
++                  {value === opt.value ? (
++                    <IconCheck className="vault-sortmenu-check" size={16} />
++                  ) : (
++                    <span className="vault-sortmenu-check-spacer" aria-hidden="true" />
++                  )}
++                </button>
++              </React.Fragment>
++            ))}
++          </div>
++        </>
++      )}
++    </div>
++  );
++}
+diff --git a/src/features/Vault/lib/vaultSort.ts b/src/features/Vault/lib/vaultSort.ts
+new file mode 100644
+index 0000000..1f6d5c7
+--- /dev/null
++++ b/src/features/Vault/lib/vaultSort.ts
+@@ -0,0 +1,218 @@
++import { BankCardSummary, DataCardSummary } from '../types/ui';
++
++export type VaultSortMode =
++  | 'name_asc'
++  | 'name_desc'
++  | 'updated_desc'
++  | 'updated_asc'
++  | 'created_desc'
++  | 'created_asc';
++
++export type VaultSortKind = 'data_cards' | 'bank_cards';
++
++export const DEFAULT_VAULT_SORT_MODE: VaultSortMode = 'name_asc';
++
++const STORAGE_KEY_PREFIX = 'vault.sort';
++
++const collator = new Intl.Collator(undefined, {
++  sensitivity: 'base',
++  numeric: true,
++});
++
++function safeTrim(value: string | null | undefined): string {
++  return (value ?? '').trim();
++}
++
++function dataCardNameKey(card: Pick<DataCardSummary, 'title' | 'url' | 'email'>): string {
++  const title = safeTrim(card.title);
++  if (title.length > 0) return title;
++
++  const url = safeTrim(card.url);
++  if (url.length > 0) return url;
++
++  const email = safeTrim(card.email);
++  if (email.length > 0) return email;
++
++  return '';
++}
++
++function bankCardNameKey(card: Pick<BankCardSummary, 'title'>): string {
++  return safeTrim(card.title);
++}
++
++function getStorageKey(kind: VaultSortKind, profileId: string): string {
++  return `${STORAGE_KEY_PREFIX}.${kind}.${profileId}`;
++}
++
++export function getVaultSortMode(kind: VaultSortKind, profileId: string): VaultSortMode {
++  if (typeof window === 'undefined') return DEFAULT_VAULT_SORT_MODE;
++
++  try {
++    const raw = window.localStorage.getItem(getStorageKey(kind, profileId));
++    if (!raw) return DEFAULT_VAULT_SORT_MODE;
++
++    const value = raw as VaultSortMode;
++    switch (value) {
++      case 'name_asc':
++      case 'name_desc':
++      case 'updated_desc':
++      case 'updated_asc':
++      case 'created_desc':
++      case 'created_asc':
++        return value;
++      default:
++        return DEFAULT_VAULT_SORT_MODE;
++    }
++  } catch {
++    return DEFAULT_VAULT_SORT_MODE;
++  }
++}
++
++export function setVaultSortMode(kind: VaultSortKind, profileId: string, mode: VaultSortMode): void {
++  if (typeof window === 'undefined') return;
++
++  try {
++    window.localStorage.setItem(getStorageKey(kind, profileId), mode);
++  } catch {
++    // Best effort.
++  }
++}
++
++function parseDateMs(value: string | null | undefined): number {
++  const ms = Date.parse(value ?? '');
++  return Number.isFinite(ms) ? ms : 0;
++}
++
++function compareNameAsc(aKey: string, bKey: string): number {
++  const byKey = collator.compare(aKey, bKey);
++  if (byKey !== 0) return byKey;
++  // Stable-ish: keep empty keys after non-empty ones when equal under collator.
++  if (aKey.length === 0 && bKey.length > 0) return 1;
++  if (aKey.length > 0 && bKey.length === 0) return -1;
++  return 0;
++}
++
++function compareNameDesc(aKey: string, bKey: string): number {
++  return -compareNameAsc(aKey, bKey);
++}
++
++export function sortDataCardSummaries(list: DataCardSummary[], mode: VaultSortMode): DataCardSummary[] {
++  const withIndex = list.map((card, index) => ({ card, index }));
++
++  const sorted = [...withIndex].sort((a, b) => {
++    const aCard = a.card;
++    const bCard = b.card;
++
++    const aName = dataCardNameKey(aCard);
++    const bName = dataCardNameKey(bCard);
++
++    const aUpdated = parseDateMs(aCard.updatedAt);
++    const bUpdated = parseDateMs(bCard.updatedAt);
++
++    const aCreated = parseDateMs(aCard.createdAt);
++    const bCreated = parseDateMs(bCard.createdAt);
++
++    let cmp = 0;
++
++    switch (mode) {
++      case 'name_asc':
++        cmp = compareNameAsc(aName, bName);
++        break;
++      case 'name_desc':
++        cmp = compareNameDesc(aName, bName);
++        break;
++      case 'updated_desc':
++        cmp = bUpdated - aUpdated;
++        break;
++      case 'updated_asc':
++        cmp = aUpdated - bUpdated;
++        break;
++      case 'created_desc':
++        cmp = bCreated - aCreated;
++        break;
++      case 'created_asc':
++        cmp = aCreated - bCreated;
++        break;
++      default:
++        cmp = compareNameAsc(aName, bName);
++        break;
++    }
++
++    if (cmp !== 0) return cmp;
++
++    // Tie-breakers: name, updated desc, created desc, id, original index.
++    const byName = compareNameAsc(aName, bName);
++    if (byName !== 0) return byName;
++
++    const byUpdated = bUpdated - aUpdated;
++    if (byUpdated !== 0) return byUpdated;
++
++    const byCreated = bCreated - aCreated;
++    if (byCreated !== 0) return byCreated;
++
++    const byId = collator.compare(aCard.id, bCard.id);
++    if (byId !== 0) return byId;
++
++    return a.index - b.index;
++  });
++
++  return sorted.map((x) => x.card);
++}
++
++export function sortBankCardSummaries(list: BankCardSummary[], mode: VaultSortMode): BankCardSummary[] {
++  const withIndex = list.map((card, index) => ({ card, index }));
++
++  const sorted = [...withIndex].sort((a, b) => {
++    const aCard = a.card;
++    const bCard = b.card;
++
++    const aName = bankCardNameKey(aCard);
++    const bName = bankCardNameKey(bCard);
++
++    const aUpdated = parseDateMs(aCard.updatedAt);
++    const bUpdated = parseDateMs(bCard.updatedAt);
++
++    const aCreated = parseDateMs(aCard.createdAt);
++    const bCreated = parseDateMs(bCard.createdAt);
++
++    let cmp = 0;
++
++    switch (mode) {
++      case 'name_asc':
++        cmp = compareNameAsc(aName, bName);
++        break;
++      case 'name_desc':
++        cmp = compareNameDesc(aName, bName);
++        break;
++      case 'updated_desc':
++        cmp = bUpdated - aUpdated;
++        break;
++      case 'updated_asc':
++        cmp = aUpdated - bUpdated;
++        break;
++      case 'created_desc':
++        cmp = bCreated - aCreated;
++        break;
++      case 'created_asc':
++        cmp = aCreated - bCreated;
++        break;
++      default:
++        cmp = compareNameAsc(aName, bName);
++        break;
++    }
++
++    if (cmp !== 0) return cmp;
++
++    const byName = compareNameAsc(aName, bName);
++    if (byName !== 0) return byName;
++
++    const byUpdated = bUpdated - aUpdated;
++    if (byUpdated !== 0) return byUpdated;
++
++    const byCreated = bCreated - aCreated;
++    if (byCreated !== 0) return byCreated;
++
++    const byId = collator.compare(aCard.id, bCard.id);
++    if (byId !== 0) return byId;
++
++    return a.index - b.index;
++  });
++
++  return sorted.map((x) => x.card);
++}
+diff --git a/src/i18n/locales/en/Common.json b/src/i18n/locales/en/Common.json
+index 0f7f8e3..f4659e0 100644
+--- a/src/i18n/locales/en/Common.json
++++ b/src/i18n/locales/en/Common.json
+@@ -1,6 +1,13 @@
+ {
+   "action.cancel": "Cancel",
+   "action.close": "Close",
+   "action.ok": "OK",
++  "sort.aria.open": "Sort",
++  "sort.nameAsc": "Name (A to Z)",
++  "sort.nameDesc": "Name (Z to A)",
++  "sort.updatedDesc": "Modified time (new to old)",
++  "sort.updatedAsc": "Modified time (old to new)",
++  "sort.createdDesc": "Created time (new to old)",
++  "sort.createdAsc": "Created time (old to new)",
+   "label.empty": "Empty",
+   "aria.dismissToast": "Dismiss",
+   "error.backupProfileMismatch": "This backup belongs to a different profile.",
+diff --git a/src/shared/icons/lucide/icons.ts b/src/shared/icons/lucide/icons.ts
+index 3e66f01..6c9c2c2 100644
+--- a/src/shared/icons/lucide/icons.ts
++++ b/src/shared/icons/lucide/icons.ts
+@@ -17,6 +17,9 @@ export {
+ 
+   SlidersHorizontal as IconFilter,
+   MoreHorizontal as IconMoreHorizontal,
++
++  ArrowDownUp as IconSort,
++  Check as IconCheck,
+ 
+   RefreshCw as IconRegenerate,
+   
+diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
+index 8b0da6f..c1aa6b9 100644
+--- a/src/shared/styles/screens/vault.css
++++ b/src/shared/styles/screens/vault.css
+@@ -9223,13 +9223,13 @@
+ .datacards-header__right {
+   display: flex;
+   align-items: center;
+   justify-content: flex-end;
+-  /* Reserve space for the actions button even when it isn't shown */
+-  width: 32px;
+-  flex: 0 0 32px;
++  gap: 8px;
++  min-width: 32px;
++  flex: 0 0 auto;
+ }
+ 
+ .datacards-actions {
+   position: relative;
+ }
+@@ -9492,6 +9492,45 @@
+ .vault-actionmenu-backdrop {
+   position: fixed;
+   inset: 0;
+   background: transparent;
+   z-index: 50;
+ }
++
++.vault-sortmenu-panel {
++  position: absolute;
++  top: calc(100% + 8px);
++  right: 0;
++  z-index: 55;
++  min-width: 260px;
++  max-width: min(340px, calc(100vw - 32px));
++  max-height: min(340px, calc(100vh - 160px));
++  overflow-y: auto;
++}
++
++.vault-sortmenu-divider {
++  height: 1px;
++  background: var(--color-border);
++  margin: 6px 0;
++}
++
++.vault-sortmenu-item {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 12px;
++}
++
++.vault-sortmenu-label {
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.vault-sortmenu-check {
++  flex: 0 0 auto;
++  color: var(--color-primary);
++}
++
++.vault-sortmenu-check-spacer {
++  width: 16px;
++  height: 16px;
++  flex: 0 0 16px;
++}
