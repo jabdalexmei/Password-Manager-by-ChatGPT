@@ -488,6 +488,12 @@
   overflow-y: auto;
 }
 
+/* Lighter hover for the sort menu items (keep other context menus unchanged). */
+.vault-sortmenu-panel .vault-context-item:hover,
+.vault-sortmenu-panel .vault-context-item:focus-visible {
+  background: var(--color-surface-2);
+}
+
 .vault-sortmenu-divider {
   height: 1px;
   background: var(--color-border);

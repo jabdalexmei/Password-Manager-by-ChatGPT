@@ -84,16 +84,25 @@ function parseDateMs(value: string | null | undefined): number {
 }
 
 function compareNameAsc(aKey: string, bKey: string): number {
-  const byKey = collator.compare(aKey, bKey);
-  if (byKey !== 0) return byKey;
-  // Stable-ish: keep empty keys after non-empty ones when equal under collator.
-  if (aKey.length === 0 && bKey.length > 0) return 1;
-  if (aKey.length > 0 && bKey.length === 0) return -1;
-  return 0;
+  const aEmpty = aKey.length === 0;
+  const bEmpty = bKey.length === 0;
+
+  // Always keep "empty" names at the end.
+  if (aEmpty && !bEmpty) return 1;
+  if (!aEmpty && bEmpty) return -1;
+
+  return collator.compare(aKey, bKey);
 }
 
 function compareNameDesc(aKey: string, bKey: string): number {
-  return -compareNameAsc(aKey, bKey);
+  const aEmpty = aKey.length === 0;
+  const bEmpty = bKey.length === 0;
+
+  // Always keep "empty" names at the end.
+  if (aEmpty && !bEmpty) return 1;
+  if (!aEmpty && bEmpty) return -1;
+
+  return collator.compare(bKey, aKey);
 }
 
 export function sortDataCardSummaries(list: DataCardSummary[], mode: VaultSortMode): DataCardSummary[] {
