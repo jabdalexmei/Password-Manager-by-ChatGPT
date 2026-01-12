@@ -11,7 +11,7 @@
   },
   "app": {
     "security": {
-      "freezePrototype": true,
+      "freezePrototype": false,
       "csp": {
         "default-src": "'self' customprotocol: asset:",
         "base-uri": "'none'",

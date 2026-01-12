@@ -65,7 +65,8 @@ export const Add2FAModal: React.FC<Props> = ({
         return;
       }
       setTextValue(norm.uri);
-    } catch {
+    } catch (err) {
+      console.error('[2FA] Failed to decode QR image', err);
       setError(t('twoFactor.error.QR_DECODE_FAILED'));
     } finally {
       setBusy(false);
