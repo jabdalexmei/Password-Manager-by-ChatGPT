@@ -42,34 +42,8 @@ html:not(.scrollbars-active) * { scrollbar-color: var(--scrollbar-thumb-hidden) 
   height: var(--scrollbar-size);
 }
 
-/* Remove scrollbar arrow buttons / caps (WebView2 can be stubborn) */
-*::-webkit-scrollbar-button,
-*::-webkit-scrollbar-button:single-button,
-*::-webkit-scrollbar-button:start:decrement,
-*::-webkit-scrollbar-button:end:increment,
-*::-webkit-scrollbar-button:vertical:decrement,
-*::-webkit-scrollbar-button:vertical:increment,
-*::-webkit-scrollbar-button:horizontal:decrement,
-*::-webkit-scrollbar-button:horizontal:increment {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  background: transparent !important;
-}
-
 *::-webkit-scrollbar-track {
   background: transparent;
-  /* Prevent top/bottom "caps" that look like arrows in rounded containers */
-  margin-block: 6px;
-  border-radius: 999px;
-}
-
-/* Extra: kill track pieces (top/bottom ends) that can appear while scrolling */
-*::-webkit-scrollbar-track-piece,
-*::-webkit-scrollbar-track-piece:start,
-*::-webkit-scrollbar-track-piece:end {
-  background: transparent !important;
-  border: none !important;
 }
 
 *::-webkit-scrollbar-thumb {
