@@ -21,6 +21,12 @@ import {
   type DataCardPreviewField,
   MAX_DATA_CARD_PREVIEW_FIELDS,
 } from '../../lib/datacardPreviewFields';
+import {
+  loadCoreHiddenFields,
+  onCoreHiddenFieldsChanged,
+  saveCoreHiddenFields,
+  type DataCardCoreField,
+} from '../../lib/datacardCoreHiddenFields';
 
 const LazyAttachmentPreviewModal = React.lazy(() =>
   import('../modals/AttachmentPreviewModal').then((m) => ({ default: m.default })),
@@ -88,10 +94,16 @@ export function Details({
   const [revealedCustomFields, setRevealedCustomFields] = useState<Record<string, boolean>>({});
   const [totpNow, setTotpNow] = useState(() => Date.now());
   const [previewFields, setPreviewFields] = useState<DataCardPreviewField[]>([]);
+  const [coreHiddenFields, setCoreHiddenFields] = useState<DataCardCoreField[]>([]);
   const [previewMenu, setPreviewMenu] = useState<{
     x: number;
     y: number;
     field: DataCardPreviewField;
+  } | null>(null);
+  const [coreMenu, setCoreMenu] = useState<{
+    x: number;
+    y: number;
+    field: DataCardCoreField;
   } | null>(null);
 
   const totpData = useMemo(() => {
@@ -133,15 +145,29 @@ export function Details({
   useEffect(() => onPreviewFieldsChanged(setPreviewFields), []);
 
   useEffect(() => {
-    if (!previewMenu) return;
+    let isMounted = true;
+    loadCoreHiddenFields().then((fields) => {
+      if (isMounted) setCoreHiddenFields(fields);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => onCoreHiddenFieldsChanged(setCoreHiddenFields), []);
+
+  useEffect(() => {
+    if (!previewMenu && !coreMenu) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setPreviewMenu(null);
+      if (e.key !== 'Escape') return;
+      setPreviewMenu(null);
+      setCoreMenu(null);
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [previewMenu]);
+  }, [previewMenu, coreMenu]);
 
   const toggleCustomFieldVisibility = (fieldId: string) => {
     setRevealedCustomFields((prev) => ({
@@ -153,7 +179,15 @@ export function Details({
   const openPreviewMenu = (field: DataCardPreviewField, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setCoreMenu(null);
     setPreviewMenu({ x: e.clientX, y: e.clientY, field });
+  };
+
+  const openCoreMenu = (field: DataCardCoreField, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPreviewMenu(null);
+    setCoreMenu({ x: e.clientX, y: e.clientY, field });
   };
 
   const isFieldInPreview = (field: DataCardPreviewField) => previewFields.includes(field);
@@ -170,6 +204,15 @@ export function Details({
     if (previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) return;
     await savePreviewFields([...previewFields, field]);
     setPreviewMenu(null);
+  };
+
+  const isCoreFieldHidden = (field: DataCardCoreField) => coreHiddenFields.includes(field);
+
+  const toggleCoreFieldHidden = async (field: DataCardCoreField) => {
+    const isHidden = isCoreFieldHidden(field);
+    const next = isHidden ? coreHiddenFields.filter((f) => f !== field) : [...coreHiddenFields, field];
+    await saveCoreHiddenFields(next);
+    setCoreMenu(null);
   };
 
   const informationTitle = (
@@ -311,7 +354,7 @@ export function Details({
       {hasTitle && (
         <div className="detail-field">
           <div className="detail-label">{t('label.title')}</div>
-          <div className="detail-value-box">
+          <div className="detail-value-box" onContextMenu={(e) => openCoreMenu('title', e)}>
             <div className="detail-value-text">{card.title}</div>
           </div>
         </div>
@@ -320,7 +363,7 @@ export function Details({
       {hasUrl && (
         <div className="detail-field">
           <div className="detail-label">{t('label.url')}</div>
-          <div className="detail-value-box">
+          <div className="detail-value-box" onContextMenu={(e) => openCoreMenu('url', e)}>
             <div className="detail-value-text">{card.url ?? ''}</div>
             <div className="detail-value-actions">
               <button
@@ -339,7 +382,7 @@ export function Details({
       {hasEmail && (
         <div className="detail-field">
           <div className="detail-label">{t('label.email')}</div>
-          <div className="detail-value-box">
+          <div className="detail-value-box" onContextMenu={(e) => openCoreMenu('email', e)}>
             <div className="detail-value-text">{card.email ?? ''}</div>
             <div className="detail-value-actions">
               <button
@@ -617,6 +660,30 @@ export function Details({
       </div>
       </div>
     </div>
+
+      {coreMenu && (
+        <>
+          <div className="vault-actionmenu-backdrop" onClick={() => setCoreMenu(null)} />
+          <div
+            className="vault-actionmenu-panel vault-contextmenu-panel"
+            role="menu"
+            style={
+              {
+                '--menu-x': `${coreMenu.x}px`,
+                '--menu-y': `${coreMenu.y}px`,
+              } as React.CSSProperties
+            }
+          >
+            <button
+              className="vault-actionmenu-item"
+              type="button"
+              onClick={() => toggleCoreFieldHidden(coreMenu.field)}
+            >
+              {isCoreFieldHidden(coreMenu.field) ? 'Show in list' : 'Hide in list'}
+            </button>
+          </div>
+        </>
+      )}
 
       {previewMenu && (
         <>

@@ -117,3 +117,11 @@ export function getDataCardPreviewFields(): Promise<string[]> {
 export function setDataCardPreviewFields(fields: string[]): Promise<boolean> {
   return invoke('set_datacard_preview_fields', { fields });
 }
+
+export function getDataCardCoreHiddenFields(): Promise<string[]> {
+  return invoke('get_datacard_core_hidden_fields');
+}
+
+export function setDataCardCoreHiddenFields(fields: string[]): Promise<boolean> {
+  return invoke('set_datacard_core_hidden_fields', { fields });
+}
