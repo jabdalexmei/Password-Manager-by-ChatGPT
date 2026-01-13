@@ -1,43 +1,95 @@
---- /mnt/data/useBankCards.orig.ts	2026-01-13 23:21:50.804280590 +0000
-+++ src/features/Vault/hooks/useBankCards.ts	2026-01-13 23:22:04.376834244 +0000
-@@ -208,7 +208,25 @@
-           });
-           setDeletedCards((prev) => prev.filter((c) => c.id !== id));
-         }
--      } catch (err) {
-+      } catch (err: any) {
-+        const code = err?.code ?? err?.error ?? 'UNKNOWN';
-+
-+        // This can happen when the UI tries to load a card that was deleted/purged
-+        // (e.g. stale selection). Treat it as a non-fatal state sync issue.
-+        if (code === 'BANK_CARD_NOT_FOUND') {
-+          setSelectedCardId((prev) => (prev === id ? null : prev));
-+          setCards((prev) => prev.filter((c) => c.id !== id));
-+          setDeletedCards((prev) => prev.filter((c) => c.id !== id));
-+          setCardDetailsById((prev) => {
-+            if (!prev[id]) return prev;
-+            const next = { ...prev };
-+            delete next[id];
-+            return next;
-+          });
-+          console.warn('[BankCards] BANK_CARD_NOT_FOUND while loading card', { id });
-+          return;
-+        }
-+
-         handleError(err);
-       }
-     },
-@@ -240,9 +258,10 @@
- 
-   const selectCard = useCallback(
-     (id: string | null) => {
--      setSelectedCardId(id);
--      if (id && !cardDetailsById[id]) {
--        loadCard(id);
-+      const normalized = id && id.trim().length > 0 ? id : null;
-+      setSelectedCardId(normalized);
-+      if (normalized && !cardDetailsById[normalized]) {
-+        loadCard(normalized);
-       }
-     },
-     [cardDetailsById, loadCard]
+Vault is corrupted or uses an unsupported format. Try restoring from a backup.
+
+Object
+code
+: 
+"DB_QUERY_FAILED"
+[[Prototype]]
+: 
+Object
+constructor
+: 
+ƒ Object()
+hasOwnProperty
+: 
+ƒ hasOwnProperty()
+isPrototypeOf
+: 
+ƒ isPrototypeOf()
+propertyIsEnumerable
+: 
+ƒ propertyIsEnumerable()
+toLocaleString
+: 
+ƒ toLocaleString()
+toString
+: 
+ƒ toString()
+valueOf
+: 
+ƒ valueOf()
+__defineGetter__
+: 
+ƒ __defineGetter__()
+__defineSetter__
+: 
+ƒ __defineSetter__()
+__lookupGetter__
+: 
+ƒ __lookupGetter__()
+__lookupSetter__
+: 
+ƒ __lookupSetter__()
+__proto__
+: 
+(...)
+get __proto__
+: 
+ƒ __proto__()
+set __proto__
+: 
+ƒ __proto__()
+(anonymous)	@	useBankCards.ts:149
+
+
+[2026-01-13][23:39:34][password_manager::data::sqlite::migrations][INFO] [DB][migrate] user_version=8, current=8
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::diagnostics][ERROR] [DB][list_bank_cards_summary.collect] rusqlite error: FromSqlConversionFailure(0, Text, Error("missing field `fields`", line: 1, column: 2))
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::diagnostics][ERROR] [DB][list_bank_cards_summary.collect] sql: SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL ORDER BY updated_at DESC, title ASC
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:34][password_manager::data::sqlite::diagnostics][ERROR] [DB][list_bank_cards_summary.collect] rusqlite error: FromSqlConversionFailure(0, Text, Error("missing field `fields`", line: 1, column: 2))
+[2026-01-13][23:39:34][password_manager::data::sqlite::diagnostics][ERROR] [DB][list_bank_cards_summary.collect] sql: SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL ORDER BY updated_at DESC, title ASC
+[2026-01-13][23:39:44][tao::platform_impl::platform::event_loop::runner][WARN] NewEvents emitted without explicit RedrawEventsCleared
+[2026-01-13][23:39:44][tao::platform_impl::platform::event_loop::runner][WARN] RedrawEventsCleared emitted without explicit MainEventsCleared
+[2026-01-13][23:39:57][password_manager::data::sqlite::migrations][INFO] [DB][migrate] user_version=8, current=8
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::diagnostics][ERROR] [DB][list_bank_cards_summary.collect] rusqlite error: FromSqlConversionFailure(0, Text, Error("missing field `fields`", line: 1, column: 2))
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::diagnostics][ERROR] [DB][list_bank_cards_summary.collect] rusqlite error: FromSqlConversionFailure(0, Text, Error("missing field `fields`", line: 1, column: 2))
+[2026-01-13][23:39:57][password_manager::data::sqlite::diagnostics][ERROR] [DB][list_bank_cards_summary.collect] sql: SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL ORDER BY updated_at DESC, title ASC
+[2026-01-13][23:39:57][password_manager::data::sqlite::pool][INFO] [DB][pool] profile_id=65518fea-ed4d-48ca-a294-1a7047249bf2 target=File("Q:\\Password-Manager\\APPS\\Password-Manager-by-ChatGPT\\src-tauri\\target\\debug\\Password Manager Vault\\Profiles\\65518fea-ed4d-48ca-a294-1a7047249bf2\\vault.db") key=65518fea-ed4d-48ca-a294-1a7047249bf2::file
+[2026-01-13][23:39:57][password_manager::data::sqlite::diagnostics][ERROR] [DB][list_bank_cards_summary.collect] sql: SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL ORDER BY updated_at DESC, title ASC
+
