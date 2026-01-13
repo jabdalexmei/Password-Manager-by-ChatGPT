@@ -208,7 +208,25 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
           });
           setDeletedCards((prev) => prev.filter((c) => c.id !== id));
         }
-      } catch (err) {
+      } catch (err: any) {
+        const code = err?.code ?? err?.error ?? 'UNKNOWN';
+
+        // This can happen when the UI tries to load a card that was deleted/purged
+        // (e.g. stale selection). Treat it as a non-fatal state sync issue.
+        if (code === 'BANK_CARD_NOT_FOUND') {
+          setSelectedCardId((prev) => (prev === id ? null : prev));
+          setCards((prev) => prev.filter((c) => c.id !== id));
+          setDeletedCards((prev) => prev.filter((c) => c.id !== id));
+          setCardDetailsById((prev) => {
+            if (!prev[id]) return prev;
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+          console.warn('[BankCards] BANK_CARD_NOT_FOUND while loading card', { id });
+          return;
+        }
+
         handleError(err);
       }
     },
@@ -240,9 +258,10 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
 
   const selectCard = useCallback(
     (id: string | null) => {
-      setSelectedCardId(id);
-      if (id && !cardDetailsById[id]) {
-        loadCard(id);
+      const normalized = id && id.trim().length > 0 ? id : null;
+      setSelectedCardId(normalized);
+      if (normalized && !cardDetailsById[normalized]) {
+        loadCard(normalized);
       }
     },
     [cardDetailsById, loadCard]
