@@ -65,5 +65,15 @@
   "seedPhrase.hide": "Hide seed phrase",
   "seedPhrase.wordsCount": "{{count}} words",
   "seedPhrase.gridAria": "Seed phrase words",
-  "seedPhrase.wordAria": "Seed phrase word {{index}}"
+  "seedPhrase.wordAria": "Seed phrase word {{index}}",
+
+  "coreMenu.showInList": "Show in list",
+  "coreMenu.hideInList": "Hide in list",
+
+  "previewMenu.showThis": "Show in preview",
+  "previewMenu.hideThis": "Hide in preview",
+  "previewMenu.maxThis": "Max {{count}} fields (this card)",
+  "previewMenu.showAll": "Show in preview all",
+  "previewMenu.hideAll": "Hide in preview all",
+  "previewMenu.maxAll": "Max {{count}} fields (all cards)"
 }
