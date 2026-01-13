@@ -1,7 +1,12 @@
+
+
+## Diff patch
+
+```diff
 *** a/src/features/Vault/hooks/useVault.ts
 --- b/src/features/Vault/hooks/useVault.ts
 ***************
-*** 271,298 ****
+*** 268,302 ****
    const createFolderAction = useCallback(
      async (name: string, parentId: string | null) => {
        try {
@@ -17,3 +22,117 @@
      },
      [handleError, sortCardsWithSettings]
    );
+ 
+   const renameFolderAction = useCallback(
+     async (id: string, name: string) => {
+       try {
+         await renameFolder({ id, name });
+         setFolders((prev) =>
+           [...prev.map((folder) => (folder.id === id ? { ...folder, name } : folder))].sort(sortFolders)
+         );
+-        setSelectedNav((prev) => {
+-          if (typeof prev === 'object' && prev.folderId === id) {
+-            return { folderId: id };
+-          }
+-          return prev;
+-        });
+       } catch (err) {
+         handleError(err);
+       }
+     },
+     [handleError]
+   );
+***************
+*** 386,416 ****
+   const createCardAction = useCallback(
+     async (input: CreateDataCardInput) => {
+       try {
+         const created = await createDataCard(mapCreateCardToBackend(input));
+         const mapped = mapCardFromBackend(created);
+         const summary = mapCardToSummary(mapped, dtf);
+ 
+         setCards((prev) => sortCardsWithSettings([summary, ...prev]));
+         setCardDetailsById((prev) => ({ ...prev, [mapped.id]: mapped }));
+-        setSelectedNav((prev) => (prev === 'deleted' ? 'all' : prev));
+-        setSelectedCardId(mapped.id);
++        // No implicit navigation/selection. User decides what to select.
+         return mapped;
+       } catch (err) {
+         handleError(err);
+         return null;
+       }
+     },
+     [dtf, handleError, sortCardsWithSettings]
+   );
+***************
+*** 464,510 ****
+   const restoreCardAction = useCallback(
+     async (id: string) => {
+       try {
+         await restoreDataCard(id);
+ 
+-        const restored = deletedCards.find((card) => card.id === id) ?? null;
+-        const deletedAfterRestore = deletedCards.filter((card) => card.id !== id);
++        const restored = deletedCards.find((card) => card.id === id) ?? null;
+ 
+         setDeletedCards((prev) => prev.filter((card) => card.id !== id));
+         setCards((prev) => {
+           if (!restored) return prev;
+           const updated = { ...restored, deletedAt: null };
+           return sortCardsWithSettings([...prev.filter((card) => card.id !== id), updated]);
+         });
+ 
+-        // Keep user in the current navigation.
+-        // If they are in "deleted", the restored card disappears from that list,
+-        // so select the next deleted card (or clear selection).
+-        if (selectedNav === 'deleted') {
+-          setSelectedCardId(deletedAfterRestore[0]?.id ?? null);
+-          return;
+-        }
+-
+-        // If not in "deleted", keep behavior: select restored card and load details.
+-        setSelectedCardId(id);
+-        await loadCard(id);
++        // No implicit selection changes:
++        // - If the restored card was selected, clear selection (it disappears from "deleted").
++        // - Otherwise keep current selection as-is.
++        setSelectedCardId((prev) => (prev === id ? null : prev));
+       } catch (err) {
+         handleError(err);
+       }
+     },
+-    [deletedCards, handleError, loadCard, selectedNav, sortCardsWithSettings]
++    [deletedCards, handleError, sortCardsWithSettings]
+   );
+```
+
+```diff
+*** a/src/features/Vault/hooks/useBankCards.ts
+--- b/src/features/Vault/hooks/useBankCards.ts
+***************
+*** 210,244 ****
+   const createCardAction = useCallback(
+     async (input: CreateBankCardInput) => {
+       try {
+         const effectiveFolderId = input.folderId !== undefined ? input.folderId : selectedFolderId;
+         const created = await createBankCard(
+           mapCreateBankCardToBackend({ ...input, folderId: effectiveFolderId ?? null })
+         );
+         const mapped = mapBankCardFromBackend(created);
+         const summary = mapBankCardToSummary(mapped, dtf);
+ 
+         setCards((prev) => sortCardsWithSettings([summary, ...prev]));
+         setCardDetailsById((prev) => ({ ...prev, [mapped.id]: mapped }));
+-        setSelectedNav((prev) => (prev === 'deleted' ? 'all' : prev));
+-        setSelectedCardId(mapped.id);
++        // No implicit navigation/selection. User decides what to select.
+         return mapped;
+       } catch (err) {
+         handleError(err);
+         return null;
+       }
+     },
+     [dtf, handleError, selectedFolderId, sortCardsWithSettings]
+   );
+```
+
