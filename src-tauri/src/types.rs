@@ -246,8 +246,11 @@ pub struct BankCardItem {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
+#[serde(default)]
 pub struct BankCardPreviewFields {
+    #[serde(default)]
     pub fields: Vec<String>,
+    #[serde(default)]
     pub card_number_mode: Option<String>,
 }
 
