@@ -13,6 +13,7 @@ type Props = {
 const FILTER_ORDER: Array<{ key: keyof VaultFilters; labelKey: string }> = [
   { key: 'totp', labelKey: 'filters.2fa' },
   { key: 'seedPhrase', labelKey: 'filters.seedPhrase' },
+  { key: 'recoveryEmail', labelKey: 'filters.recoveryEmail' },
   { key: 'phone', labelKey: 'filters.phone' },
   { key: 'notes', labelKey: 'filters.notes' },
   { key: 'attachments', labelKey: 'filters.attachments' },

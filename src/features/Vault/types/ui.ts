@@ -64,6 +64,7 @@ export type DataCardSummary = DataCard & {
   metaLine: string;
   hasTotp: boolean;
   hasSeedPhrase: boolean;
+  hasRecoveryEmail: boolean;
   hasPhone: boolean;
   hasNotes: boolean;
   hasAttachments: boolean;

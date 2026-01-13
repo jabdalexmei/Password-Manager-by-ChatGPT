@@ -43,6 +43,7 @@ export type SelectedNav = 'all' | 'favorites' | 'archive' | 'deleted' | { folder
 export type VaultFilters = {
   totp: boolean;
   seedPhrase: boolean;
+  recoveryEmail: boolean;
   phone: boolean;
   notes: boolean;
   attachments: boolean;
@@ -68,6 +69,7 @@ export function useVault(profileId: string, onLocked: () => void) {
   const [filters, setFilters] = useState<VaultFilters>({
     totp: false,
     seedPhrase: false,
+    recoveryEmail: false,
     phone: false,
     notes: false,
     attachments: false,
@@ -88,7 +90,14 @@ export function useVault(profileId: string, onLocked: () => void) {
     setSelectedNav('all');
     setSelectedCardId(null);
     setTrashLoaded(false);
-    setFilters({ totp: false, seedPhrase: false, phone: false, notes: false, attachments: false });
+    setFilters({
+      totp: false,
+      seedPhrase: false,
+      recoveryEmail: false,
+      phone: false,
+      notes: false,
+      attachments: false,
+    });
   }, [profileId]);
 
   const isTrashMode = selectedNav === 'deleted';
@@ -659,6 +668,7 @@ export function useVault(profileId: string, onLocked: () => void) {
       pool = pool.filter((card) => {
         if (filters.totp && !card.hasTotp) return false;
         if (filters.seedPhrase && !card.hasSeedPhrase) return false;
+        if (filters.recoveryEmail && !card.hasRecoveryEmail) return false;
         if (filters.phone && !card.hasPhone) return false;
         if (filters.notes && !card.hasNotes) return false;
         if (filters.attachments && !card.hasAttachments) return false;
