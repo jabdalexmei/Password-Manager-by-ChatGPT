@@ -61,6 +61,7 @@ export function mapCardFromBackend(card: BackendDataCard): DataCard {
       value: field.value,
       type: field.type,
     })),
+    previewFields: card.preview_fields ?? [],
   };
 }
 
@@ -92,6 +93,7 @@ export function mapCardSummaryFromBackend(
     seedPhrase: null,
     seedPhraseWordCount: null,
     customFields: [],
+    previewFields: card.preview_fields ?? [],
     isFavorite: card.is_favorite,
     hasTotp: card.has_totp,
     hasSeedPhrase: card.has_seed_phrase,

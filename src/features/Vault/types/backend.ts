@@ -42,6 +42,7 @@ export type BackendDataCard = {
   seed_phrase: string | null;
   seed_phrase_word_count: number | null;
   custom_fields: BackendCustomField[];
+  preview_fields: string[];
 };
 
 export type BackendDataCardSummary = {
@@ -63,6 +64,7 @@ export type BackendDataCardSummary = {
   has_phone: boolean;
   has_note: boolean;
   has_attachments: boolean;
+  preview_fields: string[];
 };
 
 export type BackendCreateDataCardInput = {

@@ -27,6 +27,7 @@ import {
   saveCoreHiddenFields,
   type DataCardCoreField,
 } from '../../lib/datacardCoreHiddenFields';
+import { setDataCardPreviewFieldsForCard } from '../../api/vaultApi';
 
 const LazyAttachmentPreviewModal = React.lazy(() =>
   import('../modals/AttachmentPreviewModal').then((m) => ({ default: m.default })),
@@ -47,6 +48,7 @@ export type DetailsProps = {
   onPurge: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onAttachmentPresenceChange?: (cardId: string, hasAttachments: boolean) => void;
+  onReloadCard?: (id: string) => void;
   isTrashMode: boolean;
   clipboardAutoClearEnabled?: boolean;
   clipboardClearTimeoutSeconds?: number;
@@ -61,6 +63,7 @@ export function Details({
   onPurge,
   onToggleFavorite,
   onAttachmentPresenceChange,
+  onReloadCard,
   isTrashMode,
   clipboardAutoClearEnabled,
   clipboardClearTimeoutSeconds,
@@ -190,10 +193,52 @@ export function Details({
     setCoreMenu({ x: e.clientX, y: e.clientY, field });
   };
 
-  const isFieldInPreview = (field: DataCardPreviewField) => previewFields.includes(field);
+  const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
+    value === 'username' ||
+    value === 'mobile_phone' ||
+    value === 'note' ||
+    value === 'folder' ||
+    value === 'tags';
 
-  const togglePreviewField = async (field: DataCardPreviewField) => {
-    const isSelected = isFieldInPreview(field);
+  const perCardPreviewFields = useMemo<DataCardPreviewField[]>(() => {
+    const raw = Array.isArray(card?.previewFields) ? card!.previewFields : [];
+    const out: DataCardPreviewField[] = [];
+    for (const item of raw) {
+      if (!isAllowedPreviewField(item)) continue;
+      if (out.includes(item)) continue;
+      out.push(item);
+      if (out.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
+    }
+    return out;
+  }, [card?.previewFields]);
+
+  const isFieldInCardPreview = (field: DataCardPreviewField) => perCardPreviewFields.includes(field);
+
+  const togglePreviewFieldForCard = async (field: DataCardPreviewField) => {
+    if (!card) return;
+
+    const isSelected = isFieldInCardPreview(field);
+
+    if (isSelected) {
+      const next = perCardPreviewFields.filter((f) => f !== field);
+      await setDataCardPreviewFieldsForCard(card.id, next);
+      onReloadCard?.(card.id);
+      setPreviewMenu(null);
+      return;
+    }
+
+    if (perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) return;
+
+    const next = [...perCardPreviewFields, field];
+    await setDataCardPreviewFieldsForCard(card.id, next);
+    onReloadCard?.(card.id);
+    setPreviewMenu(null);
+  };
+
+  const isFieldInGlobalPreview = (field: DataCardPreviewField) => previewFields.includes(field);
+
+  const togglePreviewFieldForAllCards = async (field: DataCardPreviewField) => {
+    const isSelected = isFieldInGlobalPreview(field);
 
     if (isSelected) {
       await savePreviewFields(previewFields.filter((f) => f !== field));
@@ -701,16 +746,42 @@ export function Details({
             <button
               className="vault-actionmenu-item"
               type="button"
-              onClick={() => togglePreviewField(previewMenu.field)}
-              disabled={!isFieldInPreview(previewMenu.field) && previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS}
+              onClick={() => togglePreviewFieldForCard(previewMenu.field)}
+              disabled={
+                !isFieldInCardPreview(previewMenu.field) &&
+                perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS
+              }
             >
-              {isFieldInPreview(previewMenu.field) ? 'Hide in preview' : 'Show in preview'}
+              {isFieldInCardPreview(previewMenu.field) ? 'Hide in preview' : 'Show in preview'}
             </button>
-            {!isFieldInPreview(previewMenu.field) && previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
-              <button className="vault-actionmenu-item" type="button" disabled>
-                Max {MAX_DATA_CARD_PREVIEW_FIELDS} fields
-              </button>
-            )}
+
+            {!isFieldInCardPreview(previewMenu.field) &&
+              perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
+                <button className="vault-actionmenu-item" type="button" disabled>
+                  Max {MAX_DATA_CARD_PREVIEW_FIELDS} fields (this card)
+                </button>
+              )}
+
+            <div className="vault-actionmenu-separator" />
+
+            <button
+              className="vault-actionmenu-item"
+              type="button"
+              onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
+              disabled={
+                !isFieldInGlobalPreview(previewMenu.field) &&
+                previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS
+              }
+            >
+              {isFieldInGlobalPreview(previewMenu.field) ? 'Hide in preview all' : 'Show in preview all'}
+            </button>
+
+            {!isFieldInGlobalPreview(previewMenu.field) &&
+              previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
+                <button className="vault-actionmenu-item" type="button" disabled>
+                  Max {MAX_DATA_CARD_PREVIEW_FIELDS} fields (all cards)
+                </button>
+              )}
           </div>
         </>
       )}

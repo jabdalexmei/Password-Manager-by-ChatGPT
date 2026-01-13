@@ -944,7 +944,30 @@ export function DataCards({
               }
             };
 
-            const extraLines = previewFields
+            const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
+              value === 'username' ||
+              value === 'mobile_phone' ||
+              value === 'note' ||
+              value === 'folder' ||
+              value === 'tags';
+
+            const mergedPreviewFields: DataCardPreviewField[] = [];
+            const perCardRaw = Array.isArray((card as any).previewFields)
+              ? ((card as any).previewFields as string[])
+              : [];
+            for (const item of perCardRaw) {
+              if (!isAllowedPreviewField(item)) continue;
+              if (mergedPreviewFields.includes(item)) continue;
+              mergedPreviewFields.push(item);
+              if (mergedPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
+            }
+            for (const item of previewFields) {
+              if (mergedPreviewFields.includes(item)) continue;
+              mergedPreviewFields.push(item);
+              if (mergedPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
+            }
+
+            const extraLines = mergedPreviewFields
               .map((field) => getExtraLine(field))
               .filter((value): value is string => Boolean(value))
               .slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);

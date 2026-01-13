@@ -1,705 +1,130 @@
+Ок — фиксим оба пункта:
 
+1. убираем `(card as any)` в `DataCards.tsx`
+2. выносим строки меню в `i18n` (в `Details.json`) и используем `t()` с интерполяцией `{{count}}`. ([i18next][1])
 
-## 1) Backend (Rust / Tauri)
+Вот patch-style unified diff:
 
-### 1.1 `src-tauri/src/data/sqlite/schema.sql`
-
-В таблицу `datacards` добавь колонку `preview_fields_json` (лучше рядом с `custom_fields_json`):
-
-```sql
-CREATE TABLE IF NOT EXISTS datacards (
-  id           TEXT PRIMARY KEY,
-  folder_id    TEXT NULL,
-
-  title        TEXT,
-  url          TEXT NULL,
-  email        TEXT NULL,
-  username     TEXT NULL,
-  mobile_phone TEXT NULL,
-  note         TEXT NULL,
-
-  is_favorite  INTEGER NOT NULL DEFAULT 0,
-
-  tags_json           TEXT NOT NULL DEFAULT '[]',
-  password_value      TEXT NULL,
-  totp_uri            TEXT NULL,
-  seed_phrase_value   TEXT NULL,
-  seed_phrase_word_count   INTEGER NULL,
-  custom_fields_json  TEXT NOT NULL DEFAULT '[]',
-  preview_fields_json TEXT NOT NULL DEFAULT '[]',
-
-  created_at   TEXT NOT NULL,
-  updated_at   TEXT NOT NULL,
-  deleted_at   TEXT NULL
-);
+```diff
+*** a/src/features/Vault/components/DataCards/DataCards.tsx
+--- b/src/features/Vault/components/DataCards/DataCards.tsx
+***************
+*** 950,962 ****
+             const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
+               value === 'username' ||
+               value === 'mobile_phone' ||
+               value === 'note' ||
+               value === 'folder' ||
+               value === 'tags';
+ 
+             const mergedPreviewFields: DataCardPreviewField[] = [];
+-            const perCardRaw = Array.isArray((card as any).previewFields)
+-              ? ((card as any).previewFields as string[])
+-              : [];
++            const perCardRaw = Array.isArray(card.previewFields) ? card.previewFields : [];
+             for (const item of perCardRaw) {
+               if (!isAllowedPreviewField(item)) continue;
+               if (mergedPreviewFields.includes(item)) continue;
+               mergedPreviewFields.push(item);
+               if (mergedPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
+             }
+             for (const item of previewFields) {
+               if (mergedPreviewFields.includes(item)) continue;
+               mergedPreviewFields.push(item);
+               if (mergedPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
+             }
+*** a/src/features/Vault/components/Details/Details.tsx
+--- b/src/features/Vault/components/Details/Details.tsx
+***************
+*** 724,731 ****
+             >
+               <button
+                 className="vault-actionmenu-item"
+                 type="button"
+                 onClick={() => toggleCoreFieldHidden(coreMenu.field)}
+               >
+-              {isCoreFieldHidden(coreMenu.field) ? 'Show in list' : 'Hide in list'}
++              {isCoreFieldHidden(coreMenu.field) ? t('coreMenu.showInList') : t('coreMenu.hideInList')}
+               </button>
+             </div>
+           </>
+         )}
+***************
+*** 750,817 ****
+             >
+               <button
+                 className="vault-actionmenu-item"
+                 type="button"
+                 onClick={() => togglePreviewFieldForCard(previewMenu.field)}
+                 disabled={
+                   !isFieldInCardPreview(previewMenu.field) &&
+                   perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS
+                 }
+               >
+-              {isFieldInCardPreview(previewMenu.field) ? 'Hide in preview' : 'Show in preview'}
++              {isFieldInCardPreview(previewMenu.field) ? t('previewMenu.hideThis') : t('previewMenu.showThis')}
+               </button>
+ 
+               {!isFieldInCardPreview(previewMenu.field) &&
+                 perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
+                   <button className="vault-actionmenu-item" type="button" disabled>
+-                  Max {MAX_DATA_CARD_PREVIEW_FIELDS} fields (this card)
++                  {t('previewMenu.maxThis', { count: MAX_DATA_CARD_PREVIEW_FIELDS })}
+                   </button>
+                 )}
+ 
+               <div className="vault-actionmenu-separator" />
+ 
+               <button
+                 className="vault-actionmenu-item"
+                 type="button"
+                 onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
+                 disabled={
+                   !isFieldInGlobalPreview(previewMenu.field) &&
+                   previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS
+                 }
+               >
+-              {isFieldInGlobalPreview(previewMenu.field) ? 'Hide in preview all' : 'Show in preview all'}
++              {isFieldInGlobalPreview(previewMenu.field) ? t('previewMenu.hideAll') : t('previewMenu.showAll')}
+               </button>
+ 
+               {!isFieldInGlobalPreview(previewMenu.field) &&
+                 previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
+                   <button className="vault-actionmenu-item" type="button" disabled>
+-                  Max {MAX_DATA_CARD_PREVIEW_FIELDS} fields (all cards)
++                  {t('previewMenu.maxAll', { count: MAX_DATA_CARD_PREVIEW_FIELDS })}
+                   </button>
+                 )}
+             </div>
+           </>
+         )}
+*** a/src/i18n/locales/en/Details.json
+--- b/src/i18n/locales/en/Details.json
+***************
+*** 58,86 ****
+   "seedPhrase.title": "Seed phrase",
+   "seedPhrase.reveal": "Reveal seed phrase",
+   "seedPhrase.hide": "Hide seed phrase",
+   "seedPhrase.wordsCount": "{{count}} words",
+   "seedPhrase.gridAria": "Seed phrase words",
+-  "seedPhrase.wordAria": "Seed phrase word {{index}}"
++  "seedPhrase.wordAria": "Seed phrase word {{index}}",
++
++  "coreMenu.showInList": "Show in list",
++  "coreMenu.hideInList": "Hide in list",
++
++  "previewMenu.showThis": "Show in preview",
++  "previewMenu.hideThis": "Hide in preview",
++  "previewMenu.maxThis": "Max {{count}} fields (this card)",
++  "previewMenu.showAll": "Show in preview all",
++  "previewMenu.hideAll": "Hide in preview all",
++  "previewMenu.maxAll": "Max {{count}} fields (all cards)"
+ }
 ```
 
----
+После этого:
 
-### 1.2 `src-tauri/src/data/sqlite/migrations.rs`
+* `(card as any)` исчезает, типы используются нормально.
+* Все строки меню уходят в `i18n` и легко локализуются.
 
-Полностью замени содержимое файла на это (версия схемы станет 2 + аккуратный `ALTER TABLE`):
-
-```rust
-use rusqlite::Connection;
-use rusqlite::OptionalExtension;
-
-use crate::error::{ErrorCodeString, Result};
-
-const CURRENT_SCHEMA_VERSION: i32 = 2;
-
-fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
-    // Dev-mode friendly: create idempotently so existing schema DBs also get it.
-    conn.execute_batch(
-        r#"
-CREATE TABLE IF NOT EXISTS ui_preferences (
-  key        TEXT PRIMARY KEY,
-  value_json TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-"#,
-    )
-    .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-    Ok(())
-}
-
-fn has_table(conn: &Connection, name: &str) -> Result<bool> {
-    let sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1 LIMIT 1";
-    let exists: Option<i32> = conn
-        .query_row(sql, [name], |row| row.get(0))
-        .optional()
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-    Ok(exists.is_some())
-}
-
-fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
-    let sql = format!("PRAGMA table_info({table});");
-    let mut stmt = conn
-        .prepare(&sql)
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-    let mut rows = stmt
-        .query([])
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-    while let Some(row) = rows
-        .next()
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-    {
-        let name: String = row.get(1).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-        if name == column {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-fn migrate_1_to_2(conn: &Connection) -> Result<()> {
-    ensure_ui_preferences_table(conn)?;
-
-    // Add per-datacard preview fields storage.
-    if has_table(conn, "datacards")? && !has_column(conn, "datacards", "preview_fields_json")? {
-        conn.execute_batch(
-            r#"
-ALTER TABLE datacards
-ADD COLUMN preview_fields_json TEXT NOT NULL DEFAULT '[]';
-"#,
-        )
-        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-    }
-
-    conn.execute_batch("PRAGMA user_version = 2;")
-        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-
-    Ok(())
-}
-
-pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
-    conn.execute_batch("PRAGMA foreign_keys = ON;")
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-    let version: i32 = conn
-        .query_row("PRAGMA user_version;", [], |row| row.get(0))
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-    log::info!(
-        "[DB][migrate] user_version={version}, current={CURRENT_SCHEMA_VERSION}"
-    );
-
-    // Fresh DB: create schema and stamp it with the current version.
-    if version == 0 {
-        conn.execute_batch(include_str!("schema.sql"))
-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-        ensure_ui_preferences_table(conn)?;
-        conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
-            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-        return Ok(());
-    }
-
-    match version {
-        1 => migrate_1_to_2(conn),
-        CURRENT_SCHEMA_VERSION => {
-            ensure_ui_preferences_table(conn)?;
-            Ok(())
-        }
-        _ => {
-            log::warn!("[DB][migrate] unsupported schema version: {version}");
-            Err(ErrorCodeString::new("DB_MIGRATION_FAILED"))
-        }
-    }
-}
-
-pub fn validate_core_schema(conn: &Connection) -> Result<()> {
-    let required = ["folders", "datacards", "bank_cards"];
-    for table in required {
-        if !has_table(conn, table)? {
-            return Err(ErrorCodeString::new("DB_SCHEMA_MISSING"));
-        }
-    }
-    Ok(())
-}
-```
-
-`ALTER TABLE ... ADD COLUMN` для SQLite нормальная и штатная операция.
-
----
-
-### 1.3 `src-tauri/src/types.rs`
-
-В `DataCard` и `DataCardSummary` добавь поле:
-
-```rust
-pub preview_fields: Vec<String>,
-```
-
-Итоговые куски (вставь внутри структур):
-
-```rust
-pub struct DataCard {
-    pub id: String,
-    pub folder_id: Option<String>,
-
-    pub title: String,
-    pub url: Option<String>,
-    pub email: Option<String>,
-    pub username: Option<String>,
-    pub mobile_phone: Option<String>,
-    pub note: Option<String>,
-    pub is_favorite: bool,
-    pub tags: Vec<String>,
-
-    pub preview_fields: Vec<String>,
-
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
-
-    pub password: Option<String>,
-    pub totp_uri: Option<String>,
-    pub seed_phrase: Option<String>,
-    pub seed_phrase_word_count: Option<i32>,
-    pub custom_fields: Vec<CustomField>,
-}
-```
-
-```rust
-pub struct DataCardSummary {
-    pub id: String,
-    pub folder_id: Option<String>,
-    pub title: String,
-    pub url: Option<String>,
-    pub email: Option<String>,
-    pub username: Option<String>,
-    pub mobile_phone: Option<String>,
-    pub note: Option<String>,
-    pub tags: Vec<String>,
-
-    pub preview_fields: Vec<String>,
-
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
-    pub is_favorite: bool,
-    pub has_totp: bool,
-    pub has_seed_phrase: bool,
-    pub has_phone: bool,
-    pub has_note: bool,
-    pub has_attachments: bool,
-}
-```
-
----
-
-### 1.4 `src-tauri/src/data/sqlite/repo_impl.rs`
-
-#### A) В `map_datacard` добавь `preview_fields`:
-
-Найди `Ok(DataCard { ... })` и вставь строку:
-
-```rust
-preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
-```
-
-Пример (кусок целиком, чтобы не промахнуться):
-
-```rust
-        tags: deserialize_json(row.get::<_, String>("tags_json")?)?,
-        preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
-        created_at: row.get("created_at")?,
-```
-
-#### B) В `map_datacard_summary` добавь `preview_fields`:
-
-Внутри `Ok(DataCardSummary { ... })` добавь:
-
-```rust
-preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
-```
-
-#### C) В `list_datacards_summary` и `list_deleted_datacards_summary` добавь колонку в SELECT:
-
-В обоих запросах добавь строку рядом с `d.tags_json`:
-
-```sql
-d.preview_fields_json,
-```
-
-Например:
-
-```sql
-                d.tags_json,
-                d.preview_fields_json,
-                d.is_favorite,
-```
-
-#### D) В `create_datacard` INSERT добавь `preview_fields_json`
-
-Замени строку INSERT на такую:
-
-```rust
-conn.execute(
-    "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, NULL)",
-    params![
-        id,
-        input.folder_id,
-        input.title,
-        input.url,
-        input.email,
-        input.username,
-        input.mobile_phone,
-        input.note,
-        tags_json,
-        input.password,
-        input.totp_uri,
-        input.seed_phrase,
-        input.seed_phrase_word_count,
-        custom_fields_json,
-        "[]",
-        now,
-        now
-    ],
-)
-```
-
-#### E) Добавь новую функцию репозитория (в конец файла, рядом с другими update-функциями):
-
-```rust
-pub fn set_datacard_preview_fields_for_card(
-    state: &Arc<AppState>,
-    profile_id: &str,
-    id: &str,
-    preview_fields_json: &str,
-) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
-        let rows = conn
-            .execute(
-                "UPDATE datacards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3",
-                params![preview_fields_json, Utc::now().to_rfc3339(), id],
-            )
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-        if rows == 0 {
-            return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
-        }
-
-        Ok(true)
-    })
-}
-```
-
----
-
-### 1.5 `src-tauri/src/services/datacards_service.rs`
-
-Добавь в импорты `Vec<String>` уже есть, ок. Добавь новый метод (например после `update_datacard`):
-
-```rust
-fn is_allowed_preview_field(value: &str) -> bool {
-    matches!(value, "username" | "mobile_phone" | "note" | "folder" | "tags")
-}
-
-fn sanitize_preview_fields(fields: Vec<String>) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    for item in fields {
-        let trimmed = item.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if !is_allowed_preview_field(trimmed) {
-            continue;
-        }
-        if out.iter().any(|x| x == trimmed) {
-            continue;
-        }
-        out.push(trimmed.to_string());
-        if out.len() >= 3 {
-            break;
-        }
-    }
-    out
-}
-
-pub fn set_datacard_preview_fields_for_card(
-    id: String,
-    fields: Vec<String>,
-    state: &Arc<AppState>,
-) -> Result<bool> {
-    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-
-    let sanitized = sanitize_preview_fields(fields);
-    let json = serde_json::to_string(&sanitized)
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-    let updated = repo_impl::set_datacard_preview_fields_for_card(state, &profile_id, &id, &json)?;
-    security_service::request_persist_active_vault(state.clone());
-    Ok(updated)
-}
-```
-
----
-
-### 1.6 `src-tauri/src/commands/datacards.rs`
-
-Добавь новый tauri command (в конце файла):
-
-```rust
-#[tauri::command]
-pub async fn set_datacard_preview_fields_for_card(
-    id: String,
-    fields: Vec<String>,
-    state: State<'_, Arc<AppState>>,
-) -> Result<bool> {
-    let app = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        datacards_service::set_datacard_preview_fields_for_card(id, fields, &app)
-    })
-    .await
-    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-}
-```
-
----
-
-### 1.7 `src-tauri/src/main.rs`
-
-В список команд `invoke_handler` добавь:
-
-```rust
-set_datacard_preview_fields_for_card,
-```
-
-Прямо рядом с datacard командами.
-
----
-
-### 1.8 `src-tauri/permissions/app-default.toml`
-
-В `commands.allow` добавь строку:
-
-```toml
-  "set_datacard_preview_fields_for_card",
-```
-
----
-
-## 2) Frontend (React/TS)
-
-### 2.1 `src/features/Vault/types/backend.ts`
-
-Добавь поле в `BackendDataCard` и `BackendDataCardSummary`:
-
-```ts
-  preview_fields: string[];
-```
-
-Пример:
-
-```ts
-export type BackendDataCard = {
-  // ...
-  custom_fields: BackendCustomField[];
-  preview_fields: string[];
-};
-```
-
-```ts
-export type BackendDataCardSummary = {
-  // ...
-  has_attachments: boolean;
-  preview_fields: string[];
-};
-```
-
----
-
-### 2.2 `src/features/Vault/types/ui.ts`
-
-В `DataCard` добавь:
-
-```ts
-  previewFields: string[];
-```
-
-Например:
-
-```ts
-export type DataCard = {
-  // ...
-  customFields: CustomField[];
-  previewFields: string[];
-};
-```
-
----
-
-### 2.3 `src/features/Vault/types/mappers.ts`
-
-В `mapCardFromBackend` добавь:
-
-```ts
-previewFields: card.preview_fields ?? [],
-```
-
-В `mapCardSummaryFromBackend` добавь:
-
-```ts
-previewFields: card.preview_fields ?? [],
-```
-
-И убедись, что `mapCardToSummary` через `...card` это поле сохраняет (оно сохранится автоматически).
-
----
-
-### 2.4 `src/features/Vault/api/vaultApi.ts`
-
-Добавь функцию:
-
-```ts
-export async function setDataCardPreviewFieldsForCard(id: string, fields: string[]): Promise<boolean> {
-  return invoke('set_datacard_preview_fields_for_card', { id, fields });
-}
-```
-
----
-
-### 2.5 `src/features/Vault/Vault.tsx`
-
-В `<LazyDetails ... />` (для data cards) добавь проп:
-
-```tsx
-onReloadCard={vault.loadCard}
-```
-
----
-
-### 2.6 `src/features/Vault/components/Details/Details.tsx`
-
-#### A) Импорт
-
-Добавь импорт:
-
-```ts
-import { setDataCardPreviewFieldsForCard } from '../../api/vaultApi';
-```
-
-#### B) Props
-
-В `DetailsProps` добавь:
-
-```ts
-  onReloadCard?: (id: string) => void;
-```
-
-И в аргументах компонента прими `onReloadCard`.
-
-#### C) Локальная логика per-card
-
-Добавь рядом с `isFieldInPreview / togglePreviewField`:
-
-```ts
-  const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
-    value === 'username' ||
-    value === 'mobile_phone' ||
-    value === 'note' ||
-    value === 'folder' ||
-    value === 'tags';
-
-  const perCardPreviewFields = useMemo<DataCardPreviewField[]>(() => {
-    const raw = Array.isArray(card?.previewFields) ? card!.previewFields : [];
-    const out: DataCardPreviewField[] = [];
-    for (const item of raw) {
-      if (!isAllowedPreviewField(item)) continue;
-      if (out.includes(item)) continue;
-      out.push(item);
-      if (out.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
-    }
-    return out;
-  }, [card?.previewFields]);
-
-  const isFieldInCardPreview = (field: DataCardPreviewField) => perCardPreviewFields.includes(field);
-
-  const togglePreviewFieldForCard = async (field: DataCardPreviewField) => {
-    if (!card) return;
-
-    const isSelected = isFieldInCardPreview(field);
-
-    if (isSelected) {
-      const next = perCardPreviewFields.filter((f) => f !== field);
-      await setDataCardPreviewFieldsForCard(card.id, next);
-      onReloadCard?.(card.id);
-      setPreviewMenu(null);
-      return;
-    }
-
-    if (perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) return;
-
-    const next = [...perCardPreviewFields, field];
-    await setDataCardPreviewFieldsForCard(card.id, next);
-    onReloadCard?.(card.id);
-    setPreviewMenu(null);
-  };
-
-  // Глобальное (all cards) — это то, что уже было:
-  const isFieldInGlobalPreview = (field: DataCardPreviewField) => previewFields.includes(field);
-
-  const togglePreviewFieldForAllCards = async (field: DataCardPreviewField) => {
-    const isSelected = isFieldInGlobalPreview(field);
-
-    if (isSelected) {
-      await savePreviewFields(previewFields.filter((f) => f !== field));
-      setPreviewMenu(null);
-      return;
-    }
-
-    if (previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) return;
-    await savePreviewFields([...previewFields, field]);
-    setPreviewMenu(null);
-  };
-```
-
-И **удали/замени** старые `isFieldInPreview` + `togglePreviewField`, чтобы не было путаницы.
-
-#### D) Меню (контекстное)
-
-Заменить блок `{previewMenu && ( ... )}` на этот:
-
-```tsx
-      {previewMenu && (
-        <>
-          <div className="vault-actionmenu-backdrop" onClick={() => setPreviewMenu(null)} />
-          <div
-            className="vault-actionmenu-panel vault-contextmenu-panel"
-            role="menu"
-            style={
-              {
-                '--menu-x': `${previewMenu.x}px`,
-                '--menu-y': `${previewMenu.y}px`,
-              } as React.CSSProperties
-            }
-          >
-            <button
-              className="vault-actionmenu-item"
-              type="button"
-              onClick={() => togglePreviewFieldForCard(previewMenu.field)}
-              disabled={
-                !isFieldInCardPreview(previewMenu.field) &&
-                perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS
-              }
-            >
-              {isFieldInCardPreview(previewMenu.field) ? 'Hide in preview' : 'Show in preview'}
-            </button>
-
-            {!isFieldInCardPreview(previewMenu.field) &&
-              perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
-                <button className="vault-actionmenu-item" type="button" disabled>
-                  Max {MAX_DATA_CARD_PREVIEW_FIELDS} fields (this card)
-                </button>
-              )}
-
-            <div className="vault-actionmenu-separator" />
-
-            <button
-              className="vault-actionmenu-item"
-              type="button"
-              onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
-              disabled={
-                !isFieldInGlobalPreview(previewMenu.field) &&
-                previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS
-              }
-            >
-              {isFieldInGlobalPreview(previewMenu.field) ? 'Hide in preview all' : 'Show in preview all'}
-            </button>
-
-            {!isFieldInGlobalPreview(previewMenu.field) &&
-              previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
-                <button className="vault-actionmenu-item" type="button" disabled>
-                  Max {MAX_DATA_CARD_PREVIEW_FIELDS} fields (all cards)
-                </button>
-              )}
-          </div>
-        </>
-      )}
-```
-
----
-
-### 2.7 `src/features/Vault/components/DataCards/DataCards.tsx`
-
-Тут нужно, чтобы **пер-карточка имела приоритет**, а глобальные добавлялись только если осталось место.
-
-Найди:
-
-```ts
-const extraLines = previewFields ...
-```
-
-И замени на:
-
-```ts
-            const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
-              value === 'username' ||
-              value === 'mobile_phone' ||
-              value === 'note' ||
-              value === 'folder' ||
-              value === 'tags';
-
-            const mergedPreviewFields: DataCardPreviewField[] = [];
-            const perCardRaw = Array.isArray((card as any).previewFields) ? ((card as any).previewFields as string[]) : [];
-            for (const item of perCardRaw) {
-              if (!isAllowedPreviewField(item)) continue;
-              if (mergedPreviewFields.includes(item)) continue;
-              mergedPreviewFields.push(item);
-              if (mergedPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
-            }
-            for (const item of previewFields) {
-              if (mergedPreviewFields.includes(item)) continue;
-              mergedPreviewFields.push(item);
-              if (mergedPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
-            }
-
-            const extraLines = mergedPreviewFields
-              .map((field) => getExtraLine(field))
-              .filter((value): value is string => Boolean(value))
-              .slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);
-```
-
+[1]: https://www.i18next.com/translation-function/interpolation?utm_source=chatgpt.com "Interpolation"

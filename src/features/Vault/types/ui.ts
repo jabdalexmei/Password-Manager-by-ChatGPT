@@ -35,6 +35,7 @@ export type DataCard = {
   seedPhrase: string | null;
   seedPhraseWordCount: number | null;
   customFields: CustomField[];
+  previewFields: string[];
 };
 
 export type PasswordHistoryEntry = {

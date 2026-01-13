@@ -98,6 +98,7 @@ pub struct DataCard {
     pub note: Option<String>,
     pub is_favorite: bool,
     pub tags: Vec<String>,
+    pub preview_fields: Vec<String>,
 
     pub created_at: String,
     pub updated_at: String,
@@ -129,6 +130,7 @@ pub struct DataCardSummary {
     pub mobile_phone: Option<String>,
     pub note: Option<String>,
     pub tags: Vec<String>,
+    pub preview_fields: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,

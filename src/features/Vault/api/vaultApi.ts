@@ -131,6 +131,10 @@ export async function purgeAllDeletedDataCards(): Promise<boolean> {
   return invoke('purge_all_deleted_datacards');
 }
 
+export async function setDataCardPreviewFieldsForCard(id: string, fields: string[]): Promise<boolean> {
+  return invoke('set_datacard_preview_fields_for_card', { id, fields });
+}
+
 export async function getSettings(): Promise<BackendUserSettings> {
   return invoke('get_settings');
 }
