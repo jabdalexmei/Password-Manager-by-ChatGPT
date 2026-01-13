@@ -121,6 +121,7 @@ export function mapCardToSummary(card: DataCard, formatter: Intl.DateTimeFormat)
     metaLine: metaFromCard(card, ''),
     hasTotp: (card.totpUri ?? null) !== null,
     hasSeedPhrase: (card.seedPhrase ?? '').trim().length > 0,
+    hasRecoveryEmail: (card.recoveryEmail ?? '').trim().length > 0,
     hasPhone: (card.mobilePhone ?? '').trim().length > 0,
     hasNotes: (card.note ?? '').trim().length > 0,
     // attachments are not present in DataCard payload; caller should preserve/override

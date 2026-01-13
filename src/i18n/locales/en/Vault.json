@@ -12,6 +12,7 @@
   "filters.title": "Filters",
   "filters.2fa": "2FA",
   "filters.seedPhrase": "Seed phrase",
+  "filters.recoveryEmail": "Recovery email",
   "filters.phone": "Phone",
   "filters.notes": "Notes",
   "filters.attachments": "Attachments",
