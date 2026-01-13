@@ -172,7 +172,7 @@ export function BankCards({
 
             <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-number-input`}>
-                {t('label.number')}
+                {t('label.cardNumber')}
               </label>
               <input
                 id={`${dialogId}-number-input`}
@@ -182,7 +182,7 @@ export function BankCards({
                 pattern="[0-9]*"
                 value={form.number}
                 onChange={(e) => onFieldChange('number', e.target.value)}
-                placeholder={t('label.numberPlaceholder')}
+                placeholder={t('label.cardNumberPlaceholder')}
               />
             </div>
 

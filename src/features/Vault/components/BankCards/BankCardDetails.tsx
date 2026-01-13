@@ -197,7 +197,7 @@ export function BankCardDetails({
 
           {hasNumber && (
             <div className="detail-field">
-              <div className="detail-label">{t('label.number')}</div>
+              <div className="detail-label">{t('label.cardNumber')}</div>
               <div className="detail-value-box">
                 <div className="detail-value-text">{numberDisplay}</div>
                 <div className="detail-value-actions">
