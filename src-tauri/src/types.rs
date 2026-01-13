@@ -219,6 +219,12 @@ pub struct SetDataCardArchivedInput {
     pub is_archived: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetBankCardArchivedInput {
+    pub id: String,
+    pub is_archived: bool,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct BankCardItem {
     pub id: String,
@@ -233,6 +239,7 @@ pub struct BankCardItem {
     pub is_favorite: bool,
     pub created_at: String,
     pub updated_at: String,
+    pub archived_at: Option<String>,
     pub deleted_at: Option<String>,
 }
 
@@ -247,6 +254,7 @@ pub struct BankCardSummary {
     pub is_favorite: bool,
     pub created_at: String,
     pub updated_at: String,
+    pub archived_at: Option<String>,
     pub deleted_at: Option<String>,
 }
 

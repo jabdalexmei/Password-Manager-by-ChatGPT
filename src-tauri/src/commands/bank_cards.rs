@@ -6,8 +6,8 @@ use crate::app_state::AppState;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::bank_cards_service;
 use crate::types::{
-    BankCardItem, BankCardSummary, CreateBankCardInput, SetBankCardFavoriteInput,
-    UpdateBankCardInput,
+    BankCardItem, BankCardSummary, CreateBankCardInput, SetBankCardArchivedInput,
+    SetBankCardFavoriteInput, UpdateBankCardInput,
 };
 
 #[tauri::command]
@@ -70,6 +70,19 @@ pub async fn set_bank_card_favorite(
     let app = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         bank_cards_service::set_bank_card_favorite(input, &app)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
+pub async fn set_bankcard_archived(
+    input: SetBankCardArchivedInput,
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        bank_cards_service::set_bankcard_archived(input, &app)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?

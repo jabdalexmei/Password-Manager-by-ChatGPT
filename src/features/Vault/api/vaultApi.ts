@@ -71,6 +71,10 @@ export async function setBankCardFavorite(input: { id: string; is_favorite: bool
   return invoke('set_bank_card_favorite', { input });
 }
 
+export async function setBankCardArchived(input: { id: string; is_archived: boolean }): Promise<boolean> {
+  return invoke('set_bankcard_archived', { input });
+}
+
 export async function deleteBankCard(id: string): Promise<boolean> {
   return invoke('delete_bank_card', { id });
 }
