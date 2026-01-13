@@ -106,6 +106,8 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
       vault.selectCard(null);
       setActiveDetailsKind('bank');
     },
+    onToggleFavorite: bankCards.toggleFavorite,
+    onToggleArchive: bankCards.toggleArchive,
     onCreateCard: bankCards.createCard,
     onUpdateCard: bankCards.updateCard,
     onDeleteCard: bankCards.deleteCard,

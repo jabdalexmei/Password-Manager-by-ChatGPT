@@ -69,6 +69,7 @@ export function BankCards({
 
   const cards = useMemo(() => sortBankCardSummaries(rawCards, sortMode), [rawCards, sortMode]);
   const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
+  const [cardMenu, setCardMenu] = useState<null | { id: string; x: number; y: number }>(null);
   const shouldShowTrashActions = isTrashMode && showTrashActions;
   const createTitleRef = useRef<HTMLInputElement | null>(null);
   const editTitleRef = useRef<HTMLInputElement | null>(null);
@@ -276,6 +277,96 @@ export function BankCards({
 
   return (
     <div className={`vault-panel-wrapper ${fillHeight ? 'vault-panel-wrapper--fill' : ''}`.trim()}>
+      {cardMenu && !viewModel.isTrashMode && (
+        <>
+          <div
+            className="vault-actionmenu-backdrop"
+            onClick={() => setCardMenu(null)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setCardMenu(null);
+            }}
+          />
+          <div
+            className="vault-actionmenu-panel vault-contextmenu-panel"
+            role="menu"
+            style={
+              {
+                '--menu-x': `${cardMenu.x}px`,
+                '--menu-y': `${cardMenu.y}px`,
+              } as React.CSSProperties
+            }
+          >
+            {(() => {
+              const target = cards.find((card) => card.id === cardMenu.id) ?? null;
+              const isArchived = Boolean(target?.archivedAt);
+              const isFavorite = Boolean(target?.isFavorite);
+
+              return (
+                <>
+                  <button
+                    className="vault-actionmenu-item"
+                    type="button"
+                    onClick={async () => {
+                      const id = cardMenu.id;
+                      setCardMenu(null);
+                      try {
+                        const backend = await import('../../api/vaultApi').then((module) =>
+                          module.getBankCard(id)
+                        );
+                        const mapped = await import('../../types/mappers').then((module) =>
+                          module.mapBankCardFromBackend(backend)
+                        );
+                        viewModel.openEditModal(mapped);
+                      } catch (err) {
+                        console.error(err);
+                      }
+                    }}
+                  >
+                    {t('action.edit')}
+                  </button>
+
+                  <button
+                    className="vault-actionmenu-item"
+                    type="button"
+                    onClick={async () => {
+                      const id = cardMenu.id;
+                      setCardMenu(null);
+                      await viewModel.toggleFavorite(id);
+                    }}
+                  >
+                    {isFavorite ? t('action.unmarkFavorite') : t('action.markFavorite')}
+                  </button>
+
+                  <button
+                    className="vault-actionmenu-item"
+                    type="button"
+                    onClick={async () => {
+                      const id = cardMenu.id;
+                      setCardMenu(null);
+                      await viewModel.toggleArchive(id);
+                    }}
+                  >
+                    {isArchived ? t('action.unarchive') : t('action.archive')}
+                  </button>
+
+                  <button
+                    className="vault-actionmenu-item vault-actionmenu-danger"
+                    type="button"
+                    onClick={async () => {
+                      const id = cardMenu.id;
+                      setCardMenu(null);
+                      await viewModel.deleteCard(id);
+                    }}
+                  >
+                    {t('action.delete')}
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </>
+      )}
       <div className="datacards-header">
         <div className="vault-section-header">{sectionTitle}</div>
 
@@ -352,6 +443,11 @@ export function BankCards({
                 className={`vault-datacard ${isActive ? 'active' : ''}`}
                 type="button"
                 onClick={() => viewModel.selectCard(card.id)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  viewModel.selectCard(card.id);
+                  setCardMenu({ id: card.id, x: event.clientX, y: event.clientY });
+                }}
               >
                 <div className="datacard-top">
                   <div className="datacard-title">{title}</div>

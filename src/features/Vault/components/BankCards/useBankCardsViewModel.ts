@@ -22,6 +22,8 @@ type UseBankCardsParams = {
   selectedCardId: string | null;
   isTrashMode: boolean;
   onSelectCard: (id: string | null) => void;
+  onToggleFavorite: (id: string) => Promise<void> | void;
+  onToggleArchive: (id: string) => Promise<void> | void;
   onCreateCard: (input: CreateBankCardInput) => Promise<BankCardItem | void | null>;
   onUpdateCard: (input: UpdateBankCardInput) => Promise<void>;
   onDeleteCard: (id: string) => Promise<void> | void;
@@ -36,6 +38,8 @@ export type BankCardsViewModel = {
   selectedCardId: string | null;
   isTrashMode: boolean;
   selectCard: (id: string) => void;
+  toggleFavorite: (id: string) => Promise<void> | void;
+  toggleArchive: (id: string) => Promise<void> | void;
   deleteCard: (id: string) => void;
   restoreCard: (id: string) => void;
   purgeCard: (id: string) => void;
@@ -122,6 +126,8 @@ export function useBankCardsViewModel({
   selectedCardId,
   isTrashMode,
   onSelectCard,
+  onToggleFavorite,
+  onToggleArchive,
   onCreateCard,
   onUpdateCard,
   onDeleteCard,
@@ -304,6 +310,20 @@ export function useBankCardsViewModel({
     [onSelectCard, selectedCardId]
   );
 
+  const toggleFavorite = useCallback(
+    async (id: string) => {
+      await onToggleFavorite(id);
+    },
+    [onToggleFavorite]
+  );
+
+  const toggleArchive = useCallback(
+    async (id: string) => {
+      await onToggleArchive(id);
+    },
+    [onToggleArchive]
+  );
+
   const deleteCard = useCallback(
     (id: string) => {
       if (isTrashMode) return;
@@ -359,6 +379,8 @@ export function useBankCardsViewModel({
     selectedCardId,
     isTrashMode,
     selectCard,
+    toggleFavorite,
+    toggleArchive,
     deleteCard,
     restoreCard,
     purgeCard,
