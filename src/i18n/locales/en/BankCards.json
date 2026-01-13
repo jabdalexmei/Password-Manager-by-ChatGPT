@@ -28,6 +28,8 @@
   "action.edit": "Edit",
   "action.markFavorite": "Mark favorite",
   "action.unmarkFavorite": "Unmark favorite",
+  "action.archive": "Archive",
+  "action.unarchive": "Unarchive",
   "action.create": "Create",
   "action.save": "Save",
   "trash.actions": "Actions",

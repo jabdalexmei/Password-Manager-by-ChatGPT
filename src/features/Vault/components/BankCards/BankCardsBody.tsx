@@ -49,6 +49,8 @@ export function BankCardsBody({
     selectedCardId: bankCards.selectedCardId,
     isTrashMode: bankCards.isTrashMode,
     onSelectCard: bankCards.selectCard,
+    onToggleFavorite: bankCards.toggleFavorite,
+    onToggleArchive: bankCards.toggleArchive,
     onCreateCard: bankCards.createCard,
     onUpdateCard: bankCards.updateCard,
     onDeleteCard: bankCards.deleteCard,
