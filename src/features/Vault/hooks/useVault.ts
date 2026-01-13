@@ -300,12 +300,6 @@ export function useVault(profileId: string, onLocked: () => void) {
         setFolders((prev) =>
           [...prev.map((folder) => (folder.id === id ? { ...folder, name } : folder))].sort(sortFolders)
         );
-        setSelectedNav((prev) => {
-          if (typeof prev === 'object' && prev.folderId === id) {
-            return { folderId: id };
-          }
-          return prev;
-        });
       } catch (err) {
         handleError(err);
       }
@@ -384,8 +378,7 @@ export function useVault(profileId: string, onLocked: () => void) {
 
         setCards((prev) => sortCardsWithSettings([summary, ...prev]));
         setCardDetailsById((prev) => ({ ...prev, [mapped.id]: mapped }));
-        setSelectedNav((prev) => (prev === 'deleted' ? 'all' : prev));
-        setSelectedCardId(mapped.id);
+        // No implicit navigation/selection. User decides what to select.
         return mapped;
       } catch (err) {
         handleError(err);
@@ -474,7 +467,6 @@ export function useVault(profileId: string, onLocked: () => void) {
         await restoreDataCard(id);
 
         const restored = deletedCards.find((card) => card.id === id) ?? null;
-        const deletedAfterRestore = deletedCards.filter((card) => card.id !== id);
 
         setDeletedCards((prev) => prev.filter((card) => card.id !== id));
         setCards((prev) => {
@@ -483,22 +475,15 @@ export function useVault(profileId: string, onLocked: () => void) {
           return sortCardsWithSettings([...prev.filter((card) => card.id !== id), updated]);
         });
 
-        // Keep user in the current navigation.
-        // If they are in "deleted", the restored card disappears from that list,
-        // so select the next deleted card (or clear selection).
-        if (selectedNav === 'deleted') {
-          setSelectedCardId(deletedAfterRestore[0]?.id ?? null);
-          return;
-        }
-
-        // If not in "deleted", keep behavior: select restored card and load details.
-        setSelectedCardId(id);
-        await loadCard(id);
+        // No implicit selection changes:
+        // - If the restored card was selected, clear selection (it disappears from "deleted").
+        // - Otherwise keep current selection as-is.
+        setSelectedCardId((prev) => (prev === id ? null : prev));
       } catch (err) {
         handleError(err);
       }
     },
-    [deletedCards, handleError, loadCard, selectedNav, sortCardsWithSettings]
+    [deletedCards, handleError, sortCardsWithSettings]
   );
 
   const purgeCardAction = useCallback(
