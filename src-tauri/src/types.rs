@@ -237,11 +237,18 @@ pub struct BankCardItem {
     pub cvc: Option<String>,
     pub note: Option<String>,
     pub tags: Vec<String>,
+    pub preview_fields: BankCardPreviewFields,
     pub is_favorite: bool,
     pub created_at: String,
     pub updated_at: String,
     pub archived_at: Option<String>,
     pub deleted_at: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
+pub struct BankCardPreviewFields {
+    pub fields: Vec<String>,
+    pub card_number_mode: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -252,7 +259,9 @@ pub struct BankCardSummary {
     pub bank_name: Option<String>,
     pub holder: Option<String>,
     pub number: Option<String>,
+    pub note: Option<String>,
     pub tags: Vec<String>,
+    pub preview_fields: BankCardPreviewFields,
     pub is_favorite: bool,
     pub created_at: String,
     pub updated_at: String,

@@ -199,6 +199,13 @@ export function mapBankCardFromBackend(card: BackendBankCardItem): BankCardItem 
     cvc: card.cvc,
     note: card.note,
     tags: card.tags ?? [],
+    previewFields: {
+      fields: card.preview_fields?.fields ?? [],
+      cardNumberMode:
+        card.preview_fields?.card_number_mode === 'full' || card.preview_fields?.card_number_mode === 'last_four'
+          ? (card.preview_fields.card_number_mode as 'full' | 'last_four')
+          : null,
+    },
     isFavorite: card.is_favorite,
     createdAt: card.created_at,
     updatedAt: card.updated_at,
@@ -224,8 +231,15 @@ export function mapBankCardSummaryFromBackend(
     number: card.number,
     expiryMmYy: null,
     cvc: null,
-    note: null,
+    note: card.note ?? null,
     tags: card.tags ?? [],
+    previewFields: {
+      fields: card.preview_fields?.fields ?? [],
+      cardNumberMode:
+        card.preview_fields?.card_number_mode === 'full' || card.preview_fields?.card_number_mode === 'last_four'
+          ? (card.preview_fields.card_number_mode as 'full' | 'last_four')
+          : null,
+    },
     isFavorite: card.is_favorite,
     createdAt: card.created_at,
     updatedAt: card.updated_at,

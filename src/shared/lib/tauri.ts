@@ -118,6 +118,19 @@ export function setDataCardPreviewFields(fields: string[]): Promise<boolean> {
   return invoke('set_datacard_preview_fields', { fields });
 }
 
+export type BankCardPreviewFieldsDto = {
+  fields: string[];
+  card_number_mode: string | null;
+};
+
+export function getBankCardPreviewFields(): Promise<BankCardPreviewFieldsDto> {
+  return invoke('get_bankcard_preview_fields');
+}
+
+export function setBankCardPreviewFields(prefs: BankCardPreviewFieldsDto): Promise<boolean> {
+  return invoke('set_bankcard_preview_fields', { prefs });
+}
+
 export function getDataCardCoreHiddenFields(): Promise<string[]> {
   return invoke('get_datacard_core_hidden_fields');
 }

@@ -11,6 +11,13 @@ import {
   type VaultSortMode,
 } from '../../lib/vaultSort';
 import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
+import {
+  loadBankCardPreviewFields,
+  type BankCardPreviewFields,
+  type BankCardPreviewField,
+  formatCardNumberFull,
+  formatCardNumberLastFour,
+} from '../../lib/bankcardPreviewFields';
 
 export type BankCardsProps = {
   profileId: string;
@@ -58,9 +65,33 @@ export function BankCards({
     closeCreateModal,
   } = viewModel;
   const [sortMode, setSortMode] = useState<VaultSortMode>(() => getVaultSortMode('bank_cards', profileId));
+  const [globalPreview, setGlobalPreview] = useState<BankCardPreviewFields>({
+    fields: [],
+    cardNumberMode: null,
+  });
 
   useEffect(() => {
     setSortMode(getVaultSortMode('bank_cards', profileId));
+  }, [profileId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const prefs = await loadBankCardPreviewFields();
+        if (!cancelled) setGlobalPreview(prefs);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    load();
+    const handler = () => load();
+    window.addEventListener('bankcard-preview-fields-changed', handler as EventListener);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('bankcard-preview-fields-changed', handler as EventListener);
+    };
   }, [profileId]);
 
   useEffect(() => {
@@ -458,9 +489,70 @@ export function BankCards({
             // - else -> Untitled
             const displayTitleText = rawTitle || rawBankName || t('label.untitled');
 
-            // Secondary line:
-            // - show Bank name only when Title exists and Bank name exists
-            const bankNameLine = rawTitle && rawBankName ? rawBankName : null;
+            const perCardPreview = card.previewFields;
+            const mergedFields: BankCardPreviewField[] = [];
+            for (const f of perCardPreview.fields) {
+              if (!mergedFields.includes(f)) mergedFields.push(f);
+            }
+            for (const f of globalPreview.fields) {
+              if (!mergedFields.includes(f)) mergedFields.push(f);
+            }
+
+            const numberMode = perCardPreview.cardNumberMode ?? globalPreview.cardNumberMode;
+
+            const previewLines: Array<{ label: string; value: string }> = [];
+
+            if (card.number && numberMode) {
+              if (numberMode === 'full') {
+                previewLines.push({
+                  label: t('label.cardNumber'),
+                  value: formatCardNumberFull(card.number),
+                });
+              } else if (numberMode === 'last_four') {
+                previewLines.push({
+                  label: t('label.cardNumberLastFour'),
+                  value: formatCardNumberLastFour(card.number),
+                });
+              }
+            }
+
+            const addLine = (label: string, value: string | null | undefined) => {
+              if (!value) return;
+              const trimmed = value.trim();
+              if (!trimmed) return;
+              previewLines.push({ label, value: trimmed });
+            };
+
+            for (const field of ['bank_name', 'holder', 'note', 'tags'] as const) {
+              if (!mergedFields.includes(field)) continue;
+              if (previewLines.length >= 3) break;
+
+              switch (field) {
+                case 'bank_name': {
+                  if (!rawBankName) break;
+                  // Avoid duplicating the primary title line when title is empty and Bank name is used as title.
+                  if (!rawTitle && displayTitleText === rawBankName) break;
+                  addLine(t('label.bankName'), rawBankName);
+                  break;
+                }
+                case 'holder': {
+                  addLine(t('label.holder'), card.holder ?? null);
+                  break;
+                }
+                case 'note': {
+                  addLine(t('label.note'), card.note ?? null);
+                  break;
+                }
+                case 'tags': {
+                  if (!card.tags || card.tags.length === 0) break;
+                  addLine(t('label.tags'), card.tags.join(', '));
+                  break;
+                }
+              }
+              if (previewLines.length >= 3) break;
+            }
+
+            const visiblePreviewLines = previewLines.slice(0, 3);
 
             return (
               <button
@@ -479,11 +571,15 @@ export function BankCards({
                   {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
                 </div>
 
-                {bankNameLine && (
+                {visiblePreviewLines.length > 0 && (
                   <div className="datacard-meta-lines">
-                    <div className="datacard-meta">
-                      <span>{bankNameLine}</span>
-                    </div>
+                    {visiblePreviewLines.map((l) => (
+                      <div key={l.label} className="datacard-meta">
+                        <span>
+                          {l.label}: {l.value}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </button>

@@ -358,6 +358,7 @@ fn map_bank_card(row: &rusqlite::Row) -> rusqlite::Result<BankCardItem> {
         cvc: row.get("cvc")?,
         note: row.get("note")?,
         tags: deserialize_json(row.get::<_, String>("tags_json")?)?,
+        preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
         is_favorite: row.get::<_, i64>("is_favorite")? != 0,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
@@ -377,7 +378,9 @@ fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummar
         bank_name: row.get("bank_name")?,
         holder: row.get("holder")?,
         number: row.get("number")?,
+        note: row.get("note")?,
         tags,
+        preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
         is_favorite,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
@@ -1086,7 +1089,7 @@ pub fn list_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let clause = order_clause(sort_field, sort_dir).unwrap_or("ORDER BY updated_at DESC");
         let query = format!(
-            "SELECT id, folder_id, title, bank_name, holder, number, tags_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
+            "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
         );
         let mut stmt = conn.prepare(&query).map_err(|e| {
             log_sqlite_err("list_bank_cards_summary.prepare", &query, &e);
@@ -1116,7 +1119,7 @@ pub fn list_deleted_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let mut stmt = conn
             .prepare(
-                "SELECT id, folder_id, title, bank_name, holder, number, tags_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -1505,6 +1508,28 @@ pub fn set_datacard_preview_fields_for_card(
 
         if rows == 0 {
             return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
+        }
+
+        Ok(true)
+    })
+}
+
+pub fn set_bankcard_preview_fields_for_card(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    id: &str,
+    preview_fields_json: &str,
+) -> Result<bool> {
+    with_connection(state, profile_id, |conn| {
+        let rows = conn
+            .execute(
+                "UPDATE bank_cards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3",
+                params![preview_fields_json, Utc::now().to_rfc3339(), id],
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        if rows == 0 {
+            return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
         }
 
         Ok(true)

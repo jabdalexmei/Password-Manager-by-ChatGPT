@@ -7,7 +7,7 @@ use crate::error::{ErrorCodeString, Result};
 use crate::services::bank_cards_service;
 use crate::types::{
     BankCardItem, BankCardSummary, CreateBankCardInput, SetBankCardArchivedInput,
-    SetBankCardFavoriteInput, UpdateBankCardInput,
+    SetBankCardFavoriteInput, UpdateBankCardInput, BankCardPreviewFields,
 };
 
 #[tauri::command]
@@ -139,4 +139,18 @@ pub async fn purge_all_deleted_bank_cards(state: State<'_, Arc<AppState>>) -> Re
     tauri::async_runtime::spawn_blocking(move || bank_cards_service::purge_all_deleted_bank_cards(&app))
         .await
         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
+pub async fn set_bankcard_preview_fields_for_card(
+    id: String,
+    preview_fields: BankCardPreviewFields,
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        bank_cards_service::set_bankcard_preview_fields_for_card(id, preview_fields, &app)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }

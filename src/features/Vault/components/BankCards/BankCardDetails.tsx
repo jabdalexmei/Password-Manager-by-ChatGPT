@@ -1,14 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { BankCardItem } from '../../types/ui';
 import { useBankCardDetails } from './useBankCardDetails';
 import { IconCopy, IconPreview, IconPreviewOff } from '@/shared/icons/lucide/icons';
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 import { wasActuallyUpdated } from '../../utils/updatedAt';
+import { setBankCardPreviewFieldsForCard } from '../../api/vaultApi';
+import {
+  loadBankCardPreviewFields,
+  saveBankCardPreviewFields,
+  type BankCardPreviewField,
+  MAX_BANKCARD_PREVIEW_FIELDS,
+} from '../../lib/bankcardPreviewFields';
 
 export type BankCardDetailsProps = {
   card: BankCardItem | null;
   onEdit: (card: BankCardItem) => void;
+  onReloadCard?: (id: string) => void;
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onPurge: (id: string) => void;
@@ -35,6 +43,7 @@ const maskHolder = (value?: string | null) => {
 export function BankCardDetails({
   card,
   onEdit,
+  onReloadCard,
   onDelete,
   onRestore,
   onPurge,
@@ -60,6 +69,44 @@ export function BankCardDetails({
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
+  const [globalPreview, setGlobalPreview] = useState<{ fields: BankCardPreviewField[] }>({ fields: [] });
+  const [globalNumberMode, setGlobalNumberMode] = useState<'full' | 'last_four' | null>(null);
+  const [previewMenu, setPreviewMenu] = useState<
+    | null
+    | {
+        x: number;
+        y: number;
+        kind: 'field';
+        field: BankCardPreviewField;
+      }
+    | {
+        x: number;
+        y: number;
+        kind: 'card_number';
+      }
+  >(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const prefs = await loadBankCardPreviewFields();
+        if (cancelled) return;
+        setGlobalPreview({ fields: prefs.fields });
+        setGlobalNumberMode(prefs.cardNumberMode);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    load();
+    const handler = () => load();
+    window.addEventListener('bankcard-preview-fields-changed', handler as EventListener);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('bankcard-preview-fields-changed', handler as EventListener);
+    };
+  }, []);
 
   const informationTitle = <div className="vault-section-header">{tVault('information.title')}</div>;
 
@@ -90,6 +137,30 @@ export function BankCardDetails({
   const title = card.title?.trim() ?? '';
   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
   const { showHolder, showNumber, showCvc } = detailActions;
+
+  const perCardFields = card.previewFields.fields ?? [];
+  const perCardNumberMode = card.previewFields.cardNumberMode ?? null;
+
+  const updateCardPreviewFields = async (nextFields: BankCardPreviewField[], nextMode: 'full' | 'last_four' | null) => {
+    const ok = await setBankCardPreviewFieldsForCard(card.id, {
+      fields: nextFields,
+      card_number_mode: nextMode,
+    });
+    if (ok) onReloadCard?.(card.id);
+    return ok;
+  };
+
+  const updateGlobalPreviewFields = async (
+    nextFields: BankCardPreviewField[],
+    nextMode: 'full' | 'last_four' | null
+  ) => {
+    const ok = await saveBankCardPreviewFields({ fields: nextFields, cardNumberMode: nextMode });
+    if (ok) {
+      setGlobalPreview({ fields: nextFields });
+      setGlobalNumberMode(nextMode);
+    }
+    return ok;
+  };
 
   const holderDisplay = hasHolder ? (showHolder ? card.holder ?? '' : maskHolder(card.holder)) : '';
 
@@ -152,7 +223,13 @@ export function BankCardDetails({
           {hasBankName && (
             <div className="detail-field">
               <div className="detail-label">{t('label.bankName')}</div>
-              <div className="detail-value-box">
+              <div
+                className="detail-value-box"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'bank_name' });
+                }}
+              >
                 <div className="detail-value-text">{card.bankName ?? ''}</div>
                 <div className="detail-value-actions">
                   <button
@@ -171,7 +248,13 @@ export function BankCardDetails({
           {hasHolder && (
             <div className="detail-field">
               <div className="detail-label">{t('label.holder')}</div>
-              <div className="detail-value-box">
+              <div
+                className="detail-value-box"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'holder' });
+                }}
+              >
                 <div className="detail-value-text">{holderDisplay}</div>
                 <div className="detail-value-actions">
                   <button
@@ -198,7 +281,13 @@ export function BankCardDetails({
           {hasNumber && (
             <div className="detail-field">
               <div className="detail-label">{t('label.cardNumber')}</div>
-              <div className="detail-value-box">
+              <div
+                className="detail-value-box"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'card_number' });
+                }}
+              >
                 <div className="detail-value-text">{numberDisplay}</div>
                 <div className="detail-value-actions">
                   <button
@@ -261,7 +350,13 @@ export function BankCardDetails({
           {hasNote && (
             <div className="detail-field">
               <div className="detail-label">{t('label.note')}</div>
-              <div className="detail-value-box detail-value-multiline">
+              <div
+                className="detail-value-box detail-value-multiline"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'note' });
+                }}
+              >
                 <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
                 <div className="detail-value-actions">
                   <button
@@ -280,13 +375,128 @@ export function BankCardDetails({
           {hasTags && (
             <div className="detail-field">
               <div className="detail-label">{t('label.tags')}</div>
-              <div className="detail-value-box">
+              <div
+                className="detail-value-box"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'tags' });
+                }}
+              >
                 <div className="detail-value-text">{tagsText}</div>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {previewMenu && (
+        <div
+          className="preview-fields-menu"
+          style={{ left: previewMenu.x, top: previewMenu.y }}
+          onMouseLeave={() => setPreviewMenu(null)}
+        >
+          {previewMenu.kind === 'field' && (() => {
+            const field = previewMenu.field;
+            const isEnabledForCard = perCardFields.includes(field);
+            const isEnabledForAll = globalPreview.fields.includes(field);
+            const canAddForCard = !isEnabledForCard && perCardFields.length < MAX_BANKCARD_PREVIEW_FIELDS;
+            const canAddForAll = !isEnabledForAll && globalPreview.fields.length < MAX_BANKCARD_PREVIEW_FIELDS;
+
+            return (
+              <div className="preview-fields-menu-items">
+                <button
+                  className="preview-fields-menu-item"
+                  type="button"
+                  disabled={!isEnabledForCard && !canAddForCard}
+                  onClick={async () => {
+                    if (isEnabledForCard) {
+                      await updateCardPreviewFields(perCardFields.filter((f) => f !== field), perCardNumberMode);
+                    } else if (canAddForCard) {
+                      await updateCardPreviewFields([...perCardFields, field], perCardNumberMode);
+                    }
+                    setPreviewMenu(null);
+                  }}
+                >
+                  {isEnabledForCard ? t('previewMenu.hideInPreview') : t('previewMenu.showInPreview')}
+                </button>
+
+                <button
+                  className="preview-fields-menu-item"
+                  type="button"
+                  disabled={!isEnabledForAll && !canAddForAll}
+                  onClick={async () => {
+                    if (isEnabledForAll) {
+                      await updateGlobalPreviewFields(globalPreview.fields.filter((f) => f !== field), globalNumberMode);
+                    } else if (canAddForAll) {
+                      await updateGlobalPreviewFields([...globalPreview.fields, field], globalNumberMode);
+                    }
+                    setPreviewMenu(null);
+                  }}
+                >
+                  {isEnabledForAll ? t('previewMenu.hideInPreviewAll') : t('previewMenu.showInPreviewAll')}
+                </button>
+              </div>
+            );
+          })()}
+
+          {previewMenu.kind === 'card_number' && (() => {
+            const isFullForCard = perCardNumberMode === 'full';
+            const isLastFourForCard = perCardNumberMode === 'last_four';
+            const isFullForAll = globalNumberMode === 'full';
+            const isLastFourForAll = globalNumberMode === 'last_four';
+
+            return (
+              <div className="preview-fields-menu-items">
+                <button
+                  className="preview-fields-menu-item"
+                  type="button"
+                  onClick={async () => {
+                    await updateCardPreviewFields(perCardFields, isFullForCard ? null : 'full');
+                    setPreviewMenu(null);
+                  }}
+                >
+                  {isFullForCard ? t('previewMenu.hideCardNumberFull') : t('previewMenu.showCardNumberFull')}
+                </button>
+
+                <button
+                  className="preview-fields-menu-item"
+                  type="button"
+                  onClick={async () => {
+                    await updateCardPreviewFields(perCardFields, isLastFourForCard ? null : 'last_four');
+                    setPreviewMenu(null);
+                  }}
+                >
+                  {isLastFourForCard ? t('previewMenu.hideCardNumberLastFour') : t('previewMenu.showCardNumberLastFour')}
+                </button>
+
+                <div className="preview-fields-menu-separator" />
+
+                <button
+                  className="preview-fields-menu-item"
+                  type="button"
+                  onClick={async () => {
+                    await updateGlobalPreviewFields(globalPreview.fields, isFullForAll ? null : 'full');
+                    setPreviewMenu(null);
+                  }}
+                >
+                  {isFullForAll ? t('previewMenu.hideCardNumberFullAll') : t('previewMenu.showCardNumberFullAll')}
+                </button>
+
+                <button
+                  className="preview-fields-menu-item"
+                  type="button"
+                  onClick={async () => {
+                    await updateGlobalPreviewFields(globalPreview.fields, isLastFourForAll ? null : 'last_four');
+                    setPreviewMenu(null);
+                  }}
+                >
+                  {isLastFourForAll ? t('previewMenu.hideCardNumberLastFourAll') : t('previewMenu.showCardNumberLastFourAll')}
+                </button>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       <ConfirmDialog
         open={deleteConfirmOpen}

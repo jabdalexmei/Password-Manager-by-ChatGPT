@@ -7,9 +7,66 @@ use crate::error::Result;
 use crate::services::security_service;
 use crate::services::settings_service::get_settings;
 use crate::types::{
-    BankCardItem, BankCardSummary, CreateBankCardInput, SetBankCardArchivedInput,
-    SetBankCardFavoriteInput, UpdateBankCardInput,
+    BankCardItem, BankCardPreviewFields, BankCardSummary, CreateBankCardInput,
+    SetBankCardArchivedInput, SetBankCardFavoriteInput, UpdateBankCardInput,
 };
+
+const MAX_PREVIEW_FIELDS: usize = 3;
+
+fn is_allowed_preview_field(value: &str) -> bool {
+    matches!(value, "bank_name" | "holder" | "note" | "tags")
+}
+
+fn normalize_preview_fields(input: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for raw in input {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !is_allowed_preview_field(trimmed) {
+            continue;
+        }
+        if out.iter().any(|v| v == trimmed) {
+            continue;
+        }
+        out.push(trimmed.to_string());
+        if out.len() >= MAX_PREVIEW_FIELDS {
+            break;
+        }
+    }
+    out
+}
+
+fn normalize_card_number_mode(input: Option<String>) -> Option<String> {
+    let raw = input?.trim().to_string();
+    if raw.is_empty() {
+        return None;
+    }
+    match raw.as_str() {
+        "full" | "last_four" => Some(raw),
+        _ => None,
+    }
+}
+
+pub fn set_bankcard_preview_fields_for_card(
+    id: String,
+    preview_fields: BankCardPreviewFields,
+    state: &Arc<AppState>,
+) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+
+    let sanitized = BankCardPreviewFields {
+        fields: normalize_preview_fields(preview_fields.fields),
+        card_number_mode: normalize_card_number_mode(preview_fields.card_number_mode),
+    };
+
+    let json = serde_json::to_string(&sanitized)
+        .map_err(|_| crate::error::ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    let updated = repo_impl::set_bankcard_preview_fields_for_card(state, &profile_id, &id, &json)?;
+    security_service::request_persist_active_vault(state.clone());
+    Ok(updated)
+}
 
 fn normalize_tags(tags: Vec<String>) -> Vec<String> {
     let mut result: Vec<String> = Vec::new();

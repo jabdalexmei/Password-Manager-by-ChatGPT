@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 6;
+const CURRENT_SCHEMA_VERSION: i32 = 8;
 
 fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
     // Dev-mode friendly: create idempotently so existing schema DBs also get it.
@@ -123,6 +123,59 @@ WHERE archived_at IS NULL
     Ok(())
 }
 
+fn migrate_6_to_7(conn: &Connection) -> Result<()> {
+    ensure_ui_preferences_table(conn)?;
+
+    // Add per-bankcard preview fields storage.
+    if has_table(conn, "bank_cards")? && !has_column(conn, "bank_cards", "preview_fields_json")? {
+        conn.execute_batch(
+            r#"
+ALTER TABLE bank_cards
+ADD COLUMN preview_fields_json TEXT NOT NULL DEFAULT '{}';
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 7;")
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+    Ok(())
+}
+
+fn migrate_7_to_8(conn: &Connection) -> Result<()> {
+    ensure_ui_preferences_table(conn)?;
+
+    // Older vaults might have bank_cards without some of the newer optional columns.
+    // Ensure they exist so summary queries remain compatible.
+    if has_table(conn, "bank_cards")? {
+        if !has_column(conn, "bank_cards", "note")? {
+            conn.execute_batch(
+                r#"
+ALTER TABLE bank_cards
+ADD COLUMN note TEXT NULL;
+"#,
+            )
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        }
+
+        if !has_column(conn, "bank_cards", "preview_fields_json")? {
+            conn.execute_batch(
+                r#"
+ALTER TABLE bank_cards
+ADD COLUMN preview_fields_json TEXT NOT NULL DEFAULT '{}';
+"#,
+            )
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        }
+    }
+
+    conn.execute_batch("PRAGMA user_version = 8;")
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+    Ok(())
+}
+
 fn migrate_4_to_5(conn: &Connection) -> Result<()> {
     ensure_ui_preferences_table(conn)?;
 
@@ -209,28 +262,42 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
             migrate_2_to_3(conn)?;
             migrate_3_to_4(conn)?;
             migrate_4_to_5(conn)?;
-            migrate_5_to_6(conn)
+            migrate_5_to_6(conn)?;
+            migrate_6_to_7(conn)?;
+            migrate_7_to_8(conn)
         }
         2 => {
             migrate_2_to_3(conn)?;
             migrate_3_to_4(conn)?;
             migrate_4_to_5(conn)?;
-            migrate_5_to_6(conn)
+            migrate_5_to_6(conn)?;
+            migrate_6_to_7(conn)?;
+            migrate_7_to_8(conn)
         }
         3 => {
             migrate_3_to_4(conn)?;
             migrate_4_to_5(conn)?;
-            migrate_5_to_6(conn)
+            migrate_5_to_6(conn)?;
+            migrate_6_to_7(conn)?;
+            migrate_7_to_8(conn)
         }
         4 => {
             migrate_4_to_5(conn)?;
-            migrate_5_to_6(conn)
+            migrate_5_to_6(conn)?;
+            migrate_6_to_7(conn)?;
+            migrate_7_to_8(conn)
         }
-        5 => migrate_5_to_6(conn),
-        CURRENT_SCHEMA_VERSION => {
-            ensure_ui_preferences_table(conn)?;
-            Ok(())
+        5 => {
+            migrate_5_to_6(conn)?;
+            migrate_6_to_7(conn)?;
+            migrate_7_to_8(conn)
         }
+        6 => {
+            migrate_6_to_7(conn)?;
+            migrate_7_to_8(conn)
+        }
+        7 => migrate_7_to_8(conn),
+        CURRENT_SCHEMA_VERSION => migrate_7_to_8(conn),
         _ => {
             log::warn!("[DB][migrate] unsupported schema version: {version}");
             Err(ErrorCodeString::new("DB_MIGRATION_FAILED"))
