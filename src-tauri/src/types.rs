@@ -103,6 +103,7 @@ pub struct DataCard {
 
     pub created_at: String,
     pub updated_at: String,
+    pub archived_at: Option<String>,
     pub deleted_at: Option<String>,
 
     pub password: Option<String>,
@@ -135,6 +136,7 @@ pub struct DataCardSummary {
     pub preview_fields: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub archived_at: Option<String>,
     pub deleted_at: Option<String>,
     pub is_favorite: bool,
     pub has_totp: bool,
@@ -209,6 +211,12 @@ pub struct MoveDataCardInput {
 pub struct SetDataCardFavoriteInput {
     pub id: String,
     pub is_favorite: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetDataCardArchivedInput {
+    pub id: String,
+    pub is_archived: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

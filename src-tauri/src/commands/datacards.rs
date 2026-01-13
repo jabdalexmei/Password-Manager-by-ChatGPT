@@ -7,7 +7,7 @@ use crate::error::{ErrorCodeString, Result};
 use crate::services::datacards_service;
 use crate::types::{
     CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, SetDataCardFavoriteInput,
-    UpdateDataCardInput,
+    SetDataCardArchivedInput, UpdateDataCardInput,
 };
 
 #[tauri::command]
@@ -122,6 +122,17 @@ pub async fn set_datacard_favorite(
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
+pub async fn set_datacard_archived(
+    input: SetDataCardArchivedInput,
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::set_datacard_archived(input, &app))
+        .await
+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
 
 #[tauri::command]

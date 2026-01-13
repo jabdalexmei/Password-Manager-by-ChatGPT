@@ -19,6 +19,7 @@ import {
   restoreDataCard,
   restoreAllDeletedDataCards,
   setDataCardFavorite,
+  setDataCardArchived,
   updateDataCard,
 } from '../api/vaultApi';
 import { clipboardClearAll, lockVault } from '../../../shared/lib/tauri';
@@ -654,7 +655,7 @@ export function useVault(profileId: string, onLocked: () => void) {
 
   const visibleCards = useMemo(() => {
     const activeCards = cards.filter((card) => !card.deletedAt);
-    const isArchived = (card: DataCardSummary) => card.tags?.includes('archived');
+    const isArchived = (card: DataCardSummary) => Boolean(card.archivedAt);
     let pool: DataCardSummary[];
 
     if (selectedNav === 'all') {
@@ -742,10 +743,44 @@ export function useVault(profileId: string, onLocked: () => void) {
     [cards, handleError]
   );
 
+  const toggleArchive = useCallback(
+    async (id: string) => {
+      const current = cards.find((card) => card.id === id);
+      if (!current) return;
+
+      const nextArchived = !current.archivedAt;
+
+      try {
+        await setDataCardArchived({ id: current.id, is_archived: nextArchived });
+        const nextArchivedAt = nextArchived ? new Date().toISOString() : null;
+
+        setCards((prev) =>
+          prev.map((card) => (card.id === current.id ? { ...card, archivedAt: nextArchivedAt } : card))
+        );
+        setCardDetailsById((prev) =>
+          prev[current.id]
+            ? { ...prev, [current.id]: { ...prev[current.id], archivedAt: nextArchivedAt } }
+            : prev
+        );
+
+        // If the card no longer belongs to the current section, clear selection.
+        if (selectedCardId === id) {
+          const isArchiveNav = selectedNav === 'archive';
+          if ((nextArchived && !isArchiveNav) || (!nextArchived && isArchiveNav)) {
+            setSelectedCardId(null);
+          }
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    },
+    [cards, handleError, selectedCardId, selectedNav]
+  );
+
   const counts = useMemo(
     () => {
       const activeCards = cards.filter((card) => !card.deletedAt);
-      const isArchived = (card: DataCardSummary) => card.tags?.includes('archived');
+      const isArchived = (card: DataCardSummary) => Boolean(card.archivedAt);
 
       return {
         all: activeCards.filter((card) => !isArchived(card)).length,
@@ -801,6 +836,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     moveCardToFolder: moveCardAction,
     lock,
     loadCard,
+    toggleArchive,
     toggleFavorite,
     settings,
     updateSettings: updateSettingsAction,

@@ -172,6 +172,7 @@ fn main() {
             create_datacard,
             update_datacard,
             set_datacard_favorite,
+            set_datacard_archived,
             move_datacard_to_folder,
             delete_datacard,
             list_deleted_datacards,

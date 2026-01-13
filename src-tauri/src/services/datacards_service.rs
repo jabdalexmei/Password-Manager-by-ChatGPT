@@ -10,7 +10,7 @@ use crate::services::security_service;
 use crate::services::settings_service::get_settings;
 use crate::types::{
     CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, SetDataCardFavoriteInput,
-    UpdateDataCardInput,
+    SetDataCardArchivedInput, UpdateDataCardInput,
 };
 
 fn normalize_tags(tags: Vec<String>) -> Vec<String> {
@@ -259,6 +259,16 @@ pub fn set_datacard_favorite(
 ) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let updated = repo_impl::set_datacard_favorite(state, &profile_id, &input)?;
+    security_service::request_persist_active_vault(state.clone());
+    Ok(updated)
+}
+
+pub fn set_datacard_archived(
+    input: SetDataCardArchivedInput,
+    state: &Arc<AppState>,
+) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let updated = repo_impl::set_datacard_archived(state, &profile_id, &input)?;
     security_service::request_persist_active_vault(state.clone());
     Ok(updated)
 }

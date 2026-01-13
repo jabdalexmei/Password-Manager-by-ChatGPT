@@ -13,7 +13,7 @@ use crate::error::{ErrorCodeString, Result};
 use crate::types::{
     AttachmentMeta, BankCardItem, BankCardSummary, CreateBankCardInput, CreateDataCardInput,
     DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardFavoriteInput,
-    SetDataCardFavoriteInput, UpdateBankCardInput, UpdateDataCardInput,
+    SetDataCardArchivedInput, SetDataCardFavoriteInput, UpdateBankCardInput, UpdateDataCardInput,
 };
 
 use std::sync::Arc;
@@ -79,6 +79,7 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
         preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
+        archived_at: row.get("archived_at")?,
         deleted_at: row.get("deleted_at")?,
         password: row.get("password_value")?,
         totp_uri: row.get("totp_uri")?,
@@ -111,6 +112,7 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
         preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
+        archived_at: row.get("archived_at")?,
         deleted_at: row.get("deleted_at")?,
         is_favorite,
         has_totp,
@@ -424,6 +426,7 @@ pub fn list_datacards_summary(
                 d.is_favorite,
                 d.created_at,
                 d.updated_at,
+                d.archived_at,
                 d.deleted_at
             FROM datacards d
             WHERE d.deleted_at IS NULL {clause}
@@ -466,6 +469,33 @@ pub fn list_deleted_datacards(state: &Arc<AppState>, profile_id: &str) -> Result
     })
 }
 
+pub fn set_datacard_archived(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    input: &SetDataCardArchivedInput,
+) -> Result<bool> {
+    with_connection(state, profile_id, |conn| {
+        let archived_at: Option<String> = if input.is_archived {
+            Some(Utc::now().to_rfc3339())
+        } else {
+            None
+        };
+
+        let rows = conn
+            .execute(
+                "UPDATE datacards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
+                params![archived_at, Utc::now().to_rfc3339(), input.id],
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        if rows == 0 {
+            return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
+        }
+
+        Ok(true)
+    })
+}
+
 pub fn list_deleted_datacards_summary(
     state: &Arc<AppState>,
     profile_id: &str,
@@ -494,6 +524,7 @@ pub fn list_deleted_datacards_summary(
                     d.is_favorite,
                     d.created_at,
                     d.updated_at,
+                    d.archived_at,
                     d.deleted_at
                 FROM datacards d
                 WHERE d.deleted_at IS NOT NULL
