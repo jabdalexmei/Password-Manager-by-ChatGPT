@@ -284,7 +284,6 @@ export function useVault(profileId: string, onLocked: () => void) {
         const created = await createFolder({ name, parent_id: parentId });
         const mapped = mapFolderFromBackend(created);
         setFolders((prev) => [...prev, mapped].sort(sortFolders));
-        setSelectedNav({ folderId: mapped.id });
         return mapped;
       } catch (err) {
         handleError(err);
