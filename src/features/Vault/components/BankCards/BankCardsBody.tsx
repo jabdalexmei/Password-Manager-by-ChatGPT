@@ -128,6 +128,7 @@ export function BankCardsBody({
         <BankCardDetails
           card={bankCards.selectedCard}
           onEdit={(card) => viewModel.openEditModal(card)}
+          onReloadCard={(id) => bankCards.loadCard(id)}
           onDelete={bankCards.deleteCard}
           onRestore={bankCards.restoreCard}
           onPurge={bankCards.purgeCard}

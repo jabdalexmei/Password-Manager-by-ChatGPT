@@ -102,6 +102,7 @@ export type BankCardItem = {
   cvc: string | null;
   note: string | null;
   tags: string[];
+  previewFields: { fields: string[]; cardNumberMode: 'full' | 'last_four' | null };
   isFavorite: boolean;
   createdAt: string;
   updatedAt: string;

@@ -151,6 +151,13 @@ export async function setDataCardPreviewFieldsForCard(id: string, fields: string
   return invoke('set_datacard_preview_fields_for_card', { id, fields });
 }
 
+export async function setBankCardPreviewFieldsForCard(
+  id: string,
+  previewFields: { fields: string[]; card_number_mode: string | null }
+): Promise<boolean> {
+  return invoke('set_bankcard_preview_fields_for_card', { id, preview_fields: previewFields });
+}
+
 export async function getSettings(): Promise<BackendUserSettings> {
   return invoke('get_settings');
 }

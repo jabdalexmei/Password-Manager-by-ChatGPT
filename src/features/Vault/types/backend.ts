@@ -103,6 +103,7 @@ export type BackendBankCardItem = {
   cvc: string | null;
   note: string | null;
   tags: string[];
+  preview_fields: { fields: string[]; card_number_mode: string | null };
   is_favorite: boolean;
   created_at: string;
   updated_at: string;
@@ -117,7 +118,9 @@ export type BackendBankCardSummary = {
   bank_name: string | null;
   holder: string | null;
   number: string | null;
+  note: string | null;
   tags: string[];
+  preview_fields: { fields: string[]; card_number_mode: string | null };
   is_favorite: boolean;
   created_at: string;
   updated_at: string;
