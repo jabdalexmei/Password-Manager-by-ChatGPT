@@ -42,11 +42,15 @@ CREATE TABLE IF NOT EXISTS datacards (
 
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
+  archived_at  TEXT NULL,
   deleted_at   TEXT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_datacards_folder
 ON datacards(folder_id);
+
+CREATE INDEX IF NOT EXISTS idx_datacards_archived
+ON datacards(archived_at);
 
 CREATE INDEX IF NOT EXISTS idx_datacards_deleted
 ON datacards(deleted_at);

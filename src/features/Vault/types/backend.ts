@@ -37,6 +37,7 @@ export type BackendDataCard = {
   tags: string[];
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
   deleted_at: string | null;
   password: string | null;
   totp_uri: string | null;
@@ -59,6 +60,7 @@ export type BackendDataCardSummary = {
   tags: string[];
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
   deleted_at: string | null;
   is_favorite: boolean;
   has_totp: boolean;

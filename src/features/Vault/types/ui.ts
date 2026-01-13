@@ -30,6 +30,7 @@ export type DataCard = {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  archivedAt: string | null;
   deletedAt: string | null;
   password: string | null;
   totpUri: string | null;

@@ -44,6 +44,8 @@ type UseDataCardsParams = {
   folders: Folder[];
   defaultFolderId: string | null;
   onSelectCard: (id: string) => void;
+  onToggleFavorite: (id: string) => Promise<void> | void;
+  onToggleArchive: (id: string) => Promise<void> | void;
   onCreateCard: (input: CreateDataCardInput) => Promise<DataCard | void | null>;
   onUploadAttachments: (cardId: string, paths: string[]) => Promise<string[]>;
   onUpdateCard: (input: UpdateDataCardInput) => Promise<void>;
@@ -59,6 +61,8 @@ export type DataCardsViewModel = {
   selectedCardId: string | null;
   isTrashMode: boolean;
   selectCard: (id: string) => void;
+  toggleFavorite: (id: string) => Promise<void> | void;
+  toggleArchive: (id: string) => Promise<void> | void;
   deleteCard: (id: string) => void;
   restoreCard: (id: string) => void;
   purgeCard: (id: string) => void;
@@ -195,6 +199,8 @@ export function useDataCards({
   folders,
   defaultFolderId,
   onSelectCard,
+  onToggleFavorite,
+  onToggleArchive,
   onCreateCard,
   onUploadAttachments,
   onUpdateCard,
@@ -618,6 +624,8 @@ export function useDataCards({
     selectedCardId,
     isTrashMode,
     selectCard: onSelectCard,
+    toggleFavorite: onToggleFavorite,
+    toggleArchive: onToggleArchive,
     deleteCard: onDeleteCard,
     restoreCard: onRestoreCard,
     purgeCard: onPurgeCard,

@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 3;
+const CURRENT_SCHEMA_VERSION: i32 = 4;
 
 fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
     // Dev-mode friendly: create idempotently so existing schema DBs also get it.
@@ -91,6 +91,38 @@ ADD COLUMN recovery_email TEXT NULL;
     Ok(())
 }
 
+fn migrate_3_to_4(conn: &Connection) -> Result<()> {
+    ensure_ui_preferences_table(conn)?;
+
+    // Add per-datacard archived timestamp (soft-archive).
+    if has_table(conn, "datacards")? && !has_column(conn, "datacards", "archived_at")? {
+        conn.execute_batch(
+            r#"
+ALTER TABLE datacards
+ADD COLUMN archived_at TEXT NULL;
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+        // Best-effort migration from legacy tag-based archive (if it ever existed).
+        // We intentionally keep tags_json unchanged; UI will rely on archived_at going forward.
+        conn.execute_batch(
+            r#"
+UPDATE datacards
+SET archived_at = COALESCE(archived_at, updated_at)
+WHERE archived_at IS NULL
+  AND tags_json LIKE '%"archived"%';
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 4;")
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+    Ok(())
+}
+
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -116,9 +148,14 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     match version {
         1 => {
             migrate_1_to_2(conn)?;
-            migrate_2_to_3(conn)
+            migrate_2_to_3(conn)?;
+            migrate_3_to_4(conn)
         }
-        2 => migrate_2_to_3(conn),
+        2 => {
+            migrate_2_to_3(conn)?;
+            migrate_3_to_4(conn)
+        }
+        3 => migrate_3_to_4(conn),
         CURRENT_SCHEMA_VERSION => {
             ensure_ui_preferences_table(conn)?;
             Ok(())
