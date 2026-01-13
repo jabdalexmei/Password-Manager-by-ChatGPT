@@ -9,6 +9,8 @@
   "label.untitled": "Untitled",
   "label.title": "Title",
   "label.titlePlaceholder": "Card name",
+  "label.bankName": "Bank name",
+  "label.bankNamePlaceholder": "Bank",
   "label.holder": "Holder",
   "label.holderPlaceholder": "Card holder",
   "label.number": "Number",

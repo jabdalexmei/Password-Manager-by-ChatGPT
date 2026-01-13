@@ -96,6 +96,7 @@ export type BackendBankCardItem = {
   id: string;
   folder_id: string | null;
   title: string;
+  bank_name: string | null;
   holder: string | null;
   number: string | null;
   expiry_mm_yy: string | null;
@@ -113,6 +114,7 @@ export type BackendBankCardSummary = {
   id: string;
   folder_id: string | null;
   title: string;
+  bank_name: string | null;
   holder: string | null;
   number: string | null;
   tags: string[];
@@ -126,6 +128,7 @@ export type BackendBankCardSummary = {
 export type BackendCreateBankCardInput = {
   folder_id: string | null;
   title: string;
+  bank_name: string | null;
   holder: string | null;
   number: string | null;
   expiry_mm_yy: string | null;

@@ -86,6 +86,7 @@ export function BankCardDetails({
   const hasCvc = hasValue(card.cvc);
   const hasNote = hasValue(card.note);
   const hasTitle = hasValue(card.title);
+  const hasBankName = hasValue(card.bankName);
   const title = card.title?.trim() ?? '';
   const hasTags = Array.isArray(card.tags) && card.tags.length > 0;
   const { showHolder, showNumber, showCvc } = detailActions;
@@ -144,6 +145,25 @@ export function BankCardDetails({
               <div className="detail-label">{t('label.title')}</div>
               <div className="detail-value-box">
                 <div className="detail-value-text">{title}</div>
+              </div>
+            </div>
+          )}
+
+          {hasBankName && (
+            <div className="detail-field">
+              <div className="detail-label">{t('label.bankName')}</div>
+              <div className="detail-value-box">
+                <div className="detail-value-text">{card.bankName ?? ''}</div>
+                <div className="detail-value-actions">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={t('action.copy')}
+                    onClick={() => detailActions.copyToClipboard(card.bankName)}
+                  >
+                    <IconCopy />
+                  </button>
+                </div>
               </div>
             </div>
           )}
