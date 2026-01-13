@@ -202,6 +202,7 @@ pub fn search_bank_card_ids(
 SELECT
   b.id,
   b.title,
+  b.bank_name,
   b.holder,
   b.number,
   b.note,
@@ -217,6 +218,7 @@ LEFT JOIN folders f ON f.id = b.folder_id
             .query_map([], |row| {
                 let id: String = row.get("id")?;
                 let title: String = row.get("title")?;
+                let bank_name: Option<String> = row.get("bank_name")?;
                 let holder: Option<String> = row.get("holder")?;
                 let number: Option<String> = row.get("number")?;
                 let note: Option<String> = row.get("note")?;
@@ -228,6 +230,10 @@ LEFT JOIN folders f ON f.id = b.folder_id
                 let mut blob = String::new();
                 blob.push_str(&title);
                 blob.push('\n');
+                if let Some(v) = bank_name {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
                 if let Some(v) = holder {
                     blob.push_str(&v);
                     blob.push('\n');
@@ -345,6 +351,7 @@ fn map_bank_card(row: &rusqlite::Row) -> rusqlite::Result<BankCardItem> {
         id: row.get("id")?,
         folder_id: row.get("folder_id")?,
         title: row.get("title")?,
+        bank_name: row.get("bank_name")?,
         holder: row.get("holder")?,
         number: row.get("number")?,
         expiry_mm_yy: row.get("expiry_mm_yy")?,
@@ -367,6 +374,7 @@ fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummar
         id: row.get("id")?,
         folder_id: row.get("folder_id")?,
         title: row.get("title")?,
+        bank_name: row.get("bank_name")?,
         holder: row.get("holder")?,
         number: row.get("number")?,
         tags,
@@ -1078,7 +1086,7 @@ pub fn list_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let clause = order_clause(sort_field, sort_dir).unwrap_or("ORDER BY updated_at DESC");
         let query = format!(
-            "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
+            "SELECT id, folder_id, title, bank_name, holder, number, tags_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
         );
         let mut stmt = conn.prepare(&query).map_err(|e| {
             log_sqlite_err("list_bank_cards_summary.prepare", &query, &e);
@@ -1108,7 +1116,7 @@ pub fn list_deleted_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let mut stmt = conn
             .prepare(
-                "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                "SELECT id, folder_id, title, bank_name, holder, number, tags_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -1164,11 +1172,12 @@ pub fn create_bank_card(
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO bank_cards (id, folder_id, title, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?11, NULL)",
+            "INSERT INTO bank_cards (id, folder_id, title, bank_name, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, ?11, ?12, NULL)",
             params![
                 id,
                 input.folder_id,
                 input.title,
+                input.bank_name,
                 input.holder,
                 input.number,
                 input.expiry_mm_yy,
@@ -1194,10 +1203,11 @@ pub fn update_bank_card(
         let tags_json = serialize_json(&input.tags)?;
         let rows = conn
             .execute(
-                "UPDATE bank_cards SET folder_id = ?1, title = ?2, holder = ?3, number = ?4, expiry_mm_yy = ?5, cvc = ?6, note = ?7, tags_json = ?8, updated_at = ?9 WHERE id = ?10",
+                "UPDATE bank_cards SET folder_id = ?1, title = ?2, bank_name = ?3, holder = ?4, number = ?5, expiry_mm_yy = ?6, cvc = ?7, note = ?8, tags_json = ?9, updated_at = ?10 WHERE id = ?11",
                 params![
                     input.folder_id,
                     input.title,
+                    input.bank_name,
                     input.holder,
                     input.number,
                     input.expiry_mm_yy,

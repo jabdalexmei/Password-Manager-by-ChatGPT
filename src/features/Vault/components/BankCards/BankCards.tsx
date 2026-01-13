@@ -143,6 +143,20 @@ export function BankCards({
             </div>
 
             <div className="form-field">
+              <label className="form-label" htmlFor={`${dialogId}-bank-name-input`}>
+                {t('label.bankName')}
+              </label>
+              <input
+                id={`${dialogId}-bank-name-input`}
+                className="input"
+                autoComplete="off"
+                value={form.bankName}
+                onChange={(e) => onFieldChange('bankName', e.target.value)}
+                placeholder={t('label.bankNamePlaceholder')}
+              />
+            </div>
+
+            <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-holder-input`}>
                 {t('label.holder')}
               </label>

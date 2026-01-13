@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 5;
+const CURRENT_SCHEMA_VERSION: i32 = 6;
 
 fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
     // Dev-mode friendly: create idempotently so existing schema DBs also get it.
@@ -161,6 +161,26 @@ WHERE archived_at IS NULL
     Ok(())
 }
 
+fn migrate_5_to_6(conn: &Connection) -> Result<()> {
+    ensure_ui_preferences_table(conn)?;
+
+    // Add bank name field to bank_cards.
+    if has_table(conn, "bank_cards")? && !has_column(conn, "bank_cards", "bank_name")? {
+        conn.execute_batch(
+            r#"
+ALTER TABLE bank_cards
+ADD COLUMN bank_name TEXT NULL;
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 6;")
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+    Ok(())
+}
+
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -188,18 +208,25 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
             migrate_1_to_2(conn)?;
             migrate_2_to_3(conn)?;
             migrate_3_to_4(conn)?;
-            migrate_4_to_5(conn)
+            migrate_4_to_5(conn)?;
+            migrate_5_to_6(conn)
         }
         2 => {
             migrate_2_to_3(conn)?;
             migrate_3_to_4(conn)?;
-            migrate_4_to_5(conn)
+            migrate_4_to_5(conn)?;
+            migrate_5_to_6(conn)
         }
         3 => {
             migrate_3_to_4(conn)?;
-            migrate_4_to_5(conn)
+            migrate_4_to_5(conn)?;
+            migrate_5_to_6(conn)
         }
-        4 => migrate_4_to_5(conn),
+        4 => {
+            migrate_4_to_5(conn)?;
+            migrate_5_to_6(conn)
+        }
+        5 => migrate_5_to_6(conn),
         CURRENT_SCHEMA_VERSION => {
             ensure_ui_preferences_table(conn)?;
             Ok(())

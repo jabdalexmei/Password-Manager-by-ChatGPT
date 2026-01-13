@@ -192,6 +192,7 @@ export function mapBankCardFromBackend(card: BackendBankCardItem): BankCardItem 
     id: card.id,
     folderId: card.folder_id ?? null,
     title: card.title,
+    bankName: card.bank_name ?? null,
     holder: card.holder,
     number: card.number,
     expiryMmYy: card.expiry_mm_yy,
@@ -218,6 +219,7 @@ export function mapBankCardSummaryFromBackend(
     id: card.id,
     folderId: card.folder_id ?? null,
     title: card.title,
+    bankName: card.bank_name ?? null,
     holder: card.holder,
     number: card.number,
     expiryMmYy: null,
@@ -252,6 +254,7 @@ export function mapCreateBankCardToBackend(input: CreateBankCardInput): BackendC
   return {
     folder_id: input.folderId ?? null,
     title: input.title,
+    bank_name: input.bankName ?? null,
     holder: input.holder ?? null,
     number: input.number ?? null,
     expiry_mm_yy: input.expiryMmYy ?? null,

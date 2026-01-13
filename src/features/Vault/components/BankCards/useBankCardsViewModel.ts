@@ -8,6 +8,7 @@ export type BankCardFieldErrors = Partial<Record<BankCardFieldErrorKey, string>>
 export type BankCardFormState = {
   folderId: string | null;
   title: string;
+  bankName: string;
   holder: string;
   number: string;
   expiryMmYy: string;
@@ -83,6 +84,7 @@ const normalizeTags = (value: string) => {
 const buildCreateInput = (form: BankCardFormState): CreateBankCardInput => ({
   folderId: form.folderId,
   title: form.title.trim(),
+  bankName: normalizeOptional(form.bankName),
   holder: normalizeOptional(form.holder),
   number: normalizeOptional(form.number),
   expiryMmYy: normalizeOptional(form.expiryMmYy),
@@ -99,6 +101,7 @@ const buildUpdateInput = (form: BankCardFormState, id: string): UpdateBankCardIn
 const buildInitialForm = (defaultFolderId: string | null): BankCardFormState => ({
   folderId: defaultFolderId,
   title: '',
+  bankName: '',
   holder: '',
   number: '',
   expiryMmYy: '',
@@ -174,6 +177,7 @@ export function useBankCardsViewModel({
     setEditForm({
       folderId: card.folderId ?? null,
       title: card.title ?? '',
+      bankName: card.bankName ?? '',
       holder: card.holder ?? '',
       number: card.number ?? '',
       expiryMmYy: card.expiryMmYy ?? '',

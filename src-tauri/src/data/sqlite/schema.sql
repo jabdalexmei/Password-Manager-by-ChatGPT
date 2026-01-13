@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS bank_cards (
   folder_id TEXT NULL,
 
   title TEXT NOT NULL,
+  bank_name TEXT,
   holder TEXT,
   number TEXT,
   expiry_mm_yy TEXT,
