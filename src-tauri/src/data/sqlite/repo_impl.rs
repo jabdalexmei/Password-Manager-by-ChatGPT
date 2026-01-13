@@ -357,8 +357,8 @@ fn map_bank_card(row: &rusqlite::Row) -> rusqlite::Result<BankCardItem> {
         expiry_mm_yy: row.get("expiry_mm_yy")?,
         cvc: row.get("cvc")?,
         note: row.get("note")?,
-        tags: deserialize_json(row.get::<_, String>("tags_json")?)?,
-        preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
+        tags: deserialize_json(row.get::<_, Option<String>>("tags_json")?.unwrap_or_else(|| "[]".to_string()))?,
+        preview_fields: deserialize_json(row.get::<_, Option<String>>("preview_fields_json")?.unwrap_or_else(|| "{}".to_string()))?,
         is_favorite: row.get::<_, i64>("is_favorite")? != 0,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
@@ -368,7 +368,8 @@ fn map_bank_card(row: &rusqlite::Row) -> rusqlite::Result<BankCardItem> {
 }
 
 fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummary> {
-    let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
+    let tags: Vec<String> =
+        deserialize_json(row.get::<_, Option<String>>("tags_json")?.unwrap_or_else(|| "[]".to_string()))?;
     let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
 
     Ok(BankCardSummary {
@@ -380,7 +381,10 @@ fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummar
         number: row.get("number")?,
         note: row.get("note")?,
         tags,
-        preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
+        preview_fields: deserialize_json(
+            row.get::<_, Option<String>>("preview_fields_json")?
+                .unwrap_or_else(|| "{}".to_string()),
+        )?,
         is_favorite,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
@@ -1160,8 +1164,14 @@ pub fn get_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Resul
             .prepare("SELECT * FROM bank_cards WHERE id = ?1")
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-        stmt.query_row(params![id], map_bank_card)
-            .map_err(|_| ErrorCodeString::new("BANK_CARD_NOT_FOUND"))
+        match stmt.query_row(params![id], map_bank_card) {
+            Ok(card) => Ok(card),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND")),
+            Err(err) => {
+                log_sqlite_err("get_bank_card.query_row", "SELECT * FROM bank_cards WHERE id = ?1", &err);
+                Err(ErrorCodeString::new("DB_QUERY_FAILED"))
+            }
+        }
     })
 }
 

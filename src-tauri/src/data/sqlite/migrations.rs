@@ -170,6 +170,16 @@ ADD COLUMN preview_fields_json TEXT NOT NULL DEFAULT '{}';
         }
     }
 
+        // Some legacy vaults may have NULLs in newly-added columns (SQLite keeps NULL for preexisting rows in some cases).
+        // Normalize to safe JSON defaults to avoid runtime deserialization failures.
+        conn.execute_batch(
+            r#"
+UPDATE bank_cards SET tags_json = '[]' WHERE tags_json IS NULL OR tags_json = '';
+UPDATE bank_cards SET preview_fields_json = '{}' WHERE preview_fields_json IS NULL OR preview_fields_json = '';
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
     conn.execute_batch("PRAGMA user_version = 8;")
         .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
 

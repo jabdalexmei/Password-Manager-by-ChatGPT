@@ -1,69 +1,11 @@
-diff -ruN src-tauri/src/data/sqlite/migrations.rs src-tauri/src/data/sqlite/migrations.rs
---- src-tauri/src/data/sqlite/migrations.rs	2026-01-13 23:32:35.000000000 +0000
-+++ src-tauri/src/data/sqlite/migrations.rs	2026-01-13 23:38:16.446302864 +0000
-@@ -170,6 +170,16 @@
-         }
-     }
+--- a/src-tauri/src/types.rs+++ b/src-tauri/src/types.rs@@ -246,8 +246,11 @@ }
  
-+        // Some legacy vaults may have NULLs in newly-added columns (SQLite keeps NULL for preexisting rows in some cases).
-+        // Normalize to safe JSON defaults to avoid runtime deserialization failures.
-+        conn.execute_batch(
-+            r#"
-+UPDATE bank_cards SET tags_json = '[]' WHERE tags_json IS NULL OR tags_json = '';
-+UPDATE bank_cards SET preview_fields_json = '{}' WHERE preview_fields_json IS NULL OR preview_fields_json = '';
-+"#,
-+        )
-+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-+
-     conn.execute_batch("PRAGMA user_version = 8;")
-         .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
- 
-diff -ruN src-tauri/src/data/sqlite/repo_impl.rs src-tauri/src/data/sqlite/repo_impl.rs
---- src-tauri/src/data/sqlite/repo_impl.rs	2026-01-13 23:32:35.000000000 +0000
-+++ src-tauri/src/data/sqlite/repo_impl.rs	2026-01-13 23:39:31.312016986 +0000
-@@ -357,8 +357,8 @@
-         expiry_mm_yy: row.get("expiry_mm_yy")?,
-         cvc: row.get("cvc")?,
-         note: row.get("note")?,
--        tags: deserialize_json(row.get::<_, String>("tags_json")?)?,
--        preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
-+        tags: deserialize_json(row.get::<_, Option<String>>("tags_json")?.unwrap_or_else(|| "[]".to_string()))?,
-+        preview_fields: deserialize_json(row.get::<_, Option<String>>("preview_fields_json")?.unwrap_or_else(|| "{}".to_string()))?,
-         is_favorite: row.get::<_, i64>("is_favorite")? != 0,
-         created_at: row.get("created_at")?,
-         updated_at: row.get("updated_at")?,
-@@ -368,7 +368,7 @@
- }
- 
- fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummary> {
--    let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
-+    let tags: Vec<String> = deserialize_json(row.get::<_, Option<String>>("tags_json")?.unwrap_or_else(|| "[]".to_string()))?;
-     let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
- 
-     Ok(BankCardSummary {
-@@ -380,7 +380,7 @@
-         number: row.get("number")?,
-         note: row.get("note")?,
-         tags,
--        preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
-+        preview_fields: deserialize_json(row.get::<_, Option<String>>("preview_fields_json")?.unwrap_or_else(|| "{}".to_string()))?,
-         is_favorite,
-         created_at: row.get("created_at")?,
-         updated_at: row.get("updated_at")?,
-@@ -1160,8 +1160,14 @@
-             .prepare("SELECT * FROM bank_cards WHERE id = ?1")
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
--        stmt.query_row(params![id], map_bank_card)
--            .map_err(|_| ErrorCodeString::new("BANK_CARD_NOT_FOUND"))
-+        match stmt.query_row(params![id], map_bank_card) {
-+            Ok(card) => Ok(card),
-+            Err(rusqlite::Error::QueryReturnedNoRows) => Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND")),
-+            Err(err) => {
-+                log_sqlite_err("get_bank_card.query_row", "SELECT * FROM bank_cards WHERE id = ?1", &err);
-+                Err(ErrorCodeString::new("DB_QUERY_FAILED"))
-+            }
-+        }
-     })
+ #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
++#[serde(default)]
+ pub struct BankCardPreviewFields {
++    #[serde(default)]
+     pub fields: Vec<String>,
++    #[serde(default)]
+     pub card_number_mode: Option<String>,
  }
  
