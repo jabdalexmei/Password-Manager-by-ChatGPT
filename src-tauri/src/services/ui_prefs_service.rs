@@ -12,7 +12,10 @@ const MAX_PREVIEW_FIELDS: usize = 3;
 const MAX_CORE_HIDDEN_FIELDS: usize = 3;
 
 fn is_allowed_preview_field(value: &str) -> bool {
-    matches!(value, "username" | "mobile_phone" | "note" | "folder" | "tags")
+    matches!(
+        value,
+        "username" | "recovery_email" | "mobile_phone" | "note" | "folder" | "tags"
+    )
 }
 
 fn is_allowed_core_field(value: &str) -> bool {

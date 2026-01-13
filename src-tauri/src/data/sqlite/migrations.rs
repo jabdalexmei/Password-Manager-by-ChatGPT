@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 2;
+const CURRENT_SCHEMA_VERSION: i32 = 3;
 
 fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
     // Dev-mode friendly: create idempotently so existing schema DBs also get it.
@@ -71,6 +71,26 @@ ADD COLUMN preview_fields_json TEXT NOT NULL DEFAULT '[]';
     Ok(())
 }
 
+fn migrate_2_to_3(conn: &Connection) -> Result<()> {
+    ensure_ui_preferences_table(conn)?;
+
+    // Add recovery email field to datacards.
+    if has_table(conn, "datacards")? && !has_column(conn, "datacards", "recovery_email")? {
+        conn.execute_batch(
+            r#"
+ALTER TABLE datacards
+ADD COLUMN recovery_email TEXT NULL;
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 3;")
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+    Ok(())
+}
+
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -94,7 +114,11 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     }
 
     match version {
-        1 => migrate_1_to_2(conn),
+        1 => {
+            migrate_1_to_2(conn)?;
+            migrate_2_to_3(conn)
+        }
+        2 => migrate_2_to_3(conn),
         CURRENT_SCHEMA_VERSION => {
             ensure_ui_preferences_table(conn)?;
             Ok(())

@@ -1,6 +1,12 @@
 import { getDataCardPreviewFields, setDataCardPreviewFields } from '@/shared/lib/tauri';
 
-export type DataCardPreviewField = 'username' | 'mobile_phone' | 'note' | 'folder' | 'tags';
+export type DataCardPreviewField =
+  | 'username'
+  | 'recovery_email'
+  | 'mobile_phone'
+  | 'note'
+  | 'folder'
+  | 'tags';
 
 export const MAX_DATA_CARD_PREVIEW_FIELDS = 3;
 
@@ -8,6 +14,7 @@ const EVENT_NAME = 'datacard-preview-fields-changed';
 
 const isAllowed = (value: string): value is DataCardPreviewField =>
   value === 'username' ||
+  value === 'recovery_email' ||
   value === 'mobile_phone' ||
   value === 'note' ||
   value === 'folder' ||

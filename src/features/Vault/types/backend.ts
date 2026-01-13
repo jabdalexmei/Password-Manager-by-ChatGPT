@@ -29,6 +29,7 @@ export type BackendDataCard = {
   title: string;
   url: string | null;
   email: string | null;
+  recovery_email: string | null;
   username: string | null;
   mobile_phone: string | null;
   note: string | null;
@@ -51,6 +52,7 @@ export type BackendDataCardSummary = {
   title: string;
   url: string | null;
   email: string | null;
+  recovery_email: string | null;
   username: string | null;
   mobile_phone: string | null;
   note: string | null;
@@ -72,6 +74,7 @@ export type BackendCreateDataCardInput = {
   title: string;
   url: string | null;
   email: string | null;
+  recovery_email: string | null;
   username: string | null;
   mobile_phone: string | null;
   note: string | null;

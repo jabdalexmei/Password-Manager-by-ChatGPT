@@ -108,7 +108,10 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
 }
 
 fn is_allowed_preview_field(value: &str) -> bool {
-    matches!(value, "username" | "mobile_phone" | "note" | "folder" | "tags")
+    matches!(
+        value,
+        "username" | "recovery_email" | "mobile_phone" | "note" | "folder" | "tags"
+    )
 }
 
 fn sanitize_preview_fields(fields: Vec<String>) -> Vec<String> {

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS datacards (
   title        TEXT,
   url          TEXT NULL,
   email        TEXT NULL,
+  recovery_email TEXT NULL,
   username     TEXT NULL,
   mobile_phone TEXT NULL,
   note         TEXT NULL,

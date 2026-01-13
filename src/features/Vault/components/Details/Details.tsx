@@ -195,6 +195,7 @@ export function Details({
 
   const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
     value === 'username' ||
+    value === 'recovery_email' ||
     value === 'mobile_phone' ||
     value === 'note' ||
     value === 'folder' ||
@@ -283,8 +284,9 @@ export function Details({
   };
   const hasTitle = hasValue(card.title);
   const hasUrl = hasValue(card.url);
-  const hasUsername = hasValue(card.username);
   const hasEmail = hasValue(card.email);
+  const hasRecoveryEmail = hasValue(card.recoveryEmail);
+  const hasUsername = hasValue(card.username);
   const hasMobilePhone = hasValue(card.mobilePhone);
   const hasPassword = hasValue(card.password);
   const hasNote = hasValue(card.note);
@@ -435,6 +437,25 @@ export function Details({
                 type="button"
                 aria-label={t('action.copy')}
                 onClick={() => detailActions.copyToClipboard(card.email)}
+              >
+                <IconCopy />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasRecoveryEmail && (
+        <div className="detail-field">
+          <div className="detail-label">{t('label.recoveryEmail')}</div>
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('recovery_email', e)}>
+            <div className="detail-value-text">{card.recoveryEmail ?? ''}</div>
+            <div className="detail-value-actions">
+              <button
+                className="icon-button"
+                type="button"
+                aria-label={t('action.copy')}
+                onClick={() => detailActions.copyToClipboard(card.recoveryEmail)}
               >
                 <IconCopy />
               </button>

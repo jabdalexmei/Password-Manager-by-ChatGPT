@@ -6,6 +6,7 @@
   "label.folder": "Folder",
   "label.username": "Username",
   "label.email": "Email",
+  "label.recoveryEmail": "Recovery email",
   "label.url": "URL",
   "label.mobile": "Mobile phone",
   "label.password": "Password",
