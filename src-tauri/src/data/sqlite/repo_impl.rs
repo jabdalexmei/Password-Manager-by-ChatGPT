@@ -12,7 +12,7 @@ use crate::data::profiles::paths::vault_db_path;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::{
     AttachmentMeta, BankCardItem, BankCardSummary, CreateBankCardInput, CreateDataCardInput,
-    DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardArchivedInput,
+    CustomField, DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardArchivedInput,
     SetBankCardFavoriteInput, SetDataCardArchivedInput, SetDataCardFavoriteInput,
     UpdateBankCardInput, UpdateDataCardInput,
 };
@@ -50,6 +50,222 @@ fn deserialize_json<T: serde::de::DeserializeOwned>(value: String) -> rusqlite::
 
 fn serialize_json<T: serde::Serialize>(value: &T) -> Result<String> {
     serde_json::to_string(value).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))
+}
+
+fn normalize_for_search(input: &str) -> String {
+    input.to_lowercase()
+}
+
+fn matches_all_tokens(haystack: &str, query: &str) -> bool {
+    let q = normalize_for_search(query);
+    let tokens: Vec<&str> = q.split_whitespace().filter(|t| !t.is_empty()).collect();
+    if tokens.is_empty() {
+        return true;
+    }
+    let h = normalize_for_search(haystack);
+    tokens.into_iter().all(|t| h.contains(t))
+}
+
+pub fn search_datacard_ids(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    query: &str,
+) -> Result<Vec<String>> {
+    with_connection(state, profile_id, |conn| {
+        let mut stmt = conn
+            .prepare(
+                r#"
+SELECT
+  d.id,
+  d.title,
+  d.url,
+  d.email,
+  d.recovery_email,
+  d.username,
+  d.mobile_phone,
+  d.note,
+  d.password_value,
+  d.tags_json,
+  d.custom_fields_json,
+  f.name AS folder_name,
+  (
+    SELECT GROUP_CONCAT(a.file_name, '\n')
+    FROM attachments a
+    WHERE a.datacard_id = d.id
+      AND a.deleted_at IS NULL
+  ) AS attachment_names
+FROM datacards d
+LEFT JOIN folders f ON f.id = d.folder_id
+"#,
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                let id: String = row.get("id")?;
+                let title: String = row.get("title")?;
+                let url: Option<String> = row.get("url")?;
+                let email: Option<String> = row.get("email")?;
+                let recovery_email: Option<String> = row.get("recovery_email")?;
+                let username: Option<String> = row.get("username")?;
+                let mobile_phone: Option<String> = row.get("mobile_phone")?;
+                let note: Option<String> = row.get("note")?;
+                let password: Option<String> = row.get("password_value")?;
+                let tags_json: String = row.get("tags_json")?;
+                let custom_fields_json: String = row.get("custom_fields_json")?;
+                let folder_name: Option<String> = row.get("folder_name")?;
+                let attachment_names: Option<String> = row.get("attachment_names")?;
+
+                let tags: Vec<String> = deserialize_json(tags_json).unwrap_or_default();
+                let custom_fields: Vec<CustomField> =
+                    deserialize_json(custom_fields_json).unwrap_or_default();
+
+                let mut blob = String::new();
+                blob.push_str(&title);
+                blob.push('\n');
+                if let Some(v) = url {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = email {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = recovery_email {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = username {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = mobile_phone {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = note {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = password {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = folder_name {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = attachment_names {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+
+                for t in tags {
+                    blob.push_str(&t);
+                    blob.push('\n');
+                }
+
+                for cf in custom_fields {
+                    blob.push_str(&cf.key);
+                    blob.push(':');
+                    blob.push_str(&cf.value);
+                    blob.push('\n');
+                }
+
+                // ВАЖНО: намеренно НЕ включаем в поиск:
+                // - seed_phrase_value
+                // - totp_uri
+                Ok((id, blob))
+            })
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        let mut out: Vec<String> = Vec::new();
+        for row in rows {
+            let (id, blob) = row.map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            if matches_all_tokens(&blob, query) {
+                out.push(id);
+            }
+        }
+        Ok(out)
+    })
+}
+
+pub fn search_bank_card_ids(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    query: &str,
+) -> Result<Vec<String>> {
+    with_connection(state, profile_id, |conn| {
+        let mut stmt = conn
+            .prepare(
+                r#"
+SELECT
+  b.id,
+  b.title,
+  b.holder,
+  b.number,
+  b.note,
+  b.tags_json,
+  f.name AS folder_name
+FROM bank_cards b
+LEFT JOIN folders f ON f.id = b.folder_id
+"#,
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                let id: String = row.get("id")?;
+                let title: String = row.get("title")?;
+                let holder: Option<String> = row.get("holder")?;
+                let number: Option<String> = row.get("number")?;
+                let note: Option<String> = row.get("note")?;
+                let tags_json: String = row.get("tags_json")?;
+                let folder_name: Option<String> = row.get("folder_name")?;
+
+                let tags: Vec<String> = deserialize_json(tags_json).unwrap_or_default();
+
+                let mut blob = String::new();
+                blob.push_str(&title);
+                blob.push('\n');
+                if let Some(v) = holder {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = number {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = note {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                if let Some(v) = folder_name {
+                    blob.push_str(&v);
+                    blob.push('\n');
+                }
+                for t in tags {
+                    blob.push_str(&t);
+                    blob.push('\n');
+                }
+
+                // ВАЖНО: намеренно НЕ включаем в поиск:
+                // - cvc (CVV)
+                // - expiry_mm_yy (Expiry)
+                // - pin (если добавишь в будущем)
+                Ok((id, blob))
+            })
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        let mut out: Vec<String> = Vec::new();
+        for row in rows {
+            let (id, blob) = row.map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            if matches_all_tokens(&blob, query) {
+                out.push(id);
+            }
+        }
+        Ok(out)
+    })
 }
 
 fn map_folder(row: &rusqlite::Row) -> rusqlite::Result<Folder> {

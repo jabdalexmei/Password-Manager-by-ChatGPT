@@ -125,6 +125,17 @@ pub async fn set_datacard_favorite(
 }
 
 #[tauri::command]
+pub async fn search_datacards(
+    query: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<String>> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || datacards_service::search_datacard_ids(query, &app))
+        .await
+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
 pub async fn set_datacard_archived(
     input: SetDataCardArchivedInput,
     state: State<'_, Arc<AppState>>,
