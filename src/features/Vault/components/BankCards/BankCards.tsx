@@ -449,7 +449,18 @@ export function BankCards({
           {cards.map((card) => {
             const isActive = selectedCardId === card.id;
             const isFavorite = card.isFavorite;
-            const title = card.title?.trim() ? card.title : t('label.untitled');
+            const rawTitle = (card.title ?? '').trim();
+            const rawBankName = (card.bankName ?? '').trim();
+
+            // Primary line:
+            // - if Title exists -> Title
+            // - else if Bank name exists -> Bank name
+            // - else -> Untitled
+            const displayTitleText = rawTitle || rawBankName || t('label.untitled');
+
+            // Secondary line:
+            // - show Bank name only when Title exists and Bank name exists
+            const bankNameLine = rawTitle && rawBankName ? rawBankName : null;
 
             return (
               <button
@@ -464,9 +475,17 @@ export function BankCards({
                 }}
               >
                 <div className="datacard-top">
-                  <div className="datacard-title">{title}</div>
+                  <div className="datacard-title">{displayTitleText}</div>
                   {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
                 </div>
+
+                {bankNameLine && (
+                  <div className="datacard-meta-lines">
+                    <div className="datacard-meta">
+                      <span>{bankNameLine}</span>
+                    </div>
+                  </div>
+                )}
               </button>
             );
           })}
