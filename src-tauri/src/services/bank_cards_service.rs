@@ -7,8 +7,8 @@ use crate::error::Result;
 use crate::services::security_service;
 use crate::services::settings_service::get_settings;
 use crate::types::{
-    BankCardItem, BankCardSummary, CreateBankCardInput, SetBankCardFavoriteInput,
-    UpdateBankCardInput,
+    BankCardItem, BankCardSummary, CreateBankCardInput, SetBankCardArchivedInput,
+    SetBankCardFavoriteInput, UpdateBankCardInput,
 };
 
 fn normalize_tags(tags: Vec<String>) -> Vec<String> {
@@ -158,6 +158,16 @@ pub fn set_bank_card_favorite(
 ) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let updated = repo_impl::set_bank_card_favorite(state, &profile_id, &input)?;
+    security_service::request_persist_active_vault(state.clone());
+    Ok(updated)
+}
+
+pub fn set_bankcard_archived(
+    input: SetBankCardArchivedInput,
+    state: &Arc<AppState>,
+) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let updated = repo_impl::set_bankcard_archived(state, &profile_id, &input)?;
     security_service::request_persist_active_vault(state.clone());
     Ok(updated)
 }

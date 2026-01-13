@@ -105,6 +105,7 @@ export type BackendBankCardItem = {
   is_favorite: boolean;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
   deleted_at: string | null;
 };
 
@@ -118,6 +119,7 @@ export type BackendBankCardSummary = {
   is_favorite: boolean;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
   deleted_at: string | null;
 };
 

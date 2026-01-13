@@ -161,6 +161,7 @@ fn main() {
             create_bank_card,
             update_bank_card,
             set_bank_card_favorite,
+            set_bankcard_archived,
             delete_bank_card,
             restore_bank_card,
             purge_bank_card,

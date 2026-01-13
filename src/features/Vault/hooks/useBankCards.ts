@@ -12,6 +12,7 @@ import {
   restoreBankCard,
   restoreAllDeletedBankCards,
   setBankCardFavorite,
+  setBankCardArchived,
   updateBankCard,
 } from '../api/vaultApi';
 import { useDebouncedValue } from './useDebouncedValue';
@@ -376,7 +377,7 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
 
   const visibleCards = useMemo(() => {
     const activeCards = cards.filter((card) => !card.deletedAt);
-    const isArchived = (card: BankCardSummary) => card.tags?.includes('archived');
+    const isArchived = (card: BankCardSummary) => Boolean(card.archivedAt);
     let pool: BankCardSummary[];
 
     if (selectedNav === 'all') {
@@ -452,10 +453,36 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
     [cards, handleError]
   );
 
+  const toggleArchive = useCallback(
+    async (id: string) => {
+      const current = cards.find((card) => card.id === id);
+      if (!current) return;
+
+      const nextArchived = !current.archivedAt;
+
+      try {
+        await setBankCardArchived({ id: current.id, is_archived: nextArchived });
+        const nextArchivedAt = nextArchived ? new Date().toISOString() : null;
+
+        setCards((prev) =>
+          prev.map((card) => (card.id === current.id ? { ...card, archivedAt: nextArchivedAt } : card))
+        );
+        setCardDetailsById((prev) =>
+          prev[current.id]
+            ? { ...prev, [current.id]: { ...prev[current.id], archivedAt: nextArchivedAt } }
+            : prev
+        );
+      } catch (err) {
+        handleError(err);
+      }
+    },
+    [cards, handleError]
+  );
+
   const counts = useMemo(
     () => {
       const activeCards = cards.filter((card) => !card.deletedAt);
-      const isArchived = (card: BankCardSummary) => card.tags?.includes('archived');
+      const isArchived = (card: BankCardSummary) => Boolean(card.archivedAt);
 
       return {
         all: activeCards.filter((card) => !isArchived(card)).length,
@@ -500,6 +527,7 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
     purgeAllTrash: purgeAllTrashAction,
     loadCard,
     toggleFavorite,
+    toggleArchive,
     settings,
     updateSettings: updateSettingsAction,
     setSettings: setSettingsState,

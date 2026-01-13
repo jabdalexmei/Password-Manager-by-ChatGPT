@@ -101,9 +101,11 @@ CREATE TABLE IF NOT EXISTS bank_cards (
   is_favorite INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  archived_at TEXT NULL,
   deleted_at TEXT
 );
 
+CREATE INDEX IF NOT EXISTS idx_bank_cards_archived_at ON bank_cards (archived_at);
 CREATE INDEX IF NOT EXISTS idx_bank_cards_deleted_at ON bank_cards (deleted_at);
 CREATE INDEX IF NOT EXISTS idx_bank_cards_is_favorite ON bank_cards (is_favorite);
 CREATE INDEX IF NOT EXISTS idx_bank_cards_folder ON bank_cards (folder_id);

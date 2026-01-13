@@ -3,7 +3,7 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 4;
+const CURRENT_SCHEMA_VERSION: i32 = 5;
 
 fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
     // Dev-mode friendly: create idempotently so existing schema DBs also get it.
@@ -123,6 +123,44 @@ WHERE archived_at IS NULL
     Ok(())
 }
 
+fn migrate_4_to_5(conn: &Connection) -> Result<()> {
+    ensure_ui_preferences_table(conn)?;
+
+    // Add per-bank-card archived timestamp (soft-archive).
+    if has_table(conn, "bank_cards")? && !has_column(conn, "bank_cards", "archived_at")? {
+        conn.execute_batch(
+            r#"
+ALTER TABLE bank_cards
+ADD COLUMN archived_at TEXT NULL;
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+        conn.execute_batch(
+            r#"
+CREATE INDEX IF NOT EXISTS idx_bank_cards_archived_at ON bank_cards (archived_at);
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+        // Best-effort: if legacy tag-based archive exists, carry it over.
+        conn.execute_batch(
+            r#"
+UPDATE bank_cards
+SET archived_at = COALESCE(archived_at, updated_at)
+WHERE archived_at IS NULL
+  AND tags_json LIKE '%"archived"%';
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 5;")
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
+    Ok(())
+}
+
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -149,13 +187,19 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
         1 => {
             migrate_1_to_2(conn)?;
             migrate_2_to_3(conn)?;
-            migrate_3_to_4(conn)
+            migrate_3_to_4(conn)?;
+            migrate_4_to_5(conn)
         }
         2 => {
             migrate_2_to_3(conn)?;
-            migrate_3_to_4(conn)
+            migrate_3_to_4(conn)?;
+            migrate_4_to_5(conn)
         }
-        3 => migrate_3_to_4(conn),
+        3 => {
+            migrate_3_to_4(conn)?;
+            migrate_4_to_5(conn)
+        }
+        4 => migrate_4_to_5(conn),
         CURRENT_SCHEMA_VERSION => {
             ensure_ui_preferences_table(conn)?;
             Ok(())

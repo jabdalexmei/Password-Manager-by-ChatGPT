@@ -200,6 +200,7 @@ export function mapBankCardFromBackend(card: BackendBankCardItem): BankCardItem 
     isFavorite: card.is_favorite,
     createdAt: card.created_at,
     updatedAt: card.updated_at,
+    archivedAt: card.archived_at ?? null,
     deletedAt: card.deleted_at,
   };
 }
@@ -225,6 +226,7 @@ export function mapBankCardSummaryFromBackend(
     isFavorite: card.is_favorite,
     createdAt: card.created_at,
     updatedAt: card.updated_at,
+    archivedAt: card.archived_at ?? null,
     deletedAt: card.deleted_at,
     updatedAtLabel,
     createdAtLabel,

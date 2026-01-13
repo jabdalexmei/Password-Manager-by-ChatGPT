@@ -103,6 +103,7 @@ export type BankCardItem = {
   isFavorite: boolean;
   createdAt: string;
   updatedAt: string;
+  archivedAt: string | null;
   deletedAt: string | null;
 };
 

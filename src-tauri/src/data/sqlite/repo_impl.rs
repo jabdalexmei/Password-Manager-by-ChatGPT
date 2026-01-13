@@ -12,8 +12,9 @@ use crate::data::profiles::paths::vault_db_path;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::{
     AttachmentMeta, BankCardItem, BankCardSummary, CreateBankCardInput, CreateDataCardInput,
-    DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardFavoriteInput,
-    SetDataCardArchivedInput, SetDataCardFavoriteInput, UpdateBankCardInput, UpdateDataCardInput,
+    DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardArchivedInput,
+    SetBankCardFavoriteInput, SetDataCardArchivedInput, SetDataCardFavoriteInput,
+    UpdateBankCardInput, UpdateDataCardInput,
 };
 
 use std::sync::Arc;
@@ -137,6 +138,7 @@ fn map_bank_card(row: &rusqlite::Row) -> rusqlite::Result<BankCardItem> {
         is_favorite: row.get::<_, i64>("is_favorite")? != 0,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
+        archived_at: row.get("archived_at")?,
         deleted_at: row.get("deleted_at")?,
     })
 }
@@ -155,6 +157,7 @@ fn map_bank_card_summary(row: &rusqlite::Row) -> rusqlite::Result<BankCardSummar
         is_favorite,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
+        archived_at: row.get("archived_at")?,
         deleted_at: row.get("deleted_at")?,
     })
 }
@@ -859,7 +862,7 @@ pub fn list_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let clause = order_clause(sort_field, sort_dir).unwrap_or("ORDER BY updated_at DESC");
         let query = format!(
-            "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
+            "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
         );
         let mut stmt = conn.prepare(&query).map_err(|e| {
             log_sqlite_err("list_bank_cards_summary.prepare", &query, &e);
@@ -889,7 +892,7 @@ pub fn list_deleted_bank_cards_summary(
     with_connection(state, profile_id, |conn| {
         let mut stmt = conn
             .prepare(
-                "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                "SELECT id, folder_id, title, holder, number, tags_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -1011,6 +1014,31 @@ pub fn set_bank_card_favorite(
                     Utc::now().to_rfc3339(),
                     input.id
                 ],
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        if rows == 0 {
+            return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
+        }
+        Ok(true)
+    })
+}
+
+pub fn set_bankcard_archived(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    input: &SetBankCardArchivedInput,
+) -> Result<bool> {
+    with_connection(state, profile_id, |conn| {
+        let archived_at: Option<String> = if input.is_archived {
+            Some(Utc::now().to_rfc3339())
+        } else {
+            None
+        };
+
+        let rows = conn
+            .execute(
+                "UPDATE bank_cards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
+                params![archived_at, Utc::now().to_rfc3339(), input.id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
