@@ -100,6 +100,7 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
           return tCommon('error.network', { code });
         case 'PROFILE_ID_INVALID':
           return tCommon('error.profileInvalid', { code });
+        case 'DB_QUERY_FAILED':
         case 'DB_SCHEMA_MISSING':
         case 'DB_MIGRATION_FAILED':
           return tCommon('error.vaultUnsupportedOrCorrupt', { code });
@@ -111,6 +112,12 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
     },
     [tCommon]
   );
+
+  const normalizeCardId = useCallback((value: string | null) => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }, []);
 
   const sortCardsWithSettings = useCallback(
     (list: BankCardSummary[]) => {
@@ -209,6 +216,20 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
           setDeletedCards((prev) => prev.filter((c) => c.id !== id));
         }
       } catch (err) {
+        const code = err?.code ?? err?.error ?? 'UNKNOWN';
+        if (code === 'BANK_CARD_NOT_FOUND') {
+          setCardDetailsById((prev) => {
+            if (!prev[id]) return prev;
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+          setCards((prev) => prev.filter((card) => card.id !== id));
+          setDeletedCards((prev) => prev.filter((card) => card.id !== id));
+          setSelectedCardId((prev) => (prev === id ? null : prev));
+          console.warn('[BankCards] Card missing, cleared stale state.', { id });
+          return;
+        }
         handleError(err);
       }
     },
@@ -240,12 +261,13 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
 
   const selectCard = useCallback(
     (id: string | null) => {
-      setSelectedCardId(id);
-      if (id && !cardDetailsById[id]) {
-        loadCard(id);
+      const normalizedId = normalizeCardId(id);
+      setSelectedCardId(normalizedId);
+      if (normalizedId && !cardDetailsById[normalizedId]) {
+        loadCard(normalizedId);
       }
     },
-    [cardDetailsById, loadCard]
+    [cardDetailsById, loadCard, normalizeCardId]
   );
 
   const createCardAction = useCallback(
