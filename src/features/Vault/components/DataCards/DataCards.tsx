@@ -550,6 +550,20 @@ export function DataCards({
             </div>
 
             <div className="form-field">
+              <label className="form-label" htmlFor={`${dialogId}-recovery-email`}>
+                {t('label.recoveryEmail')}
+              </label>
+              <input
+                id={`${dialogId}-recovery-email`}
+                className="input"
+                type="email"
+                autoComplete="off"
+                value={form.recoveryEmail}
+                onChange={(e) => onFieldChange('recoveryEmail', e.target.value)}
+              />
+            </div>
+
+            <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-username`}>
                 {t('label.username')}
               </label>
@@ -922,6 +936,10 @@ export function DataCards({
                   const v = (card.username ?? '').trim();
                   return v.length > 0 ? v : null;
                 }
+                case 'recovery_email': {
+                  const v = (card.recoveryEmail ?? '').trim();
+                  return v.length > 0 ? `${t('label.recoveryEmail')}:${v}` : null;
+                }
                 case 'mobile_phone': {
                   const v = (card.mobilePhone ?? '').trim();
                   return v.length > 0 ? v : null;
@@ -946,6 +964,7 @@ export function DataCards({
 
             const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
               value === 'username' ||
+              value === 'recovery_email' ||
               value === 'mobile_phone' ||
               value === 'note' ||
               value === 'folder' ||

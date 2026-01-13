@@ -1,746 +1,1190 @@
+Да, делаем **через БД**, как `deleted_at`: добавляем `archived_at TEXT NULL` и переключаем Archive/Unarchive через это поле. Это реально надёжнее и логичнее, чем тег.
 
+SQLite официально поддерживает `ALTER TABLE ... ADD COLUMN`, но без `IF NOT EXISTS`, поэтому делаем проверку `PRAGMA table_info` как у тебя уже сделано для `preview_fields_json`.
+И важно: **NOT NULL без DEFAULT добавить нельзя**, поэтому `archived_at` именно `NULL`-колонка.
+
+Ниже — unified diff patch (под архив `...add-auto-hide-scrollbar...`).
 
 ```diff
-*** a/src-tauri/src/data/sqlite/schema.sql
---- b/src-tauri/src/data/sqlite/schema.sql
-***************
-*** 24,37 ****
-   title        TEXT,
-   url          TEXT NULL,
-   email        TEXT NULL,
-+  recovery_email TEXT NULL,
-   username     TEXT NULL,
-   mobile_phone TEXT NULL,
-   note         TEXT NULL,
- 
-   is_favorite  INTEGER NOT NULL DEFAULT 0,
 *** a/src-tauri/src/data/sqlite/migrations.rs
 --- b/src-tauri/src/data/sqlite/migrations.rs
 ***************
-*** 4,10 ****
- use crate::error::{ErrorCodeString, Result};
- 
--const CURRENT_SCHEMA_VERSION: i32 = 2;
-+const CURRENT_SCHEMA_VERSION: i32 = 3;
+*** 3,9 ****
+  use crate::error::{ErrorCodeString, Result};
+  
+! const CURRENT_SCHEMA_VERSION: i32 = 2;
+  
+  fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
+      // Dev-mode friendly: create idempotently so existing schema DBs also get it.
+--- 3,9 ----
+  use crate::error::{ErrorCodeString, Result};
+  
+! const CURRENT_SCHEMA_VERSION: i32 = 3;
+  
+  fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
+      // Dev-mode friendly: create idempotently so existing schema DBs also get it.
 ***************
-*** 43,78 ****
- fn migrate_1_to_2(conn: &Connection) -> Result<()> {
-     ensure_ui_preferences_table(conn)?;
- 
-     // Add per-datacard preview fields storage.
-     if has_table(conn, "datacards")? && !has_column(conn, "datacards", "preview_fields_json")? {
-         conn.execute_batch(
-             r#"
- ALTER TABLE datacards
- ADD COLUMN preview_fields_json TEXT NOT NULL DEFAULT '[]';
- "#,
-         )
-         .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-     }
- 
-     conn.execute_batch("PRAGMA user_version = 2;")
-         .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
- 
-     Ok(())
- }
- 
-+fn migrate_2_to_3(conn: &Connection) -> Result<()> {
-+    ensure_ui_preferences_table(conn)?;
-+
-+    // Add recovery email field to datacards.
-+    if has_table(conn, "datacards")? && !has_column(conn, "datacards", "recovery_email")? {
-+        conn.execute_batch(
-+            r#"
-+ALTER TABLE datacards
-+ADD COLUMN recovery_email TEXT NULL;
-+"#,
-+        )
-+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-+    }
-+
-+    conn.execute_batch("PRAGMA user_version = 3;")
-+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-+
-+    Ok(())
-+}
-+
- pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
-     conn.execute_batch("PRAGMA foreign_keys = ON;")
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+*** 71,76 ****
+      Ok(())
+  }
+  
+  pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
+      conn.execute_batch("PRAGMA foreign_keys = ON;")
+          .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+--- 71,102 ----
+      Ok(())
+  }
+  
++ fn migrate_2_to_3(conn: &Connection) -> Result<()> {
++     ensure_ui_preferences_table(conn)?;
++ 
++     // Add per-datacard archived timestamp (soft-archive).
++     if has_table(conn, "datacards")? && !has_column(conn, "datacards", "archived_at")? {
++         conn.execute_batch(
++             r#"
++ ALTER TABLE datacards
++ ADD COLUMN archived_at TEXT NULL;
++ "#,
++         )
++         .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++ 
++         // Best-effort migration from legacy tag-based archive (if it ever existed).
++         // We intentionally keep tags_json unchanged; UI will rely on archived_at going forward.
++         conn.execute_batch(
++             r#"
++ UPDATE datacards
++ SET archived_at = COALESCE(archived_at, updated_at)
++ WHERE archived_at IS NULL
++   AND tags_json LIKE '%"archived"%';
++ "#,
++         )
++         .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++     }
++ 
++     conn.execute_batch("PRAGMA user_version = 3;")
++         .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++ 
++     Ok(())
++ }
++ 
+  pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
+      conn.execute_batch("PRAGMA foreign_keys = ON;")
+          .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 ***************
-*** 90,107 ****
-     }
- 
-     match version {
--        1 => migrate_1_to_2(conn),
-+        1 => {
-+            migrate_1_to_2(conn)?;
-+            migrate_2_to_3(conn)
-+        }
-+        2 => migrate_2_to_3(conn),
-         CURRENT_SCHEMA_VERSION => {
-             ensure_ui_preferences_table(conn)?;
-             Ok(())
-         }
-         _ => {
+*** 95,106 ****
+      }
+  
+      match version {
+          1 => migrate_1_to_2(conn),
+          CURRENT_SCHEMA_VERSION => {
+              ensure_ui_preferences_table(conn)?;
+              Ok(())
+          }
+          _ => {
+--- 121,134 ----
+      }
+  
+      match version {
+          1 => migrate_1_to_2(conn),
++         2 => migrate_2_to_3(conn),
+          CURRENT_SCHEMA_VERSION => {
+              ensure_ui_preferences_table(conn)?;
+              Ok(())
+          }
+          _ => {
+*** a/src-tauri/src/data/sqlite/schema.sql
+--- b/src-tauri/src/data/sqlite/schema.sql
+***************
+*** 39,52 ****
+    custom_fields_json  TEXT NOT NULL DEFAULT '[]',
+    preview_fields_json TEXT NOT NULL DEFAULT '[]',
+  
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+-   deleted_at   TEXT NULL
++   archived_at  TEXT NULL,
++   deleted_at   TEXT NULL
+  );
+  
+  CREATE INDEX IF NOT EXISTS idx_datacards_folder
+  ON datacards(folder_id);
+  
++ CREATE INDEX IF NOT EXISTS idx_datacards_archived
++ ON datacards(archived_at);
++ 
+  CREATE INDEX IF NOT EXISTS idx_datacards_deleted
+  ON datacards(deleted_at);
+  
 *** a/src-tauri/src/types.rs
 --- b/src-tauri/src/types.rs
 ***************
-*** 82,95 ****
- pub struct DataCard {
-     pub id: String,
-     pub folder_id: Option<String>,
- 
-     pub title: String,
-     pub url: Option<String>,
-     pub email: Option<String>,
-+    pub recovery_email: Option<String>,
-     pub username: Option<String>,
-     pub mobile_phone: Option<String>,
-     pub note: Option<String>,
-     pub is_favorite: bool,
-     pub tags: Vec<String>,
-     pub preview_fields: Vec<String>,
+*** 102,112 ****
+      pub created_at: String,
+      pub updated_at: String,
++     pub archived_at: Option<String>,
+      pub deleted_at: Option<String>,
+  
+      pub password: Option<String>,
+      pub totp_uri: Option<String>,
+      pub seed_phrase: Option<String>,
+--- 102,113 ----
+      pub created_at: String,
+      pub updated_at: String,
++     pub archived_at: Option<String>,
+      pub deleted_at: Option<String>,
+  
+      pub password: Option<String>,
+      pub totp_uri: Option<String>,
+      pub seed_phrase: Option<String>,
+      pub seed_phrase_word_count: Option<i32>,
+      pub custom_fields: Vec<CustomField>,
+  }
 ***************
-*** 112,126 ****
- pub struct DataCardSummary {
-     pub id: String,
-     pub folder_id: Option<String>,
-     pub title: String,
-     pub url: Option<String>,
-     pub email: Option<String>,
-+    pub recovery_email: Option<String>,
-     pub username: Option<String>,
-     pub mobile_phone: Option<String>,
-     pub note: Option<String>,
-     pub tags: Vec<String>,
-     pub preview_fields: Vec<String>,
-     pub created_at: String,
-     pub updated_at: String,
-     pub deleted_at: Option<String>,
-     pub is_favorite: bool,
-     pub has_totp: bool,
-     pub has_seed_phrase: bool,
-     pub has_phone: bool,
-     pub has_note: bool,
-     pub has_attachments: bool,
- }
+*** 133,144 ****
+      pub created_at: String,
+      pub updated_at: String,
++     pub archived_at: Option<String>,
+      pub deleted_at: Option<String>,
+      pub is_favorite: bool,
+      pub has_totp: bool,
+      pub has_seed_phrase: bool,
+      pub has_phone: bool,
+--- 134,146 ----
+      pub created_at: String,
+      pub updated_at: String,
++     pub archived_at: Option<String>,
+      pub deleted_at: Option<String>,
+      pub is_favorite: bool,
+      pub has_totp: bool,
+      pub has_seed_phrase: bool,
+      pub has_phone: bool,
+      pub has_note: bool,
+      pub has_attachments: bool,
+  }
 ***************
-*** 160,176 ****
- pub struct CreateDataCardInput {
-     pub title: String,
-     pub url: Option<String>,
-     pub email: Option<String>,
-+    pub recovery_email: Option<String>,
-     pub username: Option<String>,
-     pub mobile_phone: Option<String>,
-     pub note: Option<String>,
-     pub tags: Vec<String>,
-     pub password: Option<String>,
-     pub totp_uri: Option<String>,
-     pub seed_phrase: Option<String>,
-     pub seed_phrase_word_count: Option<i32>,
-     pub custom_fields: Vec<CustomField>,
-     pub folder_id: Option<String>,
- }
-***************
-*** 179,196 ****
- pub struct UpdateDataCardInput {
-     pub id: String,
-     pub title: String,
-     pub url: Option<String>,
-     pub email: Option<String>,
-+    pub recovery_email: Option<String>,
-     pub username: Option<String>,
-     pub mobile_phone: Option<String>,
-     pub note: Option<String>,
-     pub tags: Vec<String>,
-     pub password: Option<String>,
-     pub totp_uri: Option<String>,
-     pub seed_phrase: Option<String>,
-     pub seed_phrase_word_count: Option<i32>,
-     pub custom_fields: Vec<CustomField>,
-     pub folder_id: Option<String>,
- }
+*** 205,210 ****
+  pub struct SetDataCardFavoriteInput {
+      pub id: String,
+      pub is_favorite: bool,
+  }
+  
++ #[derive(Debug, Serialize, Deserialize, Clone)]
++ pub struct SetDataCardArchivedInput {
++     pub id: String,
++     pub is_archived: bool,
++ }
++ 
+  #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+  pub struct BankCardItem {
+      pub id: String,
 *** a/src-tauri/src/data/sqlite/repo_impl.rs
 --- b/src-tauri/src/data/sqlite/repo_impl.rs
 ***************
-*** 58,80 ****
- fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
-     Ok(DataCard {
-         id: row.get("id")?,
-         folder_id: row.get("folder_id")?,
-         title: row.get("title")?,
-         url: row.get("url")?,
-         email: row.get("email")?,
-+        recovery_email: row.get("recovery_email")?,
-         username: row.get("username")?,
-         mobile_phone: row.get("mobile_phone")?,
-         note: row.get("note")?,
-         is_favorite: row.get("is_favorite")?,
-         tags: serde_json::from_str::<Vec<String>>(&row.get::<_, String>("tags_json")?).unwrap_or_default(),
-         preview_fields: serde_json::from_str::<Vec<String>>(&row.get::<_, String>("preview_fields_json")?).unwrap_or_default(),
-         created_at: row.get("created_at")?,
-         updated_at: row.get("updated_at")?,
-         deleted_at: row.get("deleted_at")?,
-         password: row.get("password_value")?,
-         totp_uri: row.get("totp_uri")?,
-         seed_phrase: row.get("seed_phrase_value")?,
-         seed_phrase_word_count: row.get("seed_phrase_word_count")?,
-         custom_fields: serde_json::from_str::<Vec<CustomField>>(&row.get::<_, String>("custom_fields_json")?).unwrap_or_default(),
-     })
- }
-***************
-*** 90,120 ****
- fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary> {
-     Ok(DataCardSummary {
-         id: row.get("id")?,
-         folder_id: row.get("folder_id")?,
-         title: row.get("title")?,
-         url: row.get("url")?,
-         email: row.get("email")?,
-+        recovery_email: row.get("recovery_email")?,
-         username: row.get("username")?,
-         mobile_phone: row.get("mobile_phone")?,
-         note: row.get("note")?,
-         tags: serde_json::from_str::<Vec<String>>(&row.get::<_, String>("tags_json")?).unwrap_or_default(),
-         preview_fields: serde_json::from_str::<Vec<String>>(&row.get::<_, String>("preview_fields_json")?).unwrap_or_default(),
-         created_at: row.get("created_at")?,
-         updated_at: row.get("updated_at")?,
-         deleted_at: row.get("deleted_at")?,
-         is_favorite: row.get("is_favorite")?,
-         has_totp: row.get::<_, i32>("totp_uri")? != 0,
-         has_seed_phrase: row.get::<_, i32>("has_seed_phrase")? != 0,
-         has_phone: row.get::<_, i32>("has_phone")? != 0,
-         has_note: row.get::<_, i32>("has_note")? != 0,
-         has_attachments: row.get::<_, i32>("has_attachments")? != 0,
-     })
- }
-***************
-*** 392,414 ****
-             SELECT
-                 d.id,
-                 d.folder_id,
-                 d.title,
-                 d.url,
-                 d.email,
-+                d.recovery_email,
-                 d.username,
-                 d.mobile_phone,
-                 d.note,
-                 d.totp_uri,
-                 CASE WHEN d.seed_phrase_value IS NOT NULL AND TRIM(d.seed_phrase_value) <> '' THEN 1 ELSE 0 END AS has_seed_phrase,
-                 CASE WHEN d.mobile_phone IS NOT NULL AND TRIM(d.mobile_phone) <> '' THEN 1 ELSE 0 END AS has_phone,
-                 CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
-                 EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
-                 d.tags_json,
-                 d.preview_fields_json,
-                 d.is_favorite,
-                 d.created_at,
-                 d.updated_at,
-                 d.deleted_at
-             FROM datacards d
-             WHERE d.deleted_at IS NULL {clause}
-             "#
-         );
-***************
-*** 461,485 ****
-                 SELECT
-                     d.id,
-                     d.folder_id,
-                     d.title,
-                     d.url,
-                     d.email,
-+                    d.recovery_email,
-                     d.username,
-                     d.mobile_phone,
-                     d.note,
-                     d.totp_uri,
-                     CASE WHEN d.seed_phrase_value IS NOT NULL AND TRIM(d.seed_phrase_value) <> '' THEN 1 ELSE 0 END AS has_seed_phrase,
-                     CASE WHEN d.mobile_phone IS NOT NULL AND TRIM(d.mobile_phone) <> '' THEN 1 ELSE 0 END AS has_phone,
-                     CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
-                     EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
-                     d.tags_json,
-                     d.preview_fields_json,
-                     d.is_favorite,
-                     d.created_at,
-                     d.updated_at,
-                     d.deleted_at
-                 FROM datacards d
-                 WHERE d.deleted_at IS NOT NULL
-                 ORDER BY d.deleted_at DESC
-                 "#,
-             )
-***************
-*** 593,612 ****
-         conn.execute(
--            "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, NULL)",
-+            "INSERT INTO datacards (id, folder_id, title, url, email, recovery_email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL)",
-             rusqlite::params![
-                 id,
-                 input.folder_id,
-                 input.title,
-                 input.url,
-                 input.email,
-+                input.recovery_email,
-                 input.username,
-                 input.mobile_phone,
-                 input.note,
-                 tags_json,
-                 input.password,
-                 input.totp_uri,
-                 input.seed_phrase,
-                 input.seed_phrase_word_count,
-                 custom_fields_json,
-                 "[]",
-                 now_utc,
-                 now_utc
-             ],
-         )
-***************
-*** 661,677 ****
-             conn.execute(
--                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, username = ?4, mobile_phone = ?5, note = ?6, tags_json = ?7, password_value = ?8, totp_uri = ?9, seed_phrase_value = ?10, seed_phrase_word_count = ?11, custom_fields_json = ?12, folder_id = ?13, updated_at = ?14 WHERE id = ?15",
-+                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, recovery_email = ?4, username = ?5, mobile_phone = ?6, note = ?7, tags_json = ?8, password_value = ?9, totp_uri = ?10, seed_phrase_value = ?11, seed_phrase_word_count = ?12, custom_fields_json = ?13, folder_id = ?14, updated_at = ?15 WHERE id = ?16",
-                 rusqlite::params![
-                     input.title,
-                     input.url,
-                     input.email,
-+                    input.recovery_email,
-                     input.username,
-                     input.mobile_phone,
-                     input.note,
-                     tags_json,
-                     input.password,
-                     input.totp_uri,
-                     input.seed_phrase,
-                     input.seed_phrase_word_count,
-                     custom_fields_json,
-                     input.folder_id,
-                     now_utc,
-                     input.id
-                 ],
-             )
-*** a/src-tauri/src/services/ui_prefs_service.rs
---- b/src-tauri/src/services/ui_prefs_service.rs
-***************
 *** 10,16 ****
- fn is_allowed_preview_field(value: &str) -> bool {
--    matches!(value, "username" | "mobile_phone" | "note" | "folder" | "tags")
-+    matches!(
-+        value,
-+        "username" | "recovery_email" | "mobile_phone" | "note" | "folder" | "tags"
-+    )
- }
+  use crate::error::{ErrorCodeString, Result};
+  use crate::types::{
+      AttachmentMeta, BankCardItem, BankCardSummary, CreateBankCardInput, CreateDataCardInput,
+      DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardFavoriteInput,
+!     SetDataCardFavoriteInput, UpdateBankCardInput, UpdateDataCardInput,
+  };
+--- 10,16 ----
+  use crate::error::{ErrorCodeString, Result};
+  use crate::types::{
+      AttachmentMeta, BankCardItem, BankCardSummary, CreateBankCardInput, CreateDataCardInput,
+      DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardFavoriteInput,
+!     SetDataCardArchivedInput, SetDataCardFavoriteInput, UpdateBankCardInput, UpdateDataCardInput,
+  };
+***************
+*** 17,28 ****
+  fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
+      Ok(DataCard {
+          id: row.get("id")?,
+          folder_id: row.get("folder_id")?,
+          title: row.get("title")?,
+          url: row.get("url")?,
+          email: row.get("email")?,
+          username: row.get("username")?,
+          mobile_phone: row.get("mobile_phone")?,
+          note: row.get("note")?,
+          is_favorite: row.get::<_, i64>("is_favorite")? != 0,
+          tags: deserialize_json(row.get::<_, String>("tags_json")?)?,
+          preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
+          created_at: row.get("created_at")?,
+          updated_at: row.get("updated_at")?,
++         archived_at: row.get("archived_at")?,
+          deleted_at: row.get("deleted_at")?,
+          password: row.get("password_value")?,
+          totp_uri: row.get("totp_uri")?,
+          seed_phrase: row.get("seed_phrase_value")?,
+          seed_phrase_word_count: row.get("seed_phrase_word_count")?,
+          custom_fields: deserialize_json(row.get::<_, String>("custom_fields_json")?)?,
+      })
+  }
+--- 17,29 ----
+  fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
+      Ok(DataCard {
+          id: row.get("id")?,
+          folder_id: row.get("folder_id")?,
+          title: row.get("title")?,
+          url: row.get("url")?,
+          email: row.get("email")?,
+          username: row.get("username")?,
+          mobile_phone: row.get("mobile_phone")?,
+          note: row.get("note")?,
+          is_favorite: row.get::<_, i64>("is_favorite")? != 0,
+          tags: deserialize_json(row.get::<_, String>("tags_json")?)?,
+          preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
+          created_at: row.get("created_at")?,
+          updated_at: row.get("updated_at")?,
++         archived_at: row.get("archived_at")?,
+          deleted_at: row.get("deleted_at")?,
+          password: row.get("password_value")?,
+          totp_uri: row.get("totp_uri")?,
+          seed_phrase: row.get("seed_phrase_value")?,
+          seed_phrase_word_count: row.get("seed_phrase_word_count")?,
+          custom_fields: deserialize_json(row.get::<_, String>("custom_fields_json")?)?,
+      })
+  }
+***************
+*** 45,61 ****
+      Ok(DataCardSummary {
+          id: row.get("id")?,
+          folder_id: row.get("folder_id")?,
+          title: row.get("title")?,
+          url: row.get("url")?,
+          email: row.get("email")?,
+          username: row.get("username")?,
+          mobile_phone: row.get("mobile_phone")?,
+          note: row.get("note")?,
+          tags,
+          preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
+          created_at: row.get("created_at")?,
+          updated_at: row.get("updated_at")?,
++         archived_at: row.get("archived_at")?,
+          deleted_at: row.get("deleted_at")?,
+          is_favorite,
+          has_totp,
+          has_seed_phrase,
+          has_phone,
+--- 46,63 ----
+      Ok(DataCardSummary {
+          id: row.get("id")?,
+          folder_id: row.get("folder_id")?,
+          title: row.get("title")?,
+          url: row.get("url")?,
+          email: row.get("email")?,
+          username: row.get("username")?,
+          mobile_phone: row.get("mobile_phone")?,
+          note: row.get("note")?,
+          tags,
+          preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
+          created_at: row.get("created_at")?,
+          updated_at: row.get("updated_at")?,
++         archived_at: row.get("archived_at")?,
+          deleted_at: row.get("deleted_at")?,
+          is_favorite,
+          has_totp,
+          has_seed_phrase,
+          has_phone,
+          has_note,
+          has_attachments,
+      })
+  }
+***************
+*** 33,49 ****
+  pub fn list_datacards_summary(
+      state: &Arc<AppState>,
+      profile_id: &str,
+      sort_field: &str,
+      sort_dir: &str,
+  ) -> Result<Vec<DataCardSummary>> {
+--- 35,52 ----
+  pub fn list_datacards_summary(
+      state: &Arc<AppState>,
+      profile_id: &str,
+      sort_field: &str,
+      sort_dir: &str,
+  ) -> Result<Vec<DataCardSummary>> {
+***************
+*** 43,63 ****
+                  d.is_favorite,
+                  d.created_at,
+                  d.updated_at,
++                 d.archived_at,
+                  d.deleted_at
+              FROM datacards d
+              WHERE d.deleted_at IS NULL {clause}
+              "#
+          );
+--- 46,67 ----
+                  d.is_favorite,
+                  d.created_at,
+                  d.updated_at,
++                 d.archived_at,
+                  d.deleted_at
+              FROM datacards d
+              WHERE d.deleted_at IS NULL {clause}
+              "#
+          );
+***************
+*** 107,110 ****
+  pub fn list_deleted_datacards(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<DataCard>> {
+--- 111,161 ----
+  pub fn list_deleted_datacards(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<DataCard>> {
+      with_connection(state, profile_id, |conn| {
+          let mut stmt = conn
+              .prepare("SELECT * FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+              .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+  
+          let cards = stmt
+              .query_map([], map_datacard)
+              .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+              .collect::<rusqlite::Result<Vec<_>>>()
+              .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+  
+          Ok(cards)
+      })
+  }
++ 
++ pub fn set_datacard_archived(
++     state: &Arc<AppState>,
++     profile_id: &str,
++     input: &SetDataCardArchivedInput,
++ ) -> Result<bool> {
++     with_connection(state, profile_id, |conn| {
++         let archived_at: Option<String> = if input.is_archived {
++             Some(Utc::now().to_rfc3339())
++         } else {
++             None
++         };
++ 
++         let rows = conn
++             .execute(
++                 "UPDATE datacards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
++                 params![archived_at, Utc::now().to_rfc3339(), input.id],
++             )
++             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++ 
++         if rows == 0 {
++             return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
++         }
++ 
++         Ok(true)
++     })
++ }
+***************
+*** 466,506 ****
+  pub fn list_deleted_datacards_summary(
+      state: &Arc<AppState>,
+      profile_id: &str,
+  ) -> Result<Vec<DataCardSummary>> {
+      with_connection(state, profile_id, |conn| {
+          let mut stmt = conn
+              .prepare(
+                  r#"
+                  SELECT
+                      d.id,
+                      d.folder_id,
+                      d.title,
+                      d.url,
+                      d.email,
+                      d.username,
+                      d.mobile_phone,
+                      d.note,
+                      d.totp_uri,
+                      CASE WHEN d.seed_phrase_value IS NOT NULL AND TRIM(d.seed_phrase_value) <> '' THEN 1 ELSE 0 END AS has_seed_phrase,
+                      CASE WHEN d.mobile_phone IS NOT NULL AND TRIM(d.mobile_phone) <> '' THEN 1 ELSE 0 END AS has_phone,
+                      CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
+                      EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
+                      d.tags_json,
+                      d.preview_fields_json,
+                      d.is_favorite,
+                      d.created_at,
+                      d.updated_at,
++                     d.archived_at,
+                      d.deleted_at
+                  FROM datacards d
+                  WHERE d.deleted_at IS NOT NULL
+                  ORDER BY d.deleted_at DESC
+                  "#,
+              )
+--- 517,558 ----
+  pub fn list_deleted_datacards_summary(
+      state: &Arc<AppState>,
+      profile_id: &str,
+  ) -> Result<Vec<DataCardSummary>> {
+      with_connection(state, profile_id, |conn| {
+          let mut stmt = conn
+              .prepare(
+                  r#"
+                  SELECT
+                      d.id,
+                      d.folder_id,
+                      d.title,
+                      d.url,
+                      d.email,
+                      d.username,
+                      d.mobile_phone,
+                      d.note,
+                      d.totp_uri,
+                      CASE WHEN d.seed_phrase_value IS NOT NULL AND TRIM(d.seed_phrase_value) <> '' THEN 1 ELSE 0 END AS has_seed_phrase,
+                      CASE WHEN d.mobile_phone IS NOT NULL AND TRIM(d.mobile_phone) <> '' THEN 1 ELSE 0 END AS has_phone,
+                      CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
+                      EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
+                      d.tags_json,
+                      d.preview_fields_json,
+                      d.is_favorite,
+                      d.created_at,
+                      d.updated_at,
++                     d.archived_at,
+                      d.deleted_at
+                  FROM datacards d
+                  WHERE d.deleted_at IS NOT NULL
+                  ORDER BY d.deleted_at DESC
+                  "#,
+              )
 *** a/src-tauri/src/services/datacards_service.rs
 --- b/src-tauri/src/services/datacards_service.rs
 ***************
-*** 96,102 ****
- fn is_allowed_preview_field(value: &str) -> bool {
--    matches!(value, "username" | "mobile_phone" | "note" | "folder" | "tags")
-+    matches!(
-+        value,
-+        "username" | "recovery_email" | "mobile_phone" | "note" | "folder" | "tags"
-+    )
- }
-*** a/src/features/Vault/types/backend.ts
---- b/src/features/Vault/types/backend.ts
+*** 6,12 ****
+  use crate::types::{
+      CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, SetDataCardFavoriteInput,
+!     UpdateDataCardInput,
+  };
+  
+  pub fn list_datacards(state: &Arc<AppState>) -> Result<Vec<DataCard>> {
+--- 6,12 ----
+  use crate::types::{
+      CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, SetDataCardFavoriteInput,
+!     SetDataCardArchivedInput, UpdateDataCardInput,
+  };
 ***************
-*** 24,36 ****
- export type BackendDataCard = {
-   id: string;
-   folder_id: string | null;
-   title: string;
-   url: string | null;
-   email: string | null;
-+  recovery_email: string | null;
-   username: string | null;
-   mobile_phone: string | null;
-   note: string | null;
-   is_favorite: boolean;
-   tags: string[];
+*** 74,79 ****
+  pub fn set_datacard_favorite(
+      input: SetDataCardFavoriteInput,
+      state: &Arc<AppState>,
+  ) -> Result<bool> {
+--- 74,95 ----
+  pub fn set_datacard_favorite(
+      input: SetDataCardFavoriteInput,
+      state: &Arc<AppState>,
+  ) -> Result<bool> {
+      let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+      let updated = repo_impl::set_datacard_favorite(state, &profile_id, &input)?;
+      security_service::request_persist_active_vault(state.clone());
+      Ok(updated)
+  }
++ 
++ pub fn set_datacard_archived(
++     input: SetDataCardArchivedInput,
++     state: &Arc<AppState>,
++ ) -> Result<bool> {
++     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
++     let updated = repo_impl::set_datacard_archived(state, &profile_id, &input)?;
++     security_service::request_persist_active_vault(state.clone());
++     Ok(updated)
++ }
+*** a/src-tauri/src/commands/datacards.rs
+--- b/src-tauri/src/commands/datacards.rs
 ***************
-*** 49,61 ****
- export type BackendDataCardSummary = {
-   id: string;
-   folder_id: string | null;
-   title: string;
-   url: string | null;
-   email: string | null;
-+  recovery_email: string | null;
-   username: string | null;
-   mobile_phone: string | null;
-   note: string | null;
-   tags: string[];
+*** 6,11 ****
+  use crate::error::{ErrorCodeString, Result};
+  use crate::services::datacards_service;
+  use crate::types::{
+      CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, SetDataCardFavoriteInput,
+!     UpdateDataCardInput,
+  };
+--- 6,11 ----
+  use crate::error::{ErrorCodeString, Result};
+  use crate::services::datacards_service;
+  use crate::types::{
+      CreateDataCardInput, DataCard, DataCardSummary, MoveDataCardInput, SetDataCardFavoriteInput,
+!     SetDataCardArchivedInput, UpdateDataCardInput,
+  };
 ***************
-*** 68,84 ****
- export type BackendCreateDataCardInput = {
-   folder_id: string | null;
-   title: string;
-   url: string | null;
-   email: string | null;
-+  recovery_email: string | null;
-   username: string | null;
-   mobile_phone: string | null;
-   note: string | null;
-   tags: string[];
-   password: string | null;
+*** 114,125 ****
+  pub async fn set_datacard_favorite(
+      input: SetDataCardFavoriteInput,
+      state: State<'_, Arc<AppState>>,
+  ) -> Result<bool> {
+      let app = state.inner().clone();
+      tauri::async_runtime::spawn_blocking(move || {
+          datacards_service::set_datacard_favorite(input, &app)
+      })
+      .await
+      .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+  }
+--- 114,145 ----
+  pub async fn set_datacard_favorite(
+      input: SetDataCardFavoriteInput,
+      state: State<'_, Arc<AppState>>,
+  ) -> Result<bool> {
+      let app = state.inner().clone();
+      tauri::async_runtime::spawn_blocking(move || {
+          datacards_service::set_datacard_favorite(input, &app)
+      })
+      .await
+      .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+  }
++ 
++ #[tauri::command]
++ pub async fn set_datacard_archived(
++     input: SetDataCardArchivedInput,
++     state: State<'_, Arc<AppState>>,
++ ) -> Result<bool> {
++     let app = state.inner().clone();
++     tauri::async_runtime::spawn_blocking(move || {
++         datacards_service::set_datacard_archived(input, &app)
++     })
++     .await
++     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
++ }
+*** a/src-tauri/src/main.rs
+--- b/src-tauri/src/main.rs
+***************
+*** 165,176 ****
+              get_datacard,
+              list_datacards,
+              create_datacard,
+              update_datacard,
+              set_datacard_favorite,
++             set_datacard_archived,
+              move_datacard_to_folder,
+              delete_datacard,
+              list_deleted_datacards,
+              restore_datacard,
+              purge_datacard,
+--- 165,177 ----
+              get_datacard,
+              list_datacards,
+              create_datacard,
+              update_datacard,
+              set_datacard_favorite,
++             set_datacard_archived,
+              move_datacard_to_folder,
+              delete_datacard,
+              list_deleted_datacards,
+              restore_datacard,
+              purge_datacard,
+*** a/src-tauri/permissions/app-default.toml
+--- b/src-tauri/permissions/app-default.toml
+***************
+*** 55,60 ****
+    "create_datacard",
+    "update_datacard",
+    "set_datacard_favorite",
++   "set_datacard_archived",
+    "move_datacard_to_folder",
+    "delete_datacard",
+    "list_deleted_datacards",
+    "restore_datacard",
+    "purge_datacard",
+*** a/src/features/Vault/api/vaultApi.ts
+--- b/src/features/Vault/api/vaultApi.ts
+***************
+*** 102,107 ****
+  export async function setDataCardFavorite(input: { id: string; is_favorite: boolean }): Promise<boolean> {
+    return invoke('set_datacard_favorite', { input });
+  }
+  
++ export async function setDataCardArchived(input: { id: string; is_archived: boolean }): Promise<boolean> {
++   return invoke('set_datacard_archived', { input });
++ }
++ 
+  export async function moveDataCardToFolder(input: { id: string; folder_id: string | null }): Promise<boolean> {
+    return invoke('move_datacard_to_folder', { input });
+  }
 *** a/src/features/Vault/types/ui.ts
 --- b/src/features/Vault/types/ui.ts
 ***************
-*** 20,34 ****
- export type DataCard = {
-   id: string;
-   folderId: string | null;
-   title: string;
-   url: string | null;
-   email: string | null;
-+  recoveryEmail: string | null;
-   username: string | null;
-   mobilePhone: string | null;
-   note: string | null;
-   isFavorite: boolean;
-   tags: string[];
-***************
-*** 55,70 ****
- export type CreateDataCardInput = {
-   folderId: string | null;
-   title: string;
-   url?: string | null;
-   email?: string | null;
-+  recoveryEmail?: string | null;
-   username?: string | null;
-   mobilePhone?: string | null;
-   note?: string | null;
-   tags?: string[];
-   password?: string | null;
+*** 28,36 ****
+    tags: string[];
+    createdAt: string;
+    updatedAt: string;
++   archivedAt: string | null;
+    deletedAt: string | null;
+    password: string | null;
+    totpUri: string | null;
+    seedPhrase: string | null;
+--- 28,37 ----
+    tags: string[];
+    createdAt: string;
+    updatedAt: string;
++   archivedAt: string | null;
+    deletedAt: string | null;
+    password: string | null;
+    totpUri: string | null;
+    seedPhrase: string | null;
+    seedPhraseWordCount: number | null;
+    customFields: CustomField[];
+    previewFields: string[];
+  };
 *** a/src/features/Vault/types/mappers.ts
 --- b/src/features/Vault/types/mappers.ts
 ***************
-*** 26,52 ****
- export function mapCardFromBackend(card: BackendDataCard): DataCard {
-   return {
-     id: card.id,
-     folderId: card.folder_id,
-     title: card.title,
-     url: card.url,
-     email: card.email,
-+    recoveryEmail: card.recovery_email,
-     username: card.username,
-     mobilePhone: card.mobile_phone,
-     note: card.note,
-     isFavorite: card.is_favorite,
-     tags: card.tags ?? [],
+*** 35,46 ****
+  export function mapDataCardFromBackend(card: BackendDataCard): DataCard {
+    return {
+      id: card.id,
+      folderId: card.folder_id ?? null,
+      title: card.title,
+      url: card.url ?? null,
+      email: card.email ?? null,
+      username: card.username ?? null,
+      mobilePhone: card.mobile_phone ?? null,
+      note: card.note ?? null,
+      isFavorite: card.is_favorite,
+      tags: card.tags ?? [],
+      previewFields: card.preview_fields ?? [],
+      createdAt: card.created_at,
+      updatedAt: card.updated_at,
++     archivedAt: card.archived_at ?? null,
+      deletedAt: card.deleted_at ?? null,
+      password: card.password ?? null,
+      totpUri: card.totp_uri ?? null,
+      seedPhrase: card.seed_phrase ?? null,
+      seedPhraseWordCount: card.seed_phrase_word_count ?? null,
+      customFields: card.custom_fields ?? [],
+    };
+  }
+--- 35,47 ----
+  export function mapDataCardFromBackend(card: BackendDataCard): DataCard {
+    return {
+      id: card.id,
+      folderId: card.folder_id ?? null,
+      title: card.title,
+      url: card.url ?? null,
+      email: card.email ?? null,
+      username: card.username ?? null,
+      mobilePhone: card.mobile_phone ?? null,
+      note: card.note ?? null,
+      isFavorite: card.is_favorite,
+      tags: card.tags ?? [],
+      previewFields: card.preview_fields ?? [],
+      createdAt: card.created_at,
+      updatedAt: card.updated_at,
++     archivedAt: card.archived_at ?? null,
+      deletedAt: card.deleted_at ?? null,
+      password: card.password ?? null,
+      totpUri: card.totp_uri ?? null,
+      seedPhrase: card.seed_phrase ?? null,
+      seedPhraseWordCount: card.seed_phrase_word_count ?? null,
+      customFields: card.custom_fields ?? [],
+    };
+  }
 ***************
-*** 70,90 ****
-   return {
-     id: card.id,
-     folderId: card.folder_id,
-     title: card.title,
-     url: card.url,
-     email: card.email,
-+    recoveryEmail: card.recovery_email,
-     username: card.username,
-     mobilePhone: card.mobile_phone,
-     note: card.note,
-     tags: card.tags ?? [],
+*** 48,62 ****
+  export function mapDataCardSummaryFromBackend(card: BackendDataCardSummary): DataCardSummary {
+    return {
+      ...mapDataCardFromBackend(card),
+      updatedAtLabel: formatRelativeDateTime(card.updated_at),
+      createdAtLabel: formatRelativeDateTime(card.created_at),
+      metaLine: buildMetaLine(card),
+      hasTotp: card.has_totp,
+      hasSeedPhrase: card.has_seed_phrase,
+      hasPhone: card.has_phone,
+      hasNotes: card.has_note,
+      hasAttachments: card.has_attachments,
+    };
+  }
+--- 49,63 ----
+  export function mapDataCardSummaryFromBackend(card: BackendDataCardSummary): DataCardSummary {
+    return {
+      ...mapDataCardFromBackend(card),
+      updatedAtLabel: formatRelativeDateTime(card.updated_at),
+      createdAtLabel: formatRelativeDateTime(card.created_at),
+      metaLine: buildMetaLine(card),
+      hasTotp: card.has_totp,
+      hasSeedPhrase: card.has_seed_phrase,
+      hasPhone: card.has_phone,
+      hasNotes: card.has_note,
+      hasAttachments: card.has_attachments,
+    };
+  }
+*** a/src/features/Vault/hooks/useVault.ts
+--- b/src/features/Vault/hooks/useVault.ts
 ***************
-*** 132,152 ****
- export function mapCreateCardToBackend(input: CreateDataCardInput): BackendCreateDataCardInput {
-   return {
-     folder_id: input.folderId,
-     title: input.title,
-     url: input.url ?? null,
-     email: input.email ?? null,
-+    recovery_email: input.recoveryEmail ?? null,
-     username: input.username ?? null,
-     mobile_phone: input.mobilePhone ?? null,
-     note: input.note ?? null,
-     tags: input.tags ?? [],
-     password: input.password ?? null,
+*** 28,33 ****
+  import {
+    createDataCard,
+    deleteDataCard,
+    getDataCard,
+    getSettings,
+    listDataCardSummaries,
+    listDeletedDataCardSummaries,
+    moveDataCardToFolder,
+    restoreDataCard,
+    restoreAllDeletedDataCards,
+    setDataCardFavorite,
++   setDataCardArchived,
+    updateDataCard,
+  } from '../api/vaultApi';
+***************
+*** 36,55 ****
+    const visibleCards = useMemo(() => {
+      const activeCards = cards.filter((card) => !card.deletedAt);
+-     const isArchived = (card: DataCardSummary) => card.tags?.includes('archived');
++     const isArchived = (card: DataCardSummary) => Boolean(card.archivedAt);
+      let pool: DataCardSummary[];
+  
+      if (selectedNav === 'all') {
+        pool = activeCards.filter((card) => !isArchived(card));
+      } else if (selectedNav === 'favorites') {
+        pool = activeCards.filter((card) => card.isFavorite && !isArchived(card));
+      } else if (selectedNav === 'archive') {
+        pool = activeCards.filter((card) => isArchived(card));
+      } else if (selectedNav === 'deleted') {
+        pool = deletedCards;
+      } else {
+        pool = activeCards.filter((card) => card.folderId === selectedNav.folderId && !isArchived(card));
+      }
+--- 36,55 ----
+    const visibleCards = useMemo(() => {
+      const activeCards = cards.filter((card) => !card.deletedAt);
++     const isArchived = (card: DataCardSummary) => Boolean(card.archivedAt);
+      let pool: DataCardSummary[];
+  
+      if (selectedNav === 'all') {
+        pool = activeCards.filter((card) => !isArchived(card));
+      } else if (selectedNav === 'favorites') {
+        pool = activeCards.filter((card) => card.isFavorite && !isArchived(card));
+      } else if (selectedNav === 'archive') {
+        pool = activeCards.filter((card) => isArchived(card));
+      } else if (selectedNav === 'deleted') {
+        pool = deletedCards;
+      } else {
+        pool = activeCards.filter((card) => card.folderId === selectedNav.folderId && !isArchived(card));
+      }
+***************
+*** 124,126 ****
+    const toggleFavorite = useCallback(
+--- 124,191 ----
+    const toggleFavorite = useCallback(
+      async (id: string) => {
+        const current = cards.find((card) => card.id === id);
+        if (!current) return;
+  
+        const nextFavorite = !current.isFavorite;
+  
+        try {
+          await setDataCardFavorite({ id: current.id, is_favorite: nextFavorite });
+  
+          setCards((prev) =>
+            prev.map((card) => (card.id === current.id ? { ...card, isFavorite: nextFavorite } : card))
+          );
+          setCardDetailsById((prev) =>
+            prev[current.id]
+              ? { ...prev, [current.id]: { ...prev[current.id], isFavorite: nextFavorite } }
+              : prev
+          );
+        } catch (err) {
+          handleError(err);
+        }
+      },
+      [cards, handleError]
+    );
++ 
++   const toggleArchive = useCallback(
++     async (id: string) => {
++       const current = cards.find((card) => card.id === id);
++       if (!current) return;
++ 
++       const nextArchived = !current.archivedAt;
++ 
++       try {
++         await setDataCardArchived({ id: current.id, is_archived: nextArchived });
++         const nextArchivedAt = nextArchived ? new Date().toISOString() : null;
++ 
++         setCards((prev) =>
++           prev.map((card) => (card.id === current.id ? { ...card, archivedAt: nextArchivedAt } : card))
++         );
++         setCardDetailsById((prev) =>
++           prev[current.id]
++             ? { ...prev, [current.id]: { ...prev[current.id], archivedAt: nextArchivedAt } }
++             : prev
++         );
++ 
++         // If the card no longer belongs to the current section, clear selection.
++         if (selectedCardId === id) {
++           const isArchiveNav = selectedNav === 'archive';
++           if ((nextArchived && !isArchiveNav) || (!nextArchived && isArchiveNav)) {
++             setSelectedCardId(null);
++           }
++         }
++       } catch (err) {
++         handleError(err);
++       }
++     },
++     [cards, handleError, selectedCardId, selectedNav]
++   );
+***************
+*** 126,145 ****
+    const counts = useMemo(
+      () => {
+        const activeCards = cards.filter((card) => !card.deletedAt);
+-       const isArchived = (card: DataCardSummary) => card.tags?.includes('archived');
++       const isArchived = (card: DataCardSummary) => Boolean(card.archivedAt);
+  
+        return {
+          all: activeCards.filter((card) => !isArchived(card)).length,
+          favorites: activeCards.filter((card) => card.isFavorite && !isArchived(card)).length,
+          archive: activeCards.filter((card) => isArchived(card)).length,
+          deleted: deletedCards.length,
+          folders: activeCards.reduce<Record<string, number>>((acc, card) => {
+            if (card.folderId && !isArchived(card)) {
+              acc[card.folderId] = (acc[card.folderId] || 0) + 1;
+            }
+            return acc;
+          }, {}),
+        };
+      },
+      [cards, deletedCards]
+    );
+--- 191,210 ----
+    const counts = useMemo(
+      () => {
+        const activeCards = cards.filter((card) => !card.deletedAt);
++       const isArchived = (card: DataCardSummary) => Boolean(card.archivedAt);
+  
+        return {
+          all: activeCards.filter((card) => !isArchived(card)).length,
+          favorites: activeCards.filter((card) => card.isFavorite && !isArchived(card)).length,
+          archive: activeCards.filter((card) => isArchived(card)).length,
+          deleted: deletedCards.length,
+          folders: activeCards.reduce<Record<string, number>>((acc, card) => {
+            if (card.folderId && !isArchived(card)) {
+              acc[card.folderId] = (acc[card.folderId] || 0) + 1;
+            }
+            return acc;
+          }, {}),
+        };
+      },
+      [cards, deletedCards]
+    );
+***************
+*** 210,220 ****
+    return {
+      folders,
+      cards,
+      deletedCards,
+      selectedNav,
+      selectedCardId,
+      selectedCard,
+      isTrashMode,
+      counts,
+      selectedFolderId,
+      currentSectionTitle,
+      searchQuery: searchInput,
+      setSearchQuery: setSearchInput,
+      filters,
+      setFilters,
+--- 275,287 ----
+    return {
+      folders,
+      cards,
+      deletedCards,
+      selectedNav,
+      selectedCardId,
+      selectedCard,
+      isTrashMode,
+      counts,
+      selectedFolderId,
+      currentSectionTitle,
+      searchQuery: searchInput,
+      setSearchQuery: setSearchInput,
+      filters,
+      setFilters,
++     toggleArchive,
+      toggleFavorite,
+      createCard: createCardAction,
+      updateCard: updateCardAction,
+      deleteCard: deleteCardAction,
+      restoreCard: restoreCardAction,
+      purgeCard: purgeCardAction,
 *** a/src/features/Vault/components/DataCards/useDataCards.ts
 --- b/src/features/Vault/components/DataCards/useDataCards.ts
 ***************
-*** 18,33 ****
- export type DataCardFormState = {
-   title: string;
-   folderId: string | null;
-   folderName: string;
-   url: string;
-   email: string;
-+  recoveryEmail: string;
-   username: string;
-   password: string;
-   mobilePhone: string;
-   note: string;
-   tagsText: string;
+*** 43,54 ****
+    folders: Folder[];
+    defaultFolderId: string | null;
+    onSelectCard: (id: string) => void;
++   onToggleFavorite: (id: string) => Promise<void> | void;
++   onToggleArchive: (id: string) => Promise<void> | void;
+    onCreateCard: (input: CreateDataCardInput) => Promise<DataCard | void | null>;
+    onUploadAttachments: (cardId: string, paths: string[]) => Promise<string[]>;
+    onUpdateCard: (input: UpdateDataCardInput) => Promise<void>;
+    onDeleteCard: (id: string) => Promise<void> | void;
+    onRestoreCard: (id: string) => Promise<void> | void;
+    onPurgeCard: (id: string) => Promise<void> | void;
+    onRestoreAllTrash?: () => Promise<void> | void;
+    onPurgeAllTrash?: () => Promise<void> | void;
+  };
 ***************
-*** 66,80 ****
- const buildCreateInput = (form: DataCardFormState): CreateDataCardInput => ({
-   folderId: form.folderId,
-   title: form.title.trim(),
-   url: normalizeOptional(form.url),
-   email: normalizeOptional(form.email),
-+  recoveryEmail: normalizeOptional(form.recoveryEmail),
-   username: normalizeOptional(form.username),
-   password: normalizeOptional(form.password),
-   mobilePhone: normalizeOptional(form.mobilePhone),
-   note: normalizeOptional(form.note),
-   tags: normalizeTags(form.tagsText),
+*** 56,67 ****
+  export type DataCardsViewModel = {
+    cards: DataCardSummary[];
+    selectedCardId: string | null;
+    isTrashMode: boolean;
+    selectCard: (id: string) => void;
++   toggleFavorite: (id: string) => Promise<void> | void;
++   toggleArchive: (id: string) => Promise<void> | void;
+    deleteCard: (id: string) => void;
+    restoreCard: (id: string) => void;
+    purgeCard: (id: string) => void;
+    restoreAllTrash: () => Promise<void>;
+    purgeAllTrash: () => Promise<void>;
+    isTrashBulkSubmitting: boolean;
 ***************
-*** 92,109 ****
- const buildInitialForm = (defaultFolderId: string | null, folderName: string): DataCardFormState => ({
-   title: '',
-   folderId: defaultFolderId,
-   folderName,
-   url: '',
-   email: '',
-+  recoveryEmail: '',
-   username: '',
-   password: '',
-   mobilePhone: '',
-   note: '',
-   tagsText: '',
+*** 109,120 ****
+  export function useDataCards({
+    cards,
+    selectedCardId,
+    isTrashMode,
+    folders,
+    defaultFolderId,
+    onSelectCard,
++   onToggleFavorite,
++   onToggleArchive,
+    onCreateCard,
+    onUploadAttachments,
+    onUpdateCard,
+    onDeleteCard,
+    onRestoreCard,
+    onPurgeCard,
+    onRestoreAllTrash,
+    onPurgeAllTrash,
+  }: UseDataCardsParams): DataCardsViewModel {
+--- 109,122 ----
+  export function useDataCards({
+    cards,
+    selectedCardId,
+    isTrashMode,
+    folders,
+    defaultFolderId,
+    onSelectCard,
++   onToggleFavorite,
++   onToggleArchive,
+    onCreateCard,
+    onUploadAttachments,
+    onUpdateCard,
+    onDeleteCard,
+    onRestoreCard,
+    onPurgeCard,
+    onRestoreAllTrash,
+    onPurgeAllTrash,
+  }: UseDataCardsParams): DataCardsViewModel {
 ***************
-*** 250,276 ****
-   const openEditModal = useCallback((card: DataCard) => {
-     setEditError(null);
-     setEditFolderError(null);
-     setIsEditSubmitting(false);
-     setEditCardId(card.id);
-     setEditForm({
-       title: card.title,
-       folderId: card.folderId,
-       folderName: findFolderName(card.folderId, folders),
-       url: card.url || '',
-       email: card.email || '',
-+      recoveryEmail: card.recoveryEmail || '',
-       username: card.username || '',
-       password: card.password || '',
-       totpUri: card.totpUri || '',
-       seedPhrase: card.seedPhrase || '',
-       seedPhraseWordCount: card.seedPhraseWordCount ?? 0,
-       mobilePhone: card.mobilePhone || '',
-       note: card.note || '',
-       tagsText: (card.tags || []).join(', '),
-       customFields: (card.customFields ?? []).map((field: CustomField) => ({
-         id: makeRowId(),
-         key: field.key,
-         value: field.value,
-         type: field.type,
-       })),
-     });
-     setEditOpen(true);
-     setShowPassword(false);
-   }, [folders]);
+*** 617,628 ****
+    return {
+      cards,
+      selectedCardId,
+      isTrashMode,
+      selectCard: onSelectCard,
++     toggleFavorite: onToggleFavorite,
++     toggleArchive: onToggleArchive,
+      deleteCard: onDeleteCard,
+      restoreCard: onRestoreCard,
+      purgeCard: onPurgeCard,
+      restoreAllTrash,
+      purgeAllTrash,
+      isTrashBulkSubmitting,
+      openCreateModal,
+--- 619,632 ----
+    return {
+      cards,
+      selectedCardId,
+      isTrashMode,
+      selectCard: onSelectCard,
++     toggleFavorite: onToggleFavorite,
++     toggleArchive: onToggleArchive,
+      deleteCard: onDeleteCard,
+      restoreCard: onRestoreCard,
+      purgeCard: onPurgeCard,
+      restoreAllTrash,
+      purgeAllTrash,
+      isTrashBulkSubmitting,
+      openCreateModal,
+*** a/src/features/Vault/Vault.tsx
+--- b/src/features/Vault/Vault.tsx
+***************
+*** 74,90 ****
+    const dataCardsViewModel = useDataCards({
+      cards: vault.visibleCards,
+      selectedCardId: vault.selectedCardId,
+      isTrashMode: vault.isTrashMode,
+      folders: vault.folders,
+      defaultFolderId: vault.selectedFolderId,
+      onSelectCard: (id) => {
+        vault.selectCard(id);
+        bankCards.selectCard(null);
+        setActiveDetailsKind('data');
+      },
++     onToggleFavorite: vault.toggleFavorite,
++     onToggleArchive: vault.toggleArchive,
+      onCreateCard: vault.createCard,
+      onUploadAttachments: vault.uploadAttachments,
+      onUpdateCard: vault.updateCard,
+      onDeleteCard: vault.deleteCard,
+      onRestoreCard: vault.restoreCard,
+      onPurgeCard: vault.purgeCard,
+      onRestoreAllTrash: vault.restoreAllDeletedCards,
+      onPurgeAllTrash: vault.purgeAllDeletedCards,
+    });
 *** a/src/features/Vault/components/DataCards/DataCards.tsx
 --- b/src/features/Vault/components/DataCards/DataCards.tsx
 ***************
-*** 568,586 ****
-             <div className="form-field">
-               <label className="form-label" htmlFor={`${dialogId}-email`}>
-                 {t('label.email')}
-               </label>
-               <input
-                 id={`${dialogId}-email`}
-                 className="input"
-                 type="email"
-                 autoComplete="off"
-                 value={form.email}
-                 onChange={(e) => onFieldChange('email', e.target.value)}
-               />
-             </div>
- 
-+            <div className="form-field">
-+              <label className="form-label" htmlFor={`${dialogId}-recovery-email`}>
-+                {t('label.recoveryEmail')}
-+              </label>
-+              <input
-+                id={`${dialogId}-recovery-email`}
-+                className="input"
-+                type="email"
-+                autoComplete="off"
-+                value={form.recoveryEmail}
-+                onChange={(e) => onFieldChange('recoveryEmail', e.target.value)}
-+              />
-+            </div>
-+
-             <div className="form-field">
-               <label className="form-label" htmlFor={`${dialogId}-username`}>
-                 {t('label.username')}
-               </label>
-               <input
+*** 118,123 ****
+    const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+    const [isTrashActionsOpen, setIsTrashActionsOpen] = useState(false);
+    const shouldShowTrashActions = viewModel.isTrashMode && showTrashActions;
++   const [cardMenu, setCardMenu] = useState<{ id: string; x: number; y: number } | null>(null);
 ***************
-*** 906,952 ****
-             const getExtraLine = (field: DataCardPreviewField): string | null => {
-               switch (field) {
-                 case 'username': {
-                   const v = (card.username ?? '').trim();
-                   return v.length > 0 ? v : null;
-                 }
-+                case 'recovery_email': {
-+                  const v = (card.recoveryEmail ?? '').trim();
-+                  return v.length > 0 ? `${t('label.recoveryEmail')}:${v}` : null;
-+                }
-                 case 'mobile_phone': {
-                   const v = (card.mobilePhone ?? '').trim();
-                   return v.length > 0 ? v : null;
-                 }
-                 case 'note': {
-                   const v = (card.note ?? '').split(/\r?\n/)[0]?.trim() ?? '';
-                   return v.length > 0 ? v : null;
-                 }
-                 case 'folder': {
-                   if (!card.folderId) return null;
-                   const v = (viewModel.folders.find((f) => f.id === card.folderId)?.name ?? '').trim();
-                   return v.length > 0 ? `${t('label.folder')}:${v}` : null;
-                 }
-                 case 'tags': {
-                   const v = Array.isArray(card.tags) ? card.tags.join(', ').trim() : '';
-                   return v.length > 0 ? v : null;
-                 }
-                 default:
-                   return null;
-               }
-             };
- 
-             const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
-               value === 'username' ||
-+              value === 'recovery_email' ||
-               value === 'mobile_phone' ||
-               value === 'note' ||
-               value === 'folder' ||
-               value === 'tags';
-*** a/src/features/Vault/lib/datacardPreviewFields.ts
---- b/src/features/Vault/lib/datacardPreviewFields.ts
+*** 268,273 ****
+            {cards.map((card) => {
+              const isActive = card.id === selectedCardId;
+              return (
+                <button
+                  key={card.id}
+                  className={`vault-datacard ${isActive ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => viewModel.selectCard(card.id)}
++                 onContextMenu={(e) => {
++                   if (viewModel.isTrashMode) return;
++                   e.preventDefault();
++                   viewModel.selectCard(card.id);
++                   setCardMenu({ id: card.id, x: e.clientX, y: e.clientY });
++                 }}
+                >
+                  <div className="vault-datacard-title">
+                    {card.title || t('label.untitled')}
+                  </div>
+--- 268,285 ----
+            {cards.map((card) => {
+              const isActive = card.id === selectedCardId;
+              return (
+                <button
+                  key={card.id}
+                  className={`vault-datacard ${isActive ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => viewModel.selectCard(card.id)}
++                 onContextMenu={(e) => {
++                   if (viewModel.isTrashMode) return;
++                   e.preventDefault();
++                   viewModel.selectCard(card.id);
++                   setCardMenu({ id: card.id, x: e.clientX, y: e.clientY });
++                 }}
+                >
+                  <div className="vault-datacard-title">
+                    {card.title || t('label.untitled')}
+                  </div>
 ***************
-*** 1,17 ****
- import { getDataCardPreviewFields, setDataCardPreviewFields } from '@/shared/lib/tauri';
- 
--export type DataCardPreviewField = 'username' | 'mobile_phone' | 'note' | 'folder' | 'tags';
-+export type DataCardPreviewField =
-+  | 'username'
-+  | 'recovery_email'
-+  | 'mobile_phone'
-+  | 'note'
-+  | 'folder'
-+  | 'tags';
- 
- export const MAX_DATA_CARD_PREVIEW_FIELDS = 3;
- 
- const EVENT_NAME = 'datacard-preview-fields-changed';
- 
- const isAllowed = (value: string): value is DataCardPreviewField =>
-   value === 'username' ||
-+  value === 'recovery_email' ||
-   value === 'mobile_phone' ||
-   value === 'note' ||
-   value === 'folder' ||
-   value === 'tags';
-*** a/src/features/Vault/components/Details/Details.tsx
---- b/src/features/Vault/components/Details/Details.tsx
-***************
-*** 188,198 ****
-   const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
-     value === 'username' ||
-+    value === 'recovery_email' ||
-     value === 'mobile_phone' ||
-     value === 'note' ||
-     value === 'folder' ||
-     value === 'tags';
-***************
-*** 279,292 ****
-   const hasTitle = hasValue(card?.title);
-   const hasUrl = hasValue(card?.url);
-   const hasEmail = hasValue(card?.email);
-+  const hasRecoveryEmail = hasValue(card?.recoveryEmail);
-   const hasUsername = hasValue(card?.username);
-   const hasMobilePhone = hasValue(card?.mobilePhone);
-   const hasPassword = hasValue(card?.password);
-***************
-*** 410,454 ****
-       {hasEmail && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.email')}</div>
-           <div className="detail-value-box" onContextMenu={(e) => openCoreMenu('email', e)}>
-             <div className="detail-value-text">{card.email ?? ''}</div>
-             <div className="detail-value-actions">
-               <button
-                 className="icon-button"
-                 type="button"
-                 aria-label={t('action.copy')}
-                 onClick={() => detailActions.copyToClipboard(card.email)}
-               >
-                 <IconCopy />
-               </button>
-             </div>
-           </div>
-         </div>
-       )}
- 
-+      {hasRecoveryEmail && (
-+        <div className="detail-field">
-+          <div className="detail-label">{t('label.recoveryEmail')}</div>
-+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('recovery_email', e)}>
-+            <div className="detail-value-text">{card.recoveryEmail ?? ''}</div>
-+            <div className="detail-value-actions">
-+              <button
-+                className="icon-button"
-+                type="button"
-+                aria-label={t('action.copy')}
-+                onClick={() => detailActions.copyToClipboard(card.recoveryEmail)}
-+              >
-+                <IconCopy />
-+              </button>
-+            </div>
-+          </div>
-+        </div>
-+      )}
-+
-       {hasUsername && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.username')}</div>
-           <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('username', e)}>
-             <div className="detail-value-text">{card.username ?? ''}</div>
-             <div className="detail-value-actions">
-               <button
-                 className="icon-button"
-                 type="button"
-                 aria-label={t('action.copy')}
-                 onClick={() => detailActions.copyToClipboard(card.username)}
-               >
-                 <IconCopy />
-               </button>
-             </div>
-           </div>
-         </div>
-       )}
+*** 1005,1010 ****
+    return (
+      <div className={`vault-section ${fillHeight ? 'fill-height' : ''}`}>
+--- 1017,1105 ----
+    return (
+      <div className={`vault-section ${fillHeight ? 'fill-height' : ''}`}>
++       {cardMenu && !viewModel.isTrashMode && (
++         <>
++           <div
++             className="vault-actionmenu-backdrop"
++             onClick={() => setCardMenu(null)}
++             onContextMenu={(e) => {
++               e.preventDefault();
++               setCardMenu(null);
++             }}
++           />
++           <div
++             className="vault-actionmenu-panel vault-contextmenu-panel"
++             role="menu"
++             style={
++               {
++                 '--menu-x': `${cardMenu.x}px`,
++                 '--menu-y': `${cardMenu.y}px`,
++               } as React.CSSProperties
++             }
++           >
++             {(() => {
++               const target = cards.find((c) => c.id === cardMenu.id) ?? null;
++               const isArchived = Boolean(target?.archivedAt);
++               const isFavorite = Boolean(target?.isFavorite);
++ 
++               return (
++                 <>
++                   <button
++                     className="vault-actionmenu-item"
++                     type="button"
++                     onClick={async () => {
++                       const id = cardMenu.id;
++                       setCardMenu(null);
++                       try {
++                         const backend = await import('../../api/vaultApi').then((m) => m.getDataCard(id));
++                         const mapped = await import('../../types/mappers').then((m) => m.mapDataCardFromBackend(backend));
++                         viewModel.openEditModal(mapped);
++                       } catch (err) {
++                         console.error(err);
++                       }
++                     }}
++                   >
++                     {t('action.edit')}
++                   </button>
++ 
++                   <button
++                     className="vault-actionmenu-item"
++                     type="button"
++                     onClick={async () => {
++                       const id = cardMenu.id;
++                       setCardMenu(null);
++                       await viewModel.toggleFavorite(id);
++                     }}
++                   >
++                     {isFavorite ? t('action.unmarkFavorite') : t('action.markFavorite')}
++                   </button>
++ 
++                   <button
++                     className="vault-actionmenu-item"
++                     type="button"
++                     onClick={async () => {
++                       const id = cardMenu.id;
++                       setCardMenu(null);
++                       await viewModel.toggleArchive(id);
++                     }}
++                   >
++                     {isArchived ? t('action.unarchive') : t('action.archive')}
++                   </button>
++ 
++                   <button
++                     className="vault-actionmenu-item vault-actionmenu-danger"
++                     type="button"
++                     onClick={async () => {
++                       const id = cardMenu.id;
++                       setCardMenu(null);
++                       await viewModel.deleteCard(id);
++                     }}
++                   >
++                     {t('action.delete')}
++                   </button>
++                 </>
++               );
++             })()}
++           </div>
++         </>
++       )}
 *** a/src/i18n/locales/en/DataCards.json
 --- b/src/i18n/locales/en/DataCards.json
 ***************
-*** 12,22 ****
-   "label.username": "Username",
-   "label.email": "Email",
-+  "label.recoveryEmail": "Recovery email",
-   "label.url": "URL",
-   "label.password": "Password",
-   "label.totp": "2FA (TOTP)",
-   "label.mobile": "Mobile phone",
-   "label.note": "Note",
-*** a/src/i18n/locales/en/Details.json
---- b/src/i18n/locales/en/Details.json
-***************
-*** 4,14 ****
-   "label.title": "Title",
-   "label.folder": "Folder",
-   "label.username": "Username",
-   "label.email": "Email",
-+  "label.recoveryEmail": "Recovery email",
-   "label.url": "URL",
-   "label.mobile": "Mobile phone",
-   "label.password": "Password",
-   "label.note": "Note",
-   "label.tags": "Tags",
+*** 25,30 ****
+    "action.markFavorite": "Mark favorite",
+    "action.unmarkFavorite": "Unmark favorite",
++   "action.archive": "Archive",
++   "action.unarchive": "Unarchive",
+    "action.generate": "Generate",
+    "action.openGenerator": "Open password generator",
+    "action.togglePasswordVisibility": "Toggle password visibility",
+    "action.copy": "Copy",
+    "action.reveal": "Reveal",
 ```
 
+Готово: теперь **Archive — это состояние в БД (`archived_at`)**, а не тег, и контекстное меню на карточках реально будет менять этот статус. (И Navigation “Archive” уже перестанет быть “мертвым”, потому что фильтрация будет по `archivedAt`, а не по `tags`.)
 
+Если хочешь — следующим патчем добавлю то же самое для **Bank Cards** (симметрично, тоже через `archived_at`).

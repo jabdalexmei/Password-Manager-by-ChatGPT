@@ -22,6 +22,7 @@ export type DataCard = {
   title: string;
   url: string | null;
   email: string | null;
+  recoveryEmail: string | null;
   username: string | null;
   mobilePhone: string | null;
   note: string | null;
@@ -72,6 +73,7 @@ export type CreateDataCardInput = {
   title: string;
   url?: string | null;
   email?: string | null;
+  recoveryEmail?: string | null;
   username?: string | null;
   mobilePhone?: string | null;
   note?: string | null;

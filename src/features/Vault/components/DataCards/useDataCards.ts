@@ -25,6 +25,7 @@ export type DataCardFormState = {
   folderName: string;
   url: string;
   email: string;
+  recoveryEmail: string;
   username: string;
   password: string;
   mobilePhone: string;
@@ -136,6 +137,7 @@ const buildCreateInput = (form: DataCardFormState): CreateDataCardInput => ({
   title: form.title.trim(),
   url: normalizeOptional(form.url),
   email: normalizeOptional(form.email),
+  recoveryEmail: normalizeOptional(form.recoveryEmail),
   username: normalizeOptional(form.username),
   password: normalizeOptional(form.password),
   mobilePhone: normalizeOptional(form.mobilePhone),
@@ -162,6 +164,7 @@ const buildInitialForm = (defaultFolderId: string | null, folderName: string): D
   folderName,
   url: '',
   email: '',
+  recoveryEmail: '',
   username: '',
   password: '',
   mobilePhone: '',
@@ -258,6 +261,7 @@ export function useDataCards({
       folderName: findFolderName(card.folderId, folders),
       url: card.url || '',
       email: card.email || '',
+      recoveryEmail: card.recoveryEmail || '',
       username: card.username || '',
       password: card.password || '',
       totpUri: card.totpUri || '',

@@ -70,6 +70,7 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
         title: row.get("title")?,
         url: row.get("url")?,
         email: row.get("email")?,
+        recovery_email: row.get("recovery_email")?,
         username: row.get("username")?,
         mobile_phone: row.get("mobile_phone")?,
         note: row.get("note")?,
@@ -102,6 +103,7 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
         title: row.get("title")?,
         url: row.get("url")?,
         email: row.get("email")?,
+        recovery_email: row.get("recovery_email")?,
         username: row.get("username")?,
         mobile_phone: row.get("mobile_phone")?,
         note: row.get("note")?,
@@ -408,6 +410,7 @@ pub fn list_datacards_summary(
                 d.title,
                 d.url,
                 d.email,
+                d.recovery_email,
                 d.username,
                 d.mobile_phone,
                 d.note,
@@ -477,6 +480,7 @@ pub fn list_deleted_datacards_summary(
                     d.title,
                     d.url,
                     d.email,
+                    d.recovery_email,
                     d.username,
                     d.mobile_phone,
                     d.note,
@@ -596,13 +600,14 @@ pub fn create_datacard(
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, NULL)",
+            "INSERT INTO datacards (id, folder_id, title, url, email, recovery_email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL)",
             params![
                 id,
                 input.folder_id,
                 input.title,
                 input.url,
                 input.email,
+                input.recovery_email,
                 input.username,
                 input.mobile_phone,
                 input.note,
@@ -664,11 +669,12 @@ pub fn update_datacard(
         }
         let rows = conn
             .execute(
-                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, username = ?4, mobile_phone = ?5, note = ?6, tags_json = ?7, password_value = ?8, totp_uri = ?9, seed_phrase_value = ?10, seed_phrase_word_count = ?11, custom_fields_json = ?12, folder_id = ?13, updated_at = ?14 WHERE id = ?15",
+                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, recovery_email = ?4, username = ?5, mobile_phone = ?6, note = ?7, tags_json = ?8, password_value = ?9, totp_uri = ?10, seed_phrase_value = ?11, seed_phrase_word_count = ?12, custom_fields_json = ?13, folder_id = ?14, updated_at = ?15 WHERE id = ?16",
                 params![
                     input.title,
                     input.url,
                     input.email,
+                    input.recovery_email,
                     input.username,
                     input.mobile_phone,
                     input.note,

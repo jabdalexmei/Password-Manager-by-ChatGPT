@@ -10,6 +10,7 @@
   "label.noFolder": "No folder",
   "label.username": "Username",
   "label.email": "Email",
+  "label.recoveryEmail": "Recovery email",
   "label.url": "URL",
   "label.password": "Password",
   "label.totp": "2FA (TOTP)",
