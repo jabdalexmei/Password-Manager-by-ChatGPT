@@ -1,52 +1,66 @@
+Сделал ровно то, что ты просишь: **переименовал отображаемый текст “Number” → “Card number”** и **переименовал i18n-ключи**, чтобы они больше не были просто `number` (теперь `cardNumber`). Ключи в i18next — это просто строки, которые `t('...')` использует для поиска перевода, так что при переименовании важно обновить все места, где вызывается `t(...)`. ([i18next][1])
+
+```diff
+*** a/src/i18n/locales/en/BankCards.json
+--- b/src/i18n/locales/en/BankCards.json
+***************
+*** 12,20 ****
+   "label.holder": "Holder",
+   "label.holderPlaceholder": "Card holder",
+-  "label.number": "Number",
+-  "label.numberPlaceholder": "Card number",
++  "label.cardNumber": "Card number",
++  "label.cardNumberPlaceholder": "Card number",
+   "label.expiry": "Expiry date",
+   "label.expiryPlaceholder": "MM/YY",
+   "label.cvc": "CVC/CVV",
+   "label.cvcPlaceholder": "CVC",
+   "label.note": "Note",
 *** a/src/features/Vault/components/BankCards/BankCards.tsx
 --- b/src/features/Vault/components/BankCards/BankCards.tsx
 ***************
-*** 450,490 ****
-          <div className="vault-datacard-list">
-            {cards.map((card) => {
-              const isActive = selectedCardId === card.id;
-              const isFavorite = card.isFavorite;
--             const title = card.title?.trim() ? card.title : t('label.untitled');
-+             const rawTitle = (card.title ?? '').trim();
-+             const rawBankName = (card.bankName ?? '').trim();
-+
-+             // Primary line:
-+             // - if Title exists -> Title
-+             // - else if Bank name exists -> Bank name
-+             // - else -> Untitled
-+             const displayTitleText = rawTitle || rawBankName || t('label.untitled');
-+
-+             // Secondary line:
-+             // - show Bank name only when Title exists and Bank name exists
-+             const bankNameLine = rawTitle && rawBankName ? rawBankName : null;
- 
-              return (
-                <button
-                  key={card.id}
-                  className={`vault-datacard ${isActive ? 'active' : ''}`}
-                  type="button"
-                  onClick={() => viewModel.selectCard(card.id)}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    viewModel.selectCard(card.id);
-                    setCardMenu({ id: card.id, x: event.clientX, y: event.clientY });
-                  }}
-                >
-                  <div className="datacard-top">
--                   <div className="datacard-title">{title}</div>
-+                   <div className="datacard-title">{displayTitleText}</div>
-                    {isFavorite && <span className="pill datacard-favorite">{t('label.favorite')}</span>}
-                  </div>
-+
-+                 {bankNameLine && (
-+                   <div className="datacard-meta-lines">
-+                     <div className="datacard-meta">
-+                       <span>{bankNameLine}</span>
-+                     </div>
-+                   </div>
-+                 )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+*** 169,190 ****
+             <div className="form-field">
+               <label className="form-label" htmlFor={`${dialogId}-number-input`}>
+-                {t('label.number')}
++                {t('label.cardNumber')}
+               </label>
+               <input
+                 id={`${dialogId}-number-input`}
+                 className="input"
+                 autoComplete="off"
+                 value={form.number}
+                 onChange={(e) => onFieldChange('number', e.target.value)}
+-                placeholder={t('label.numberPlaceholder')}
++                placeholder={t('label.cardNumberPlaceholder')}
+               />
+             </div>
+*** a/src/features/Vault/components/BankCards/BankCardDetails.tsx
+--- b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+***************
+*** 190,210 ****
+           {showNumber && hasNumber && (
+             <div className="detail-field">
+-              <div className="detail-label">{t('label.number')}</div>
++              <div className="detail-label">{t('label.cardNumber')}</div>
+               <div className="detail-value-box">
+                 <div className="detail-value-text">{numberDisplay}</div>
+                 <div className="detail-value-actions">
+                   <button
+                     className="icon-button"
+                     type="button"
+                     aria-label={t('action.copy')}
+                     onClick={() => detailActions.copyToClipboard(card.number)}
+                   >
+                     <IconCopy />
+                   </button>
+                 </div>
+               </div>
+             </div>
+           )}
+```
+
+Если у тебя дальше появятся другие локали (ru/de), надо будет то же самое повторить в их `BankCards.json`, иначе `t('label.cardNumber')` начнёт показывать ключ вместо текста. ([React i18next][2])
+
+[1]: https://www.i18next.com/translation-function/essentials?utm_source=chatgpt.com "Essentials"
+[2]: https://react.i18next.com/latest/usetranslation-hook?utm_source=chatgpt.com "useTranslation (hook)"
