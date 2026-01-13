@@ -145,3 +145,17 @@ pub async fn list_deleted_datacards_summary_command(
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
+
+#[tauri::command]
+pub async fn set_datacard_preview_fields_for_card(
+    id: String,
+    fields: Vec<String>,
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        datacards_service::set_datacard_preview_fields_for_card(id, fields, &app)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}

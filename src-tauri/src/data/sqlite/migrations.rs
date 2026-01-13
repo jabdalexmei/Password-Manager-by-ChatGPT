@@ -3,10 +3,10 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-const CURRENT_SCHEMA_VERSION: i32 = 1;
+const CURRENT_SCHEMA_VERSION: i32 = 2;
 
 fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
-    // Dev-mode friendly: create idempotently so existing schema=1 DBs also get it.
+    // Dev-mode friendly: create idempotently so existing schema DBs also get it.
     conn.execute_batch(
         r#"
 CREATE TABLE IF NOT EXISTS ui_preferences (
@@ -17,6 +17,57 @@ CREATE TABLE IF NOT EXISTS ui_preferences (
 "#,
     )
     .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+    Ok(())
+}
+
+fn has_table(conn: &Connection, name: &str) -> Result<bool> {
+    let sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1 LIMIT 1";
+    let exists: Option<i32> = conn
+        .query_row(sql, [name], |row| row.get(0))
+        .optional()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    Ok(exists.is_some())
+}
+
+fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let sql = format!("PRAGMA table_info({table});");
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let mut rows = stmt
+        .query([])
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    while let Some(row) = rows
+        .next()
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+    {
+        let name: String = row.get(1).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn migrate_1_to_2(conn: &Connection) -> Result<()> {
+    ensure_ui_preferences_table(conn)?;
+
+    // Add per-datacard preview fields storage.
+    if has_table(conn, "datacards")? && !has_column(conn, "datacards", "preview_fields_json")? {
+        conn.execute_batch(
+            r#"
+ALTER TABLE datacards
+ADD COLUMN preview_fields_json TEXT NOT NULL DEFAULT '[]';
+"#,
+        )
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 2;")
+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+
     Ok(())
 }
 
@@ -43,26 +94,16 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     }
 
     match version {
+        1 => migrate_1_to_2(conn),
         CURRENT_SCHEMA_VERSION => {
             ensure_ui_preferences_table(conn)?;
             Ok(())
         }
         _ => {
-            // Development-mode behavior: we do not support upgrading legacy schemas yet.
-            // Refuse instead of attempting destructive rebuild.
             log::warn!("[DB][migrate] unsupported schema version: {version}");
             Err(ErrorCodeString::new("DB_MIGRATION_FAILED"))
         }
     }
-}
-
-fn has_table(conn: &Connection, name: &str) -> Result<bool> {
-    let sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1 LIMIT 1";
-    let exists: Option<i32> = conn
-        .query_row(sql, [name], |row| row.get(0))
-        .optional()
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-    Ok(exists.is_some())
 }
 
 pub fn validate_core_schema(conn: &Connection) -> Result<()> {

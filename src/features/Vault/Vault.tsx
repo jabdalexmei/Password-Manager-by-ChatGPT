@@ -537,6 +537,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
                 onRestore={vault.restoreCard}
                 onPurge={vault.purgeCard}
                 onToggleFavorite={vault.toggleFavorite}
+                onReloadCard={vault.loadCard}
                 isTrashMode={vault.isTrashMode}
                 clipboardAutoClearEnabled={vault.settings?.clipboard_auto_clear_enabled}
                 clipboardClearTimeoutSeconds={vault.settings?.clipboard_clear_timeout_seconds}

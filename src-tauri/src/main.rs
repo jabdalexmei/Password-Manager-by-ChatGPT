@@ -186,6 +186,7 @@ fn main() {
             update_settings,
             get_datacard_preview_fields,
             set_datacard_preview_fields,
+            set_datacard_preview_fields_for_card,
             get_datacard_core_hidden_fields,
             set_datacard_core_hidden_fields,
             workspace_list,

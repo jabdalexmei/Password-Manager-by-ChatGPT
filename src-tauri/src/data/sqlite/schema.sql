@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS datacards (
   seed_phrase_value   TEXT NULL,
   seed_phrase_word_count   INTEGER NULL,
   custom_fields_json  TEXT NOT NULL DEFAULT '[]',
+  preview_fields_json TEXT NOT NULL DEFAULT '[]',
 
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,

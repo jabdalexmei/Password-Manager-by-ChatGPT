@@ -75,6 +75,7 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
         note: row.get("note")?,
         is_favorite: row.get::<_, i64>("is_favorite")? != 0,
         tags: deserialize_json(row.get::<_, String>("tags_json")?)?,
+        preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
@@ -105,6 +106,7 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
         mobile_phone: row.get("mobile_phone")?,
         note: row.get("note")?,
         tags,
+        preview_fields: deserialize_json(row.get::<_, String>("preview_fields_json")?)?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
@@ -415,6 +417,7 @@ pub fn list_datacards_summary(
                 CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
                 EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
                 d.tags_json,
+                d.preview_fields_json,
                 d.is_favorite,
                 d.created_at,
                 d.updated_at,
@@ -483,6 +486,7 @@ pub fn list_deleted_datacards_summary(
                     CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
                     EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
                     d.tags_json,
+                    d.preview_fields_json,
                     d.is_favorite,
                     d.created_at,
                     d.updated_at,
@@ -592,7 +596,7 @@ pub fn create_datacard(
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, NULL)",
+            "INSERT INTO datacards (id, folder_id, title, url, email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, NULL)",
             params![
                 id,
                 input.folder_id,
@@ -608,6 +612,7 @@ pub fn create_datacard(
                 input.seed_phrase,
                 input.seed_phrase_word_count,
                 custom_fields_json,
+                "[]",
                 now,
                 now
             ],
@@ -1190,6 +1195,28 @@ pub fn soft_delete_attachment(
         }
 
         Ok(())
+    })
+}
+
+pub fn set_datacard_preview_fields_for_card(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    id: &str,
+    preview_fields_json: &str,
+) -> Result<bool> {
+    with_connection(state, profile_id, |conn| {
+        let rows = conn
+            .execute(
+                "UPDATE datacards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3",
+                params![preview_fields_json, Utc::now().to_rfc3339(), id],
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        if rows == 0 {
+            return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
+        }
+
+        Ok(true)
     })
 }
 

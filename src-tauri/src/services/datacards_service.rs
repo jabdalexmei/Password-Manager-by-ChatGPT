@@ -107,6 +107,47 @@ pub fn update_datacard(input: UpdateDataCardInput, state: &Arc<AppState>) -> Res
     Ok(updated)
 }
 
+fn is_allowed_preview_field(value: &str) -> bool {
+    matches!(value, "username" | "mobile_phone" | "note" | "folder" | "tags")
+}
+
+fn sanitize_preview_fields(fields: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for item in fields {
+        let trimmed = item.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !is_allowed_preview_field(trimmed) {
+            continue;
+        }
+        if out.iter().any(|x| x == trimmed) {
+            continue;
+        }
+        out.push(trimmed.to_string());
+        if out.len() >= 3 {
+            break;
+        }
+    }
+    out
+}
+
+pub fn set_datacard_preview_fields_for_card(
+    id: String,
+    fields: Vec<String>,
+    state: &Arc<AppState>,
+) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+
+    let sanitized = sanitize_preview_fields(fields);
+    let json = serde_json::to_string(&sanitized)
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    let updated = repo_impl::set_datacard_preview_fields_for_card(state, &profile_id, &id, &json)?;
+    security_service::request_persist_active_vault(state.clone());
+    Ok(updated)
+}
+
 pub fn move_datacard_to_folder(input: MoveDataCardInput, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let moved = repo_impl::move_datacard(state, &profile_id, &input.id, &input.folder_id)?;
