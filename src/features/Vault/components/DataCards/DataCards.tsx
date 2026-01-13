@@ -933,7 +933,7 @@ export function DataCards({
                 case 'folder': {
                   if (!card.folderId) return null;
                   const v = (viewModel.folders.find((f) => f.id === card.folderId)?.name ?? '').trim();
-                  return v.length > 0 ? v : null;
+                  return v.length > 0 ? `${t('label.folder')}:${v}` : null;
                 }
                 case 'tags': {
                   const v = Array.isArray(card.tags) ? card.tags.join(', ').trim() : '';
