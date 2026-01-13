@@ -234,8 +234,7 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
 
         setCards((prev) => sortCardsWithSettings([summary, ...prev]));
         setCardDetailsById((prev) => ({ ...prev, [mapped.id]: mapped }));
-        setSelectedNav((prev) => (prev === 'deleted' ? 'all' : prev));
-        setSelectedCardId(mapped.id);
+        // No implicit navigation/selection. User decides what to select.
         return mapped;
       } catch (err) {
         handleError(err);
