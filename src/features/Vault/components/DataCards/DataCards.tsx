@@ -952,9 +952,7 @@ export function DataCards({
               value === 'tags';
 
             const mergedPreviewFields: DataCardPreviewField[] = [];
-            const perCardRaw = Array.isArray((card as any).previewFields)
-              ? ((card as any).previewFields as string[])
-              : [];
+            const perCardRaw = Array.isArray(card.previewFields) ? card.previewFields : [];
             for (const item of perCardRaw) {
               if (!isAllowedPreviewField(item)) continue;
               if (mergedPreviewFields.includes(item)) continue;
