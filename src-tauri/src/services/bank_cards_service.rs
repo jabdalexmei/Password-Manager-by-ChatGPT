@@ -171,3 +171,8 @@ pub fn set_bankcard_archived(
     security_service::request_persist_active_vault(state.clone());
     Ok(updated)
 }
+
+pub fn search_bank_card_ids(query: String, state: &Arc<AppState>) -> Result<Vec<String>> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    repo_impl::search_bank_card_ids(state, &profile_id, &query)
+}

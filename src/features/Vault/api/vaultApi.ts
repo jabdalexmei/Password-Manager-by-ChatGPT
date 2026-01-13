@@ -75,6 +75,14 @@ export async function setBankCardArchived(input: { id: string; is_archived: bool
   return invoke('set_bankcard_archived', { input });
 }
 
+export async function searchDataCards(query: string): Promise<string[]> {
+  return invoke('search_datacards', { query });
+}
+
+export async function searchBankCards(query: string): Promise<string[]> {
+  return invoke('search_bank_cards', { query });
+}
+
 export async function deleteBankCard(id: string): Promise<boolean> {
   return invoke('delete_bank_card', { id });
 }

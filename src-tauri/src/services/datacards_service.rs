@@ -185,6 +185,11 @@ pub fn list_deleted_datacards_summary(state: &Arc<AppState>) -> Result<Vec<DataC
     repo_impl::list_deleted_datacards_summary(state, &profile_id)
 }
 
+pub fn search_datacard_ids(query: String, state: &Arc<AppState>) -> Result<Vec<String>> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    repo_impl::search_datacard_ids(state, &profile_id, &query)
+}
+
 pub fn restore_all_deleted_datacards(state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let ids = repo_impl::list_deleted_datacard_ids(state, &profile_id)?;

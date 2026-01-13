@@ -89,6 +89,17 @@ pub async fn set_bankcard_archived(
 }
 
 #[tauri::command]
+pub async fn search_bank_cards(
+    query: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<String>> {
+    let app = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || bank_cards_service::search_bank_card_ids(query, &app))
+        .await
+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
 pub async fn delete_bank_card(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let app = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || bank_cards_service::delete_bank_card(id, &app))

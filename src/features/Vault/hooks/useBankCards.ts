@@ -11,6 +11,7 @@ import {
   purgeAllDeletedBankCards,
   restoreBankCard,
   restoreAllDeletedBankCards,
+  searchBankCards,
   setBankCardFavorite,
   setBankCardArchived,
   updateBankCard,
@@ -47,6 +48,7 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const debouncedSearchQuery = useDebouncedValue(searchInput, 200);
+  const [searchMatchIds, setSearchMatchIds] = useState<Set<string> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<BankCardsError>(null);
   const dtf = useMemo(
@@ -63,6 +65,30 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
     setSelectedCardId(null);
     setTrashLoaded(false);
   }, [profileId]);
+
+  useEffect(() => {
+    const q = debouncedSearchQuery.trim();
+    if (!q) {
+      setSearchMatchIds(null);
+      return;
+    }
+
+    let cancelled = false;
+    searchBankCards(q)
+      .then((ids) => {
+        if (cancelled) return;
+        setSearchMatchIds(new Set(ids));
+      })
+      .catch((err) => {
+        console.error(err);
+        if (cancelled) return;
+        setSearchMatchIds(new Set());
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearchQuery]);
 
   const isTrashMode = selectedNav === 'deleted';
   const selectedFolderId = typeof selectedNav === 'object' ? selectedNav.folderId : null;
@@ -392,13 +418,9 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
     }
 
     if (!debouncedSearchQuery.trim()) return pool;
-
-    const query = debouncedSearchQuery.toLowerCase();
-    return pool.filter((card) => {
-      const fields = [card.title, card.holder, card.number, card.metaLine, ...(card.tags || [])];
-      return fields.some((field) => field && field.toLowerCase().includes(query));
-    });
-  }, [cards, debouncedSearchQuery, deletedCards, selectedNav]);
+    if (!searchMatchIds) return pool;
+    return pool.filter((card) => searchMatchIds.has(card.id));
+  }, [cards, debouncedSearchQuery, deletedCards, searchMatchIds, selectedNav]);
 
   const selectedCard = useMemo(() => {
     if (selectedCardId && cardDetailsById[selectedCardId]) {
