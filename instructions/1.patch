@@ -1,103 +1,43 @@
---- a/src-tauri/src/data/sqlite/migrations.rs
-+++ b/src-tauri/src/data/sqlite/migrations.rs
-@@ -3,7 +3,7 @@
- 
- use crate::error::{ErrorCodeString, Result};
- 
--const CURRENT_SCHEMA_VERSION: i32 = 7;
-+const CURRENT_SCHEMA_VERSION: i32 = 8;
- 
- fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
-     // Dev-mode friendly: create idempotently so existing schema DBs also get it.
-@@ -143,6 +143,38 @@
-     Ok(())
- }
- 
-+fn migrate_7_to_8(conn: &Connection) -> Result<()> {
-+    ensure_ui_preferences_table(conn)?;
+--- /mnt/data/useBankCards.orig.ts	2026-01-13 23:21:50.804280590 +0000
++++ src/features/Vault/hooks/useBankCards.ts	2026-01-13 23:22:04.376834244 +0000
+@@ -208,7 +208,25 @@
+           });
+           setDeletedCards((prev) => prev.filter((c) => c.id !== id));
+         }
+-      } catch (err) {
++      } catch (err: any) {
++        const code = err?.code ?? err?.error ?? 'UNKNOWN';
 +
-+    // Older vaults might have bank_cards without some of the newer optional columns.
-+    // Ensure they exist so summary queries remain compatible.
-+    if has_table(conn, "bank_cards")? {
-+        if !has_column(conn, "bank_cards", "note")? {
-+            conn.execute_batch(
-+                r#"
-+ALTER TABLE bank_cards
-+ADD COLUMN note TEXT NULL;
-+"#,
-+            )
-+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++        // This can happen when the UI tries to load a card that was deleted/purged
++        // (e.g. stale selection). Treat it as a non-fatal state sync issue.
++        if (code === 'BANK_CARD_NOT_FOUND') {
++          setSelectedCardId((prev) => (prev === id ? null : prev));
++          setCards((prev) => prev.filter((c) => c.id !== id));
++          setDeletedCards((prev) => prev.filter((c) => c.id !== id));
++          setCardDetailsById((prev) => {
++            if (!prev[id]) return prev;
++            const next = { ...prev };
++            delete next[id];
++            return next;
++          });
++          console.warn('[BankCards] BANK_CARD_NOT_FOUND while loading card', { id });
++          return;
 +        }
 +
-+        if !has_column(conn, "bank_cards", "preview_fields_json")? {
-+            conn.execute_batch(
-+                r#"
-+ALTER TABLE bank_cards
-+ADD COLUMN preview_fields_json TEXT NOT NULL DEFAULT '{}';
-+"#,
-+            )
-+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-+        }
-+    }
-+
-+    conn.execute_batch("PRAGMA user_version = 8;")
-+        .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-+
-+    Ok(())
-+}
+         handleError(err);
+       }
+     },
+@@ -240,9 +258,10 @@
  
- fn migrate_4_to_5(conn: &Connection) -> Result<()> {
-     ensure_ui_preferences_table(conn)?;
-@@ -231,37 +263,41 @@
-             migrate_3_to_4(conn)?;
-             migrate_4_to_5(conn)?;
-             migrate_5_to_6(conn)?;
--            migrate_6_to_7(conn)
-+            migrate_6_to_7(conn)?;
-+            migrate_7_to_8(conn)
-         }
-         2 => {
-             migrate_2_to_3(conn)?;
-             migrate_3_to_4(conn)?;
-             migrate_4_to_5(conn)?;
-             migrate_5_to_6(conn)?;
--            migrate_6_to_7(conn)
-+            migrate_6_to_7(conn)?;
-+            migrate_7_to_8(conn)
-         }
-         3 => {
-             migrate_3_to_4(conn)?;
-             migrate_4_to_5(conn)?;
-             migrate_5_to_6(conn)?;
--            migrate_6_to_7(conn)
-+            migrate_6_to_7(conn)?;
-+            migrate_7_to_8(conn)
-         }
-         4 => {
-             migrate_4_to_5(conn)?;
-             migrate_5_to_6(conn)?;
--            migrate_6_to_7(conn)
-+            migrate_6_to_7(conn)?;
-+            migrate_7_to_8(conn)
-         }
-         5 => {
-             migrate_5_to_6(conn)?;
--            migrate_6_to_7(conn)
-+            migrate_6_to_7(conn)?;
-+            migrate_7_to_8(conn)
-         }
-         6 => {
--            migrate_6_to_7(conn)
--        }
--        CURRENT_SCHEMA_VERSION => {
--            ensure_ui_preferences_table(conn)?;
--            Ok(())
--        }
-+            migrate_6_to_7(conn)?;
-+            migrate_7_to_8(conn)
-+        }
-+        7 => migrate_7_to_8(conn),
-+        CURRENT_SCHEMA_VERSION => migrate_7_to_8(conn),
-         _ => {
-             log::warn!("[DB][migrate] unsupported schema version: {version}");
-             Err(ErrorCodeString::new("DB_MIGRATION_FAILED"))
+   const selectCard = useCallback(
+     (id: string | null) => {
+-      setSelectedCardId(id);
+-      if (id && !cardDetailsById[id]) {
+-        loadCard(id);
++      const normalized = id && id.trim().length > 0 ? id : null;
++      setSelectedCardId(normalized);
++      if (normalized && !cardDetailsById[normalized]) {
++        loadCard(normalized);
+       }
+     },
+     [cardDetailsById, loadCard]
