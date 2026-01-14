@@ -196,6 +196,8 @@ fn main() {
             set_bankcard_preview_fields_for_card,
             get_datacard_core_hidden_fields,
             set_datacard_core_hidden_fields,
+            get_bankcard_core_hidden_fields,
+            set_bankcard_core_hidden_fields,
             workspace_list,
             workspace_select,
             workspace_create,
