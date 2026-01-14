@@ -1070,8 +1070,18 @@ export function DataCards({
               mergedPreviewFields.push(item);
               if (mergedPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
             }
+            const previewFieldOrder: DataCardPreviewField[] = [
+              'recovery_email',
+              'username',
+              'mobile_phone',
+              'note',
+              'folder',
+              'tags',
+            ];
 
-            const extraLines = mergedPreviewFields
+            const orderedPreviewFields = previewFieldOrder.filter((field) => mergedPreviewFields.includes(field));
+
+            const extraLines = orderedPreviewFields
               .map((field) => getExtraLine(field))
               .filter((value): value is string => Boolean(value))
               .slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);
