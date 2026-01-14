@@ -840,9 +840,21 @@
   transform: translateY(-50%);
 }
 
-/* Bank Cards: keep the Notes copy button aligned with other copy buttons (top-aligned, not vertically centered). */
-.bankcard-detail-notes .detail-value-actions {
-  top: 10px;
+/* Bank Cards: Notes copy button alignment
+   - single-line: vertically centered like other fields
+   - multi-line: pinned to the top (aligned with first line)
+*/
+.bankcard-detail-notes .detail-value-box.detail-value-multiline {
+  min-height: 44px;
+}
+
+.bankcard-detail-notes.bankcard-notes-singleline .detail-value-actions {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.bankcard-detail-notes.bankcard-notes-multiline .detail-value-actions {
+  top: 5px;
   transform: none;
 }
 
