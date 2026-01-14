@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BackendUserSettings } from '../../types/backend';
+import { useTranslation } from '../../../../shared/lib/i18n';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/ui/dialog';
 
 export type SettingsModalProps = {
@@ -11,6 +12,9 @@ export type SettingsModalProps = {
 };
 
 export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: SettingsModalProps) {
+  const { t: tVault } = useTranslation('Vault');
+  const { t: tCommon } = useTranslation('Common');
+
   const [autoLockEnabled, setAutoLockEnabled] = useState(false);
   const [autoLockTimeoutSeconds, setAutoLockTimeoutSeconds] = useState('60');
   const [clipboardAutoClearEnabled, setClipboardAutoClearEnabled] = useState(false);
@@ -144,12 +148,12 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
       <DialogContent aria-labelledby="settings-title">
         <DialogHeader>
-          <DialogTitle id="settings-title">Settings</DialogTitle>
+          <DialogTitle id="settings-title">{tVault('settings')}</DialogTitle>
         </DialogHeader>
 
         <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <h3 id="security-title" style={subtitleStyle}>
-            Security
+            {tVault('settingsModal.securityTitle')}
           </h3>
 
           <div
@@ -159,7 +163,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
           >
             <div className="form-field" style={toggleRowStyle}>
               <span className="form-label settings-subheader" id="auto-lock-enabled-label">
-                Enable auto-lock
+                {tVault('settingsModal.autoLock.enabled')}
               </span>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -213,7 +217,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
             <div className="form-field">
               <label className="form-label" htmlFor="auto-lock-timeout-seconds">
-                Auto-lock timeout (seconds)
+                {tVault('settingsModal.autoLock.timeoutSeconds')}
               </label>
               <input
                 id="auto-lock-timeout-seconds"
@@ -230,7 +234,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
             <div className="form-field" style={toggleRowStyle}>
               <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
-                Enable clipboard auto-clear
+                {tVault('settingsModal.clipboard.enabled')}
               </span>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -284,7 +288,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
             <div className="form-field">
               <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
-                Clipboard clear timeout (seconds)
+                {tVault('settingsModal.clipboard.timeoutSeconds')}
               </label>
               <input
                 id="clipboard-clear-timeout-seconds"
@@ -301,13 +305,13 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
           </div>
 
           <h3 id="backups-title" style={subtitleStyle}>
-            Backups
+            {tVault('backup.settings.title')}
           </h3>
 
           <div role="group" aria-labelledby="backups-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="form-field" style={toggleRowStyle}>
               <span className="form-label settings-subheader" id="backup-auto-enabled-label">
-                Auto backup enabled
+                {tVault('backup.settings.autoEnabled')}
               </span>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -336,7 +340,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
             <div className="form-field">
               <label className="form-label" htmlFor="backup-interval-minutes">
-                Interval (minutes)
+                {tVault('backup.settings.intervalMinutes')}
               </label>
               <input
                 id="backup-interval-minutes"
@@ -353,7 +357,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
 
             <div className="form-field">
               <label className="form-label" htmlFor="backup-max-copies">
-                Max copies
+                {tVault('backup.settings.maxCopies')}
               </label>
               <input
                 id="backup-max-copies"
@@ -373,13 +377,13 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
         <DialogFooter className="dialog-footer--split">
           <div className="dialog-footer-left">
             <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={busy}>
-              Cancel
+              {tCommon('action.cancel')}
             </button>
           </div>
 
           <div className="dialog-footer-right">
             <button className="btn btn-primary" type="button" onClick={handleSave} disabled={busy || !settings || !canSave}>
-              Save
+              {tVault('backup.settings.save')}
             </button>
           </div>
         </DialogFooter>

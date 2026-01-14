@@ -39,6 +39,12 @@
   "backup.settings.title": "Backups",
   "backup.settings.autoEnabled": "Auto backup enabled",
   "backup.settings.intervalMinutes": "Interval (minutes)",
+  "backup.settings.maxCopies": "Max copies",
   "backup.settings.save": "Save",
+  "settingsModal.securityTitle": "Security",
+  "settingsModal.autoLock.enabled": "Enable auto-lock",
+  "settingsModal.autoLock.timeoutSeconds": "Auto-lock timeout (seconds)",
+  "settingsModal.clipboard.enabled": "Enable clipboard auto-clear",
+  "settingsModal.clipboard.timeoutSeconds": "Clipboard clear timeout (seconds)",
   "backup.auto.success": "Auto-backup created"
 }
