@@ -8,13 +8,10 @@ export type BankCardPreviewFields = {
   cardNumberMode: BankCardCardNumberMode;
 };
 
-export const MAX_BANKCARD_PREVIEW_FIELDS = 3;
-
 export function normalizeBankCardPreviewFields(value: BankCardPreviewFieldsDto | null | undefined): BankCardPreviewFields {
   const rawFields = Array.isArray(value?.fields) ? value!.fields : [];
   const fields: BankCardPreviewField[] = [];
   for (const f of rawFields) {
-    if (fields.length >= MAX_BANKCARD_PREVIEW_FIELDS) break;
     if (f === 'bank_name' || f === 'holder' || f === 'note' || f === 'tags') {
       if (!fields.includes(f)) fields.push(f);
     }

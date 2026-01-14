@@ -25,7 +25,6 @@ import {
   loadPreviewFields,
   onPreviewFieldsChanged,
   type DataCardPreviewField,
-  MAX_DATA_CARD_PREVIEW_FIELDS,
 } from '../../lib/datacardPreviewFields';
 import {
   loadCoreHiddenFields,
@@ -1063,12 +1062,10 @@ export function DataCards({
               if (!isAllowedPreviewField(item)) continue;
               if (mergedPreviewFields.includes(item)) continue;
               mergedPreviewFields.push(item);
-              if (mergedPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
             }
             for (const item of previewFields) {
               if (mergedPreviewFields.includes(item)) continue;
               mergedPreviewFields.push(item);
-              if (mergedPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
             }
             const previewFieldOrder: DataCardPreviewField[] = [
               'recovery_email',
@@ -1083,8 +1080,7 @@ export function DataCards({
 
             const extraLines = orderedPreviewFields
               .map((field) => getExtraLine(field))
-              .filter((value): value is string => Boolean(value))
-              .slice(0, MAX_DATA_CARD_PREVIEW_FIELDS);
+              .filter((value): value is string => Boolean(value));
 
             const metaLines = [...metaCoreLines, ...extraLines];
 

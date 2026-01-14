@@ -11,8 +11,6 @@ use crate::types::{
     SetBankCardArchivedInput, SetBankCardFavoriteInput, UpdateBankCardInput,
 };
 
-const MAX_PREVIEW_FIELDS: usize = 3;
-
 fn is_allowed_preview_field(value: &str) -> bool {
     matches!(value, "bank_name" | "holder" | "note" | "tags")
 }
@@ -31,9 +29,6 @@ fn normalize_preview_fields(input: Vec<String>) -> Vec<String> {
             continue;
         }
         out.push(trimmed.to_string());
-        if out.len() >= MAX_PREVIEW_FIELDS {
-            break;
-        }
     }
     out
 }

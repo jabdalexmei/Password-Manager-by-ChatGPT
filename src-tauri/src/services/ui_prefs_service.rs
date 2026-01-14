@@ -11,7 +11,6 @@ const PREF_KEY_DATACARD_PREVIEW_FIELDS: &str = "datacard.preview_fields";
 const PREF_KEY_BANKCARD_PREVIEW_FIELDS: &str = "bankcard.preview_fields";
 const PREF_KEY_DATACARD_CORE_HIDDEN_FIELDS: &str = "datacard.core_hidden_fields";
 const PREF_KEY_BANKCARD_CORE_HIDDEN_FIELDS: &str = "bankcard.core_hidden_fields";
-const MAX_PREVIEW_FIELDS: usize = 3;
 const MAX_CORE_HIDDEN_FIELDS: usize = 3;
 
 fn is_allowed_preview_field(value: &str) -> bool {
@@ -39,9 +38,6 @@ fn normalize_bankcard_preview_fields(input: Vec<String>) -> Vec<String> {
             continue;
         }
         out.push(trimmed.to_string());
-        if out.len() >= MAX_PREVIEW_FIELDS {
-            break;
-        }
     }
     out
 }
@@ -79,9 +75,6 @@ fn normalize_preview_fields(input: Vec<String>) -> Vec<String> {
             continue;
         }
         out.push(trimmed.to_string());
-        if out.len() >= MAX_PREVIEW_FIELDS {
-            break;
-        }
     }
     out
 }
