@@ -840,6 +840,12 @@
   transform: translateY(-50%);
 }
 
+/* Bank Cards: keep the Notes copy button aligned with other copy buttons (top-aligned, not vertically centered). */
+.bankcard-detail-notes .detail-value-actions {
+  top: 10px;
+  transform: none;
+}
+
 .detail-value-text-multiline {
   white-space: pre-wrap;
   width: 100%;

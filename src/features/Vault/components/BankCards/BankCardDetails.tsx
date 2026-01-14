@@ -395,7 +395,7 @@ export function BankCardDetails({
           )}
 
           {hasNote && (
-            <div className="detail-field">
+            <div className="detail-field detail-field-notes bankcard-detail-notes">
               <div className="detail-label">{t('label.note')}</div>
               <div
                 className="detail-value-box detail-value-multiline"
