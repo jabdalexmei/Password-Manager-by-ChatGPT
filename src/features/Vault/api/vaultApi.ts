@@ -155,7 +155,8 @@ export async function setBankCardPreviewFieldsForCard(
   id: string,
   previewFields: { fields: string[]; card_number_mode: string | null }
 ): Promise<boolean> {
-  return invoke('set_bankcard_preview_fields_for_card', { id, preview_fields: previewFields });
+  // Tauri command args are camelCased (preview_fields -> previewFields)
+  return invoke('set_bankcard_preview_fields_for_card', { id, previewFields });
 }
 
 export async function getSettings(): Promise<BackendUserSettings> {
