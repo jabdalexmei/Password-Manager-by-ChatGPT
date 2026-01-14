@@ -826,6 +826,7 @@
 /* Notes: multiline layout uses top-stacked content with an absolute copy button;
    single-line notes should behave like other fields (no forced min-height). */
 .detail-field-notes .detail-value-box.detail-value-multiline {
+  min-height: 44px;
   align-items: flex-start;
   position: relative;
   padding-right: 54px;
