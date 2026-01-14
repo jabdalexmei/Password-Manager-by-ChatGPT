@@ -329,7 +329,13 @@ export function BankCardDetails({
           {hasExpiry && (
             <div className="detail-field bankcard-compact-expiry">
               <div className="detail-label">{t('label.expiry')}</div>
-              <div className="detail-value-box">
+              <div
+                className="detail-value-box"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'expiry_mm_yy' });
+                }}
+              >
                 <div className="detail-value-text">{card.expiryMmYy ?? ''}</div>
               </div>
             </div>
@@ -338,7 +344,13 @@ export function BankCardDetails({
           {hasCvc && (
             <div className="detail-field bankcard-compact-cvc">
               <div className="detail-label">{t('label.cvc')}</div>
-              <div className="detail-value-box">
+              <div
+                className="detail-value-box"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'cvc' });
+                }}
+              >
                 <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
                 <div className="detail-value-actions">
                   <button
