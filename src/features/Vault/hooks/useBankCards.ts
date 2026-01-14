@@ -31,6 +31,7 @@ import { sortCards } from '../types/sort';
 import { SelectedNav } from './useVault';
 import { BackendUserSettings } from '../types/backend';
 import type { Folder } from '../types/ui';
+import type { BankCardPreviewField } from '../lib/bankcardPreviewFields';
 
 export type BankCardsError = { code: string; message?: string } | null;
 
@@ -89,6 +90,43 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
       cancelled = true;
     };
   }, [debouncedSearchQuery]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as
+        | {
+            id?: string;
+            previewFields?: {
+              fields?: BankCardPreviewField[];
+              cardNumberMode?: 'full' | 'last_four' | null;
+            };
+          }
+        | undefined;
+
+      const id = detail?.id;
+      const previewFields = detail?.previewFields;
+      if (!id || !previewFields) return;
+
+      const next = {
+        fields: previewFields.fields ?? [],
+        cardNumberMode: previewFields.cardNumberMode ?? null,
+      };
+
+      setCardDetailsById((prev) => {
+        const existing = prev[id];
+        if (!existing) return prev;
+        return { ...prev, [id]: { ...existing, previewFields: next } };
+      });
+
+      setCards((prev) => prev.map((c) => (c.id === id ? { ...c, previewFields: next } : c)));
+      setDeletedCards((prev) => prev.map((c) => (c.id === id ? { ...c, previewFields: next } : c)));
+    };
+
+    window.addEventListener('bankcard-preview-fields-for-card-changed', handler as EventListener);
+    return () => {
+      window.removeEventListener('bankcard-preview-fields-for-card-changed', handler as EventListener);
+    };
+  }, []);
 
   const isTrashMode = selectedNav === 'deleted';
   const selectedFolderId = typeof selectedNav === 'object' ? selectedNav.folderId : null;
