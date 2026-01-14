@@ -1095,12 +1095,6 @@ export function DataCards({
               'tags',
             ];
 
-            const orderedPreviewFields = previewFieldOrder.filter((field) => mergedPreviewFields.includes(field));
-
-            const extraLines = orderedPreviewFields
-              .map((field) => getExtraLine(field))
-              .filter((value): value is string => Boolean(value));
-
             // Custom preview fields are per-card only (no global "all" toggle)
             const perCardCustomKeys = new Set(
               perCardRaw
@@ -1119,7 +1113,30 @@ export function DataCards({
               customLines.push(`${key}:${value}`);
             }
 
-            const metaLines = [...metaCoreLines, ...extraLines, ...customLines];
+            // Keep preview lines aligned with Create/Edit + Information ordering.
+            // Custom fields are placed right after Mobile phone (Password is intentionally not shown in preview).
+            const metaLines: string[] = [...metaCoreLines];
+            let didInsertCustom = false;
+            for (const field of previewFieldOrder) {
+              if (field === 'mobile_phone') {
+                if (mergedPreviewFields.includes(field)) {
+                  const line = getExtraLine(field);
+                  if (line) metaLines.push(line);
+                }
+                if (customLines.length > 0) metaLines.push(...customLines);
+                didInsertCustom = true;
+                continue;
+              }
+
+              if (!mergedPreviewFields.includes(field)) continue;
+              const line = getExtraLine(field);
+              if (line) metaLines.push(line);
+            }
+
+            // Safety: if the canonical insertion point ever disappears, keep custom fields visible.
+            if (!didInsertCustom && customLines.length > 0) {
+              metaLines.push(...customLines);
+            }
 
               return (
                 <button
