@@ -1,266 +1,94 @@
-diff -ruN /mnt/data/projfix_orig/Password-Manager-by-ChatGPT-codex-github-mention-harden-bank-card-migrations-and-loading/src/features/Vault/api/vaultApi.ts /mnt/data/projfix/Password-Manager-by-ChatGPT-codex-github-mention-harden-bank-card-migrations-and-loading/src/features/Vault/api/vaultApi.ts
---- /mnt/data/projfix_orig/Password-Manager-by-ChatGPT-codex-github-mention-harden-bank-card-migrations-and-loading/src/features/Vault/api/vaultApi.ts	2026-01-13 23:57:40.000000000 +0000
-+++ /mnt/data/projfix/Password-Manager-by-ChatGPT-codex-github-mention-harden-bank-card-migrations-and-loading/src/features/Vault/api/vaultApi.ts	2026-01-14 00:05:41.102585169 +0000
-@@ -155,7 +155,8 @@
-   id: string,
-   previewFields: { fields: string[]; card_number_mode: string | null }
- ): Promise<boolean> {
--  return invoke('set_bankcard_preview_fields_for_card', { id, preview_fields: previewFields });
-+  // Tauri command args are camelCased (preview_fields -> previewFields)
-+  return invoke('set_bankcard_preview_fields_for_card', { id, previewFields });
- }
+diff -ruN ./src/features/Vault/components/BankCards/BankCardDetails.tsx ./src/features/Vault/components/BankCards/BankCardDetails.tsx
+--- ./src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-14 00:16:42.000000000 +0000
++++ ./src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-14 00:36:18.220223638 +0000
+@@ -16,7 +16,7 @@
+ export type BankCardDetailsProps = {
+   card: BankCardItem | null;
+   onEdit: (card: BankCardItem) => void;
+-  onReloadCard?: (id: string) => void;
++  onReloadCard?: (id: string) => Promise<void> | void;
+   onDelete: (id: string) => void;
+   onRestore: (id: string) => void;
+   onPurge: (id: string) => void;
+@@ -146,7 +146,24 @@
+       fields: nextFields,
+       card_number_mode: nextMode,
+     });
+-    if (ok) onReloadCard?.(card.id);
++
++    // Update UI immediately (list preview + details) without requiring a full vault reload.
++    if (ok) {
++      window.dispatchEvent(
++        new CustomEvent('bankcard-preview-fields-for-card-changed', {
++          detail: {
++            id: card.id,
++            previewFields: {
++              fields: nextFields,
++              cardNumberMode: nextMode,
++            },
++          },
++        })
++      );
++
++      await onReloadCard?.(card.id);
++    }
++
+     return ok;
+   };
  
- export async function getSettings(): Promise<BackendUserSettings> {
-diff -ruN /mnt/data/projfix_orig/Password-Manager-by-ChatGPT-codex-github-mention-harden-bank-card-migrations-and-loading/src/features/Vault/components/BankCards/BankCardDetails.tsx /mnt/data/projfix/Password-Manager-by-ChatGPT-codex-github-mention-harden-bank-card-migrations-and-loading/src/features/Vault/components/BankCards/BankCardDetails.tsx
---- /mnt/data/projfix_orig/Password-Manager-by-ChatGPT-codex-github-mention-harden-bank-card-migrations-and-loading/src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-13 23:57:40.000000000 +0000
-+++ /mnt/data/projfix/Password-Manager-by-ChatGPT-codex-github-mention-harden-bank-card-migrations-and-loading/src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-14 00:07:35.655163376 +0000
-@@ -390,112 +390,143 @@
-       </div>
+diff -ruN ./src/features/Vault/hooks/useBankCards.ts ./src/features/Vault/hooks/useBankCards.ts
+--- ./src/features/Vault/hooks/useBankCards.ts	2026-01-14 00:16:42.000000000 +0000
++++ ./src/features/Vault/hooks/useBankCards.ts	2026-01-14 00:37:09.254558532 +0000
+@@ -31,6 +31,7 @@
+ import { SelectedNav } from './useVault';
+ import { BackendUserSettings } from '../types/backend';
+ import type { Folder } from '../types/ui';
++import type { BankCardPreviewField } from '../lib/bankcardPreviewFields';
  
-       {previewMenu && (
--        <div
--          className="preview-fields-menu"
--          style={{ left: previewMenu.x, top: previewMenu.y }}
--          onMouseLeave={() => setPreviewMenu(null)}
--        >
--          {previewMenu.kind === 'field' && (() => {
--            const field = previewMenu.field;
--            const isEnabledForCard = perCardFields.includes(field);
--            const isEnabledForAll = globalPreview.fields.includes(field);
--            const canAddForCard = !isEnabledForCard && perCardFields.length < MAX_BANKCARD_PREVIEW_FIELDS;
--            const canAddForAll = !isEnabledForAll && globalPreview.fields.length < MAX_BANKCARD_PREVIEW_FIELDS;
--
--            return (
--              <div className="preview-fields-menu-items">
--                <button
--                  className="preview-fields-menu-item"
--                  type="button"
--                  disabled={!isEnabledForCard && !canAddForCard}
--                  onClick={async () => {
--                    if (isEnabledForCard) {
--                      await updateCardPreviewFields(perCardFields.filter((f) => f !== field), perCardNumberMode);
--                    } else if (canAddForCard) {
--                      await updateCardPreviewFields([...perCardFields, field], perCardNumberMode);
--                    }
--                    setPreviewMenu(null);
--                  }}
--                >
--                  {isEnabledForCard ? t('previewMenu.hideInPreview') : t('previewMenu.showInPreview')}
--                </button>
--
--                <button
--                  className="preview-fields-menu-item"
--                  type="button"
--                  disabled={!isEnabledForAll && !canAddForAll}
--                  onClick={async () => {
--                    if (isEnabledForAll) {
--                      await updateGlobalPreviewFields(globalPreview.fields.filter((f) => f !== field), globalNumberMode);
--                    } else if (canAddForAll) {
--                      await updateGlobalPreviewFields([...globalPreview.fields, field], globalNumberMode);
--                    }
--                    setPreviewMenu(null);
--                  }}
--                >
--                  {isEnabledForAll ? t('previewMenu.hideInPreviewAll') : t('previewMenu.showInPreviewAll')}
--                </button>
--              </div>
--            );
--          })()}
--
--          {previewMenu.kind === 'card_number' && (() => {
--            const isFullForCard = perCardNumberMode === 'full';
--            const isLastFourForCard = perCardNumberMode === 'last_four';
--            const isFullForAll = globalNumberMode === 'full';
--            const isLastFourForAll = globalNumberMode === 'last_four';
--
--            return (
--              <div className="preview-fields-menu-items">
--                <button
--                  className="preview-fields-menu-item"
--                  type="button"
--                  onClick={async () => {
--                    await updateCardPreviewFields(perCardFields, isFullForCard ? null : 'full');
--                    setPreviewMenu(null);
--                  }}
--                >
--                  {isFullForCard ? t('previewMenu.hideCardNumberFull') : t('previewMenu.showCardNumberFull')}
--                </button>
--
--                <button
--                  className="preview-fields-menu-item"
--                  type="button"
--                  onClick={async () => {
--                    await updateCardPreviewFields(perCardFields, isLastFourForCard ? null : 'last_four');
--                    setPreviewMenu(null);
--                  }}
--                >
--                  {isLastFourForCard ? t('previewMenu.hideCardNumberLastFour') : t('previewMenu.showCardNumberLastFour')}
--                </button>
--
--                <div className="preview-fields-menu-separator" />
--
--                <button
--                  className="preview-fields-menu-item"
--                  type="button"
--                  onClick={async () => {
--                    await updateGlobalPreviewFields(globalPreview.fields, isFullForAll ? null : 'full');
--                    setPreviewMenu(null);
--                  }}
--                >
--                  {isFullForAll ? t('previewMenu.hideCardNumberFullAll') : t('previewMenu.showCardNumberFullAll')}
--                </button>
--
--                <button
--                  className="preview-fields-menu-item"
--                  type="button"
--                  onClick={async () => {
--                    await updateGlobalPreviewFields(globalPreview.fields, isLastFourForAll ? null : 'last_four');
--                    setPreviewMenu(null);
--                  }}
--                >
--                  {isLastFourForAll ? t('previewMenu.hideCardNumberLastFourAll') : t('previewMenu.showCardNumberLastFourAll')}
--                </button>
--              </div>
--            );
--          })()}
--        </div>
-+        <>
-+          <div
-+            className="vault-actionmenu-backdrop"
-+            onClick={() => setPreviewMenu(null)}
-+            onContextMenu={(e) => {
-+              e.preventDefault();
-+              setPreviewMenu(null);
-+            }}
-+          />
-+          <div
-+            className="vault-actionmenu-panel vault-contextmenu-panel"
-+            role="menu"
-+            style={
-+              {
-+                '--menu-x': `${previewMenu.x}px`,
-+                '--menu-y': `${previewMenu.y}px`,
-+              } as React.CSSProperties
-+            }
-+          >
-+            {previewMenu.kind === 'field' && (() => {
-+              const field = previewMenu.field;
-+              const isEnabledForCard = perCardFields.includes(field);
-+              const isEnabledForAll = globalPreview.fields.includes(field);
-+              const canAddForCard = !isEnabledForCard && perCardFields.length < MAX_BANKCARD_PREVIEW_FIELDS;
-+              const canAddForAll = !isEnabledForAll && globalPreview.fields.length < MAX_BANKCARD_PREVIEW_FIELDS;
-+
-+              return (
-+                <>
-+                  <button
-+                    className="vault-actionmenu-item"
-+                    type="button"
-+                    disabled={!isEnabledForCard && !canAddForCard}
-+                    onClick={async () => {
-+                      if (isEnabledForCard) {
-+                        await updateCardPreviewFields(perCardFields.filter((f) => f !== field), perCardNumberMode);
-+                      } else if (canAddForCard) {
-+                        await updateCardPreviewFields([...perCardFields, field], perCardNumberMode);
-+                      }
-+                      setPreviewMenu(null);
-+                    }}
-+                  >
-+                    {isEnabledForCard ? t('previewMenu.hideInPreview') : t('previewMenu.showInPreview')}
-+                  </button>
-+
-+                  {!isEnabledForCard && !canAddForCard && (
-+                    <button className="vault-actionmenu-item" type="button" disabled>
-+                      {t('previewMenu.maxInPreview', { count: MAX_BANKCARD_PREVIEW_FIELDS })}
-+                    </button>
-+                  )}
-+
-+                  <div className="vault-actionmenu-separator" />
-+
-+                  <button
-+                    className="vault-actionmenu-item"
-+                    type="button"
-+                    disabled={!isEnabledForAll && !canAddForAll}
-+                    onClick={async () => {
-+                      if (isEnabledForAll) {
-+                        await updateGlobalPreviewFields(globalPreview.fields.filter((f) => f !== field), globalNumberMode);
-+                      } else if (canAddForAll) {
-+                        await updateGlobalPreviewFields([...globalPreview.fields, field], globalNumberMode);
-+                      }
-+                      setPreviewMenu(null);
-+                    }}
-+                  >
-+                    {isEnabledForAll ? t('previewMenu.hideInPreviewAll') : t('previewMenu.showInPreviewAll')}
-+                  </button>
-+
-+                  {!isEnabledForAll && !canAddForAll && (
-+                    <button className="vault-actionmenu-item" type="button" disabled>
-+                      {t('previewMenu.maxInPreviewAll', { count: MAX_BANKCARD_PREVIEW_FIELDS })}
-+                    </button>
-+                  )}
-+                </>
-+              );
-+            })()}
-+
-+            {previewMenu.kind === 'card_number' && (() => {
-+              const isFullForCard = perCardNumberMode === 'full';
-+              const isLastFourForCard = perCardNumberMode === 'last_four';
-+              const isFullForAll = globalNumberMode === 'full';
-+              const isLastFourForAll = globalNumberMode === 'last_four';
-+
-+              return (
-+                <>
-+                  <button
-+                    className="vault-actionmenu-item"
-+                    type="button"
-+                    onClick={async () => {
-+                      await updateCardPreviewFields(perCardFields, isFullForCard ? null : 'full');
-+                      setPreviewMenu(null);
-+                    }}
-+                  >
-+                    {isFullForCard ? t('previewMenu.hideCardNumberFull') : t('previewMenu.showCardNumberFull')}
-+                  </button>
-+
-+                  <button
-+                    className="vault-actionmenu-item"
-+                    type="button"
-+                    onClick={async () => {
-+                      await updateCardPreviewFields(perCardFields, isLastFourForCard ? null : 'last_four');
-+                      setPreviewMenu(null);
-+                    }}
-+                  >
-+                    {isLastFourForCard ? t('previewMenu.hideCardNumberLastFour') : t('previewMenu.showCardNumberLastFour')}
-+                  </button>
-+
-+                  <div className="vault-actionmenu-separator" />
-+
-+                  <button
-+                    className="vault-actionmenu-item"
-+                    type="button"
-+                    onClick={async () => {
-+                      await updateGlobalPreviewFields(globalPreview.fields, isFullForAll ? null : 'full');
-+                      setPreviewMenu(null);
-+                    }}
-+                  >
-+                    {isFullForAll ? t('previewMenu.hideCardNumberFullAll') : t('previewMenu.showCardNumberFullAll')}
-+                  </button>
-+
-+                  <button
-+                    className="vault-actionmenu-item"
-+                    type="button"
-+                    onClick={async () => {
-+                      await updateGlobalPreviewFields(globalPreview.fields, isLastFourForAll ? null : 'last_four');
-+                      setPreviewMenu(null);
-+                    }}
-+                  >
-+                    {isLastFourForAll
-+                      ? t('previewMenu.hideCardNumberLastFourAll')
-+                      : t('previewMenu.showCardNumberLastFourAll')}
-+                  </button>
-+                </>
-+              );
-+            })()}
-+          </div>
-+        </>
-       )}
+ export type BankCardsError = { code: string; message?: string } | null;
  
-       <ConfirmDialog
+@@ -90,6 +91,44 @@
+     };
+   }, [debouncedSearchQuery]);
+ 
++  useEffect(() => {
++    const handler = (event: Event) => {
++      const detail = (event as CustomEvent).detail as
++        | {
++            id?: string;
++            previewFields?: {
++              fields?: BankCardPreviewField[];
++              cardNumberMode?: 'full' | 'last_four' | null;
++            };
++          }
++        | undefined;
++
++      const id = detail?.id;
++      const previewFields = detail?.previewFields;
++      if (!id || !previewFields) return;
++
++      const next = {
++        fields: previewFields.fields ?? [],
++        cardNumberMode: previewFields.cardNumberMode ?? null,
++      };
++
++      setCardDetailsById((prev) => {
++        const existing = prev[id];
++        if (!existing) return prev;
++        return { ...prev, [id]: { ...existing, previewFields: next } };
++      });
++
++      setCards((prev) => prev.map((c) => (c.id === id ? { ...c, previewFields: next } : c)));
++      setDeletedCards((prev) => prev.map((c) => (c.id === id ? { ...c, previewFields: next } : c)));
++    };
++
++    window.addEventListener('bankcard-preview-fields-for-card-changed', handler as EventListener);
++    return () => {
++      window.removeEventListener('bankcard-preview-fields-for-card-changed', handler as EventListener);
++    };
++  }, []);
++
++
+   const isTrashMode = selectedNav === 'deleted';
+   const selectedFolderId = typeof selectedNav === 'object' ? selectedNav.folderId : null;
+ 
