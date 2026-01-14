@@ -394,30 +394,35 @@ export function BankCardDetails({
             </div>
           )}
 
-          {hasNote && (
-            <div className={`detail-field detail-field-notes bankcard-detail-notes ${((card.note ?? "").includes("\n")) ? "bankcard-notes-multiline" : "bankcard-notes-singleline"}`}>
-              <div className="detail-label">{t('label.note')}</div>
-              <div
-                className="detail-value-box detail-value-multiline"
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'note' });
-                }}
-              >
-                <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
-                <div className="detail-value-actions">
-                  <button
-                    className="icon-button"
-                    type="button"
-                    aria-label={t('action.copy')}
-                    onClick={() => detailActions.copyToClipboard(card.note)}
-                  >
-                    <IconCopy />
-                  </button>
+          {hasNote && (() => {
+            const noteText = card.note ?? '';
+            const isNoteMultiline = noteText.includes('\n');
+
+            return (
+              <div className={`detail-field detail-field-notes${isNoteMultiline ? ' detail-field-notes--multiline' : ''}`}>
+                <div className="detail-label">{t('label.note')}</div>
+                <div
+                  className={`detail-value-box${isNoteMultiline ? ' detail-value-multiline' : ''}`}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'note' });
+                  }}
+                >
+                  <div className={`detail-value-text${isNoteMultiline ? ' detail-value-text-multiline' : ''}`}>{noteText}</div>
+                  <div className="detail-value-actions">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label={t('action.copy')}
+                      onClick={() => detailActions.copyToClipboard(noteText)}
+                    >
+                      <IconCopy />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {hasTags && (
             <div className="detail-field">
