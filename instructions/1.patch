@@ -1,94 +1,147 @@
-diff -ruN ./src/features/Vault/components/BankCards/BankCardDetails.tsx ./src/features/Vault/components/BankCards/BankCardDetails.tsx
---- ./src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-14 00:16:42.000000000 +0000
-+++ ./src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-14 00:36:18.220223638 +0000
-@@ -16,7 +16,7 @@
- export type BankCardDetailsProps = {
-   card: BankCardItem | null;
-   onEdit: (card: BankCardItem) => void;
--  onReloadCard?: (id: string) => void;
-+  onReloadCard?: (id: string) => Promise<void> | void;
-   onDelete: (id: string) => void;
-   onRestore: (id: string) => void;
-   onPurge: (id: string) => void;
-@@ -146,7 +146,24 @@
-       fields: nextFields,
-       card_number_mode: nextMode,
-     });
--    if (ok) onReloadCard?.(card.id);
-+
-+    // Update UI immediately (list preview + details) without requiring a full vault reload.
-+    if (ok) {
-+      window.dispatchEvent(
-+        new CustomEvent('bankcard-preview-fields-for-card-changed', {
-+          detail: {
-+            id: card.id,
-+            previewFields: {
-+              fields: nextFields,
-+              cardNumberMode: nextMode,
-+            },
-+          },
-+        })
-+      );
-+
-+      await onReloadCard?.(card.id);
-+    }
-+
-     return ok;
-   };
+diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+index a525a3d..eb5d48e 100644
+--- a/src/features/Vault/components/BankCards/BankCardDetails.tsx
++++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+@@ -329,7 +329,13 @@ export function BankCardDetails({
+           {hasExpiry && (
+             <div className="detail-field bankcard-compact-expiry">
+               <div className="detail-label">{t('label.expiry')}</div>
+-              <div className="detail-value-box">
++              <div
++                className="detail-value-box"
++                onContextMenu={(event) => {
++                  event.preventDefault();
++                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'expiry_mm_yy' });
++                }}
++              >
+                 <div className="detail-value-text">{card.expiryMmYy ?? ''}</div>
+               </div>
+             </div>
+@@ -338,7 +344,13 @@ export function BankCardDetails({
+           {hasCvc && (
+             <div className="detail-field bankcard-compact-cvc">
+               <div className="detail-label">{t('label.cvc')}</div>
+-              <div className="detail-value-box">
++              <div
++                className="detail-value-box"
++                onContextMenu={(event) => {
++                  event.preventDefault();
++                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'cvc' });
++                }}
++              >
+                 <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
+                 <div className="detail-value-actions">
+                   <button
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+index cfb1845..29a93ae 100644
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -502,20 +502,6 @@ export function BankCards({
  
-diff -ruN ./src/features/Vault/hooks/useBankCards.ts ./src/features/Vault/hooks/useBankCards.ts
---- ./src/features/Vault/hooks/useBankCards.ts	2026-01-14 00:16:42.000000000 +0000
-+++ ./src/features/Vault/hooks/useBankCards.ts	2026-01-14 00:37:09.254558532 +0000
-@@ -31,6 +31,7 @@
- import { SelectedNav } from './useVault';
- import { BackendUserSettings } from '../types/backend';
- import type { Folder } from '../types/ui';
-+import type { BankCardPreviewField } from '../lib/bankcardPreviewFields';
+             const previewLines: Array<{ label: string; value: string }> = [];
  
- export type BankCardsError = { code: string; message?: string } | null;
+-            if (card.number && numberMode) {
+-              if (numberMode === 'full') {
+-                previewLines.push({
+-                  label: t('label.cardNumber'),
+-                  value: formatCardNumberFull(card.number),
+-                });
+-              } else if (numberMode === 'last_four') {
+-                previewLines.push({
+-                  label: t('label.cardNumberLastFour'),
+-                  value: formatCardNumberLastFour(card.number),
+-                });
+-              }
+-            }
+-
+             const addLine = (label: string, value: string | null | undefined) => {
+               if (!value) return;
+               const trimmed = value.trim();
+@@ -523,10 +509,41 @@ export function BankCards({
+               previewLines.push({ label, value: trimmed });
+             };
  
-@@ -90,6 +91,44 @@
-     };
-   }, [debouncedSearchQuery]);
+-            for (const field of ['bank_name', 'holder', 'note', 'tags'] as const) {
+-              if (!mergedFields.includes(field)) continue;
++            // Keep preview lines aligned with Create/Edit + Information field ordering.
++            // Title is the primary line; the rest follows this canonical order.
++            const orderedPreviewFields = [
++              'bank_name',
++              'holder',
++              'card_number',
++              'expiry_mm_yy',
++              'cvc',
++              'note',
++              'tags',
++            ] as const;
++
++            for (const field of orderedPreviewFields) {
+               if (previewLines.length >= 3) break;
  
-+  useEffect(() => {
-+    const handler = (event: Event) => {
-+      const detail = (event as CustomEvent).detail as
-+        | {
-+            id?: string;
-+            previewFields?: {
-+              fields?: BankCardPreviewField[];
-+              cardNumberMode?: 'full' | 'last_four' | null;
-+            };
-+          }
-+        | undefined;
++              if (field === 'card_number') {
++                if (card.number && numberMode) {
++                  if (numberMode === 'full') {
++                    previewLines.push({
++                      label: t('label.cardNumber'),
++                      value: formatCardNumberFull(card.number),
++                    });
++                  } else if (numberMode === 'last_four') {
++                    previewLines.push({
++                      label: t('label.cardNumberLastFour'),
++                      value: formatCardNumberLastFour(card.number),
++                    });
++                  }
++                }
++                continue;
++              }
 +
-+      const id = detail?.id;
-+      const previewFields = detail?.previewFields;
-+      if (!id || !previewFields) return;
++              // All other fields are opt-in via per-card/global "Show in preview".
++              if (!mergedFields.includes(field as any)) continue;
 +
-+      const next = {
-+        fields: previewFields.fields ?? [],
-+        cardNumberMode: previewFields.cardNumberMode ?? null,
-+      };
-+
-+      setCardDetailsById((prev) => {
-+        const existing = prev[id];
-+        if (!existing) return prev;
-+        return { ...prev, [id]: { ...existing, previewFields: next } };
-+      });
-+
-+      setCards((prev) => prev.map((c) => (c.id === id ? { ...c, previewFields: next } : c)));
-+      setDeletedCards((prev) => prev.map((c) => (c.id === id ? { ...c, previewFields: next } : c)));
-+    };
-+
-+    window.addEventListener('bankcard-preview-fields-for-card-changed', handler as EventListener);
-+    return () => {
-+      window.removeEventListener('bankcard-preview-fields-for-card-changed', handler as EventListener);
-+    };
-+  }, []);
-+
-+
-   const isTrashMode = selectedNav === 'deleted';
-   const selectedFolderId = typeof selectedNav === 'object' ? selectedNav.folderId : null;
+               switch (field) {
+                 case 'bank_name': {
+                   if (!rawBankName) break;
+@@ -539,6 +556,14 @@ export function BankCards({
+                   addLine(t('label.holder'), card.holder ?? null);
+                   break;
+                 }
++                case 'expiry_mm_yy': {
++                  addLine(t('label.expiry'), card.expiryMmYy ?? null);
++                  break;
++                }
++                case 'cvc': {
++                  addLine(t('label.cvc'), card.cvc ?? null);
++                  break;
++                }
+                 case 'note': {
+                   addLine(t('label.note'), card.note ?? null);
+                   break;
+@@ -549,7 +574,6 @@ export function BankCards({
+                   break;
+                 }
+               }
+-              if (previewLines.length >= 3) break;
+             }
  
+             const visiblePreviewLines = previewLines.slice(0, 3);
+diff --git a/src/features/Vault/lib/bankcardPreviewFields.ts b/src/features/Vault/lib/bankcardPreviewFields.ts
+index 53e062c..ec16f36 100644
+--- a/src/features/Vault/lib/bankcardPreviewFields.ts
++++ b/src/features/Vault/lib/bankcardPreviewFields.ts
+@@ -1,6 +1,6 @@
+ import { getBankCardPreviewFields, setBankCardPreviewFields, type BankCardPreviewFieldsDto } from '../../../shared/lib/tauri';
+ 
+-export type BankCardPreviewField = 'bank_name' | 'holder' | 'note' | 'tags';
++export type BankCardPreviewField = 'bank_name' | 'holder' | 'expiry_mm_yy' | 'cvc' | 'note' | 'tags';
+ export type BankCardCardNumberMode = 'full' | 'last_four' | null;
+ 
+ export type BankCardPreviewFields = {
+@@ -15,7 +15,7 @@ export function normalizeBankCardPreviewFields(value: BankCardPreviewFieldsDto |
+   const fields: BankCardPreviewField[] = [];
+   for (const f of rawFields) {
+     if (fields.length >= MAX_BANKCARD_PREVIEW_FIELDS) break;
+-    if (f === 'bank_name' || f === 'holder' || f === 'note' || f === 'tags') {
++    if (f === 'bank_name' || f === 'holder' || f === 'expiry_mm_yy' || f === 'cvc' || f === 'note' || f === 'tags') {
+       if (!fields.includes(f)) fields.push(f);
+     }
+   }
