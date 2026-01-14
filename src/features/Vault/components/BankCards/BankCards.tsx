@@ -542,8 +542,6 @@ export function BankCards({
             ] as const;
 
             for (const field of orderedPreviewFields) {
-              if (previewLines.length >= 3) break;
-
               if (field === 'card_number') {
                 if (card.number && numberMode) {
                   if (numberMode === 'full') {
@@ -588,7 +586,7 @@ export function BankCards({
               }
             }
 
-            const visiblePreviewLines = previewLines.slice(0, 3);
+            const visiblePreviewLines = previewLines;
 
             return (
               <button
