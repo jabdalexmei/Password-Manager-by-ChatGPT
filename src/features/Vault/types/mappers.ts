@@ -96,7 +96,11 @@ export function mapCardSummaryFromBackend(
     totpUri: null,
     seedPhrase: null,
     seedPhraseWordCount: null,
-    customFields: [],
+    customFields: (card.custom_fields || []).map((field) => ({
+      key: field.key,
+      value: field.value,
+      type: field.type,
+    })),
     previewFields: card.preview_fields ?? [],
     isFavorite: card.is_favorite,
     hasTotp: card.has_totp,

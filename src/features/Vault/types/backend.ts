@@ -69,6 +69,10 @@ export type BackendDataCardSummary = {
   has_note: boolean;
   has_attachments: boolean;
   preview_fields: string[];
+
+  // Required so custom preview fields can render in the list view
+  // without waiting for a full card fetch.
+  custom_fields: BackendCustomField[];
 };
 
 export type BackendCreateDataCardInput = {

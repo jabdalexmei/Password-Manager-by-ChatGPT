@@ -144,6 +144,10 @@ pub struct DataCardSummary {
     pub has_phone: bool,
     pub has_note: bool,
     pub has_attachments: bool,
+
+    // Needed for rendering per-card-only custom preview fields in the list view.
+    // Without this, custom preview lines appear only after opening the card (details fetch).
+    pub custom_fields: Vec<CustomField>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

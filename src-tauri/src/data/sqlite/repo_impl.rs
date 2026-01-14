@@ -314,6 +314,8 @@ fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
 
 fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary> {
     let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
+    let custom_fields: Vec<CustomField> =
+        deserialize_json(row.get::<_, String>("custom_fields_json")?).unwrap_or_default();
     let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
     let has_totp = row.get::<_, Option<String>>("totp_uri")?.is_some();
     let has_seed_phrase = row.get::<_, i64>("has_seed_phrase")? != 0;
@@ -343,6 +345,9 @@ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary
         has_phone,
         has_note,
         has_attachments,
+
+        // Needed for rendering per-card-only custom preview fields in the list view.
+        custom_fields,
     })
 }
 
@@ -656,6 +661,7 @@ pub fn list_datacards_summary(
                 CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
                 EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
                 d.tags_json,
+                d.custom_fields_json,
                 d.preview_fields_json,
                 d.is_favorite,
                 d.created_at,
@@ -754,6 +760,7 @@ pub fn list_deleted_datacards_summary(
                     CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
                     EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
                     d.tags_json,
+                    d.custom_fields_json,
                     d.preview_fields_json,
                     d.is_favorite,
                     d.created_at,
