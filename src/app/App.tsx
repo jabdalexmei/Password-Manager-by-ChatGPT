@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useMemo, useState } from 'react';
 import { ToasterProvider } from '../shared/components/Toaster';
+import { useTranslation } from '../shared/lib/i18n';
 import { ProfileMeta, loginVault, setActiveProfile } from '../shared/lib/tauri';
 
 type View = 'workspace' | 'startup' | 'create' | 'login' | 'vault';
@@ -11,6 +12,7 @@ const LogIn = React.lazy(() => import('../features/LogIn/LogIn'));
 const Vault = React.lazy(() => import('../features/Vault/Vault'));
 
 const App: React.FC = () => {
+  const { t } = useTranslation('Common');
   const [view, setView] = useState<View>('workspace');
   const [activeProfile, setProfile] = useState<ProfileMeta | null>(null);
 
@@ -95,7 +97,7 @@ const App: React.FC = () => {
 
   return (
     <ToasterProvider>
-      <Suspense fallback={<p className="muted centered" aria-busy="true">Loading…</p>}>
+      <Suspense fallback={<p className="muted centered" aria-busy="true">{t('label.loading')}</p>}>
         {content}
       </Suspense>
     </ToasterProvider>

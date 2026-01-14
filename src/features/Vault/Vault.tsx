@@ -531,7 +531,7 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
               clipboardClearTimeoutSeconds={bankCards.settings?.clipboard_clear_timeout_seconds}
             />
           ) : vault.selectedCard ? (
-            <Suspense fallback={<p aria-busy="true">Loading…</p>}>
+            <Suspense fallback={<p aria-busy="true">{tCommon('label.loading')}</p>}>
               <LazyDetails
                 card={vault.selectedCard}
                 folders={foldersForCards}
