@@ -823,17 +823,16 @@
   gap: 8px;
 }
 
-.detail-field-notes .detail-value-box {
-  align-items: flex-start;
-}
-
-/* Notes: keep the copy button aligned to the right, like other fields */
+/* Notes: multiline layout uses top-stacked content with an absolute copy button;
+   single-line notes should behave like other fields (no forced min-height). */
 .detail-field-notes .detail-value-box.detail-value-multiline {
+  min-height: 44px;
+  align-items: flex-start;
   position: relative;
   padding-right: 54px;
 }
 
-.detail-field-notes .detail-value-actions {
+.detail-field-notes .detail-value-box.detail-value-multiline .detail-value-actions {
   position: absolute;
   right: 12px;
   top: 50%;
