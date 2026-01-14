@@ -629,24 +629,32 @@ export function Details({
           );
         })}
 
-      {hasNote && (
-        <div className="detail-field detail-field-notes">
-          <div className="detail-label">{t('label.note')}</div>
-          <div className="detail-value-box detail-value-multiline" onContextMenu={(e) => openPreviewMenu('note', e)}>
-            <div className="detail-value-text detail-value-text-multiline">{card.note ?? ''}</div>
-            <div className="detail-value-actions">
-              <button
-                className="icon-button"
-                type="button"
-                aria-label={t('action.copy')}
-                onClick={() => detailActions.copyToClipboard(card.note)}
-              >
-                <IconCopy />
-              </button>
+      {hasNote && (() => {
+        const noteText = card.note ?? '';
+        const isNoteMultiline = noteText.includes('\n');
+
+        return (
+          <div className={`detail-field detail-field-notes${isNoteMultiline ? ' detail-field-notes--multiline' : ''}`}>
+            <div className="detail-label">{t('label.note')}</div>
+            <div
+              className={`detail-value-box${isNoteMultiline ? ' detail-value-multiline' : ''}`}
+              onContextMenu={(e) => openPreviewMenu('note', e)}
+            >
+              <div className={`detail-value-text${isNoteMultiline ? ' detail-value-text-multiline' : ''}`}>{noteText}</div>
+              <div className="detail-value-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label={t('action.copy')}
+                  onClick={() => detailActions.copyToClipboard(noteText)}
+                >
+                  <IconCopy />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {hasFolderName && (
         <div className="detail-field">
