@@ -502,20 +502,6 @@ export function BankCards({
 
             const previewLines: Array<{ label: string; value: string }> = [];
 
-            if (card.number && numberMode) {
-              if (numberMode === 'full') {
-                previewLines.push({
-                  label: t('label.cardNumber'),
-                  value: formatCardNumberFull(card.number),
-                });
-              } else if (numberMode === 'last_four') {
-                previewLines.push({
-                  label: t('label.cardNumberLastFour'),
-                  value: formatCardNumberLastFour(card.number),
-                });
-              }
-            }
-
             const addLine = (label: string, value: string | null | undefined) => {
               if (!value) return;
               const trimmed = value.trim();
@@ -523,9 +509,40 @@ export function BankCards({
               previewLines.push({ label, value: trimmed });
             };
 
-            for (const field of ['bank_name', 'holder', 'note', 'tags'] as const) {
-              if (!mergedFields.includes(field)) continue;
+            // Keep preview lines aligned with Create/Edit + Information field ordering.
+            // Title is the primary line; the rest follows this canonical order.
+            const orderedPreviewFields = [
+              'bank_name',
+              'holder',
+              'card_number',
+              'expiry_mm_yy',
+              'cvc',
+              'note',
+              'tags',
+            ] as const;
+
+            for (const field of orderedPreviewFields) {
               if (previewLines.length >= 3) break;
+
+              if (field === 'card_number') {
+                if (card.number && numberMode) {
+                  if (numberMode === 'full') {
+                    previewLines.push({
+                      label: t('label.cardNumber'),
+                      value: formatCardNumberFull(card.number),
+                    });
+                  } else if (numberMode === 'last_four') {
+                    previewLines.push({
+                      label: t('label.cardNumberLastFour'),
+                      value: formatCardNumberLastFour(card.number),
+                    });
+                  }
+                }
+                continue;
+              }
+
+              // All other fields are opt-in via per-card/global "Show in preview".
+              if (!mergedFields.includes(field as any)) continue;
 
               switch (field) {
                 case 'bank_name': {
@@ -539,6 +556,14 @@ export function BankCards({
                   addLine(t('label.holder'), card.holder ?? null);
                   break;
                 }
+                case 'expiry_mm_yy': {
+                  addLine(t('label.expiry'), card.expiryMmYy ?? null);
+                  break;
+                }
+                case 'cvc': {
+                  addLine(t('label.cvc'), card.cvc ?? null);
+                  break;
+                }
                 case 'note': {
                   addLine(t('label.note'), card.note ?? null);
                   break;
@@ -549,7 +574,6 @@ export function BankCards({
                   break;
                 }
               }
-              if (previewLines.length >= 3) break;
             }
 
             const visiblePreviewLines = previewLines.slice(0, 3);

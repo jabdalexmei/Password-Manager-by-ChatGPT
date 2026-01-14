@@ -1,6 +1,6 @@
 import { getBankCardPreviewFields, setBankCardPreviewFields, type BankCardPreviewFieldsDto } from '../../../shared/lib/tauri';
 
-export type BankCardPreviewField = 'bank_name' | 'holder' | 'note' | 'tags';
+export type BankCardPreviewField = 'bank_name' | 'holder' | 'expiry_mm_yy' | 'cvc' | 'note' | 'tags';
 export type BankCardCardNumberMode = 'full' | 'last_four' | null;
 
 export type BankCardPreviewFields = {
@@ -15,7 +15,7 @@ export function normalizeBankCardPreviewFields(value: BankCardPreviewFieldsDto |
   const fields: BankCardPreviewField[] = [];
   for (const f of rawFields) {
     if (fields.length >= MAX_BANKCARD_PREVIEW_FIELDS) break;
-    if (f === 'bank_name' || f === 'holder' || f === 'note' || f === 'tags') {
+    if (f === 'bank_name' || f === 'holder' || f === 'expiry_mm_yy' || f === 'cvc' || f === 'note' || f === 'tags') {
       if (!fields.includes(f)) fields.push(f);
     }
   }
