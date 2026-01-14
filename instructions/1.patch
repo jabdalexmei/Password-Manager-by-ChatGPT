@@ -1,48 +1,82 @@
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -1095,12 +1095,6 @@
-               'tags',
-             ];
- 
--            const orderedPreviewFields = previewFieldOrder.filter((field) => mergedPreviewFields.includes(field));
--
--            const extraLines = orderedPreviewFields
--              .map((field) => getExtraLine(field))
--              .filter((value): value is string => Boolean(value));
--
-             // Custom preview fields are per-card only (no global "all" toggle)
-             const perCardCustomKeys = new Set(
-               perCardRaw
-@@ -1119,7 +1113,30 @@
-               customLines.push(`${key}:${value}`);
-             }
- 
--            const metaLines = [...metaCoreLines, ...extraLines, ...customLines];
-+            // Keep preview lines aligned with Create/Edit + Information ordering.
-+            // Custom fields are placed right after Mobile phone (Password is intentionally not shown in preview).
-+            const metaLines: string[] = [...metaCoreLines];
-+            let didInsertCustom = false;
-+            for (const field of previewFieldOrder) {
-+              if (field === 'mobile_phone') {
-+                if (mergedPreviewFields.includes(field)) {
-+                  const line = getExtraLine(field);
-+                  if (line) metaLines.push(line);
-+                }
-+                if (customLines.length > 0) metaLines.push(...customLines);
-+                didInsertCustom = true;
-+                continue;
-+              }
+diff --git a/src/features/Vault/types/backend.ts b/src/features/Vault/types/backend.ts
+--- a/src/features/Vault/types/backend.ts
++++ b/src/features/Vault/types/backend.ts
+@@ -69,6 +69,10 @@
+   has_note: boolean;
+   has_attachments: boolean;
+   preview_fields: string[];
 +
-+              if (!mergedPreviewFields.includes(field)) continue;
-+              const line = getExtraLine(field);
-+              if (line) metaLines.push(line);
-+            }
-+
-+            // Safety: if the canonical insertion point ever disappears, keep custom fields visible.
-+            if (!didInsertCustom && customLines.length > 0) {
-+              metaLines.push(...customLines);
-+            }
++  // Required so custom preview fields can render in the list view
++  // without waiting for a full card fetch.
++  custom_fields: BackendCustomField[];
+ };
  
-               return (
-                 <button
-s
+ export type BackendCreateDataCardInput = {
+diff --git a/src/features/Vault/types/mappers.ts b/src/features/Vault/types/mappers.ts
+--- a/src/features/Vault/types/mappers.ts
++++ b/src/features/Vault/types/mappers.ts
+@@ -96,7 +96,11 @@
+     totpUri: null,
+     seedPhrase: null,
+     seedPhraseWordCount: null,
+-    customFields: [],
++    customFields: (card.custom_fields || []).map((field) => ({
++      key: field.key,
++      value: field.value,
++      type: field.type,
++    })),
+     previewFields: card.preview_fields ?? [],
+     isFavorite: card.is_favorite,
+     hasTotp: card.has_totp,
+diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
+--- a/src-tauri/src/data/sqlite/repo_impl.rs
++++ b/src-tauri/src/data/sqlite/repo_impl.rs
+@@ -314,6 +314,8 @@
+ 
+ fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary> {
+     let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
++    let custom_fields: Vec<CustomField> =
++        deserialize_json(row.get::<_, String>("custom_fields_json")?).unwrap_or_default();
+     let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
+     let has_totp = row.get::<_, Option<String>>("totp_uri")?.is_some();
+     let has_seed_phrase = row.get::<_, i64>("has_seed_phrase")? != 0;
+@@ -343,6 +345,9 @@
+         has_phone,
+         has_note,
+         has_attachments,
++
++        // Needed for rendering per-card-only custom preview fields in the list view.
++        custom_fields,
+     })
+ }
+ 
+@@ -656,6 +661,7 @@
+                 CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
+                 EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
+                 d.tags_json,
++                d.custom_fields_json,
+                 d.preview_fields_json,
+                 d.is_favorite,
+                 d.created_at,
+@@ -754,6 +760,7 @@
+                     CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
+                     EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
+                     d.tags_json,
++                    d.custom_fields_json,
+                     d.preview_fields_json,
+                     d.is_favorite,
+                     d.created_at,
+diff --git a/src-tauri/src/types.rs b/src-tauri/src/types.rs
+--- a/src-tauri/src/types.rs
++++ b/src-tauri/src/types.rs
+@@ -144,6 +144,10 @@
+     pub has_phone: bool,
+     pub has_note: bool,
+     pub has_attachments: bool,
++
++    // Needed for rendering per-card-only custom preview fields in the list view.
++    // Without this, custom preview lines appear only after opening the card (details fetch).
++    pub custom_fields: Vec<CustomField>,
+ }
+ 
+ #[derive(Debug, Serialize, Deserialize, Clone)]
