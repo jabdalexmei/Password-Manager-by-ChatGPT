@@ -19,7 +19,6 @@ import {
   onPreviewFieldsChanged,
   savePreviewFields,
   type DataCardPreviewField,
-  MAX_DATA_CARD_PREVIEW_FIELDS,
 } from '../../lib/datacardPreviewFields';
 import {
   loadCoreHiddenFields,
@@ -208,7 +207,6 @@ export function Details({
       if (!isAllowedPreviewField(item)) continue;
       if (out.includes(item)) continue;
       out.push(item);
-      if (out.length >= MAX_DATA_CARD_PREVIEW_FIELDS) break;
     }
     return out;
   }, [card?.previewFields]);
@@ -228,8 +226,6 @@ export function Details({
       return;
     }
 
-    if (perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) return;
-
     const next = [...perCardPreviewFields, field];
     await setDataCardPreviewFieldsForCard(card.id, next);
     onReloadCard?.(card.id);
@@ -246,8 +242,6 @@ export function Details({
       setPreviewMenu(null);
       return;
     }
-
-    if (previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS) return;
     await savePreviewFields([...previewFields, field]);
     setPreviewMenu(null);
   };
@@ -776,20 +770,9 @@ export function Details({
                 className="vault-actionmenu-item"
                 type="button"
                 onClick={() => togglePreviewFieldForCard(previewMenu.field)}
-                disabled={
-                  !isFieldInCardPreview(previewMenu.field) &&
-                  perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS
-                }
               >
                 {isFieldInCardPreview(previewMenu.field) ? t('previewMenu.hideThis') : t('previewMenu.showThis')}
               </button>
-
-              {!isFieldInCardPreview(previewMenu.field) &&
-                perCardPreviewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
-                  <button className="vault-actionmenu-item" type="button" disabled>
-                    {t('previewMenu.maxThis', { count: MAX_DATA_CARD_PREVIEW_FIELDS })}
-                  </button>
-                )}
 
               <div className="vault-actionmenu-separator" />
 
@@ -797,20 +780,9 @@ export function Details({
                 className="vault-actionmenu-item"
                 type="button"
                 onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
-                disabled={
-                  !isFieldInGlobalPreview(previewMenu.field) &&
-                  previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS
-                }
               >
                 {isFieldInGlobalPreview(previewMenu.field) ? t('previewMenu.hideAll') : t('previewMenu.showAll')}
               </button>
-
-              {!isFieldInGlobalPreview(previewMenu.field) &&
-                previewFields.length >= MAX_DATA_CARD_PREVIEW_FIELDS && (
-                  <button className="vault-actionmenu-item" type="button" disabled>
-                    {t('previewMenu.maxAll', { count: MAX_DATA_CARD_PREVIEW_FIELDS })}
-                  </button>
-                )}
             </div>
           </>
         )}

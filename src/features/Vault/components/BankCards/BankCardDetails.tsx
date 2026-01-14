@@ -10,7 +10,6 @@ import {
   loadBankCardPreviewFields,
   saveBankCardPreviewFields,
   type BankCardPreviewField,
-  MAX_BANKCARD_PREVIEW_FIELDS,
 } from '../../lib/bankcardPreviewFields';
 import {
   loadBankCardCoreHiddenFields,
@@ -484,19 +483,16 @@ export function BankCardDetails({
               const field = previewMenu.field;
               const isEnabledForCard = perCardFields.includes(field);
               const isEnabledForAll = globalPreview.fields.includes(field);
-              const canAddForCard = !isEnabledForCard && perCardFields.length < MAX_BANKCARD_PREVIEW_FIELDS;
-              const canAddForAll = !isEnabledForAll && globalPreview.fields.length < MAX_BANKCARD_PREVIEW_FIELDS;
 
               return (
                 <>
                   <button
                     className="vault-actionmenu-item"
                     type="button"
-                    disabled={!isEnabledForCard && !canAddForCard}
                     onClick={async () => {
                       if (isEnabledForCard) {
                         await updateCardPreviewFields(perCardFields.filter((f) => f !== field), perCardNumberMode);
-                      } else if (canAddForCard) {
+                      } else {
                         await updateCardPreviewFields([...perCardFields, field], perCardNumberMode);
                       }
                       setPreviewMenu(null);
@@ -505,22 +501,15 @@ export function BankCardDetails({
                     {isEnabledForCard ? t('previewMenu.hideInPreview') : t('previewMenu.showInPreview')}
                   </button>
 
-                  {!isEnabledForCard && !canAddForCard && (
-                    <button className="vault-actionmenu-item" type="button" disabled>
-                      {t('previewMenu.maxInPreview', { count: MAX_BANKCARD_PREVIEW_FIELDS })}
-                    </button>
-                  )}
-
                   <div className="vault-actionmenu-separator" />
 
                   <button
                     className="vault-actionmenu-item"
                     type="button"
-                    disabled={!isEnabledForAll && !canAddForAll}
                     onClick={async () => {
                       if (isEnabledForAll) {
                         await updateGlobalPreviewFields(globalPreview.fields.filter((f) => f !== field), globalNumberMode);
-                      } else if (canAddForAll) {
+                      } else {
                         await updateGlobalPreviewFields([...globalPreview.fields, field], globalNumberMode);
                       }
                       setPreviewMenu(null);
@@ -528,12 +517,6 @@ export function BankCardDetails({
                   >
                     {isEnabledForAll ? t('previewMenu.hideInPreviewAll') : t('previewMenu.showInPreviewAll')}
                   </button>
-
-                  {!isEnabledForAll && !canAddForAll && (
-                    <button className="vault-actionmenu-item" type="button" disabled>
-                      {t('previewMenu.maxInPreviewAll', { count: MAX_BANKCARD_PREVIEW_FIELDS })}
-                    </button>
-                  )}
                 </>
               );
             })()}

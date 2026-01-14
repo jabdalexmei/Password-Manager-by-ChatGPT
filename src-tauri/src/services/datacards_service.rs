@@ -128,9 +128,6 @@ fn sanitize_preview_fields(fields: Vec<String>) -> Vec<String> {
             continue;
         }
         out.push(trimmed.to_string());
-        if out.len() >= 3 {
-            break;
-        }
     }
     out
 }
