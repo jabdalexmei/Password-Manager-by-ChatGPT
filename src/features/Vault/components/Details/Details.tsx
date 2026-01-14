@@ -797,7 +797,10 @@ export function Details({
                   <button
                     className="vault-actionmenu-item"
                     type="button"
-                    onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
+                    onClick={() => {
+                      if (isCustomPreviewField(previewMenu.field)) return;
+                      togglePreviewFieldForAllCards(previewMenu.field);
+                    }}
                   >
                     {isFieldInGlobalPreview(previewMenu.field)
                       ? t('previewMenu.hideAll')
