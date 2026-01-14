@@ -16,7 +16,7 @@ import {
 export type BankCardDetailsProps = {
   card: BankCardItem | null;
   onEdit: (card: BankCardItem) => void;
-  onReloadCard?: (id: string) => void;
+  onReloadCard?: (id: string) => Promise<void> | void;
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onPurge: (id: string) => void;
@@ -146,7 +146,22 @@ export function BankCardDetails({
       fields: nextFields,
       card_number_mode: nextMode,
     });
-    if (ok) onReloadCard?.(card.id);
+    // Update UI immediately (list preview + details) without requiring a full vault reload.
+    if (ok) {
+      window.dispatchEvent(
+        new CustomEvent('bankcard-preview-fields-for-card-changed', {
+          detail: {
+            id: card.id,
+            previewFields: {
+              fields: nextFields,
+              cardNumberMode: nextMode,
+            },
+          },
+        })
+      );
+
+      await onReloadCard?.(card.id);
+    }
     return ok;
   };
 
