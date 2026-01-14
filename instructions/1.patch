@@ -1,27 +1,40 @@
---- a/src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-14 10:43:55.000000000 +0000
-+++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-14 10:52:01.272613636 +0000
+diff --git a/src/features/Vault/components/BankCards/BankCardDetails.tsx b/src/features/Vault/components/BankCards/BankCardDetails.tsx
+--- a/src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-14 11:18:32.078578986 +0000
++++ b/src/features/Vault/components/BankCards/BankCardDetails.tsx	2026-01-14 11:18:32.267495065 +0000
 @@ -395,7 +395,7 @@
            )}
  
            {hasNote && (
--            <div className="detail-field">
-+            <div className="detail-field detail-field-notes bankcard-detail-notes">
+-            <div className="detail-field detail-field-notes bankcard-detail-notes">
++            <div className={`detail-field detail-field-notes bankcard-detail-notes ${((card.note ?? "").includes("\n")) ? "bankcard-notes-multiline" : "bankcard-notes-singleline"}`}>
                <div className="detail-label">{t('label.note')}</div>
                <div
                  className="detail-value-box detail-value-multiline"
-
---- a/src/shared/styles/screens/vault.css	2026-01-14 10:43:55.000000000 +0000
-+++ b/src/shared/styles/screens/vault.css	2026-01-14 10:52:24.873366865 +0000
-@@ -840,6 +840,12 @@
+diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
+--- a/src/shared/styles/screens/vault.css	2026-01-14 11:18:32.079277535 +0000
++++ b/src/shared/styles/screens/vault.css	2026-01-14 11:18:32.359655397 +0000
+@@ -840,9 +840,21 @@
    transform: translateY(-50%);
  }
  
-+/* Bank Cards: keep the Notes copy button aligned with other copy buttons (top-aligned, not vertically centered). */
-+.bankcard-detail-notes .detail-value-actions {
-+  top: 10px;
-+  transform: none;
+-/* Bank Cards: keep the Notes copy button aligned with other copy buttons (top-aligned, not vertically centered). */
+-.bankcard-detail-notes .detail-value-actions {
+-  top: 10px;
++/* Bank Cards: Notes copy button alignment
++   - single-line: vertically centered like other fields
++   - multi-line: pinned to the top (aligned with first line)
++*/
++.bankcard-detail-notes .detail-value-box.detail-value-multiline {
++  min-height: 44px;
 +}
 +
- .detail-value-text-multiline {
-   white-space: pre-wrap;
-   width: 100%;
++.bankcard-detail-notes.bankcard-notes-singleline .detail-value-actions {
++  top: 50%;
++  transform: translateY(-50%);
++}
++
++.bankcard-detail-notes.bankcard-notes-multiline .detail-value-actions {
++  top: 5px;
+   transform: none;
+ }
+ 
