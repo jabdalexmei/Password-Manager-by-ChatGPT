@@ -1069,6 +1069,14 @@ export function DataCards({
 
             const mergedPreviewFields: DataCardPreviewField[] = [];
             const perCardRaw = Array.isArray(card.previewFields) ? card.previewFields : [];
+
+            const CUSTOM_PREVIEW_PREFIX = 'custom:' as const;
+            const isCustomPreviewField = (
+              value: string,
+            ): value is `${typeof CUSTOM_PREVIEW_PREFIX}${string}` =>
+              value.startsWith(CUSTOM_PREVIEW_PREFIX) && value.length > CUSTOM_PREVIEW_PREFIX.length;
+
+            // Built-in per-card preview fields (can also be enabled globally)
             for (const item of perCardRaw) {
               if (!isAllowedPreviewField(item)) continue;
               if (mergedPreviewFields.includes(item)) continue;
@@ -1093,7 +1101,25 @@ export function DataCards({
               .map((field) => getExtraLine(field))
               .filter((value): value is string => Boolean(value));
 
-            const metaLines = [...metaCoreLines, ...extraLines];
+            // Custom preview fields are per-card only (no global "all" toggle)
+            const perCardCustomKeys = new Set(
+              perCardRaw
+                .filter(isCustomPreviewField)
+                .map((token) => token.slice(CUSTOM_PREVIEW_PREFIX.length))
+                .filter((key) => key.trim().length > 0),
+            );
+
+            const customLines: string[] = [];
+            for (const customField of Array.isArray(card.customFields) ? card.customFields : []) {
+              const key = (customField.key ?? '').trim();
+              if (!key) continue;
+              if (!perCardCustomKeys.has(key)) continue;
+              const value = (customField.value ?? '').split(/\r?\n/)[0]?.trim() ?? '';
+              if (!value) continue;
+              customLines.push(`${key}:${value}`);
+            }
+
+            const metaLines = [...metaCoreLines, ...extraLines, ...customLines];
 
               return (
                 <button

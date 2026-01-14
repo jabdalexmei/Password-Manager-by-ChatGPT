@@ -53,6 +53,15 @@ export type DetailsProps = {
   clipboardClearTimeoutSeconds?: number;
 };
 
+type DataCardCustomPreviewField = `custom:${string}`;
+type DataCardCardPreviewField = DataCardPreviewField | DataCardCustomPreviewField;
+
+const CUSTOM_PREVIEW_PREFIX = 'custom:' as const;
+const isCustomPreviewField = (value: string): value is DataCardCustomPreviewField =>
+  value.startsWith(CUSTOM_PREVIEW_PREFIX) && value.length > CUSTOM_PREVIEW_PREFIX.length;
+
+const toCustomPreviewField = (key: string): DataCardCustomPreviewField => `${CUSTOM_PREVIEW_PREFIX}${key}`;
+
 export function Details({
   card,
   folders,
@@ -100,7 +109,8 @@ export function Details({
   const [previewMenu, setPreviewMenu] = useState<{
     x: number;
     y: number;
-    field: DataCardPreviewField;
+    field: DataCardCardPreviewField;
+    allowGlobal: boolean;
   } | null>(null);
   const [coreMenu, setCoreMenu] = useState<{
     x: number;
@@ -178,11 +188,11 @@ export function Details({
     }));
   };
 
-  const openPreviewMenu = (field: DataCardPreviewField, e: React.MouseEvent) => {
+  const openPreviewMenu = (field: DataCardCardPreviewField, e: React.MouseEvent, allowGlobal: boolean) => {
     e.preventDefault();
     e.stopPropagation();
     setCoreMenu(null);
-    setPreviewMenu({ x: e.clientX, y: e.clientY, field });
+    setPreviewMenu({ x: e.clientX, y: e.clientY, field, allowGlobal });
   };
 
   const openCoreMenu = (field: DataCardCoreField, e: React.MouseEvent) => {
@@ -192,7 +202,7 @@ export function Details({
     setCoreMenu({ x: e.clientX, y: e.clientY, field });
   };
 
-  const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
+  const isAllowedGlobalPreviewField = (value: string): value is DataCardPreviewField =>
     value === 'username' ||
     value === 'recovery_email' ||
     value === 'mobile_phone' ||
@@ -200,20 +210,23 @@ export function Details({
     value === 'folder' ||
     value === 'tags';
 
-  const perCardPreviewFields = useMemo<DataCardPreviewField[]>(() => {
+  const isAllowedCardPreviewField = (value: string): value is DataCardCardPreviewField =>
+    isAllowedGlobalPreviewField(value) || isCustomPreviewField(value);
+
+  const perCardPreviewFields = useMemo<DataCardCardPreviewField[]>(() => {
     const raw = Array.isArray(card?.previewFields) ? card!.previewFields : [];
-    const out: DataCardPreviewField[] = [];
+    const out: DataCardCardPreviewField[] = [];
     for (const item of raw) {
-      if (!isAllowedPreviewField(item)) continue;
+      if (!isAllowedCardPreviewField(item)) continue;
       if (out.includes(item)) continue;
       out.push(item);
     }
     return out;
   }, [card?.previewFields]);
 
-  const isFieldInCardPreview = (field: DataCardPreviewField) => perCardPreviewFields.includes(field);
+  const isFieldInCardPreview = (field: DataCardCardPreviewField) => perCardPreviewFields.includes(field);
 
-  const togglePreviewFieldForCard = async (field: DataCardPreviewField) => {
+  const togglePreviewFieldForCard = async (field: DataCardCardPreviewField) => {
     if (!card) return;
 
     const isSelected = isFieldInCardPreview(field);
@@ -442,7 +455,7 @@ export function Details({
       {hasRecoveryEmail && (
         <div className="detail-field">
           <div className="detail-label">{t('label.recoveryEmail')}</div>
-          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('recovery_email', e)}>
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('recovery_email', e, true)}>
             <div className="detail-value-text">{card.recoveryEmail ?? ''}</div>
             <div className="detail-value-actions">
               <button
@@ -461,7 +474,7 @@ export function Details({
       {hasUsername && (
         <div className="detail-field">
           <div className="detail-label">{t('label.username')}</div>
-          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('username', e)}>
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('username', e, true)}>
             <div className="detail-value-text">{card.username ?? ''}</div>
             <div className="detail-value-actions">
               <button
@@ -480,7 +493,7 @@ export function Details({
       {hasMobilePhone && (
         <div className="detail-field">
           <div className="detail-label">{t('label.mobile')}</div>
-          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('mobile_phone', e)}>
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('mobile_phone', e, true)}>
             <div className="detail-value-text">{card.mobilePhone ?? ''}</div>
             <div className="detail-value-actions">
               <button
@@ -594,7 +607,10 @@ export function Details({
             <div key={fieldId} className="detail-field">
               <div className="detail-label">{field.key}</div>
 
-              <div className="detail-value-box">
+              <div
+                className="detail-value-box"
+                onContextMenu={(e) => openPreviewMenu(toCustomPreviewField(field.key), e, false)}
+              >
                 <div className="detail-value-text">{displayValue}</div>
 
                 <div className="detail-value-actions">
@@ -632,7 +648,7 @@ export function Details({
             <div className="detail-label">{t('label.note')}</div>
             <div
               className={`detail-value-box${isNoteMultiline ? ' detail-value-multiline' : ''}`}
-              onContextMenu={(e) => openPreviewMenu('note', e)}
+              onContextMenu={(e) => openPreviewMenu('note', e, true)}
             >
               <div className={`detail-value-text${isNoteMultiline ? ' detail-value-text-multiline' : ''}`}>{noteText}</div>
               <div className="detail-value-actions">
@@ -653,7 +669,7 @@ export function Details({
       {hasFolderName && (
         <div className="detail-field">
           <div className="detail-label">{t('label.folder')}</div>
-          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('folder', e)}>
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('folder', e, true)}>
             <div className="detail-value-text">{folderName}</div>
           </div>
         </div>
@@ -662,7 +678,7 @@ export function Details({
       {hasTags && (
         <div className="detail-field">
           <div className="detail-label">{t('label.tags')}</div>
-          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('tags', e)}>
+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('tags', e, true)}>
             <div className="detail-value-text">{card.tags?.join(', ')}</div>
           </div>
         </div>
@@ -774,15 +790,21 @@ export function Details({
                 {isFieldInCardPreview(previewMenu.field) ? t('previewMenu.hideThis') : t('previewMenu.showThis')}
               </button>
 
-              <div className="vault-actionmenu-separator" />
+              {previewMenu.allowGlobal && !isCustomPreviewField(previewMenu.field) && (
+                <>
+                  <div className="vault-actionmenu-separator" />
 
-              <button
-                className="vault-actionmenu-item"
-                type="button"
-                onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
-              >
-                {isFieldInGlobalPreview(previewMenu.field) ? t('previewMenu.hideAll') : t('previewMenu.showAll')}
-              </button>
+                  <button
+                    className="vault-actionmenu-item"
+                    type="button"
+                    onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
+                  >
+                    {isFieldInGlobalPreview(previewMenu.field)
+                      ? t('previewMenu.hideAll')
+                      : t('previewMenu.showAll')}
+                  </button>
+                </>
+              )}
             </div>
           </>
         )}

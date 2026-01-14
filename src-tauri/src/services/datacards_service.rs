@@ -114,6 +114,28 @@ fn is_allowed_preview_field(value: &str) -> bool {
     )
 }
 
+fn is_allowed_custom_preview_field(value: &str) -> bool {
+    // Per-card only. Format: "custom:<field_key>"
+    // The key must be non-empty and reasonably short to avoid storing unbounded strings.
+    const PREFIX: &str = "custom:";
+    if !value.starts_with(PREFIX) {
+        return false;
+    }
+    let key = &value[PREFIX.len()..];
+    let key = key.trim();
+    if key.is_empty() {
+        return false;
+    }
+    // Prevent pathological values.
+    if key.len() > 80 {
+        return false;
+    }
+    if key.contains(['\n', '\r', '\0']) {
+        return false;
+    }
+    true
+}
+
 fn sanitize_preview_fields(fields: Vec<String>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for item in fields {
@@ -121,7 +143,7 @@ fn sanitize_preview_fields(fields: Vec<String>) -> Vec<String> {
         if trimmed.is_empty() {
             continue;
         }
-        if !is_allowed_preview_field(trimmed) {
+        if !is_allowed_preview_field(trimmed) && !is_allowed_custom_preview_field(trimmed) {
             continue;
         }
         if out.iter().any(|x| x == trimmed) {
