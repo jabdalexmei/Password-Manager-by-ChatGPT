@@ -12,6 +12,12 @@ import {
   type BankCardPreviewField,
   MAX_BANKCARD_PREVIEW_FIELDS,
 } from '../../lib/bankcardPreviewFields';
+import {
+  loadBankCardCoreHiddenFields,
+  onBankCardCoreHiddenFieldsChanged,
+  saveBankCardCoreHiddenFields,
+  type BankCardCoreField,
+} from '../../lib/bankcardCoreHiddenFields';
 
 export type BankCardDetailsProps = {
   card: BankCardItem | null;
@@ -71,6 +77,7 @@ export function BankCardDetails({
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const [globalPreview, setGlobalPreview] = useState<{ fields: BankCardPreviewField[] }>({ fields: [] });
   const [globalNumberMode, setGlobalNumberMode] = useState<'full' | 'last_four' | null>(null);
+  const [coreHiddenFields, setCoreHiddenFields] = useState<BankCardCoreField[]>([]);
   const [previewMenu, setPreviewMenu] = useState<
     | null
     | {
@@ -83,6 +90,12 @@ export function BankCardDetails({
         x: number;
         y: number;
         kind: 'card_number';
+      }
+    | {
+        x: number;
+        y: number;
+        kind: 'core';
+        field: BankCardCoreField;
       }
   >(null);
 
@@ -105,6 +118,19 @@ export function BankCardDetails({
     return () => {
       cancelled = true;
       window.removeEventListener('bankcard-preview-fields-changed', handler as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadBankCardCoreHiddenFields().then((fields) => {
+      if (!cancelled) setCoreHiddenFields(fields);
+    });
+
+    const unsubscribe = onBankCardCoreHiddenFieldsChanged(setCoreHiddenFields);
+    return () => {
+      cancelled = true;
+      unsubscribe();
     };
   }, []);
 
@@ -229,7 +255,13 @@ export function BankCardDetails({
           {hasTitle && (
             <div className="detail-field">
               <div className="detail-label">{t('label.title')}</div>
-              <div className="detail-value-box">
+              <div
+                className="detail-value-box"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'core', field: 'title' });
+                }}
+              >
                 <div className="detail-value-text">{title}</div>
               </div>
             </div>
@@ -329,13 +361,7 @@ export function BankCardDetails({
           {hasExpiry && (
             <div className="detail-field bankcard-compact-expiry">
               <div className="detail-label">{t('label.expiry')}</div>
-              <div
-                className="detail-value-box"
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'expiry_mm_yy' });
-                }}
-              >
+              <div className="detail-value-box">
                 <div className="detail-value-text">{card.expiryMmYy ?? ''}</div>
               </div>
             </div>
@@ -344,13 +370,7 @@ export function BankCardDetails({
           {hasCvc && (
             <div className="detail-field bankcard-compact-cvc">
               <div className="detail-label">{t('label.cvc')}</div>
-              <div
-                className="detail-value-box"
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  setPreviewMenu({ x: event.clientX, y: event.clientY, kind: 'field', field: 'cvc' });
-                }}
-              >
+              <div className="detail-value-box">
                 <div className="detail-value-text detail-value-text-monospace">{cvcDisplay}</div>
                 <div className="detail-value-actions">
                   <button
@@ -436,6 +456,25 @@ export function BankCardDetails({
               } as React.CSSProperties
             }
           >
+            {previewMenu.kind === 'core' && (() => {
+              const field = previewMenu.field;
+              const isHidden = coreHiddenFields.includes(field);
+
+              return (
+                <button
+                  className="vault-actionmenu-item"
+                  type="button"
+                  onClick={async () => {
+                    const next = isHidden ? coreHiddenFields.filter((f) => f !== field) : [...coreHiddenFields, field];
+                    await saveBankCardCoreHiddenFields(next);
+                    setPreviewMenu(null);
+                  }}
+                >
+                  {isHidden ? t('coreMenu.showInList') : t('coreMenu.hideInList')}
+                </button>
+              );
+            })()}
+
             {previewMenu.kind === 'field' && (() => {
               const field = previewMenu.field;
               const isEnabledForCard = perCardFields.includes(field);

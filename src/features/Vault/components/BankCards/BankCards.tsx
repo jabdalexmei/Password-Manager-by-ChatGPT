@@ -18,6 +18,11 @@ import {
   formatCardNumberFull,
   formatCardNumberLastFour,
 } from '../../lib/bankcardPreviewFields';
+import {
+  loadBankCardCoreHiddenFields,
+  onBankCardCoreHiddenFieldsChanged,
+  type BankCardCoreField,
+} from '../../lib/bankcardCoreHiddenFields';
 
 export type BankCardsProps = {
   profileId: string;
@@ -69,6 +74,7 @@ export function BankCards({
     fields: [],
     cardNumberMode: null,
   });
+  const [coreHiddenFields, setCoreHiddenFields] = useState<BankCardCoreField[]>([]);
 
   useEffect(() => {
     setSortMode(getVaultSortMode('bank_cards', profileId));
@@ -91,6 +97,19 @@ export function BankCards({
     return () => {
       cancelled = true;
       window.removeEventListener('bankcard-preview-fields-changed', handler as EventListener);
+    };
+  }, [profileId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadBankCardCoreHiddenFields().then((fields) => {
+      if (!cancelled) setCoreHiddenFields(fields);
+    });
+
+    const unsubscribe = onBankCardCoreHiddenFieldsChanged(setCoreHiddenFields);
+    return () => {
+      cancelled = true;
+      unsubscribe();
     };
   }, [profileId]);
 
@@ -483,11 +502,14 @@ export function BankCards({
             const rawTitle = (card.title ?? '').trim();
             const rawBankName = (card.bankName ?? '').trim();
 
+            const isTitleHiddenInList = coreHiddenFields.includes('title');
+            const titleForList = isTitleHiddenInList ? '' : rawTitle;
+
             // Primary line:
             // - if Title exists -> Title
             // - else if Bank name exists -> Bank name
             // - else -> Untitled
-            const displayTitleText = rawTitle || rawBankName || t('label.untitled');
+            const displayTitleText = titleForList || rawBankName || t('label.untitled');
 
             const perCardPreview = card.previewFields;
             const mergedFields: BankCardPreviewField[] = [];
@@ -515,8 +537,6 @@ export function BankCards({
               'bank_name',
               'holder',
               'card_number',
-              'expiry_mm_yy',
-              'cvc',
               'note',
               'tags',
             ] as const;
@@ -548,20 +568,12 @@ export function BankCards({
                 case 'bank_name': {
                   if (!rawBankName) break;
                   // Avoid duplicating the primary title line when title is empty and Bank name is used as title.
-                  if (!rawTitle && displayTitleText === rawBankName) break;
+                  if (!titleForList && displayTitleText === rawBankName) break;
                   addLine(t('label.bankName'), rawBankName);
                   break;
                 }
                 case 'holder': {
                   addLine(t('label.holder'), card.holder ?? null);
-                  break;
-                }
-                case 'expiry_mm_yy': {
-                  addLine(t('label.expiry'), card.expiryMmYy ?? null);
-                  break;
-                }
-                case 'cvc': {
-                  addLine(t('label.cvc'), card.cvc ?? null);
                   break;
                 }
                 case 'note': {

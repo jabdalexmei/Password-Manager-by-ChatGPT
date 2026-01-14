@@ -35,6 +35,8 @@
   "previewMenu.hideInPreview": "Hide in preview",
   "previewMenu.showInPreviewAll": "Show in preview all",
   "previewMenu.hideInPreviewAll": "Hide in preview all",
+  "coreMenu.hideInList": "Hide in list",
+  "coreMenu.showInList": "Show in list",
   "previewMenu.showCardNumberFull": "Show in preview full information",
   "previewMenu.hideCardNumberFull": "Hide in preview full information",
   "previewMenu.showCardNumberLastFour": "Show in preview last four",

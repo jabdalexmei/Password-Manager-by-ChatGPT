@@ -138,3 +138,11 @@ export function getDataCardCoreHiddenFields(): Promise<string[]> {
 export function setDataCardCoreHiddenFields(fields: string[]): Promise<boolean> {
   return invoke('set_datacard_core_hidden_fields', { fields });
 }
+
+export function getBankCardCoreHiddenFields(): Promise<string[]> {
+  return invoke('get_bankcard_core_hidden_fields');
+}
+
+export function setBankCardCoreHiddenFields(fields: string[]): Promise<boolean> {
+  return invoke('set_bankcard_core_hidden_fields', { fields });
+}
