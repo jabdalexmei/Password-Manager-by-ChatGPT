@@ -1,268 +1,48 @@
-diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-codex-github-mention-remove-preview-field-limits-and-enforce-dete/src/features/Vault/components/DataCards/DataCards.tsx /mnt/data/mod/repo/src/features/Vault/components/DataCards/DataCards.tsx
---- /mnt/data/orig/Password-Manager-by-ChatGPT-codex-github-mention-remove-preview-field-limits-and-enforce-dete/src/features/Vault/components/DataCards/DataCards.tsx	2026-01-14 15:58:55.000000000 +0000
-+++ /mnt/data/mod/repo/src/features/Vault/components/DataCards/DataCards.tsx	2026-01-14 16:27:42.612047960 +0000
-@@ -1048,6 +1048,10 @@
-               }
-             };
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -1095,12 +1095,6 @@
+               'tags',
+             ];
  
-+            const CUSTOM_PREVIEW_PREFIX = 'custom:' as const;
-+            const isCustomPreviewField = (value: string): value is `${typeof CUSTOM_PREVIEW_PREFIX}${string}` =>
-+              value.startsWith(CUSTOM_PREVIEW_PREFIX) && value.length > CUSTOM_PREVIEW_PREFIX.length;
-+
-             const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
-               value === 'username' ||
-               value === 'recovery_email' ||
-@@ -1058,6 +1062,8 @@
+-            const orderedPreviewFields = previewFieldOrder.filter((field) => mergedPreviewFields.includes(field));
+-
+-            const extraLines = orderedPreviewFields
+-              .map((field) => getExtraLine(field))
+-              .filter((value): value is string => Boolean(value));
+-
+             // Custom preview fields are per-card only (no global "all" toggle)
+             const perCardCustomKeys = new Set(
+               perCardRaw
+@@ -1119,7 +1113,30 @@
+               customLines.push(`${key}:${value}`);
+             }
  
-             const mergedPreviewFields: DataCardPreviewField[] = [];
-             const perCardRaw = Array.isArray(card.previewFields) ? card.previewFields : [];
+-            const metaLines = [...metaCoreLines, ...extraLines, ...customLines];
++            // Keep preview lines aligned with Create/Edit + Information ordering.
++            // Custom fields are placed right after Mobile phone (Password is intentionally not shown in preview).
++            const metaLines: string[] = [...metaCoreLines];
++            let didInsertCustom = false;
++            for (const field of previewFieldOrder) {
++              if (field === 'mobile_phone') {
++                if (mergedPreviewFields.includes(field)) {
++                  const line = getExtraLine(field);
++                  if (line) metaLines.push(line);
++                }
++                if (customLines.length > 0) metaLines.push(...customLines);
++                didInsertCustom = true;
++                continue;
++              }
 +
-+            // Built-in per-card preview fields (can also be enabled globally)
-             for (const item of perCardRaw) {
-               if (!isAllowedPreviewField(item)) continue;
-               if (mergedPreviewFields.includes(item)) continue;
-@@ -1082,7 +1088,25 @@
-               .map((field) => getExtraLine(field))
-               .filter((value): value is string => Boolean(value));
- 
--            const metaLines = [...metaCoreLines, ...extraLines];
-+            // Custom preview fields are per-card only (no global "all" toggle)
-+            const perCardCustomKeys = new Set(
-+              perCardRaw
-+                .filter(isCustomPreviewField)
-+                .map((token) => token.slice(CUSTOM_PREVIEW_PREFIX.length))
-+                .filter((key) => key.trim().length > 0),
-+            );
-+
-+            const customLines: string[] = [];
-+            for (const customField of Array.isArray(card.customFields) ? card.customFields : []) {
-+              const key = (customField.key ?? '').trim();
-+              if (!key) continue;
-+              if (!perCardCustomKeys.has(key)) continue;
-+              const value = (customField.value ?? '').split(/\r?\n/)[0]?.trim() ?? '';
-+              if (!value) continue;
-+              customLines.push(`${key}:${value}`);
++              if (!mergedPreviewFields.includes(field)) continue;
++              const line = getExtraLine(field);
++              if (line) metaLines.push(line);
 +            }
 +
-+            const metaLines = [...metaCoreLines, ...extraLines, ...customLines];
++            // Safety: if the canonical insertion point ever disappears, keep custom fields visible.
++            if (!didInsertCustom && customLines.length > 0) {
++              metaLines.push(...customLines);
++            }
  
                return (
                  <button
-diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-codex-github-mention-remove-preview-field-limits-and-enforce-dete/src/features/Vault/components/Details/Details.tsx /mnt/data/mod/repo/src/features/Vault/components/Details/Details.tsx
---- /mnt/data/orig/Password-Manager-by-ChatGPT-codex-github-mention-remove-preview-field-limits-and-enforce-dete/src/features/Vault/components/Details/Details.tsx	2026-01-14 15:58:55.000000000 +0000
-+++ /mnt/data/mod/repo/src/features/Vault/components/Details/Details.tsx	2026-01-14 16:26:07.022757329 +0000
-@@ -53,6 +53,15 @@
-   clipboardClearTimeoutSeconds?: number;
- };
- 
-+type DataCardCustomPreviewField = `custom:${string}`;
-+type DataCardCardPreviewField = DataCardPreviewField | DataCardCustomPreviewField;
-+
-+const CUSTOM_PREVIEW_PREFIX = 'custom:' as const;
-+const isCustomPreviewField = (value: string): value is DataCardCustomPreviewField =>
-+  value.startsWith(CUSTOM_PREVIEW_PREFIX) && value.length > CUSTOM_PREVIEW_PREFIX.length;
-+
-+const toCustomPreviewField = (key: string): DataCardCustomPreviewField => `${CUSTOM_PREVIEW_PREFIX}${key}`;
-+
- export function Details({
-   card,
-   folders,
-@@ -100,7 +109,8 @@
-   const [previewMenu, setPreviewMenu] = useState<{
-     x: number;
-     y: number;
--    field: DataCardPreviewField;
-+    field: DataCardCardPreviewField;
-+    allowGlobal: boolean;
-   } | null>(null);
-   const [coreMenu, setCoreMenu] = useState<{
-     x: number;
-@@ -178,11 +188,11 @@
-     }));
-   };
- 
--  const openPreviewMenu = (field: DataCardPreviewField, e: React.MouseEvent) => {
-+  const openPreviewMenu = (field: DataCardCardPreviewField, e: React.MouseEvent, allowGlobal: boolean) => {
-     e.preventDefault();
-     e.stopPropagation();
-     setCoreMenu(null);
--    setPreviewMenu({ x: e.clientX, y: e.clientY, field });
-+    setPreviewMenu({ x: e.clientX, y: e.clientY, field, allowGlobal });
-   };
- 
-   const openCoreMenu = (field: DataCardCoreField, e: React.MouseEvent) => {
-@@ -192,7 +202,7 @@
-     setCoreMenu({ x: e.clientX, y: e.clientY, field });
-   };
- 
--  const isAllowedPreviewField = (value: string): value is DataCardPreviewField =>
-+  const isAllowedGlobalPreviewField = (value: string): value is DataCardPreviewField =>
-     value === 'username' ||
-     value === 'recovery_email' ||
-     value === 'mobile_phone' ||
-@@ -200,20 +210,23 @@
-     value === 'folder' ||
-     value === 'tags';
- 
--  const perCardPreviewFields = useMemo<DataCardPreviewField[]>(() => {
-+  const isAllowedCardPreviewField = (value: string): value is DataCardCardPreviewField =>
-+    isAllowedGlobalPreviewField(value) || isCustomPreviewField(value);
-+
-+  const perCardPreviewFields = useMemo<DataCardCardPreviewField[]>(() => {
-     const raw = Array.isArray(card?.previewFields) ? card!.previewFields : [];
--    const out: DataCardPreviewField[] = [];
-+    const out: DataCardCardPreviewField[] = [];
-     for (const item of raw) {
--      if (!isAllowedPreviewField(item)) continue;
-+      if (!isAllowedCardPreviewField(item)) continue;
-       if (out.includes(item)) continue;
-       out.push(item);
-     }
-     return out;
-   }, [card?.previewFields]);
- 
--  const isFieldInCardPreview = (field: DataCardPreviewField) => perCardPreviewFields.includes(field);
-+  const isFieldInCardPreview = (field: DataCardCardPreviewField) => perCardPreviewFields.includes(field);
- 
--  const togglePreviewFieldForCard = async (field: DataCardPreviewField) => {
-+  const togglePreviewFieldForCard = async (field: DataCardCardPreviewField) => {
-     if (!card) return;
- 
-     const isSelected = isFieldInCardPreview(field);
-@@ -442,7 +455,7 @@
-       {hasRecoveryEmail && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.recoveryEmail')}</div>
--          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('recovery_email', e)}>
-+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('recovery_email', e, true)}>
-             <div className="detail-value-text">{card.recoveryEmail ?? ''}</div>
-             <div className="detail-value-actions">
-               <button
-@@ -461,7 +474,7 @@
-       {hasUsername && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.username')}</div>
--          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('username', e)}>
-+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('username', e, true)}>
-             <div className="detail-value-text">{card.username ?? ''}</div>
-             <div className="detail-value-actions">
-               <button
-@@ -480,7 +493,7 @@
-       {hasMobilePhone && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.mobile')}</div>
--          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('mobile_phone', e)}>
-+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('mobile_phone', e, true)}>
-             <div className="detail-value-text">{card.mobilePhone ?? ''}</div>
-             <div className="detail-value-actions">
-               <button
-@@ -594,7 +607,10 @@
-             <div key={fieldId} className="detail-field">
-               <div className="detail-label">{field.key}</div>
- 
--              <div className="detail-value-box">
-+              <div
-+                className="detail-value-box"
-+                onContextMenu={(e) => openPreviewMenu(toCustomPreviewField(field.key), e, false)}
-+              >
-                 <div className="detail-value-text">{displayValue}</div>
- 
-                 <div className="detail-value-actions">
-@@ -632,7 +648,7 @@
-             <div className="detail-label">{t('label.note')}</div>
-             <div
-               className={`detail-value-box${isNoteMultiline ? ' detail-value-multiline' : ''}`}
--              onContextMenu={(e) => openPreviewMenu('note', e)}
-+              onContextMenu={(e) => openPreviewMenu('note', e, true)}
-             >
-               <div className={`detail-value-text${isNoteMultiline ? ' detail-value-text-multiline' : ''}`}>{noteText}</div>
-               <div className="detail-value-actions">
-@@ -653,7 +669,7 @@
-       {hasFolderName && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.folder')}</div>
--          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('folder', e)}>
-+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('folder', e, true)}>
-             <div className="detail-value-text">{folderName}</div>
-           </div>
-         </div>
-@@ -662,7 +678,7 @@
-       {hasTags && (
-         <div className="detail-field">
-           <div className="detail-label">{t('label.tags')}</div>
--          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('tags', e)}>
-+          <div className="detail-value-box" onContextMenu={(e) => openPreviewMenu('tags', e, true)}>
-             <div className="detail-value-text">{card.tags?.join(', ')}</div>
-           </div>
-         </div>
-@@ -774,15 +790,21 @@
-                 {isFieldInCardPreview(previewMenu.field) ? t('previewMenu.hideThis') : t('previewMenu.showThis')}
-               </button>
- 
--              <div className="vault-actionmenu-separator" />
-+              {previewMenu.allowGlobal && !isCustomPreviewField(previewMenu.field) && (
-+                <>
-+                  <div className="vault-actionmenu-separator" />
- 
--              <button
--                className="vault-actionmenu-item"
--                type="button"
--                onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
--              >
--                {isFieldInGlobalPreview(previewMenu.field) ? t('previewMenu.hideAll') : t('previewMenu.showAll')}
--              </button>
-+                  <button
-+                    className="vault-actionmenu-item"
-+                    type="button"
-+                    onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
-+                  >
-+                    {isFieldInGlobalPreview(previewMenu.field)
-+                      ? t('previewMenu.hideAll')
-+                      : t('previewMenu.showAll')}
-+                  </button>
-+                </>
-+              )}
-             </div>
-           </>
-         )}
-diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-codex-github-mention-remove-preview-field-limits-and-enforce-dete/src-tauri/src/services/datacards_service.rs /mnt/data/mod/repo/src-tauri/src/services/datacards_service.rs
---- /mnt/data/orig/Password-Manager-by-ChatGPT-codex-github-mention-remove-preview-field-limits-and-enforce-dete/src-tauri/src/services/datacards_service.rs	2026-01-14 15:58:55.000000000 +0000
-+++ /mnt/data/mod/repo/src-tauri/src/services/datacards_service.rs	2026-01-14 16:28:41.898464444 +0000
-@@ -114,6 +114,28 @@
-     )
- }
- 
-+fn is_allowed_custom_preview_field(value: &str) -> bool {
-+    // Per-card only. Format: "custom:<field_key>"
-+    // The key must be non-empty and reasonably short to avoid storing unbounded strings.
-+    const PREFIX: &str = "custom:";
-+    if !value.starts_with(PREFIX) {
-+        return false;
-+    }
-+    let key = &value[PREFIX.len()..];
-+    let key = key.trim();
-+    if key.is_empty() {
-+        return false;
-+    }
-+    // Prevent pathological values.
-+    if key.len() > 80 {
-+        return false;
-+    }
-+    if key.contains(['\n', '\r', '\0']) {
-+        return false;
-+    }
-+    true
-+}
-+
- fn sanitize_preview_fields(fields: Vec<String>) -> Vec<String> {
-     let mut out: Vec<String> = Vec::new();
-     for item in fields {
-@@ -121,7 +143,7 @@
-         if trimmed.is_empty() {
-             continue;
-         }
--        if !is_allowed_preview_field(trimmed) {
-+        if !is_allowed_preview_field(trimmed) && !is_allowed_custom_preview_field(trimmed) {
-             continue;
-         }
-         if out.iter().any(|x| x == trimmed) {
+s
