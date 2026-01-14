@@ -1,82 +1,189 @@
-diff --git a/src/features/Vault/types/backend.ts b/src/features/Vault/types/backend.ts
---- a/src/features/Vault/types/backend.ts
-+++ b/src/features/Vault/types/backend.ts
-@@ -69,6 +69,10 @@
-   has_note: boolean;
-   has_attachments: boolean;
-   preview_fields: string[];
-+
-+  // Required so custom preview fields can render in the list view
-+  // without waiting for a full card fetch.
-+  custom_fields: BackendCustomField[];
+diff -ruN /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/app/App.tsx /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/app/App.tsx
+--- /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/app/App.tsx	2026-01-14 17:47:55.000000000 +0000
++++ /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/app/App.tsx	2026-01-14 18:05:09.757820279 +0000
+@@ -1,6 +1,7 @@
+ import React, { Suspense, useCallback, useMemo, useState } from 'react';
+ import { ToasterProvider } from '../shared/components/Toaster';
+ import { ProfileMeta, loginVault, setActiveProfile } from '../shared/lib/tauri';
++import { useTranslation } from '../shared/lib/i18n';
+ 
+ type View = 'workspace' | 'startup' | 'create' | 'login' | 'vault';
+ 
+@@ -11,6 +12,7 @@
+ const Vault = React.lazy(() => import('../features/Vault/Vault'));
+ 
+ const App: React.FC = () => {
++  const { t } = useTranslation('Common');
+   const [view, setView] = useState<View>('workspace');
+   const [activeProfile, setProfile] = useState<ProfileMeta | null>(null);
+ 
+@@ -95,7 +97,7 @@
+ 
+   return (
+     <ToasterProvider>
+-      <Suspense fallback={<p className="muted centered" aria-busy="true">Loading…</p>}>
++      <Suspense fallback={<p className="muted centered" aria-busy="true">{t('label.loading')}</p>}>
+         {content}
+       </Suspense>
+     </ToasterProvider>
+diff -ruN /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/features/Vault/Vault.tsx /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/features/Vault/Vault.tsx
+--- /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/features/Vault/Vault.tsx	2026-01-14 17:47:55.000000000 +0000
++++ /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/features/Vault/Vault.tsx	2026-01-14 18:06:21.178002487 +0000
+@@ -531,7 +531,7 @@
+               clipboardClearTimeoutSeconds={bankCards.settings?.clipboard_clear_timeout_seconds}
+             />
+           ) : vault.selectedCard ? (
+-            <Suspense fallback={<p aria-busy="true">Loading…</p>}>
++            <Suspense fallback={<p aria-busy="true">{tCommon('label.loading')}</p>}>
+               <LazyDetails
+                 card={vault.selectedCard}
+                 folders={foldersForCards}
+diff -ruN /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/features/Vault/components/modals/SettingsModal.tsx /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/features/Vault/components/modals/SettingsModal.tsx
+--- /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/features/Vault/components/modals/SettingsModal.tsx	2026-01-14 17:47:55.000000000 +0000
++++ /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/features/Vault/components/modals/SettingsModal.tsx	2026-01-14 18:10:41.758641946 +0000
+@@ -1,6 +1,7 @@
+ import React, { useEffect, useMemo, useState } from 'react';
+ import { BackendUserSettings } from '../../types/backend';
+ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/ui/dialog';
++import { useTranslation } from '../../../../shared/lib/i18n';
+ 
+ export type SettingsModalProps = {
+   open: boolean;
+@@ -11,6 +12,9 @@
  };
  
- export type BackendCreateDataCardInput = {
-diff --git a/src/features/Vault/types/mappers.ts b/src/features/Vault/types/mappers.ts
---- a/src/features/Vault/types/mappers.ts
-+++ b/src/features/Vault/types/mappers.ts
-@@ -96,7 +96,11 @@
-     totpUri: null,
-     seedPhrase: null,
-     seedPhraseWordCount: null,
--    customFields: [],
-+    customFields: (card.custom_fields || []).map((field) => ({
-+      key: field.key,
-+      value: field.value,
-+      type: field.type,
-+    })),
-     previewFields: card.preview_fields ?? [],
-     isFavorite: card.is_favorite,
-     hasTotp: card.has_totp,
-diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
---- a/src-tauri/src/data/sqlite/repo_impl.rs
-+++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -314,6 +314,8 @@
- 
- fn map_datacard_summary(row: &rusqlite::Row) -> rusqlite::Result<DataCardSummary> {
-     let tags: Vec<String> = deserialize_json(row.get::<_, String>("tags_json")?)?;
-+    let custom_fields: Vec<CustomField> =
-+        deserialize_json(row.get::<_, String>("custom_fields_json")?).unwrap_or_default();
-     let is_favorite = row.get::<_, i64>("is_favorite")? != 0;
-     let has_totp = row.get::<_, Option<String>>("totp_uri")?.is_some();
-     let has_seed_phrase = row.get::<_, i64>("has_seed_phrase")? != 0;
-@@ -343,6 +345,9 @@
-         has_phone,
-         has_note,
-         has_attachments,
+ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: SettingsModalProps) {
++  const { t: tVault } = useTranslation('Vault');
++  const { t: tCommon } = useTranslation('Common');
 +
-+        // Needed for rendering per-card-only custom preview fields in the list view.
-+        custom_fields,
-     })
- }
+   const [autoLockEnabled, setAutoLockEnabled] = useState(false);
+   const [autoLockTimeoutSeconds, setAutoLockTimeoutSeconds] = useState('60');
+   const [clipboardAutoClearEnabled, setClipboardAutoClearEnabled] = useState(false);
+@@ -144,12 +148,12 @@
+     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
+       <DialogContent aria-labelledby="settings-title">
+         <DialogHeader>
+-          <DialogTitle id="settings-title">Settings</DialogTitle>
++          <DialogTitle id="settings-title">{tVault('settings')}</DialogTitle>
+         </DialogHeader>
  
-@@ -656,6 +661,7 @@
-                 CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
-                 EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
-                 d.tags_json,
-+                d.custom_fields_json,
-                 d.preview_fields_json,
-                 d.is_favorite,
-                 d.created_at,
-@@ -754,6 +760,7 @@
-                     CASE WHEN d.note IS NOT NULL AND TRIM(d.note) <> '' THEN 1 ELSE 0 END AS has_note,
-                     EXISTS(SELECT 1 FROM attachments a WHERE a.datacard_id = d.id AND a.deleted_at IS NULL) AS has_attachments,
-                     d.tags_json,
-+                    d.custom_fields_json,
-                     d.preview_fields_json,
-                     d.is_favorite,
-                     d.created_at,
-diff --git a/src-tauri/src/types.rs b/src-tauri/src/types.rs
---- a/src-tauri/src/types.rs
-+++ b/src-tauri/src/types.rs
-@@ -144,6 +144,10 @@
-     pub has_phone: bool,
-     pub has_note: bool,
-     pub has_attachments: bool,
-+
-+    // Needed for rendering per-card-only custom preview fields in the list view.
-+    // Without this, custom preview lines appear only after opening the card (details fetch).
-+    pub custom_fields: Vec<CustomField>,
- }
+         <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+           <h3 id="security-title" style={subtitleStyle}>
+-            Security
++            {tVault('settingsModal.securityTitle')}
+           </h3>
  
- #[derive(Debug, Serialize, Deserialize, Clone)]
+           <div
+@@ -159,7 +163,7 @@
+           >
+             <div className="form-field" style={toggleRowStyle}>
+               <span className="form-label settings-subheader" id="auto-lock-enabled-label">
+-                Enable auto-lock
++                {tVault('settingsModal.autoLock.enabled')}
+               </span>
+ 
+               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+@@ -213,7 +217,7 @@
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="auto-lock-timeout-seconds">
+-                Auto-lock timeout (seconds)
++                {tVault('settingsModal.autoLock.timeoutSeconds')}
+               </label>
+               <input
+                 id="auto-lock-timeout-seconds"
+@@ -230,7 +234,7 @@
+ 
+             <div className="form-field" style={toggleRowStyle}>
+               <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
+-                Enable clipboard auto-clear
++                {tVault('settingsModal.clipboard.enabled')}
+               </span>
+ 
+               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+@@ -284,7 +288,7 @@
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
+-                Clipboard clear timeout (seconds)
++                {tVault('settingsModal.clipboard.timeoutSeconds')}
+               </label>
+               <input
+                 id="clipboard-clear-timeout-seconds"
+@@ -301,13 +305,13 @@
+           </div>
+ 
+           <h3 id="backups-title" style={subtitleStyle}>
+-            Backups
++            {tVault('backup.settings.title')}
+           </h3>
+ 
+           <div role="group" aria-labelledby="backups-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+             <div className="form-field" style={toggleRowStyle}>
+               <span className="form-label settings-subheader" id="backup-auto-enabled-label">
+-                Auto backup enabled
++                {tVault('backup.settings.autoEnabled')}
+               </span>
+ 
+               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+@@ -336,7 +340,7 @@
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="backup-interval-minutes">
+-                Interval (minutes)
++                {tVault('backup.settings.intervalMinutes')}
+               </label>
+               <input
+                 id="backup-interval-minutes"
+@@ -353,7 +357,7 @@
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="backup-max-copies">
+-                Max copies
++                {tVault('backup.settings.maxCopies')}
+               </label>
+               <input
+                 id="backup-max-copies"
+@@ -373,13 +377,13 @@
+         <DialogFooter className="dialog-footer--split">
+           <div className="dialog-footer-left">
+             <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={busy}>
+-              Cancel
++              {tCommon('action.cancel')}
+             </button>
+           </div>
+ 
+           <div className="dialog-footer-right">
+             <button className="btn btn-primary" type="button" onClick={handleSave} disabled={busy || !settings || !canSave}>
+-              Save
++              {tVault('backup.settings.save')}
+             </button>
+           </div>
+         </DialogFooter>
+diff -ruN /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/i18n/locales/en/Common.json /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/i18n/locales/en/Common.json
+--- /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/i18n/locales/en/Common.json	2026-01-14 17:47:55.000000000 +0000
++++ /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/i18n/locales/en/Common.json	2026-01-14 18:04:24.726024114 +0000
+@@ -10,6 +10,7 @@
+   "sort.createdDesc": "Created time (new to old)",
+   "sort.createdAsc": "Created time (old to new)",
+   "label.empty": "Empty",
++  "label.loading": "Loading…",
+   "aria.dismissToast": "Dismiss",
+   "error.backupProfileMismatch": "This backup belongs to a different profile.",
+   "error.backupUnsupportedFormat": "This backup format is not supported.",
+diff -ruN /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/i18n/locales/en/Vault.json /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/i18n/locales/en/Vault.json
+--- /mnt/data/final_base/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/i18n/locales/en/Vault.json	2026-01-14 17:47:55.000000000 +0000
++++ /mnt/data/final_src/Password-Manager-by-ChatGPT-codex-github-mention-adjust-datacard-preview-ordering-for-custom/src/i18n/locales/en/Vault.json	2026-01-14 18:04:40.973672875 +0000
+@@ -39,6 +39,12 @@
+   "backup.settings.title": "Backups",
+   "backup.settings.autoEnabled": "Auto backup enabled",
+   "backup.settings.intervalMinutes": "Interval (minutes)",
++  "backup.settings.maxCopies": "Max copies",
+   "backup.settings.save": "Save",
++  "settingsModal.securityTitle": "Security",
++  "settingsModal.autoLock.enabled": "Enable auto-lock",
++  "settingsModal.autoLock.timeoutSeconds": "Auto-lock timeout (seconds)",
++  "settingsModal.clipboard.enabled": "Enable clipboard auto-clear",
++  "settingsModal.clipboard.timeoutSeconds": "Clipboard clear timeout (seconds)",
+   "backup.auto.success": "Auto-backup created"
+ }
