@@ -1007,41 +1007,52 @@ export function DataCards({
             const isUrlVisible = !coreHiddenFields.includes('url');
             const isEmailVisible = !coreHiddenFields.includes('email');
 
-            const coreValues: string[] = [];
-            if (isTitleVisible && titleText.length > 0) coreValues.push(titleText);
-            if (isUrlVisible && urlText.length > 0) coreValues.push(urlText);
-            if (isEmailVisible && emailText.length > 0) coreValues.push(emailText);
+            const formatMetaLine = (label: string, value: string) => `${label}: ${value}`;
 
-            const isUntitledPlaceholder = coreValues.length === 0;
-            const displayTitleText = isUntitledPlaceholder ? t('label.untitled') : coreValues[0];
-            const metaCoreLines = coreValues.slice(1, 3);
+            const coreEntries: Array<{ field: 'title' | 'url' | 'email'; value: string }> = [];
+            if (isTitleVisible && titleText.length > 0) coreEntries.push({ field: 'title', value: titleText });
+            if (isUrlVisible && urlText.length > 0) coreEntries.push({ field: 'url', value: urlText });
+            if (isEmailVisible && emailText.length > 0) coreEntries.push({ field: 'email', value: emailText });
+
+            const isUntitledPlaceholder = coreEntries.length === 0;
+            const displayTitleText = isUntitledPlaceholder ? t('label.untitled') : coreEntries[0].value;
+            const metaCoreLines = coreEntries.slice(1, 3).map((entry) => {
+              switch (entry.field) {
+                case 'url':
+                  return formatMetaLine(t('label.url'), entry.value);
+                case 'email':
+                  return formatMetaLine(t('label.email'), entry.value);
+                default:
+                  return entry.value;
+              }
+            });
 
             const getExtraLine = (field: DataCardPreviewField): string | null => {
               switch (field) {
                 case 'username': {
                   const v = (card.username ?? '').trim();
-                  return v.length > 0 ? v : null;
+                  return v.length > 0 ? formatMetaLine(t('label.username'), v) : null;
                 }
                 case 'recovery_email': {
                   const v = (card.recoveryEmail ?? '').trim();
-                  return v.length > 0 ? `${t('label.recoveryEmail')}:${v}` : null;
+                  return v.length > 0 ? formatMetaLine(t('label.recoveryEmail'), v) : null;
                 }
                 case 'mobile_phone': {
                   const v = (card.mobilePhone ?? '').trim();
-                  return v.length > 0 ? v : null;
+                  return v.length > 0 ? formatMetaLine(t('label.mobile'), v) : null;
                 }
                 case 'note': {
                   const v = (card.note ?? '').split(/\r?\n/)[0]?.trim() ?? '';
-                  return v.length > 0 ? v : null;
+                  return v.length > 0 ? formatMetaLine(t('label.note'), v) : null;
                 }
                 case 'folder': {
                   if (!card.folderId) return null;
                   const v = (viewModel.folders.find((f) => f.id === card.folderId)?.name ?? '').trim();
-                  return v.length > 0 ? `${t('label.folder')}:${v}` : null;
+                  return v.length > 0 ? formatMetaLine(t('label.folder'), v) : null;
                 }
                 case 'tags': {
                   const v = Array.isArray(card.tags) ? card.tags.join(', ').trim() : '';
-                  return v.length > 0 ? v : null;
+                  return v.length > 0 ? formatMetaLine(t('label.tags'), v) : null;
                 }
                 default:
                   return null;
