@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -208,6 +209,116 @@ fn cleanup_sqlite_sidecars(vault_path: &Path) {
         let _ = std::fs::remove_file(wal);
         let _ = std::fs::remove_file(shm);
     }
+}
+
+fn rename_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
+    let mut i = 0;
+    loop {
+        match std::fs::rename(from, to) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                i += 1;
+                if i >= attempts {
+                    return Err(e);
+                }
+                // Windows can temporarily lock files/dirs (AV/indexer), so retry with backoff.
+                let backoff_ms = base_delay.as_millis() as u64 * i as u64;
+                std::thread::sleep(Duration::from_millis(backoff_ms.max(25).min(1500)));
+            }
+        }
+    }
+}
+
+fn prepare_empty_dir(path: &Path) -> Result<()> {
+    if path.exists() {
+        std::fs::remove_dir_all(path)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    }
+    std::fs::create_dir_all(path)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    Ok(())
+}
+
+fn list_attachment_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))? {
+        let entry = entry.map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
+        let p = entry.path();
+        if p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("bin") {
+            out.push(p);
+        }
+    }
+    Ok(out)
+}
+
+fn attachment_id_from_path(path: &Path) -> Result<String> {
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_READ"))?;
+    Ok(stem.to_string())
+}
+
+fn encrypt_attachments_plain_to_staging(
+    profile_id: &str,
+    key: &[u8; 32],
+    attachments_dir: &Path,
+    staging_dir: &Path,
+) -> Result<()> {
+    prepare_empty_dir(staging_dir)?;
+    for file in list_attachment_files(attachments_dir)? {
+        let attachment_id = attachment_id_from_path(&file)?;
+        let blob = std::fs::read(&file).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
+
+        // If we see encrypted magic in a passwordless profile, we can't safely recover it (no old key).
+        if blob.starts_with(crate::data::crypto::cipher::PM_ENC_MAGIC) {
+            return Err(ErrorCodeString::new("ATTACHMENT_CORRUPTED"));
+        }
+
+        let enc = cipher::encrypt_attachment_blob(profile_id, &attachment_id, key, &blob)?;
+        let out_path = staging_dir.join(
+            file.file_name()
+                .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?,
+        );
+        if write_atomic(&out_path, &enc).is_err() {
+            return Err(ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"));
+        }
+    }
+    Ok(())
+}
+
+fn reencrypt_attachments_to_staging(
+    profile_id: &str,
+    old_key: &[u8; 32],
+    new_key: &[u8; 32],
+    attachments_dir: &Path,
+    staging_dir: &Path,
+) -> Result<()> {
+    prepare_empty_dir(staging_dir)?;
+    for file in list_attachment_files(attachments_dir)? {
+        let attachment_id = attachment_id_from_path(&file)?;
+        let blob = std::fs::read(&file).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
+
+        let plain = if blob.starts_with(crate::data::crypto::cipher::PM_ENC_MAGIC) {
+            cipher::decrypt_attachment_blob(profile_id, &attachment_id, old_key, &blob)?
+        } else {
+            // Tolerate plaintext leftovers (legacy/edge cases) and bring them into the new key.
+            blob
+        };
+
+        let enc = cipher::encrypt_attachment_blob(profile_id, &attachment_id, new_key, &plain)?;
+        let out_path = staging_dir.join(
+            file.file_name()
+                .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?,
+        );
+        if write_atomic(&out_path, &enc).is_err() {
+            return Err(ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"));
+        }
+    }
+    Ok(())
 }
 
 pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) -> Result<bool> {
@@ -570,8 +681,15 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
         return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
     }
 
+    // Prevent concurrent persists while we rotate key material.
+    // persist_active_vault takes this guard before reading vault_session.
+    let _persist_guard = state
+        .vault_persist_guard
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+
     // Must be unlocked (session exists and matches profile).
-    let (bytes, old_profile_id) = {
+    let (mut bytes, old_key) = {
         let session = state
             .vault_session
             .lock()
@@ -584,21 +702,180 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
             .conn
             .serialize(DatabaseName::Main)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-        (serialized.to_vec(), s.profile_id.clone())
+        let mut bytes = serialized.to_vec();
+        normalize_sqlite_header_disable_wal(bytes.as_mut_slice(), id, "change_password_before_encrypt");
+        (bytes, Zeroizing::new(*s.key))
     };
 
-    let salt = kdf::generate_kdf_salt();
-    let salt_path = kdf_salt_path(&storage_paths, id)?;
-    write_atomic(&salt_path, &salt).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    let key = Zeroizing::new(kdf::derive_master_key(pwd, &salt)?);
+    // Stop pools: we will swap files/directories.
+    let _maintenance = MaintenanceGuard::new(id)?;
+    drain_and_drop_profile_pools(id, Duration::from_secs(5));
+    clear_pool(id);
 
-    key_check::create_key_check_file(&storage_paths, id, &*key)?;
+    ensure_profile_dirs(&storage_paths, id)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+    let profile_root = profile_dir(&storage_paths, id)?;
+    let backup_root = profile_root.join("tmp").join("change_password_backup");
+    if backup_root.exists() {
+        let _ = std::fs::remove_dir_all(&backup_root);
+    }
+    std::fs::create_dir_all(&backup_root)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     let vault_path = vault_db_path(&storage_paths, id)?;
-    let encrypted = cipher::encrypt_vault_blob(&old_profile_id, &*key, &bytes)?;
-    cipher::write_encrypted_file(&vault_path, &encrypted)?;
+    let vault_backup_path = backup_root.join("vault.db.bak");
 
-    // Update in-memory session key to keep vault unlocked.
+    let salt_path = kdf_salt_path(&storage_paths, id)?;
+    let salt_backup_path = backup_root.join("kdf_salt.bin.bak");
+
+    let key_path = key_check_path(&storage_paths, id)?;
+    let key_backup_path = backup_root.join("key_check.bin.bak");
+
+    let attachments_dir = profile_root.join("attachments");
+    let attachments_backup_dir = backup_root.join("attachments_old");
+    let attachments_staging_dir = backup_root.join("attachments_reencrypted_staging");
+
+    let salt = kdf::generate_kdf_salt();
+    let new_key = Zeroizing::new(kdf::derive_master_key(pwd, &salt)?);
+
+    // Stage attachments re-encryption (old_key -> new_key).
+    reencrypt_attachments_to_staging(id, &*old_key, &*new_key, &attachments_dir, &attachments_staging_dir)?;
+
+    #[derive(Debug, Clone)]
+    struct ChangePasswordRollback {
+        vault_path: PathBuf,
+        vault_backup_path: PathBuf,
+        vault_backed_up: bool,
+
+        salt_path: PathBuf,
+        salt_backup_path: PathBuf,
+        salt_backed_up: bool,
+
+        key_check_path: PathBuf,
+        key_check_backup_path: PathBuf,
+        key_check_backed_up: bool,
+
+        attachments_dir: PathBuf,
+        attachments_backup_dir: PathBuf,
+        attachments_swapped: bool,
+    }
+
+    fn rollback_change_profile_password(
+        storage_paths: &crate::data::storage_paths::StoragePaths,
+        profile_id: &str,
+        profile_name: &str,
+        rb: &ChangePasswordRollback,
+    ) {
+        log::warn!(
+            "[SECURITY][change_profile_password] rolling back failed operation for profile_id={}",
+            profile_id
+        );
+
+        if rb.attachments_swapped {
+            let _ = std::fs::remove_dir_all(&rb.attachments_dir);
+            let _ = std::fs::rename(&rb.attachments_backup_dir, &rb.attachments_dir);
+        }
+
+        if rb.vault_backed_up {
+            let _ = std::fs::remove_file(&rb.vault_path);
+            let _ = std::fs::rename(&rb.vault_backup_path, &rb.vault_path);
+        }
+
+        if rb.salt_backed_up {
+            let _ = std::fs::remove_file(&rb.salt_path);
+            let _ = std::fs::rename(&rb.salt_backup_path, &rb.salt_path);
+        }
+
+        if rb.key_check_backed_up {
+            let _ = std::fs::remove_file(&rb.key_check_path);
+            let _ = std::fs::rename(&rb.key_check_backup_path, &rb.key_check_path);
+        }
+
+        let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
+        clear_pool(profile_id);
+    }
+
+    let mut rb = ChangePasswordRollback {
+        vault_path: vault_path.clone(),
+        vault_backup_path: vault_backup_path.clone(),
+        vault_backed_up: false,
+
+        salt_path: salt_path.clone(),
+        salt_backup_path: salt_backup_path.clone(),
+        salt_backed_up: false,
+
+        key_check_path: key_path.clone(),
+        key_check_backup_path: key_backup_path.clone(),
+        key_check_backed_up: false,
+
+        attachments_dir: attachments_dir.clone(),
+        attachments_backup_dir: attachments_backup_dir.clone(),
+        attachments_swapped: false,
+    };
+
+    // Backup vault/salt/key_check.
+    if !vault_path.exists() {
+        return Err(ErrorCodeString::new("VAULT_NOT_FOUND"));
+    }
+
+    rename_retry(&vault_path, &vault_backup_path, 20, Duration::from_millis(50))
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    rb.vault_backed_up = true;
+
+    if salt_path.exists() {
+        rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50))
+            .map_err(|_| {
+                rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+                ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+            })?;
+        rb.salt_backed_up = true;
+    }
+
+    if key_path.exists() {
+        rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50))
+            .map_err(|_| {
+                rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+                ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+            })?;
+        rb.key_check_backed_up = true;
+    }
+
+    // Write new salt + key_check.
+    if write_atomic(&salt_path, &salt).is_err() {
+        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+    }
+    if let Err(e) = key_check::create_key_check_file(&storage_paths, id, &*new_key) {
+        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+        return Err(e);
+    }
+
+    // Write new encrypted vault file.
+    let encrypted = cipher::encrypt_vault_blob(id, &*new_key, &bytes)?;
+    if let Err(e) = cipher::write_encrypted_file(&vault_path, &encrypted) {
+        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+        return Err(e);
+    }
+
+    // Swap attachments dir.
+    if attachments_backup_dir.exists() {
+        let _ = std::fs::remove_dir_all(&attachments_backup_dir);
+    }
+    rename_retry(&attachments_dir, &attachments_backup_dir, 20, Duration::from_millis(50))
+        .map_err(|_| {
+            rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+            ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+        })?;
+    rb.attachments_swapped = true;
+
+    rename_retry(&attachments_staging_dir, &attachments_dir, 20, Duration::from_millis(50))
+        .map_err(|_| {
+            rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+            ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+        })?;
+
+    // Update in-memory session key to keep vault unlocked (only after commit).
     {
         let mut session = state
             .vault_session
@@ -606,11 +883,13 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
         let s = session.as_mut().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
         if s.profile_id != id {
+            rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
             return Err(ErrorCodeString::new("VAULT_LOCKED"));
         }
-        s.key = key;
+        s.key = new_key;
     }
 
+    let _ = std::fs::remove_dir_all(&backup_root);
     Ok(true)
 }
 
@@ -737,12 +1016,12 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     if !vault_path.exists() {
         return Err(ErrorCodeString::new("VAULT_NOT_FOUND"));
     }
-    if std::fs::rename(&vault_path, &vault_backup_path).is_err() {
+    if rename_retry(&vault_path, &vault_backup_path, 20, Duration::from_millis(50)).is_err() {
         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
     }
 
     if salt_path.exists() {
-        if std::fs::rename(&salt_path, &salt_backup_path).is_err() {
+        if rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50)).is_err() {
             let _ = std::fs::rename(&vault_backup_path, &vault_path);
             return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
         }
@@ -750,7 +1029,7 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     }
 
     if key_path.exists() {
-        if std::fs::rename(&key_path, &key_backup_path).is_err() {
+        if rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50)).is_err() {
             let _ = std::fs::rename(&vault_backup_path, &vault_path);
             if rb.salt_moved {
                 let _ = std::fs::rename(&salt_backup_path, &salt_path);
@@ -851,13 +1130,13 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     if attachments_backup_dir.exists() {
         let _ = std::fs::remove_dir_all(&attachments_backup_dir);
     }
-    if std::fs::rename(&attachments_dir, &attachments_backup_dir).is_err() {
+    if rename_retry(&attachments_dir, &attachments_backup_dir, 20, Duration::from_millis(50)).is_err() {
         rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
     }
     rb.attachments_swapped = true;
 
-    if std::fs::rename(&staging_dir, &attachments_dir).is_err() {
+    if rename_retry(&staging_dir, &attachments_dir, 20, Duration::from_millis(50)).is_err() {
         rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
     }
