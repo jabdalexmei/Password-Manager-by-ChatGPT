@@ -399,7 +399,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         // Reading/validating a WAL DB can require accessing sidecar files (-wal/-shm). If those cannot be opened,
         // SQLite returns SQLITE_CANTOPEN (14). We avoid that by doing all validation/migrations on the in-memory copy
         // and forcing journal_mode=MEMORY there.
-        let (mut mem_conn, bytes): (rusqlite::Connection, Vec<u8>) = {
+        let (mem_conn, bytes): (rusqlite::Connection, Vec<u8>) = {
             // Open read-only to avoid taking write locks / WAL side-effects during snapshot.
             let src = rusqlite::Connection::open_with_flags(
                 &vault_path,
