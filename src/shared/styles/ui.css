@@ -1017,7 +1017,7 @@ select:autofill {
    ======================================================================== */
 
 .settings-modal-body {
-  gap: 18px;
+  gap: 24px;
 }
 
 .settings-modal-section-title {
@@ -1031,20 +1031,83 @@ select:autofill {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
 }
 
 .settings-profile-action {
-  width: 160px;
+  width: 168px;
   justify-content: center;
+  min-height: 40px;
 }
 
 .settings-profile-action--tall {
-  padding-top: 16px;
-  padding-bottom: 16px;
+  min-height: 56px;
+  padding-top: 14px;
+  padding-bottom: 14px;
   white-space: normal;
   line-height: 18px;
   text-align: center;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-toggle-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 16px;
+}
+
+.settings-toggle-row__control {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.settings-input {
+  width: 100%;
+}
+
+/* Switch: single implementation for all toggles (role="switch") */
+.pm-switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.14);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  cursor: pointer;
+  outline: none;
+}
+
+.pm-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.pm-switch[data-checked="true"] {
+  border-color: rgba(34, 197, 94, 0.95);
+  background: rgba(34, 197, 94, 0.55);
+}
+
+.pm-switch__thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateX(2px);
+  transition: transform 160ms ease;
+}
+
+.pm-switch[data-checked="true"] .pm-switch__thumb {
+  transform: translateX(22px);
 }
 
 /* Attachments block inside a dialog (list of attached files) */
