@@ -1,36 +1,338 @@
+Симптомы идеально сходятся в одну причину:
+
+* В логе при открытии профиля падает `DB_QUERY_FAILED` в `App.tsx:28` (то есть на `loginVault(profile.id, undefined)` для **passwordless** профиля). 
+* `DB_QUERY_FAILED` для passwordless у тебя возникает внутри `init_database_passwordless()` на `PRAGMA journal_mode` — это происходит, когда `vault.db` **уже не SQLite**, а **зашифрованный blob** (“file is not a database” классика). ([Zetetic Community Discussion][1])
+
+То есть у тебя получилась **рассинхронизация**: `vault.db` уже “protected”, а в `registry.json` профиль всё ещё `has_password=false`. Тогда UI думает “пароля нет” и пытается открыть как SQLite → PRAGMA → BOOM.
+
+Ниже фикс в 2 части:
+
+1. **Самовосстановление `has_password`** на основе файлов (`kdf_salt.bin`, `key_check.bin`) и сигнатуры шифрованного `vault.db`.
+2. **Set password** делаем “без частичных поломок”: берём консистентный снапшот через SQLite backup в in-memory, и даже если обновление registry вдруг не получилось — **не возвращаем ошибку после успешной конвертации** (иначе ты видишь “Failed to set password”, хотя файл уже стал encrypted).
+
+---
+
+## PATCH 1 — registry self-heal + безопасный rename
+
+```diff
+diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
+index 82fe9b5..c3d7d9a 100644
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -1,11 +1,16 @@
+ use serde::{Deserialize, Serialize};
+ use std::fs;
++use std::io::Read;
+ use std::path::PathBuf;
+ use uuid::Uuid;
+ 
++use crate::data::crypto::cipher::PM_ENC_MAGIC;
+ use crate::data::fs::atomic_write::write_atomic;
+-use crate::data::profiles::paths::{ensure_profiles_dir, profile_config_path, registry_path};
++use crate::data::profiles::paths::{
++    ensure_profiles_dir, key_check_path, kdf_salt_path, profile_config_path, registry_path,
++    vault_db_path,
++};
+ use crate::data::storage_paths::StoragePaths;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::types::ProfileMeta;
+@@ -40,6 +45,40 @@ fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
+     write_atomic(&path, serialized.as_bytes())
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+ }
+ 
++fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
++    let path = match vault_db_path(sp, id) {
++        Ok(p) => p,
++        Err(_) => return false,
++    };
++    if !path.exists() {
++        return false;
++    }
++    let mut f = match fs::File::open(path) {
++        Ok(f) => f,
++        Err(_) => return false,
++    };
++    let mut buf = [0u8; 6];
++    if f.read_exact(&mut buf).is_err() {
++        return false;
++    }
++    buf == PM_ENC_MAGIC
++}
++
++fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
++    if record_has_password {
++        return true;
++    }
++    let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
++    let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
++    if salt_ok && key_ok {
++        return true;
++    }
++    vault_looks_encrypted(sp, id)
++}
+ 
+ pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
+-    let registry = load_registry(sp)?;
+-    Ok(registry
+-        .profiles
+-        .into_iter()
+-        .map(ProfileMeta::from)
+-        .collect())
++    let mut registry = load_registry(sp)?;
++    let mut dirty = false;
++
++    for rec in registry.profiles.iter_mut() {
++        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
++        if inferred != rec.has_password {
++            rec.has_password = inferred;
++            dirty = true;
++        }
++    }
++
++    if dirty {
++        // Best-effort self-heal; even if it fails, we still return inferred values.
++        let _ = save_registry(sp, &registry);
++    }
++
++    Ok(registry.profiles.into_iter().map(ProfileMeta::from).collect())
+ }
+ 
+@@ -158,28 +197,43 @@ pub fn upsert_profile_with_id(
+     })
+ }
+ 
+ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
+     ensure_profiles_dir(sp)?;
+     let mut registry = load_registry(sp)?;
+-    let record = registry
+-        .profiles
+-        .iter_mut()
+-        .find(|p| p.id == id)
+-        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+-
+-    record.name = name.to_string();
+-    save_registry(sp, &registry)?;
++    let idx = registry
++        .profiles
++        .iter()
++        .position(|p| p.id == id)
++        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++
++    registry.profiles[idx].name = name.to_string();
++
++    let meta = ProfileMeta {
++        id: registry.profiles[idx].id.clone(),
++        name: registry.profiles[idx].name.clone(),
++        has_password: infer_has_password(sp, &registry.profiles[idx].id, registry.profiles[idx].has_password),
++    };
++
++    save_registry(sp, &registry)?;
+ 
+     let config_path: PathBuf = profile_config_path(sp, id)?;
+     let config = serde_json::json!({ "name": name });
+     let serialized_config = serde_json::to_string_pretty(&config)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     write_atomic(&config_path, serialized_config.as_bytes())
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
+-    Ok(ProfileMeta {
+-        id: record.id.clone(),
+-        name: record.name.clone(),
+-        has_password: record.has_password,
+-    })
++    Ok(meta)
+ }
+ 
+ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
+@@ -199,7 +253,33 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
+ }
+ 
+ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>> {
+-    let registry = load_registry(sp)?;
+-    Ok(registry.profiles.into_iter().find(|p| p.id == id))
++    let mut registry = load_registry(sp)?;
++    let mut dirty = false;
++
++    if let Some(rec) = registry.profiles.iter_mut().find(|p| p.id == id) {
++        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
++        if inferred != rec.has_password {
++            rec.has_password = inferred;
++            dirty = true;
++        }
++
++        if dirty {
++            let _ = save_registry(sp, &registry);
++        }
++
++        return Ok(Some(rec.clone()));
++    }
++
++    Ok(None)
+ }
+```
+
+Что это даёт:
+
+* даже если set-password “частично” успел записать `vault.db`/salt/key_check, профиль **перестанет считаться passwordless** → UI поведёт в Login, а не попытается открыть как SQLite (и не словит `DB_QUERY_FAILED`). 
+
+---
+
+## PATCH 2 — set password делаем консистентным и без “успел зашифровать, но вернул ошибку”
+
+```diff
 diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 8cead45..e0c1c4b 100644
+index e0c1c4b..4c6cbd9 100644
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -289,19 +289,18 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) ->
+@@ -1,6 +1,7 @@
+ use std::ptr::NonNull;
+ use std::path::Path;
+ use std::sync::atomic::Ordering;
+ use std::sync::Arc;
+@@ -6,6 +7,7 @@ use rusqlite::ffi;
+ use rusqlite::serialize::OwnedData;
+ use rusqlite::DatabaseName;
++use rusqlite::backup::Backup;
+ use zeroize::{Zeroize, Zeroizing};
+ 
+ use crate::app_state::{AppState, VaultSession};
+@@ -248,11 +250,17 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+     let storage_paths = state.get_storage_paths()?;
+ 
+     let profile = registry::get_profile(&storage_paths, id)?
+         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+ 
+-    if profile.has_password {
++    // registry::get_profile now self-heals has_password from disk state.
++    if profile.has_password {
+         return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
+     }
+ 
+     let pwd = password.trim();
+     if pwd.is_empty() {
+         return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
+@@ -269,37 +277,58 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+     // Close file-based sqlite connections before touching vault.db bytes.
+     clear_pool(id);
+ 
+-    // Ensure DB exists (passwordless profiles may not have opened yet in some flows).
+-    init_database_passwordless(&storage_paths, id)?;
+-
+     let vault_path = vault_db_path(&storage_paths, id)?;
      if !vault_path.exists() {
          return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
      }
  
 -    // Serialize passwordless sqlite file to bytes.
--    let conn = rusqlite::Connection::open(&vault_path)
--        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
--    migrations::migrate_to_latest(&conn)?;
--    let serialized = conn
--        .serialize(DatabaseName::Main)
--        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
--    drop(conn);
--
--    let bytes = serialized.to_vec();
-+    // Serialize passwordless sqlite file to bytes.
-+    // NOTE: `serialize()` returns `Data<'_>` which may borrow `conn` (Shared variant),
-+    // so we must materialize bytes while `conn` is still alive.
+-    // NOTE: `serialize()` returns `Data<'_>` which may borrow `conn` (Shared variant),
+-    // so we must materialize bytes while `conn` is still alive.
+-    let bytes: Vec<u8> = {
+-        let conn = rusqlite::Connection::open(&vault_path)
+-            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+-        migrations::migrate_to_latest(&conn)?;
+-        let serialized = conn
+-            .serialize(DatabaseName::Main)
+-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+-        serialized.to_vec()
+-    };
++    // Serialize passwordless sqlite file to bytes via BACKUP snapshot to avoid WAL/in-flight locks.
 +    let bytes: Vec<u8> = {
-+        let conn = rusqlite::Connection::open(&vault_path)
++        let src_conn = rusqlite::Connection::open(&vault_path)
 +            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-+        migrations::migrate_to_latest(&conn)?;
-+        let serialized = conn
++        migrations::migrate_to_latest(&src_conn)?;
++
++        let mut mem_conn = rusqlite::Connection::open_in_memory()
++            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++
++        let backup = Backup::new(&src_conn, &mut mem_conn)
++            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++        backup
++            .run_to_completion(5, std::time::Duration::from_millis(250), None)
++            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++
++        let serialized = mem_conn
 +            .serialize(DatabaseName::Main)
 +            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 +        serialized.to_vec()
 +    };
++
++    // Validate we can open this snapshot in-memory BEFORE writing any encrypted files.
++    let mut mem_conn = rusqlite::Connection::open_in_memory()
++        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++    let owned = owned_data_from_bytes(bytes.clone())?;
++    mem_conn
++        .deserialize(DatabaseName::Main, owned, false)
++        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
++    migrations::migrate_to_latest(&mem_conn)?;
++    migrations::validate_core_schema(&mem_conn)
++        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
  
      // Create new salt + key.
      let salt = kdf::generate_kdf_salt();
      let salt_path = kdf_salt_path(&storage_paths, id)?;
      write_atomic(&salt_path, &salt).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
+     let key = Zeroizing::new(kdf::derive_master_key(pwd, &salt)?);
+ 
+     // Create key check file first (so we can validate later).
+     key_check::create_key_check_file(&storage_paths, id, &*key)?;
+ 
+     // Encrypt vault bytes into vault.db (overwriting sqlite file).
+     let encrypted = cipher::encrypt_vault_blob(id, &*key, &bytes)?;
+     cipher::write_encrypted_file(&vault_path, &encrypted)?;
+     cleanup_sqlite_sidecars(&vault_path);
+ 
+     // Switch runtime session to protected in-memory session so app stays unlocked.
+-    let mut mem_conn = rusqlite::Connection::open_in_memory()
+-        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+-    let owned = owned_data_from_bytes(bytes)?;
+-    mem_conn
+-        .deserialize(DatabaseName::Main, owned, false)
+-        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+-    migrations::migrate_to_latest(&mem_conn)?;
+-    migrations::validate_core_schema(&mem_conn)
+-        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
++    // (mem_conn already validated above)
+ 
+     {
+         let mut session = state
+             .vault_session
+             .lock()
+             .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
+         *session = Some(VaultSession {
+             profile_id: id.to_string(),
+             conn: mem_conn,
+             key,
+         });
+     }
+ 
+-    // Update registry flag.
+-    let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)?;
+-    Ok(updated.into())
++    // Update registry flag. If it fails, do NOT pretend the operation failed:
++    // the vault is already encrypted and self-heal will recover on next load.
++    let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)
++        .unwrap_or(ProfileMeta { id: profile.id, name: profile.name, has_password: true });
++    Ok(updated)
+ }
+```
+
+Ключевая идея: **мы больше не возвращаем “Failed to set password” после того как уже зашифровали vault**, и берём снапшот через `Backup`, чтобы не словить странности WAL/локов.
+
+---
+
+### Почему это чинит оба твоих пункта
+
+1. **Set password на passwordless профиле**
+   Раньше у тебя мог получаться “partial success”: vault уже стал encrypted, но функция вернула error → UI показал “Failed…”. После патча:
+
+* снапшот/валидация делаются до записи encrypted,
+* registry обновляется best-effort и не превращает уже сделанную конвертацию в “ошибку”.
+
+2. **После rename войти невозможно**
+   Это побочный эффект той же рассинхронизации: UI думает passwordless → пытается открыть как SQLite → `DB_QUERY_FAILED`. Теперь `has_password` самовосстанавливается по факту файлов → UI отправит в Login, и вход снова возможен. 
+
+Если хочешь, следующим шагом можно сделать UX приятнее: в UI ловить код типа `PROFILE_ALREADY_PROTECTED` и показывать человеческий текст (“Этот профиль уже защищён паролем”). Но функционально после этих патчей всё должно встать на рельсы.
+
+[1]: https://discuss.zetetic.net/t/file-is-not-a-database-3-4-2-to-4-2-0/3901?utm_source=chatgpt.com "\"File is not a database\" 3.4.2 to 4.2.0 - SQLCipher"
