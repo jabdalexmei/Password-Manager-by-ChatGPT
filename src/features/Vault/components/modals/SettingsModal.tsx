@@ -183,7 +183,6 @@ export function SettingsModal({
       // eslint-disable-next-line no-console
       console.error('profile_set_password failed:', e);
 
-      // Tauri commands return errors as rejected promises. :contentReference[oaicite:3]{index=3}
       // Our backend uses structured error objects (e.g. { code: "DB_QUERY_FAILED" }).
       const err = e as any;
       const code =

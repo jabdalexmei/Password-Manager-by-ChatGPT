@@ -9,6 +9,8 @@ export type ConfirmDialogProps = {
   cancelLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmDisabled?: boolean;
+  cancelDisabled?: boolean;
 };
 
 const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
@@ -19,6 +21,8 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelLabel,
   onConfirm,
   onCancel,
+  confirmDisabled,
+  cancelDisabled,
 }) => {
   const titleId = 'confirm-dialog-title';
   const descId = 'confirm-dialog-desc';
@@ -27,7 +31,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen) onCancel();
+        if (!nextOpen && !cancelDisabled) onCancel();
       }}
     >
       <DialogContent aria-labelledby={titleId} aria-describedby={descId}>
@@ -42,10 +46,20 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </div>
 
         <DialogFooter className="dialog-footer">
-          <button type="button" className="btn btn-secondary" onClick={onCancel}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onCancel}
+            disabled={!!cancelDisabled}
+          >
             {cancelLabel}
           </button>
-          <button type="button" className="btn btn-danger" onClick={onConfirm}>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={onConfirm}
+            disabled={!!confirmDisabled}
+          >
             {confirmLabel}
           </button>
         </DialogFooter>
