@@ -1,191 +1,77 @@
-diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
-index bb4a80a..c0d4c41 100644
---- a/src/features/Vault/components/modals/SettingsModal.tsx
-+++ b/src/features/Vault/components/modals/SettingsModal.tsx
-@@ -169,10 +169,33 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
-     } catch (e) {
-       // eslint-disable-next-line no-console
-       console.error('profile_set_password failed:', e);
--      const code =
--        (e as any)?.code ??
--        (e as any)?.error?.code ??
--        (e as any)?.message ??
--        String(e);
--      showToast(`${tVault('settingsModal.profile.setPasswordError')}: ${code}`, 'error');
-+
-+      // Tauri commands return errors as rejected promises. :contentReference[oaicite:3]{index=3}
-+      // Our backend uses structured error objects (e.g. { code: "DB_QUERY_FAILED" }).
-+      const err = e as any;
-+      const code =
-+        err?.code ??
-+        err?.error?.code ??
-+        err?.message ??
-+        'UNKNOWN_ERROR';
-+
-+      let details = '';
-+      try {
-+        details = JSON.stringify(err);
-+      } catch {
-+        details = String(err);
-+      }
-+
-+      // eslint-disable-next-line no-console
-+      console.error('profile_set_password error details:', { code, details });
-+
-+      // Keep toast short but informative.
-+      showToast(`${tVault('settingsModal.profile.setPasswordError')}: ${code}`, 'error');
-     } finally {
-       setIsSettingPassword(false);
-     }
-   };
-
 diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 2c2a9c6..5e85c2c 100644
+index 5e85c2c..0b8d9ef 100644
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -1,10 +1,12 @@
+@@ -1,10 +1,11 @@
  use std::ptr::NonNull;
  use std::path::Path;
  use std::sync::atomic::Ordering;
  use std::sync::Arc;
  use std::time::Duration;
- 
+
  use rusqlite::backup::Backup;
++use rusqlite::OpenFlags;
  use rusqlite::ffi;
  use rusqlite::serialize::OwnedData;
  use rusqlite::DatabaseName;
  use zeroize::{Zeroize, Zeroizing};
- 
- use crate::app_state::{AppState, VaultSession};
- use crate::data::crypto::{cipher, kdf, key_check};
- use crate::data::fs::atomic_write::write_atomic;
- use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path, vault_db_path};
- use crate::data::profiles::registry;
- use crate::data::sqlite::migrations;
- use crate::data::sqlite::pool::{MaintenanceGuard, clear_pool, drain_and_drop_profile_pools};
- use crate::error::{ErrorCodeString, Result};
- use crate::services::attachments_service;
- use crate::types::ProfileMeta;
- 
-+fn format_rusqlite_error(err: &rusqlite::Error) -> String {
-+    match err {
-+        rusqlite::Error::SqliteFailure(e, msg) => {
-+            let m = msg.as_deref().unwrap_or("");
-+            format!("SqliteFailure(code={:?}, extended_code={}, message={})", e.code, e.extended_code, m)
-+        }
-+        other => format!("{other:?}"),
-+    }
-+}
-+
-+fn classify_db_error(err: &rusqlite::Error) -> ErrorCodeString {
-+    match err {
-+        rusqlite::Error::SqliteFailure(e, _) => {
-+            use rusqlite::ErrorCode::*;
-+            match e.code {
-+                DatabaseBusy | DatabaseLocked => ErrorCodeString::new("DB_BUSY"),
-+                _ => ErrorCodeString::new("DB_QUERY_FAILED"),
-+            }
-+        }
-+        _ => ErrorCodeString::new("DB_QUERY_FAILED"),
-+    }
-+}
-+
- pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-     let storage_paths = state.get_storage_paths()?;
- 
-     let profile = registry::get_profile(&storage_paths, id)?
-         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
-@@ -279,6 +317,9 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-     // Block any new pooled sqlite connections and wait for checked-out conns to return.
-     let _maintenance = MaintenanceGuard::new(id)?;
-     drain_and_drop_profile_pools(id, Duration::from_secs(5));
-     clear_pool(id);
- 
-     let vault_path = vault_db_path(&storage_paths, id)?;
-     if !vault_path.exists() {
-         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
-     }
- 
-     // Snapshot the file DB into memory using SQLite online backup, then serialize the in-memory DB.
-     let bytes: Vec<u8> = {
-         let src = rusqlite::Connection::open(&vault_path)
-             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-         src.busy_timeout(Duration::from_secs(15))
-             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
- 
-         migrations::migrate_to_latest(&src)?;
- 
-         let mut mem = rusqlite::Connection::open_in_memory()
-             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
- 
-         {
--            let backup = Backup::new(&src, &mut mem).map_err(|e| {
--                log::error!("[SECURITY][set_profile_password] backup init failed: {e:?}");
--                map_db_error(&e)
--            })?;
-+            let backup = Backup::new(&src, &mut mem).map_err(|e| {
-+                log::error!(
-+                    "[SECURITY][set_profile_password] profile_id={} step=backup_init vault={:?} err={}",
-+                    id,
-+                    vault_path,
-+                    format_rusqlite_error(&e)
-+                );
-+                classify_db_error(&e)
-+            })?;
-             backup
-                 .run_to_completion(5, Duration::from_millis(250), None)
-                 .map_err(|e| {
--                    log::error!("[SECURITY][set_profile_password] backup run failed: {e:?}");
--                    map_db_error(&e)
-+                    log::error!(
-+                        "[SECURITY][set_profile_password] profile_id={} step=backup_run vault={:?} err={}",
-+                        id,
-+                        vault_path,
-+                        format_rusqlite_error(&e)
-+                    );
-+                    classify_db_error(&e)
-                 })?;
-         }
- 
-         let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
--            log::error!("[SECURITY][set_profile_password] serialize(mem) failed: {e:?}");
--            map_db_error(&e)
-+            log::error!(
-+                "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
-+                id,
-+                format_rusqlite_error(&e)
-+            );
-+            classify_db_error(&e)
-         })?;
-         serialized.to_vec()
-     };
-@@ -373,6 +420,13 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-     // Encrypt vault bytes into vault.db (overwriting sqlite file).
-     let encrypted = cipher::encrypt_vault_blob(id, &*key, &bytes)?;
--    cipher::write_encrypted_file(&vault_path, &encrypted)?;
-+    if let Err(e) = cipher::write_encrypted_file(&vault_path, &encrypted) {
-+        log::error!(
-+            "[SECURITY][set_profile_password] profile_id={} step=write_encrypted vault={:?} code={}",
-+            id, vault_path, e.code
-+        );
-+        return Err(e);
-+    }
-     cleanup_sqlite_sidecars(&vault_path);
 
-diff --git a/src-tauri/src/data/crypto/cipher.rs b/src-tauri/src/data/crypto/cipher.rs
-index 7b7d2d1..2c0b5e6 100644
---- a/src-tauri/src/data/crypto/cipher.rs
-+++ b/src-tauri/src/data/crypto/cipher.rs
-@@ -80,7 +80,13 @@ pub fn decrypt_bytes(key: &[u8; KEY_LEN], aad: &[u8], blob: &[u8]) -> Result<Vec
- }
- 
- pub fn write_encrypted_file(path: &std::path::Path, blob: &[u8]) -> Result<()> {
--    write_atomic(path, blob).map_err(|_| ErrorCodeString::new("ENCRYPTED_FILE_WRITE"))
-+    write_atomic(path, blob).map_err(|ioe| {
-+        log::error!(
-+            "[CRYPTO][write_encrypted_file] path={:?} io_error={:?}",
-+            path, ioe
-+        );
-+        ErrorCodeString::new("ENCRYPTED_FILE_WRITE")
-+    })
- }
+@@ -270,13 +271,12 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+         fn map_db_error(err: &rusqlite::Error) -> ErrorCodeString {
+             match err {
+                 rusqlite::Error::SqliteFailure(e, _) => {
+                     use rusqlite::ErrorCode::*;
+                     match e.code {
+-                        DatabaseBusy | DatabaseLocked | Busy | Locked => {
+-                            ErrorCodeString::new("DB_BUSY")
+-                        }
++                        DatabaseBusy | DatabaseLocked => ErrorCodeString::new("DB_BUSY"),
+                         _ => ErrorCodeString::new("DB_QUERY_FAILED"),
+                     }
+                 }
+                 _ => ErrorCodeString::new("DB_QUERY_FAILED"),
+             }
+         }
+
+@@ -305,16 +305,24 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+         // Snapshot the file DB into memory using SQLite online backup, then serialize the in-memory DB.
+         let bytes: Vec<u8> = {
+-            let src = rusqlite::Connection::open(&vault_path)
++            // Open read-only to avoid taking write locks / WAL side-effects during snapshot.
++            let src = rusqlite::Connection::open_with_flags(
++                &vault_path,
++                OpenFlags::SQLITE_OPEN_READ_ONLY,
++            )
+                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+             src.busy_timeout(Duration::from_secs(15))
+                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+-            migrations::migrate_to_latest(&src)?;
++
++            // IMPORTANT:
++            // Do NOT run migrations on the file DB here.
++            // On Windows/WAL with concurrent connections this can hit SQLITE_BUSY/LOCKED and fail the whole flow.
++            // We run migrations on the in-memory snapshot below (mem_conn), which is lock-free.
+
+             let mut mem = rusqlite::Connection::open_in_memory()
+                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+
+             {
+-                let mut backup = Backup::new(&src, &mut mem).map_err(|e| {
++                let backup = Backup::new(&src, &mut mem).map_err(|e| {
+                     log::error!("[SECURITY][set_profile_password] backup init failed: {e:?}");
+                     map_db_error(&e)
+                 })?;
+                 backup
+                     .run_to_completion(5, Duration::from_millis(250), None)
+                     .map_err(|e| {
+                         log::error!("[SECURITY][set_profile_password] backup run failed: {e:?}");
+                         map_db_error(&e)
+                     })?;
+             }
+
+             let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
+                 log::error!("[SECURITY][set_profile_password] serialize(mem) failed: {e:?}");
+                 map_db_error(&e)
+             })?;
+             serialized.to_vec()
+         };
