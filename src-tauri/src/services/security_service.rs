@@ -268,8 +268,20 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         let profile = registry::get_profile(&storage_paths, id)?
             .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
-        // Block any new pooled sqlite connections during conversion.
-        let _maintenance = MaintenanceGuard::new(id)?;
+        fn map_db_error(err: &rusqlite::Error) -> ErrorCodeString {
+            match err {
+                rusqlite::Error::SqliteFailure(e, _) => {
+                    use rusqlite::ErrorCode::*;
+                    match e.code {
+                        DatabaseBusy | DatabaseLocked | Busy | Locked => {
+                            ErrorCodeString::new("DB_BUSY")
+                        }
+                        _ => ErrorCodeString::new("DB_QUERY_FAILED"),
+                    }
+                }
+                _ => ErrorCodeString::new("DB_QUERY_FAILED"),
+            }
+        }
 
         // registry::get_profile now self-heals has_password based on disk state.
         if profile.has_password {
@@ -284,52 +296,43 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         ensure_profile_dirs(&storage_paths, id)
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-        // Close file-based sqlite connections before touching vault.db bytes.
-        // 1) Block new connections via MaintenanceGuard
-        // 2) Wait for checked-out connections to be returned
-        // 3) Drop pools to close idle connections and release OS file handles (Windows)
+        // Block any new pooled sqlite connections and wait for checked-out conns to return.
+        let _maintenance = MaintenanceGuard::new(id)?;
         drain_and_drop_profile_pools(id, Duration::from_secs(5));
         clear_pool(id);
-        // Give any in-flight requests a moment to drop their pooled conns.
-        std::thread::sleep(Duration::from_millis(80));
 
         let vault_path = vault_db_path(&storage_paths, id)?;
         if !vault_path.exists() {
             return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
         }
 
-        // Serialize passwordless sqlite file to bytes.
+        // Snapshot the file DB into memory using SQLite online backup, then serialize the in-memory DB.
         let bytes: Vec<u8> = {
-            // Source connection (file)
             let src = rusqlite::Connection::open(&vault_path)
                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
             src.busy_timeout(Duration::from_secs(15))
                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-            // Ensure schema is current before snapshot
             migrations::migrate_to_latest(&src)?;
 
-            // Destination connection (in-memory snapshot)
             let mut mem = rusqlite::Connection::open_in_memory()
                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 
-            // SQLite forbids using destination connection during backup; keep it in its own scope.
             {
                 let mut backup = Backup::new(&src, &mut mem).map_err(|e| {
-                    log::error!("[SECURITY][set_profile_password] backup new failed: {e:?}");
-                    ErrorCodeString::new("DB_QUERY_FAILED")
+                    log::error!("[SECURITY][set_profile_password] backup init failed: {e:?}");
+                    map_db_error(&e)
                 })?;
                 backup
                     .run_to_completion(5, Duration::from_millis(250), None)
                     .map_err(|e| {
                         log::error!("[SECURITY][set_profile_password] backup run failed: {e:?}");
-                        ErrorCodeString::new("DB_QUERY_FAILED")
+                        map_db_error(&e)
                     })?;
             }
 
-            // Now serialize from the in-memory snapshot (no WAL/locks).
             let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
                 log::error!("[SECURITY][set_profile_password] serialize(mem) failed: {e:?}");
-                ErrorCodeString::new("DB_QUERY_FAILED")
+                map_db_error(&e)
             })?;
             serialized.to_vec()
         };
