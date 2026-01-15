@@ -126,6 +126,7 @@ fn main() {
             profile_rename,
             profile_set_password,
             profile_change_password,
+            profile_remove_password,
             get_active_profile,
             set_active_profile,
             login_vault,

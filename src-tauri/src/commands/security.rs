@@ -69,6 +69,19 @@ pub async fn profile_change_password(
 }
 
 #[tauri::command]
+pub async fn profile_remove_password(
+    id: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<ProfileMeta> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        security_service::remove_profile_password(&id, &app_state)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
 pub async fn health_check() -> Result<bool> {
     tauri::async_runtime::spawn_blocking(security_service::health_check)
         .await

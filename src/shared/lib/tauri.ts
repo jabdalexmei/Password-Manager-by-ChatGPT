@@ -43,6 +43,10 @@ export async function changeProfilePassword(id: string, password: string): Promi
   return invoke('profile_change_password', { id, password });
 }
 
+export async function removeProfilePassword(id: string): Promise<ProfileMeta> {
+  return invoke('profile_remove_password', { id });
+}
+
 export async function setActiveProfile(id: string): Promise<boolean> {
   return invoke('set_active_profile', { id });
 }

@@ -2,7 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackendUserSettings } from '../../types/backend';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { useToaster } from '../../../../shared/components/Toaster';
-import { changeProfilePassword, renameProfile, setProfilePassword, type ProfileMeta } from '../../../../shared/lib/tauri';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
+import {
+  changeProfilePassword,
+  removeProfilePassword,
+  renameProfile,
+  setProfilePassword,
+  type ProfileMeta,
+} from '../../../../shared/lib/tauri';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/ui/dialog';
 
 export type SettingsModalProps = {
@@ -55,6 +62,9 @@ export function SettingsModal({
   const [changePasswordConfirm, setChangePasswordConfirm] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+  const [removePasswordConfirmOpen, setRemovePasswordConfirmOpen] = useState(false);
+  const [isRemovingPassword, setIsRemovingPassword] = useState(false);
+
   useEffect(() => {
     if (!open || !settings) return;
     setAutoLockEnabled(settings.auto_lock_enabled);
@@ -82,6 +92,11 @@ export function SettingsModal({
     setChangePasswordValue('');
     setChangePasswordConfirm('');
   }, [changePasswordOpen]);
+
+  useEffect(() => {
+    if (profileHasPassword) return;
+    setRemovePasswordConfirmOpen(false);
+  }, [profileHasPassword]);
 
   const busy = isSaving;
 
@@ -210,6 +225,22 @@ export function SettingsModal({
     }
   };
 
+  const handleRemovePasswordConfirm = async () => {
+    if (!profileHasPassword) return;
+
+    setIsRemovingPassword(true);
+    try {
+      const updated = await removeProfilePassword(profileId);
+      onProfileUpdated?.(updated);
+      showToast(tVault('settingsModal.profile.removePasswordSuccess'));
+      setRemovePasswordConfirmOpen(false);
+    } catch {
+      showToast(tVault('settingsModal.profile.removePasswordError'), 'error');
+    } finally {
+      setIsRemovingPassword(false);
+    }
+  };
+
   const handleSave = () => {
     if (!settings) return;
 
@@ -315,6 +346,22 @@ export function SettingsModal({
               disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
             >
               {tVault('settingsModal.profile.changePasswordAction')}
+            </button>
+
+            <button
+              className="btn btn-danger settings-profile-action"
+              type="button"
+              onClick={() => setRemovePasswordConfirmOpen(true)}
+              disabled={
+                busy ||
+                isRenamingProfile ||
+                isSettingPassword ||
+                isChangingPassword ||
+                isRemovingPassword ||
+                !profileHasPassword
+              }
+            >
+              {tVault('settingsModal.profile.removePasswordAction')}
             </button>
           </div>
 
@@ -649,6 +696,18 @@ export function SettingsModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <ConfirmDialog
+      open={removePasswordConfirmOpen}
+      title={tVault('settingsModal.profile.removePasswordTitle')}
+      description={tVault('settingsModal.profile.removePasswordDescription')}
+      confirmLabel={tVault('settingsModal.profile.removePasswordConfirmAction')}
+      cancelLabel={tCommon('action.cancel')}
+      onConfirm={handleRemovePasswordConfirm}
+      onCancel={() => setRemovePasswordConfirmOpen(false)}
+      confirmDisabled={busy || isRemovingPassword}
+      cancelDisabled={busy || isRemovingPassword}
+    />
     </>
   );
 }
