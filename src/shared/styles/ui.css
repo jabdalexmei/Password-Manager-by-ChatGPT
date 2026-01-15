@@ -1038,16 +1038,10 @@ select:autofill {
   width: 168px;
   justify-content: center;
   min-height: 40px;
+  padding: 0 16px;
 }
 
-.settings-profile-action--tall {
-  min-height: 56px;
-  padding-top: 14px;
-  padding-bottom: 14px;
-  white-space: normal;
-  line-height: 18px;
-  text-align: center;
-}
+/* keep Profile buttons identical */
 
 .settings-group {
   display: flex;

@@ -309,7 +309,7 @@ export function SettingsModal({
             </button>
 
             <button
-              className="btn btn-secondary settings-profile-action settings-profile-action--tall"
+              className="btn btn-secondary settings-profile-action"
               type="button"
               onClick={() => setChangePasswordOpen(true)}
               disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
