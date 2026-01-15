@@ -51,5 +51,20 @@
   "settingsModal.profile.renameTitle": "Rename profile",
   "settingsModal.profile.nameLabel": "Profile name",
   "settingsModal.profile.renameSuccess": "Profile renamed",
-  "settingsModal.profile.renameError": "Failed to rename profile"
+  "settingsModal.profile.renameError": "Failed to rename profile",
+
+  "settingsModal.profileSecurityTitle": "Profile security",
+  "settingsModal.profile.setPasswordSection": "Set password to profile",
+  "settingsModal.profile.setPasswordAction": "Set password",
+  "settingsModal.profile.changePasswordSection": "Change password",
+  "settingsModal.profile.changePasswordAction": "Change password",
+
+  "settingsModal.profile.setPasswordTitle": "Set password",
+  "settingsModal.profile.changePasswordTitle": "Change password",
+  "settingsModal.profile.passwordLabel": "Password",
+  "settingsModal.profile.confirmPasswordLabel": "Confirm password",
+  "settingsModal.profile.setPasswordSuccess": "Password set",
+  "settingsModal.profile.setPasswordError": "Failed to set password",
+  "settingsModal.profile.changePasswordSuccess": "Password changed",
+  "settingsModal.profile.changePasswordError": "Failed to change password"
 }

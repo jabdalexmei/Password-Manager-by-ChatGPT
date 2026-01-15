@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BackendUserSettings } from '../../types/backend';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { useToaster } from '../../../../shared/components/Toaster';
-import { renameProfile } from '../../../../shared/lib/tauri';
+import { changeProfilePassword, renameProfile, setProfilePassword, type ProfileMeta } from '../../../../shared/lib/tauri';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/ui/dialog';
 
 export type SettingsModalProps = {
@@ -13,7 +13,9 @@ export type SettingsModalProps = {
   onSave: (nextSettings: BackendUserSettings) => void;
   profileId: string;
   profileName: string;
+  profileHasPassword: boolean;
   onProfileRenamed?: (name: string) => void;
+  onProfileUpdated?: (profile: ProfileMeta) => void;
 };
 
 export function SettingsModal({
@@ -24,7 +26,9 @@ export function SettingsModal({
   onSave,
   profileId,
   profileName,
+  profileHasPassword,
   onProfileRenamed,
+  onProfileUpdated,
 }: SettingsModalProps) {
   const { t: tVault } = useTranslation('Vault');
   const { t: tCommon } = useTranslation('Common');
@@ -41,6 +45,16 @@ export function SettingsModal({
   const [renameProfileValue, setRenameProfileValue] = useState('');
   const [isRenamingProfile, setIsRenamingProfile] = useState(false);
 
+  const [setPasswordOpen, setSetPasswordOpen] = useState(false);
+  const [setPasswordValue, setSetPasswordValue] = useState('');
+  const [setPasswordConfirm, setSetPasswordConfirm] = useState('');
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
+
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [changePasswordValue, setChangePasswordValue] = useState('');
+  const [changePasswordConfirm, setChangePasswordConfirm] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   useEffect(() => {
     if (!open || !settings) return;
     setAutoLockEnabled(settings.auto_lock_enabled);
@@ -56,6 +70,18 @@ export function SettingsModal({
     if (!renameProfileOpen) return;
     setRenameProfileValue(profileName || '');
   }, [renameProfileOpen, profileName]);
+
+  useEffect(() => {
+    if (!setPasswordOpen) return;
+    setSetPasswordValue('');
+    setSetPasswordConfirm('');
+  }, [setPasswordOpen]);
+
+  useEffect(() => {
+    if (!changePasswordOpen) return;
+    setChangePasswordValue('');
+    setChangePasswordConfirm('');
+  }, [changePasswordOpen]);
 
   const busy = isSaving;
 
@@ -107,6 +133,57 @@ export function SettingsModal({
       showToast(tVault('settingsModal.profile.renameError'), 'error');
     } finally {
       setIsRenamingProfile(false);
+    }
+  };
+
+  const canSaveSetPassword = useMemo(() => {
+    if (profileHasPassword) return false;
+    const p1 = setPasswordValue;
+    const p2 = setPasswordConfirm;
+    if (!p1 || !p2) return false;
+    if (p1 !== p2) return false;
+    return true;
+  }, [profileHasPassword, setPasswordConfirm, setPasswordValue]);
+
+  const canSaveChangePassword = useMemo(() => {
+    if (!profileHasPassword) return false;
+    const p1 = changePasswordValue;
+    const p2 = changePasswordConfirm;
+    if (!p1 || !p2) return false;
+    if (p1 !== p2) return false;
+    return true;
+  }, [changePasswordConfirm, changePasswordValue, profileHasPassword]);
+
+  const handleSetPasswordSave = async () => {
+    if (profileHasPassword) return;
+    if (!canSaveSetPassword) return;
+
+    setIsSettingPassword(true);
+    try {
+      const updated = await setProfilePassword(profileId, setPasswordValue);
+      onProfileUpdated?.(updated);
+      showToast(tVault('settingsModal.profile.setPasswordSuccess'));
+      setSetPasswordOpen(false);
+    } catch {
+      showToast(tVault('settingsModal.profile.setPasswordError'), 'error');
+    } finally {
+      setIsSettingPassword(false);
+    }
+  };
+
+  const handleChangePasswordSave = async () => {
+    if (!profileHasPassword) return;
+    if (!canSaveChangePassword) return;
+
+    setIsChangingPassword(true);
+    try {
+      await changeProfilePassword(profileId, changePasswordValue);
+      showToast(tVault('settingsModal.profile.changePasswordSuccess'));
+      setChangePasswordOpen(false);
+    } catch {
+      showToast(tVault('settingsModal.profile.changePasswordError'), 'error');
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -463,6 +540,46 @@ export function SettingsModal({
           </div>
         </div>
 
+        <h3 id="profile-security-title" style={subtitleStyle}>
+          {tVault('settingsModal.profileSecurityTitle')}
+        </h3>
+
+        <div
+          role="group"
+          aria-labelledby="profile-security-title"
+          style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+        >
+          <div className="form-field" style={toggleRowStyle}>
+            <span className="form-label settings-subheader">{tVault('settingsModal.profile.setPasswordSection')}</span>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={() => setSetPasswordOpen(true)}
+                disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
+              >
+                {tVault('settingsModal.profile.setPasswordAction')}
+              </button>
+            </div>
+          </div>
+
+          <div className="form-field" style={toggleRowStyle}>
+            <span className="form-label settings-subheader">{tVault('settingsModal.profile.changePasswordSection')}</span>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={() => setChangePasswordOpen(true)}
+                disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
+              >
+                {tVault('settingsModal.profile.changePasswordAction')}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <DialogFooter className="dialog-footer--split">
           <div className="dialog-footer-left">
             <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={busy}>
@@ -523,6 +640,137 @@ export function SettingsModal({
               type="button"
               onClick={handleRenameSave}
               disabled={busy || isRenamingProfile || !canSaveRename}
+            >
+              {tVault('backup.settings.save')}
+            </button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={setPasswordOpen} onOpenChange={(nextOpen) => (!nextOpen ? setSetPasswordOpen(false) : undefined)}>
+      <DialogContent aria-labelledby="set-password-title">
+        <DialogHeader>
+          <DialogTitle id="set-password-title">{tVault('settingsModal.profile.setPasswordTitle')}</DialogTitle>
+        </DialogHeader>
+
+        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="form-field">
+            <label className="form-label" htmlFor="set-password-input">
+              {tVault('settingsModal.profile.passwordLabel')}
+            </label>
+            <input
+              id="set-password-input"
+              type="password"
+              value={setPasswordValue}
+              disabled={busy || isSettingPassword || profileHasPassword}
+              onChange={(e) => setSetPasswordValue(e.target.value)}
+              autoComplete="new-password"
+              style={fullWidthInputStyle}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="set-password-confirm-input">
+              {tVault('settingsModal.profile.confirmPasswordLabel')}
+            </label>
+            <input
+              id="set-password-confirm-input"
+              type="password"
+              value={setPasswordConfirm}
+              disabled={busy || isSettingPassword || profileHasPassword}
+              onChange={(e) => setSetPasswordConfirm(e.target.value)}
+              autoComplete="new-password"
+              style={fullWidthInputStyle}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="dialog-footer--split">
+          <div className="dialog-footer-left">
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => setSetPasswordOpen(false)}
+              disabled={busy || isSettingPassword}
+            >
+              {tCommon('action.cancel')}
+            </button>
+          </div>
+
+          <div className="dialog-footer-right">
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={handleSetPasswordSave}
+              disabled={busy || isSettingPassword || !canSaveSetPassword}
+            >
+              {tVault('backup.settings.save')}
+            </button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog
+      open={changePasswordOpen}
+      onOpenChange={(nextOpen) => (!nextOpen ? setChangePasswordOpen(false) : undefined)}
+    >
+      <DialogContent aria-labelledby="change-password-title">
+        <DialogHeader>
+          <DialogTitle id="change-password-title">{tVault('settingsModal.profile.changePasswordTitle')}</DialogTitle>
+        </DialogHeader>
+
+        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="form-field">
+            <label className="form-label" htmlFor="change-password-input">
+              {tVault('settingsModal.profile.passwordLabel')}
+            </label>
+            <input
+              id="change-password-input"
+              type="password"
+              value={changePasswordValue}
+              disabled={busy || isChangingPassword || !profileHasPassword}
+              onChange={(e) => setChangePasswordValue(e.target.value)}
+              autoComplete="new-password"
+              style={fullWidthInputStyle}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="change-password-confirm-input">
+              {tVault('settingsModal.profile.confirmPasswordLabel')}
+            </label>
+            <input
+              id="change-password-confirm-input"
+              type="password"
+              value={changePasswordConfirm}
+              disabled={busy || isChangingPassword || !profileHasPassword}
+              onChange={(e) => setChangePasswordConfirm(e.target.value)}
+              autoComplete="new-password"
+              style={fullWidthInputStyle}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="dialog-footer--split">
+          <div className="dialog-footer-left">
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => setChangePasswordOpen(false)}
+              disabled={busy || isChangingPassword}
+            >
+              {tCommon('action.cancel')}
+            </button>
+          </div>
+
+          <div className="dialog-footer-right">
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={handleChangePasswordSave}
+              disabled={busy || isChangingPassword || !canSaveChangePassword}
             >
               {tVault('backup.settings.save')}
             </button>

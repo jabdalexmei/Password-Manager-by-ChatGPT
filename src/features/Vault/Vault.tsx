@@ -11,6 +11,7 @@ import { useBankCardsViewModel } from './components/BankCards/useBankCardsViewMo
 import { BankCards } from './components/BankCards/BankCards';
 import { BankCardDetails } from './components/BankCards/BankCardDetails';
 import { useTranslation } from '../../shared/lib/i18n';
+import type { ProfileMeta } from '../../shared/lib/tauri';
 import { useToaster } from '../../shared/components/Toaster';
 import { IconMoreHorizontal } from '@/shared/icons/lucide/icons';
 import {
@@ -44,9 +45,17 @@ type VaultProps = {
   isPasswordless: boolean;
   onLocked: () => void;
   onProfileRenamed?: (name: string) => void;
+  onProfileUpdated?: (profile: ProfileMeta) => void;
 };
 
-export default function Vault({ profileId, profileName, isPasswordless, onLocked, onProfileRenamed }: VaultProps) {
+export default function Vault({
+  profileId,
+  profileName,
+  isPasswordless,
+  onLocked,
+  onProfileRenamed,
+  onProfileUpdated,
+}: VaultProps) {
   const vault = useVault(profileId, onLocked);
   const bankCards = useBankCards(profileId, onLocked, vault.folders);
   const { t: tDataCards } = useTranslation('DataCards');
@@ -602,7 +611,9 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             onSave={handleSaveSettings}
             profileId={profileId}
             profileName={profileName}
+            profileHasPassword={!isPasswordless}
             onProfileRenamed={onProfileRenamed}
+            onProfileUpdated={onProfileUpdated}
           />
         </Suspense>
       )}
