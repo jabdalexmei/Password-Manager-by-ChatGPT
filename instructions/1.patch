@@ -1,104 +1,36 @@
-Да, это чистые **компиляторные** штуки: ты **разыменовал `Zeroizing`** и получил `[u8; 32]`, а поле `VaultSession.key` ждёт **`Zeroizing<[u8; 32]>`**. И второй баг — классический borrow-checker: держишь `&mut record`, а потом пытаешься передать весь `registry` как `&registry` (immutable) пока mutable borrow ещё “жив”. `Zeroizing` как раз задумано хранить “секрет” в обёртке, а не в голом массиве. ([Docs.rs][1])
-Правило про одновременные mutable/immutable borrows — базовое из Rust ownership/borrowing. ([Rust Documentation][2])
-
-Ниже фикс-патч (unified diff) под твоё текущее дерево (как в твоём архиве с rename flow).
-
----
-
-## 1) `security_service.rs`: не разыменовываем `Zeroizing`, а **перемещаем** его
-
-```diff
 diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index e38cbe6..8cead45 100644
+index 8cead45..e0c1c4b 100644
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -329,12 +329,12 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) ->
-     {
-         let mut session = state
-             .vault_session
-             .lock()
-             .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
-         *session = Some(VaultSession {
-             profile_id: id.to_string(),
-             conn: mem_conn,
--            key: *key,
-+            key,
-         });
+@@ -289,19 +289,18 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) ->
+     if !vault_path.exists() {
+         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
      }
  
-@@ -393,7 +393,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>)
-         if s.profile_id != id {
-             return Err(ErrorCodeString::new("VAULT_LOCKED"));
-         }
--        s.key = *key;
-+        s.key = key;
-     }
- 
-     Ok(true)
- }
-```
-
-Смысл: `key` у тебя уже `Zeroizing<[u8; 32]>`. `&*key` нормально использовать для шифрования/проверок, но **в сессию надо класть сам `Zeroizing`**, а не результат `*key`.
-
----
-
-## 2) `registry.rs`: убираем конфликт mutable/immutable borrow в `rename_profile`
-
-```diff
-diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
-index 5759509..9a4d2f1 100644
---- a/src-tauri/src/data/profiles/registry.rs
-+++ b/src-tauri/src/data/profiles/registry.rs
-@@ -164,26 +164,36 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
-     ensure_profiles_dir(sp)?;
-     let mut registry = load_registry(sp)?;
--    let record = registry
--        .profiles
--        .iter_mut()
--        .find(|p| p.id == id)
--        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+-    // Serialize passwordless sqlite file to bytes.
+-    let conn = rusqlite::Connection::open(&vault_path)
+-        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+-    migrations::migrate_to_latest(&conn)?;
+-    let serialized = conn
+-        .serialize(DatabaseName::Main)
+-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+-    drop(conn);
 -
--    record.name = name.to_string();
--    save_registry(sp, &registry)?;
-+
-+    let idx = registry
-+        .profiles
-+        .iter()
-+        .position(|p| p.id == id)
-+        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
-+
-+    registry.profiles[idx].name = name.to_string();
-+
-+    let meta = ProfileMeta {
-+        id: registry.profiles[idx].id.clone(),
-+        name: registry.profiles[idx].name.clone(),
-+        has_password: registry.profiles[idx].has_password,
+-    let bytes = serialized.to_vec();
++    // Serialize passwordless sqlite file to bytes.
++    // NOTE: `serialize()` returns `Data<'_>` which may borrow `conn` (Shared variant),
++    // so we must materialize bytes while `conn` is still alive.
++    let bytes: Vec<u8> = {
++        let conn = rusqlite::Connection::open(&vault_path)
++            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++        migrations::migrate_to_latest(&conn)?;
++        let serialized = conn
++            .serialize(DatabaseName::Main)
++            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++        serialized.to_vec()
 +    };
-+
-+    save_registry(sp, &registry)?;
  
-     // Keep per-profile config.json consistent with registry.
-     let config_path: PathBuf = profile_config_path(sp, id)?;
-     let config = serde_json::json!({ "name": name });
-     let serialized_config = serde_json::to_string_pretty(&config)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-     write_atomic(&config_path, serialized_config.as_bytes())
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
- 
--    Ok(ProfileMeta {
--        id: record.id.clone(),
--        name: record.name.clone(),
--        has_password: record.has_password,
--    })
-+    Ok(meta)
- }
-```
-
-Смысл: мы больше **не держим `record: &mut ProfileRecord`** пока вызываем `save_registry(...)`. Вместо этого находим индекс, меняем значение, заранее собираем `ProfileMeta`, и только потом сохраняем.
-
----
-
-Если применишь эти два диффа — ошибки `E0308` и `E0502` уйдут. Дальше уже можно спокойно докручивать UI-часть Set/Change password.
-
-[1]: https://docs.rs/zeroize/latest/zeroize/?utm_source=chatgpt.com "zeroize - Rust"
-[2]: https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html?utm_source=chatgpt.com "References and Borrowing - The Rust Programming ..."
+     // Create new salt + key.
+     let salt = kdf::generate_kdf_salt();
+     let salt_path = kdf_salt_path(&storage_paths, id)?;
+     write_atomic(&salt_path, &salt).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
