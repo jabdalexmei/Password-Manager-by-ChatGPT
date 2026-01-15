@@ -274,7 +274,7 @@ fn encrypt_attachments_plain_to_staging(
         let blob = std::fs::read(&file).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
 
         // If we see encrypted magic in a passwordless profile, we can't safely recover it (no old key).
-        if blob.starts_with(crate::data::crypto::cipher::PM_ENC_MAGIC) {
+        if blob.starts_with(&cipher::PM_ENC_MAGIC) {
             return Err(ErrorCodeString::new("ATTACHMENT_CORRUPTED"));
         }
 
@@ -302,7 +302,7 @@ fn reencrypt_attachments_to_staging(
         let attachment_id = attachment_id_from_path(&file)?;
         let blob = std::fs::read(&file).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
 
-        let plain = if blob.starts_with(crate::data::crypto::cipher::PM_ENC_MAGIC) {
+        let plain = if blob.starts_with(&cipher::PM_ENC_MAGIC) {
             cipher::decrypt_attachment_blob(profile_id, &attachment_id, old_key, &blob)?
         } else {
             // Tolerate plaintext leftovers (legacy/edge cases) and bring them into the new key.
@@ -846,7 +846,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
 
     // Must be unlocked (session exists and matches profile).
-    let (mut bytes, old_key) = {
+    let (bytes, old_key) = {
         let session = state
             .vault_session
             .lock()
