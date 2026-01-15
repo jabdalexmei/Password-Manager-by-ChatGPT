@@ -36,7 +36,10 @@ impl r2d2::CustomizeConnection<rusqlite::Connection, rusqlite::Error> for FilePr
         conn.execute_batch(
             r#"
             PRAGMA foreign_keys = ON;
-            PRAGMA synchronous = NORMAL;
+            -- Stronger durability: in WAL mode, FULL syncs the WAL on each commit.
+            -- This reduces the chance of losing the last transactions after sudden power loss/OS crash,
+            -- at the cost of slower writes.
+            PRAGMA synchronous = FULL;
             "#,
         )
     }
