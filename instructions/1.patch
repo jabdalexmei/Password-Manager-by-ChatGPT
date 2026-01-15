@@ -1,0 +1,513 @@
+diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
+index 9b8f1d2..c2a5b71 100644
+--- a/src/features/Vault/components/modals/SettingsModal.tsx
++++ b/src/features/Vault/components/modals/SettingsModal.tsx
+@@ -1,4 +1,4 @@
+-import React, { useEffect, useMemo, useState } from 'react';
++import React, { useCallback, useEffect, useMemo, useState } from 'react';
+ import { BackendUserSettings } from '../../types/backend';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+ import { useToaster } from '../../../../shared/components/Toaster';
+ import { changeProfilePassword, renameProfile, setProfilePassword, type ProfileMeta } from '../../../../shared/lib/tauri';
+ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/ui/dialog';
+@@ -239,46 +239,62 @@ export function SettingsModal({
+ 
+     onSave(nextSettings);
+   };
+ 
+-  const toggleRowStyle: React.CSSProperties = {
+-    display: 'grid',
+-    gridTemplateColumns: '1fr 140px', // fixed control column (not flush to modal edge)
+-    alignItems: 'center',
+-    columnGap: 16,
+-  };
+-
+-  // ---- Toggle switch (button role="switch") ----
+-  // WAI-ARIA switch pattern: role="switch" + aria-checked true/false, keyboard operable.
+-  // https://www.w3.org/WAI/ARIA/apg/patterns/switch/
+-  // https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/switch_role
+-  const switchButtonStyle: React.CSSProperties = {
+-    width: 44,
+-    height: 24,
+-    borderRadius: 9999,
+-    border: autoBackupEnabled
+-      ? '1px solid rgba(34, 197, 94, 0.95)'
+-      : '1px solid rgba(255, 255, 255, 0.25)',
+-    background: autoBackupEnabled
+-      ? 'rgba(34, 197, 94, 0.55)'
+-      : 'rgba(255, 255, 255, 0.14)',
+-    padding: 0,
+-    display: 'inline-flex',
+-    alignItems: 'center',
+-    justifyContent: 'flex-start',
+-    cursor: busy ? 'not-allowed' : 'pointer',
+-    opacity: busy ? 0.65 : 1,
+-    outline: 'none',
+-  };
+-
+-  const switchThumbStyle: React.CSSProperties = {
+-    width: 18,
+-    height: 18,
+-    borderRadius: 9999,
+-    background: 'rgba(255, 255, 255, 0.95)',
+-    transform: autoBackupEnabled ? 'translateX(22px)' : 'translateX(2px)',
+-    transition: 'transform 160ms ease',
+-  };
+-
+-  const fullWidthInputStyle: React.CSSProperties = {
+-    width: '100%',
+-  };
++  const onSwitchKeyDown = useCallback((e: React.KeyboardEvent, toggle: () => void) => {
++    if (busy) return;
++    if (e.key === ' ' || e.key === 'Enter') {
++      e.preventDefault();
++      toggle();
++    }
++  }, [busy]);
++
++  const renderSwitch = useCallback(
++    (opts: {
++      id: string;
++      labelId: string;
++      checked: boolean;
++      onToggle: () => void;
++      disabled?: boolean;
++    }) => {
++      const { id, labelId, checked, onToggle, disabled } = opts;
++      return (
++        <button
++          id={id}
++          type="button"
++          role="switch"
++          aria-checked={checked}
++          aria-labelledby={labelId}
++          disabled={!!disabled}
++          data-checked={checked ? 'true' : 'false'}
++          className="pm-switch"
++          onClick={onToggle}
++          onKeyDown={(e) => onSwitchKeyDown(e, onToggle)}
++        >
++          <span className="pm-switch__thumb" />
++        </button>
++      );
++    },
++    [onSwitchKeyDown],
++  );
+ 
+   return (
+     <>
+       <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
+       <DialogContent aria-labelledby="settings-title" className="settings-modal">
+         <DialogHeader>
+           <DialogTitle id="settings-title">{tVault('settings')}</DialogTitle>
+         </DialogHeader>
+ 
+         <div className="dialog-body settings-modal-body">
+           <h3 id="profile-title" className="settings-modal-section-title">
+             {tVault('settingsModal.profileTitle')}
+           </h3>
+ 
+           <div className="settings-profile-actions" role="group" aria-labelledby="profile-title">
+             <button
+               className="btn btn-secondary settings-profile-action"
+               type="button"
+               onClick={() => setRenameProfileOpen(true)}
+               disabled={busy}
+             >
+               {tVault('settingsModal.profile.rename')}
+             </button>
+ 
+             <button
+               className="btn btn-secondary settings-profile-action"
+               type="button"
+               onClick={() => setSetPasswordOpen(true)}
+               disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
+             >
+               {tVault('settingsModal.profile.setPasswordAction')}
+             </button>
+ 
+             <button
+               className="btn btn-secondary settings-profile-action settings-profile-action--tall"
+               type="button"
+               onClick={() => setChangePasswordOpen(true)}
+               disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
+             >
+               {tVault('settingsModal.profile.changePasswordAction')}
+             </button>
+           </div>
+ 
+           <h3 id="security-title" className="settings-modal-section-title">
+             {tVault('settingsModal.securityTitle')}
+           </h3>
+ 
+           <div
+             role="group"
+             aria-labelledby="security-title"
+-            style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
++            className="settings-group"
+           >
+-            <div className="form-field" style={toggleRowStyle}>
++            <div className="form-field settings-toggle-row">
+               <span className="form-label settings-subheader" id="auto-lock-enabled-label">
+                 {tVault('settingsModal.autoLock.enabled')}
+               </span>
+ 
+-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+-                <button
+-                  id="auto-lock-enabled-switch"
+-                  type="button"
+-                  role="switch"
+-                  aria-checked={autoLockEnabled}
+-                  aria-labelledby="auto-lock-enabled-label"
+-                  disabled={busy}
+-                  onClick={() => setAutoLockEnabled((v) => !v)}
+-                  onKeyDown={(e) => {
+-                    if (busy) return;
+-                    if (e.key === ' ' || e.key === 'Enter') {
+-                      e.preventDefault();
+-                      setAutoLockEnabled((v) => !v);
+-                    }
+-                  }}
+-                  style={{
+-                    width: 44,
+-                    height: 24,
+-                    borderRadius: 9999,
+-                    border: autoLockEnabled
+-                      ? '1px solid rgba(34, 197, 94, 0.95)'
+-                      : '1px solid rgba(255, 255, 255, 0.25)',
+-                    background: autoLockEnabled
+-                      ? 'rgba(34, 197, 94, 0.55)'
+-                      : 'rgba(255, 255, 255, 0.14)',
+-                    padding: 0,
+-                    display: 'inline-flex',
+-                    alignItems: 'center',
+-                    justifyContent: 'flex-start',
+-                    cursor: busy ? 'not-allowed' : 'pointer',
+-                    opacity: busy ? 0.65 : 1,
+-                    outline: 'none',
+-                  }}
+-                >
+-                  <span
+-                    style={{
+-                      width: 18,
+-                      height: 18,
+-                      borderRadius: 9999,
+-                      background: 'rgba(255, 255, 255, 0.95)',
+-                      transform: autoLockEnabled ? 'translateX(22px)' : 'translateX(2px)',
+-                      transition: 'transform 160ms ease',
+-                    }}
+-                  />
+-                </button>
+-              </div>
++              <div className="settings-toggle-row__control">
++                {renderSwitch({
++                  id: 'auto-lock-enabled-switch',
++                  labelId: 'auto-lock-enabled-label',
++                  checked: autoLockEnabled,
++                  onToggle: () => setAutoLockEnabled((v) => !v),
++                  disabled: busy,
++                })}
++              </div>
+             </div>
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="auto-lock-timeout-seconds">
+                 {tVault('settingsModal.autoLock.timeoutSeconds')}
+               </label>
+               <input
+                 id="auto-lock-timeout-seconds"
+                 type="number"
+                 min={30}
+                 max={86400}
+                 value={autoLockTimeoutSeconds}
+                 disabled={busy || !autoLockEnabled}
+                 inputMode="numeric"
+                 onChange={(event) => setAutoLockTimeoutSeconds(event.target.value)}
+-                style={fullWidthInputStyle}
++                className="settings-input"
+               />
+             </div>
+ 
+-            <div className="form-field" style={toggleRowStyle}>
++            <div className="form-field settings-toggle-row">
+               <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
+                 {tVault('settingsModal.clipboard.enabled')}
+               </span>
+ 
+-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+-                <button
+-                  id="clipboard-auto-clear-enabled-switch"
+-                  type="button"
+-                  role="switch"
+-                  aria-checked={clipboardAutoClearEnabled}
+-                  aria-labelledby="clipboard-auto-clear-enabled-label"
+-                  disabled={busy}
+-                  onClick={() => setClipboardAutoClearEnabled((v) => !v)}
+-                  onKeyDown={(e) => {
+-                    if (busy) return;
+-                    if (e.key === ' ' || e.key === 'Enter') {
+-                      e.preventDefault();
+-                      setClipboardAutoClearEnabled((v) => !v);
+-                    }
+-                  }}
+-                  style={{
+-                    width: 44,
+-                    height: 24,
+-                    borderRadius: 9999,
+-                    border: clipboardAutoClearEnabled
+-                      ? '1px solid rgba(34, 197, 94, 0.95)'
+-                      : '1px solid rgba(255, 255, 255, 0.25)',
+-                    background: clipboardAutoClearEnabled
+-                      ? 'rgba(34, 197, 94, 0.55)'
+-                      : 'rgba(255, 255, 255, 0.14)',
+-                    padding: 0,
+-                    display: 'inline-flex',
+-                    alignItems: 'center',
+-                    justifyContent: 'flex-start',
+-                    cursor: busy ? 'not-allowed' : 'pointer',
+-                    opacity: busy ? 0.65 : 1,
+-                    outline: 'none',
+-                  }}
+-                >
+-                  <span
+-                    style={{
+-                      width: 18,
+-                      height: 18,
+-                      borderRadius: 9999,
+-                      background: 'rgba(255, 255, 255, 0.95)',
+-                      transform: clipboardAutoClearEnabled ? 'translateX(22px)' : 'translateX(2px)',
+-                      transition: 'transform 160ms ease',
+-                    }}
+-                  />
+-                </button>
+-              </div>
++              <div className="settings-toggle-row__control">
++                {renderSwitch({
++                  id: 'clipboard-auto-clear-enabled-switch',
++                  labelId: 'clipboard-auto-clear-enabled-label',
++                  checked: clipboardAutoClearEnabled,
++                  onToggle: () => setClipboardAutoClearEnabled((v) => !v),
++                  disabled: busy,
++                })}
++              </div>
+             </div>
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
+                 {tVault('settingsModal.clipboard.timeoutSeconds')}
+               </label>
+               <input
+                 id="clipboard-clear-timeout-seconds"
+                 type="number"
+                 min={1}
+                 max={600}
+                 value={clipboardClearTimeoutSeconds}
+                 disabled={busy || !clipboardAutoClearEnabled}
+                 inputMode="numeric"
+                 onChange={(event) => setClipboardClearTimeoutSeconds(event.target.value)}
+-                style={fullWidthInputStyle}
++                className="settings-input"
+               />
+             </div>
+           </div>
+ 
+           <h3 id="backups-title" className="settings-modal-section-title">
+             {tVault('backup.settings.title')}
+           </h3>
+ 
+-          <div role="group" aria-labelledby="backups-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+-            <div className="form-field" style={toggleRowStyle}>
++          <div role="group" aria-labelledby="backups-title" className="settings-group">
++            <div className="form-field settings-toggle-row">
+               <span className="form-label settings-subheader" id="backup-auto-enabled-label">
+                 {tVault('backup.settings.autoEnabled')}
+               </span>
+ 
+-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+-                <button
+-                  id="backup-auto-enabled-switch"
+-                  type="button"
+-                  role="switch"
+-                  aria-checked={autoBackupEnabled}
+-                  aria-labelledby="backup-auto-enabled-label"
+-                  disabled={busy}
+-                  onClick={() => setAutoBackupEnabled((v) => !v)}
+-                  onKeyDown={(e) => {
+-                    // Space/Enter toggles for keyboard users
+-                    if (busy) return;
+-                    if (e.key === ' ' || e.key === 'Enter') {
+-                      e.preventDefault();
+-                      setAutoBackupEnabled((v) => !v);
+-                    }
+-                  }}
+-                  style={switchButtonStyle}
+-                >
+-                  <span style={switchThumbStyle} />
+-                </button>
+-              </div>
++              <div className="settings-toggle-row__control">
++                {renderSwitch({
++                  id: 'backup-auto-enabled-switch',
++                  labelId: 'backup-auto-enabled-label',
++                  checked: autoBackupEnabled,
++                  onToggle: () => setAutoBackupEnabled((v) => !v),
++                  disabled: busy,
++                })}
++              </div>
+             </div>
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="backup-interval-minutes">
+                 {tVault('backup.settings.intervalMinutes')}
+               </label>
+               <input
+                 id="backup-interval-minutes"
+                 type="number"
+                 min={5}
+                 max={1440}
+                 value={intervalMinutes}
+                 disabled={busy || !autoBackupEnabled}
+                 inputMode="numeric"
+                 onChange={(event) => setIntervalMinutes(event.target.value)}
+-                style={fullWidthInputStyle}
++                className="settings-input"
+               />
+             </div>
+ 
+             <div className="form-field">
+               <label className="form-label" htmlFor="backup-max-copies">
+                 {tVault('backup.settings.maxCopies')}
+               </label>
+               <input
+                 id="backup-max-copies"
+                 type="number"
+                 min={1}
+                 max={500}
+                 value={maxCopies}
+                 disabled={busy}
+                 inputMode="numeric"
+                 onChange={(event) => setMaxCopies(event.target.value)}
+-                style={fullWidthInputStyle}
++                className="settings-input"
+               />
+             </div>
+           </div>
+         </div>
+diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
+index 2d9f4d1..7a2f3be 100644
+--- a/src/shared/styles/ui.css
++++ b/src/shared/styles/ui.css
+@@ -1012,41 +1012,102 @@
+   gap: 10px;
+ }
+ 
+ /* ========================================================================
+    Settings modal
+    ======================================================================== */
+ 
+ .settings-modal-body {
+-  gap: 18px;
++  gap: 24px;
+ }
+ 
+ .settings-modal-section-title {
+   margin: 0;
+   font-size: 22px;
+   line-height: 28px;
+   font-weight: 800;
+ }
+ 
+ .settings-profile-actions {
+   display: flex;
+   flex-direction: column;
+   align-items: flex-start;
+-  gap: 12px;
++  gap: 14px;
+ }
+ 
+ .settings-profile-action {
+-  width: 160px;
++  width: 168px;
+   justify-content: center;
++  min-height: 40px;
+ }
+ 
+ .settings-profile-action--tall {
+-  padding-top: 16px;
+-  padding-bottom: 16px;
++  min-height: 56px;
++  padding-top: 14px;
++  padding-bottom: 14px;
+   white-space: normal;
+   line-height: 18px;
+   text-align: center;
+ }
+ 
++.settings-group {
++  display: flex;
++  flex-direction: column;
++  gap: 14px;
++}
++
++.settings-toggle-row {
++  display: grid;
++  grid-template-columns: 1fr auto;
++  align-items: center;
++  column-gap: 16px;
++}
++
++.settings-toggle-row__control {
++  display: flex;
++  justify-content: flex-end;
++  align-items: center;
++}
++
++.settings-input {
++  width: 100%;
++}
++
++/* Switch: single implementation for all toggles (role="switch") */
++.pm-switch {
++  width: 44px;
++  height: 24px;
++  border-radius: 9999px;
++  border: 1px solid rgba(255, 255, 255, 0.25);
++  background: rgba(255, 255, 255, 0.14);
++  padding: 0;
++  display: inline-flex;
++  align-items: center;
++  justify-content: flex-start;
++  cursor: pointer;
++  outline: none;
++}
++
++.pm-switch:disabled {
++  cursor: not-allowed;
++  opacity: 0.65;
++}
++
++.pm-switch[data-checked="true"] {
++  border-color: rgba(34, 197, 94, 0.95);
++  background: rgba(34, 197, 94, 0.55);
++}
++
++.pm-switch__thumb {
++  width: 18px;
++  height: 18px;
++  border-radius: 9999px;
++  background: rgba(255, 255, 255, 0.95);
++  transform: translateX(2px);
++  transition: transform 160ms ease;
++}
++
++.pm-switch[data-checked="true"] .pm-switch__thumb {
++  transform: translateX(22px);
++}
++
+ /* Attachments block inside a dialog (list of attached files) */
+ .dialog-attachments {
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+   margin-top: 4px;
+ }
