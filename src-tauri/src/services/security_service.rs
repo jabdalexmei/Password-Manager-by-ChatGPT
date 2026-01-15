@@ -296,11 +296,14 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         let mut mem_conn = rusqlite::Connection::open_in_memory()
             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 
-        let backup = Backup::new(&src_conn, &mut mem_conn)
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-        backup
-            .run_to_completion(5, std::time::Duration::from_millis(250), None)
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        {
+            let mut backup = Backup::new(&src_conn, &mut mem_conn)
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            backup
+                .run_to_completion(5, std::time::Duration::from_millis(250), None)
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            // `backup` dropped here, releasing the mutable borrow of `mem_conn`.
+        }
 
         let serialized = mem_conn
             .serialize(DatabaseName::Main)

@@ -258,21 +258,27 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
 
 pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>> {
     let mut registry = load_registry(sp)?;
+    let idx = match registry.profiles.iter().position(|p| p.id == id) {
+        Some(i) => i,
+        None => return Ok(None),
+    };
+
     let mut dirty = false;
-
-    if let Some(rec) = registry.profiles.iter_mut().find(|p| p.id == id) {
-        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
-        if inferred != rec.has_password {
-            rec.has_password = inferred;
-            dirty = true;
-        }
-
-        if dirty {
-            let _ = save_registry(sp, &registry);
-        }
-
-        return Ok(Some(rec.clone()));
+    let inferred = infer_has_password(
+        sp,
+        &registry.profiles[idx].id,
+        registry.profiles[idx].has_password,
+    );
+    if inferred != registry.profiles[idx].has_password {
+        registry.profiles[idx].has_password = inferred;
+        dirty = true;
     }
 
-    Ok(None)
+    let out = registry.profiles[idx].clone();
+
+    if dirty {
+        let _ = save_registry(sp, &registry);
+    }
+
+    Ok(Some(out))
 }
