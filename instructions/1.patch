@@ -1,151 +1,34 @@
 diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index d3f6d42..7b1c6b9 100644
+index 7b1c6b9..9f3a6d1 100644
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -328,63 +328,96 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-         if !vault_path.exists() {
-             return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
-         }
-
--        // Snapshot the file DB into memory using SQLite online backup, then serialize the in-memory DB.
--        let bytes: Vec<u8> = {
-+        // Snapshot the file DB into memory using SQLite online backup.
-+        // IMPORTANT: The file DB is WAL-mode (init_database_passwordless sets journal_mode=WAL persistently).
-+        // Reading/validating a WAL DB can require accessing sidecar files (-wal/-shm). If those cannot be opened,
-+        // SQLite returns SQLITE_CANTOPEN (14). We avoid that by doing all validation/migrations on the in-memory copy
-+        // and forcing journal_mode=MEMORY there.
-+        let (mut mem_conn, bytes): (rusqlite::Connection, Vec<u8>) = {
-             // Open read-only to avoid taking write locks / WAL side-effects during snapshot.
-             let src = rusqlite::Connection::open_with_flags(
-                 &vault_path,
-                 OpenFlags::SQLITE_OPEN_READ_ONLY,
-             )
-                 .map_err(|e| {
-                     log::error!(
-                         "[SECURITY][set_profile_password] profile_id={} step=open_src vault={:?} err={}",
-                         id,
-                         vault_path,
-                         format_rusqlite_error(&e)
-                     );
-                     ErrorCodeString::new("DB_OPEN_FAILED")
-                 })?;
-             src.busy_timeout(Duration::from_secs(15)).map_err(|e| {
-                 log::error!(
-                     "[SECURITY][set_profile_password] profile_id={} step=busy_timeout_src vault={:?} err={}",
-                     id,
-                     vault_path,
-                     format_rusqlite_error(&e)
-                 );
-                 ErrorCodeString::new("DB_OPEN_FAILED")
-             })?;
-
--            let mut mem = rusqlite::Connection::open_in_memory()
-+            let mut mem = rusqlite::Connection::open_in_memory()
-                 .map_err(|e| {
-                     log::error!(
-                         "[SECURITY][set_profile_password] profile_id={} step=open_mem err={}",
-                         id,
-                         format_rusqlite_error(&e)
-                     );
-                     ErrorCodeString::new("DB_OPEN_FAILED")
-                 })?;
-
-             {
-                 let backup = Backup::new(&src, &mut mem).map_err(|e| {
-                     log::error!(
-                         "[SECURITY][set_profile_password] profile_id={} step=backup_init vault={:?} err={}",
-                         id,
-                         vault_path,
-                         format_rusqlite_error(&e)
-                     );
-                     classify_db_error(&e)
-                 })?;
-                 backup
-                     .run_to_completion(5, Duration::from_millis(250), None)
-                     .map_err(|e| {
-                         log::error!(
-                             "[SECURITY][set_profile_password] profile_id={} step=backup_run vault={:?} err={}",
-                             id,
-                             vault_path,
-                             format_rusqlite_error(&e)
-                         );
-                         classify_db_error(&e)
-                     })?;
-             }
-
+@@ -392,16 +392,22 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+             migrations::migrate_to_latest(&mem)?;
+             migrations::validate_core_schema(&mem)
+                 .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+ 
 -            let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
-+            // Ensure the in-memory copy never tries to use WAL (no -wal/-shm files).
-+            // This also makes the serialized image safe to deserialize later into :memory:.
-+            let _: String = mem
-+                .query_row("PRAGMA journal_mode=MEMORY;", [], |row| row.get(0))
-+                .map_err(|e| {
+-                log::error!(
+-                    "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
+-                    id,
+-                    format_rusqlite_error(&e)
+-                );
+-                classify_db_error(&e)
+-            })?;
+-            (mem, serialized.to_vec())
++            // IMPORTANT: `serialize()` returns a value that borrows `mem`.
++            // Materialize bytes inside a narrower scope so the borrow ends
++            // before we move `mem` out.
++            let bytes = {
++                let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
 +                    log::error!(
-+                        "[SECURITY][set_profile_password] profile_id={} step=set_journal_mode_memory err={}",
++                        "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
 +                        id,
 +                        format_rusqlite_error(&e)
 +                    );
 +                    classify_db_error(&e)
 +                })?;
-+
-+            migrations::migrate_to_latest(&mem)?;
-+            migrations::validate_core_schema(&mem)
-+                .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
-+
-+            let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
-                 log::error!(
-                     "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
-                     id,
-                     format_rusqlite_error(&e)
-                 );
-                 classify_db_error(&e)
-             })?;
--            serialized.to_vec()
-+            (mem, serialized.to_vec())
++                serialized.to_vec()
++            };
++            (mem, bytes)
          };
-
--        // Validate we can open this snapshot in-memory BEFORE writing any encrypted files.
--        let mut mem_conn = rusqlite::Connection::open_in_memory()
--            .map_err(|e| {
--                log::error!(
--                    "[SECURITY][set_profile_password] profile_id={} step=open_mem_validate err={}",
--                    id,
--                    format_rusqlite_error(&e)
--                );
--                ErrorCodeString::new("DB_OPEN_FAILED")
--            })?;
--        let owned = owned_data_from_bytes(bytes.clone())?;
--        mem_conn
--            .deserialize(DatabaseName::Main, owned, false)
--            .map_err(|e| {
--                log::error!(
--                    "[SECURITY][set_profile_password] profile_id={} step=deserialize_mem err={}",
--                    id,
--                    format_rusqlite_error(&e)
--                );
--                ErrorCodeString::new("VAULT_CORRUPTED")
--            })?;
--        migrations::migrate_to_latest(&mem_conn)?;
--        migrations::validate_core_schema(&mem_conn)
--            .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
-+        // mem_conn is already validated/migrated in-memory above.
-
-         // Create new salt + key.
-         let salt = kdf::generate_kdf_salt();
-         let salt_path = kdf_salt_path(&storage_paths, id)?;
-         write_atomic(&salt_path, &salt)
-             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-@@ -399,7 +432,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-         // Switch runtime session to protected in-memory session so app stays unlocked.
-         // (mem_conn already validated above)
-
-         {
-             let mut session = state
-                 .vault_session
-                 .lock()
-                 .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
-             *session = Some(VaultSession {
-                 profile_id: id.to_string(),
-                 conn: mem_conn,
-                 key,
-             });
-         }
