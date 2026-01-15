@@ -1,7 +1,9 @@
+use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use rusqlite::backup::Backup;
 use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
 use rusqlite::DatabaseName;
@@ -9,13 +11,15 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::app_state::{AppState, VaultSession};
 use crate::data::crypto::{cipher, kdf, key_check};
-use crate::data::profiles::paths::{kdf_salt_path, vault_db_path};
+use crate::data::fs::atomic_write::write_atomic;
+use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path, vault_db_path};
 use crate::data::profiles::registry;
 use crate::data::sqlite::init::init_database_passwordless;
 use crate::data::sqlite::migrations;
 use crate::data::sqlite::pool::clear_pool;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::attachments_service;
+use crate::types::ProfileMeta;
 
 fn owned_data_from_bytes(mut bytes: Vec<u8>) -> Result<OwnedData> {
     if bytes.is_empty() {
@@ -86,6 +90,17 @@ fn open_protected_vault_session(
     }
 
     Ok(())
+}
+
+fn cleanup_sqlite_sidecars(vault_path: &Path) {
+    // After converting passwordless (sqlite file) -> protected (encrypted blob),
+    // old WAL/SHM sidecars may remain. Remove best-effort.
+    if let Some(p) = vault_path.to_str() {
+        let wal = format!("{p}-wal");
+        let shm = format!("{p}-shm");
+        let _ = std::fs::remove_file(wal);
+        let _ = std::fs::remove_file(shm);
+    }
 }
 
 pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) -> Result<bool> {
@@ -241,6 +256,168 @@ pub fn drop_active_session_without_persist(state: &Arc<AppState>) -> Result<bool
     clear_pool(&profile_id);
 
     let _ = registry::get_profile(&storage_paths, &profile_id)?;
+
+    Ok(true)
+}
+
+pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+    let storage_paths = state.get_storage_paths()?;
+
+    let profile = registry::get_profile(&storage_paths, id)?
+        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+
+    // registry::get_profile now self-heals has_password from disk state.
+    if profile.has_password {
+        return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
+    }
+
+    let pwd = password.trim();
+    if pwd.is_empty() {
+        return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
+    }
+
+    ensure_profile_dirs(&storage_paths, id)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+    // Close file-based sqlite connections before touching vault.db bytes.
+    clear_pool(id);
+
+    let vault_path = vault_db_path(&storage_paths, id)?;
+    if !vault_path.exists() {
+        return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
+    }
+
+    // Serialize passwordless sqlite file to bytes via BACKUP snapshot to avoid WAL/in-flight locks.
+    let bytes: Vec<u8> = {
+        let src_conn = rusqlite::Connection::open(&vault_path)
+            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+        migrations::migrate_to_latest(&src_conn)?;
+
+        let mut mem_conn = rusqlite::Connection::open_in_memory()
+            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+
+        {
+            let mut backup = Backup::new(&src_conn, &mut mem_conn)
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            backup
+                .run_to_completion(5, std::time::Duration::from_millis(250), None)
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            // `backup` dropped here, releasing the mutable borrow of `mem_conn`.
+        }
+
+        let serialized = mem_conn
+            .serialize(DatabaseName::Main)
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        serialized.to_vec()
+    };
+
+    // Validate we can open this snapshot in-memory BEFORE writing any encrypted files.
+    let mut mem_conn = rusqlite::Connection::open_in_memory()
+        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+    let owned = owned_data_from_bytes(bytes.clone())?;
+    mem_conn
+        .deserialize(DatabaseName::Main, owned, false)
+        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+    migrations::migrate_to_latest(&mem_conn)?;
+    migrations::validate_core_schema(&mem_conn)
+        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+
+    // Create new salt + key.
+    let salt = kdf::generate_kdf_salt();
+    let salt_path = kdf_salt_path(&storage_paths, id)?;
+    write_atomic(&salt_path, &salt).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+    let key = Zeroizing::new(kdf::derive_master_key(pwd, &salt)?);
+
+    // Create key check file first (so we can validate later).
+    key_check::create_key_check_file(&storage_paths, id, &*key)?;
+
+    // Encrypt vault bytes into vault.db (overwriting sqlite file).
+    let encrypted = cipher::encrypt_vault_blob(id, &*key, &bytes)?;
+    cipher::write_encrypted_file(&vault_path, &encrypted)?;
+    cleanup_sqlite_sidecars(&vault_path);
+
+    // Switch runtime session to protected in-memory session so app stays unlocked.
+    // (mem_conn already validated above)
+
+    {
+        let mut session = state
+            .vault_session
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
+        *session = Some(VaultSession {
+            profile_id: id.to_string(),
+            conn: mem_conn,
+            key,
+        });
+    }
+
+    // Update registry flag. If it fails, do NOT pretend the operation failed:
+    // the vault is already encrypted and self-heal will recover on next load.
+    let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)
+        .unwrap_or(ProfileMeta {
+            id: profile.id,
+            name: profile.name,
+            has_password: true,
+        });
+    Ok(updated)
+}
+
+pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<bool> {
+    let storage_paths = state.get_storage_paths()?;
+
+    let profile = registry::get_profile(&storage_paths, id)?
+        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+
+    if !profile.has_password {
+        return Err(ErrorCodeString::new("PROFILE_NOT_PROTECTED"));
+    }
+
+    let pwd = password.trim();
+    if pwd.is_empty() {
+        return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
+    }
+
+    // Must be unlocked (session exists and matches profile).
+    let (bytes, old_profile_id) = {
+        let session = state
+            .vault_session
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        let s = session.as_ref().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
+        if s.profile_id != id {
+            return Err(ErrorCodeString::new("VAULT_LOCKED"));
+        }
+        let serialized = s
+            .conn
+            .serialize(DatabaseName::Main)
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        (serialized.to_vec(), s.profile_id.clone())
+    };
+
+    let salt = kdf::generate_kdf_salt();
+    let salt_path = kdf_salt_path(&storage_paths, id)?;
+    write_atomic(&salt_path, &salt).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    let key = Zeroizing::new(kdf::derive_master_key(pwd, &salt)?);
+
+    key_check::create_key_check_file(&storage_paths, id, &*key)?;
+
+    let vault_path = vault_db_path(&storage_paths, id)?;
+    let encrypted = cipher::encrypt_vault_blob(&old_profile_id, &*key, &bytes)?;
+    cipher::write_encrypted_file(&vault_path, &encrypted)?;
+
+    // Update in-memory session key to keep vault unlocked.
+    {
+        let mut session = state
+            .vault_session
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        let s = session.as_mut().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
+        if s.profile_id != id {
+            return Err(ErrorCodeString::new("VAULT_LOCKED"));
+        }
+        s.key = key;
+    }
 
     Ok(true)
 }

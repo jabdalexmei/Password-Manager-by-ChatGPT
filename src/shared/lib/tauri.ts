@@ -35,6 +35,14 @@ export async function renameProfile(id: string, name: string): Promise<ProfileMe
   return invoke('profile_rename', { id, name });
 }
 
+export async function setProfilePassword(id: string, password: string): Promise<ProfileMeta> {
+  return invoke('profile_set_password', { id, password });
+}
+
+export async function changeProfilePassword(id: string, password: string): Promise<boolean> {
+  return invoke('profile_change_password', { id, password });
+}
+
 export async function setActiveProfile(id: string): Promise<boolean> {
   return invoke('set_active_profile', { id });
 }

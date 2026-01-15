@@ -1,10 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+use crate::data::crypto::cipher::PM_ENC_MAGIC;
 use crate::data::fs::atomic_write::write_atomic;
-use crate::data::profiles::paths::{ensure_profiles_dir, profile_config_path, registry_path};
+use crate::data::profiles::paths::{
+    ensure_profiles_dir, key_check_path, kdf_salt_path, profile_config_path, registry_path,
+    vault_db_path,
+};
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::ProfileMeta;
@@ -51,14 +56,55 @@ fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
 }
 
+fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
+    let path = match vault_db_path(sp, id) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    if !path.exists() {
+        return false;
+    }
+    let mut f = match fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    let mut buf = [0u8; 6];
+    if f.read_exact(&mut buf).is_err() {
+        return false;
+    }
+    buf == PM_ENC_MAGIC
+}
+
+fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
+    if record_has_password {
+        return true;
+    }
+    let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
+    let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
+    if salt_ok && key_ok {
+        return true;
+    }
+    vault_looks_encrypted(sp, id)
+}
 
 pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
-    let registry = load_registry(sp)?;
-    Ok(registry
-        .profiles
-        .into_iter()
-        .map(ProfileMeta::from)
-        .collect())
+    let mut registry = load_registry(sp)?;
+    let mut dirty = false;
+
+    for rec in registry.profiles.iter_mut() {
+        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
+        if inferred != rec.has_password {
+            rec.has_password = inferred;
+            dirty = true;
+        }
+    }
+
+    if dirty {
+        // Best-effort self-heal; even if it fails, we still return inferred values.
+        let _ = save_registry(sp, &registry);
+    }
+
+    Ok(registry.profiles.into_iter().map(ProfileMeta::from).collect())
 }
 
 pub fn create_profile(
@@ -164,13 +210,24 @@ pub fn upsert_profile_with_id(
 pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
     ensure_profiles_dir(sp)?;
     let mut registry = load_registry(sp)?;
-    let record = registry
+    let idx = registry
         .profiles
-        .iter_mut()
-        .find(|p| p.id == id)
+        .iter()
+        .position(|p| p.id == id)
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
-    record.name = name.to_string();
+    registry.profiles[idx].name = name.to_string();
+
+    let meta = ProfileMeta {
+        id: registry.profiles[idx].id.clone(),
+        name: registry.profiles[idx].name.clone(),
+        has_password: infer_has_password(
+            sp,
+            &registry.profiles[idx].id,
+            registry.profiles[idx].has_password,
+        ),
+    };
+
     save_registry(sp, &registry)?;
 
     let config_path: PathBuf = profile_config_path(sp, id)?;
@@ -180,11 +237,7 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
     write_atomic(&config_path, serialized_config.as_bytes())
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    Ok(ProfileMeta {
-        id: record.id.clone(),
-        name: record.name.clone(),
-        has_password: record.has_password,
-    })
+    Ok(meta)
 }
 
 pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
@@ -204,6 +257,28 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
 }
 
 pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>> {
-    let registry = load_registry(sp)?;
-    Ok(registry.profiles.into_iter().find(|p| p.id == id))
+    let mut registry = load_registry(sp)?;
+    let idx = match registry.profiles.iter().position(|p| p.id == id) {
+        Some(i) => i,
+        None => return Ok(None),
+    };
+
+    let mut dirty = false;
+    let inferred = infer_has_password(
+        sp,
+        &registry.profiles[idx].id,
+        registry.profiles[idx].has_password,
+    );
+    if inferred != registry.profiles[idx].has_password {
+        registry.profiles[idx].has_password = inferred;
+        dirty = true;
+    }
+
+    let out = registry.profiles[idx].clone();
+
+    if dirty {
+        let _ = save_registry(sp, &registry);
+    }
+
+    Ok(Some(out))
 }
