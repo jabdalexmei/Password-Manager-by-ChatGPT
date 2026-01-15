@@ -3,6 +3,7 @@ use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use rusqlite::backup::Backup;
 use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
 use rusqlite::DatabaseName;
@@ -265,6 +266,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
     let profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
+    // registry::get_profile now self-heals has_password from disk state.
     if profile.has_password {
         return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
     }
@@ -280,26 +282,42 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
     // Close file-based sqlite connections before touching vault.db bytes.
     clear_pool(id);
 
-    // Ensure DB exists (passwordless profiles may not have opened yet in some flows).
-    init_database_passwordless(&storage_paths, id)?;
-
     let vault_path = vault_db_path(&storage_paths, id)?;
     if !vault_path.exists() {
         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
     }
 
-    // Serialize passwordless sqlite file to bytes.
-    // NOTE: `serialize()` returns `Data<'_>` which may borrow `conn` (Shared variant),
-    // so we must materialize bytes while `conn` is still alive.
+    // Serialize passwordless sqlite file to bytes via BACKUP snapshot to avoid WAL/in-flight locks.
     let bytes: Vec<u8> = {
-        let conn = rusqlite::Connection::open(&vault_path)
+        let src_conn = rusqlite::Connection::open(&vault_path)
             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-        migrations::migrate_to_latest(&conn)?;
-        let serialized = conn
+        migrations::migrate_to_latest(&src_conn)?;
+
+        let mut mem_conn = rusqlite::Connection::open_in_memory()
+            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+
+        let backup = Backup::new(&src_conn, &mut mem_conn)
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        backup
+            .run_to_completion(5, std::time::Duration::from_millis(250), None)
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        let serialized = mem_conn
             .serialize(DatabaseName::Main)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         serialized.to_vec()
     };
+
+    // Validate we can open this snapshot in-memory BEFORE writing any encrypted files.
+    let mut mem_conn = rusqlite::Connection::open_in_memory()
+        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+    let owned = owned_data_from_bytes(bytes.clone())?;
+    mem_conn
+        .deserialize(DatabaseName::Main, owned, false)
+        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+    migrations::migrate_to_latest(&mem_conn)?;
+    migrations::validate_core_schema(&mem_conn)
+        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
     // Create new salt + key.
     let salt = kdf::generate_kdf_salt();
@@ -317,15 +335,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
     cleanup_sqlite_sidecars(&vault_path);
 
     // Switch runtime session to protected in-memory session so app stays unlocked.
-    let mut mem_conn = rusqlite::Connection::open_in_memory()
-        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-    let owned = owned_data_from_bytes(bytes)?;
-    mem_conn
-        .deserialize(DatabaseName::Main, owned, false)
-        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
-    migrations::migrate_to_latest(&mem_conn)?;
-    migrations::validate_core_schema(&mem_conn)
-        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+    // (mem_conn already validated above)
 
     {
         let mut session = state
@@ -339,9 +349,15 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         });
     }
 
-    // Update registry flag.
-    let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)?;
-    Ok(updated.into())
+    // Update registry flag. If it fails, do NOT pretend the operation failed:
+    // the vault is already encrypted and self-heal will recover on next load.
+    let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)
+        .unwrap_or(ProfileMeta {
+            id: profile.id,
+            name: profile.name,
+            has_password: true,
+        });
+    Ok(updated)
 }
 
 pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<bool> {
