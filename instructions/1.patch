@@ -1,87 +1,211 @@
+Причина тут почти наверняка одна и та же для обоих симптомов:
 
+* `set_profile_password()` **успевает зашифровать `vault.db`**, но потом **падает на обновлении registry/config** (или другом шаге после шифрования) → фронт показывает “Failed to set password”, **хотя файл уже стал encrypted**.
+* После этого `registry.json` по-прежнему говорит `has_password=false`, и при входе приложение пытается открыть уже **не-SQLite** файл как SQLite (делает `PRAGMA journal_mode`) → вылетает `DB_QUERY_FAILED`. Это ровно то, что видно у тебя в логе. SQLite файл должен иметь заголовок `SQLite format 3`, а у твоего encrypted файла в начале другой “magic”. ([SQLite][1])
 
-## 1) `registry.rs`: убираем mutable borrow перед `save_registry`
+Фикс должен делать 2 вещи:
+
+1. **Self-heal**: определять `has_password` по факту файлов (`kdf_salt.bin`, `key_check.bin` и magic `PMENC1`) и подлечивать registry на лету.
+2. **Не возвращать ошибку после успешного шифрования**: обновление registry/config делаем best-effort (иначе получаешь “Failed…” при уже установленном пароле).
+
+Ниже патч под твой текущий код из архива.
+
+---
+
+## Patch 1 — self-heal `has_password` в registry (чинит “после rename войти невозможно”)
 
 ```diff
 diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
-index c3d7d9a..e60c45a 100644
+index 5759509..b3b8d6e 100644
 --- a/src-tauri/src/data/profiles/registry.rs
 +++ b/src-tauri/src/data/profiles/registry.rs
-@@ -252,28 +252,30 @@ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>>
--    let mut registry = load_registry(sp)?;
--    let mut dirty = false;
--
--    if let Some(rec) = registry.profiles.iter_mut().find(|p| p.id == id) {
--        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
--        if inferred != rec.has_password {
--            rec.has_password = inferred;
--            dirty = true;
--        }
--
--        if dirty {
--            let _ = save_registry(sp, &registry);
--        }
--
--        return Ok(Some(rec.clone()));
--    }
--
--    Ok(None)
+@@ -1,8 +1,11 @@
+ use serde::{Deserialize, Serialize};
+ use std::fs;
++use std::io::Read;
+ use std::path::PathBuf;
+ use uuid::Uuid;
+ 
++use crate::data::crypto::cipher::PM_ENC_MAGIC;
+ use crate::data::fs::atomic_write::write_atomic;
+-use crate::data::profiles::paths::{ensure_profiles_dir, profile_config_path, registry_path};
++use crate::data::profiles::paths::{
++    ensure_profiles_dir, key_check_path, kdf_salt_path, profile_config_path, registry_path,
++    vault_db_path,
++};
+ use crate::data::storage_paths::StoragePaths;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::types::ProfileMeta;
+@@ -38,6 +41,44 @@ fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
+     write_atomic(&path, serialized.as_bytes())
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+ }
+ 
++fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
++    let path = match vault_db_path(sp, id) {
++        Ok(p) => p,
++        Err(_) => return false,
++    };
++    if !path.exists() {
++        return false;
++    }
++    let mut f = match fs::File::open(path) {
++        Ok(f) => f,
++        Err(_) => return false,
++    };
++    let mut buf = [0u8; 6];
++    if f.read_exact(&mut buf).is_err() {
++        return false;
++    }
++    buf == PM_ENC_MAGIC
++}
++
++fn infer_has_password(sp: &StoragePaths, id: &str, current: bool) -> bool {
++    if current {
++        return true;
++    }
++    let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
++    let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
++    if salt_ok && key_ok {
++        return true;
++    }
++    vault_looks_encrypted(sp, id)
++}
++
+ pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
+-    let registry = load_registry(sp)?;
+-    Ok(registry
+-        .profiles
+-        .into_iter()
+-        .map(ProfileMeta::from)
+-        .collect())
++    let mut registry = load_registry(sp)?;
++    let mut dirty = false;
++
++    for rec in registry.profiles.iter_mut() {
++        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
++        if inferred != rec.has_password {
++            rec.has_password = inferred;
++            dirty = true;
++        }
++    }
++
++    if dirty {
++        let _ = save_registry(sp, &registry);
++    }
++
++    Ok(registry.profiles.into_iter().map(ProfileMeta::from).collect())
+ }
+@@ -173,6 +214,9 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
+     let meta = ProfileMeta {
+         id: registry.profiles[idx].id.clone(),
+         name: registry.profiles[idx].name.clone(),
+-        has_password: registry.profiles[idx].has_password,
++        has_password: infer_has_password(
++            sp,
++            &registry.profiles[idx].id,
++            registry.profiles[idx].has_password,
++        ),
+     };
+@@ -231,7 +275,22 @@ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>>
+-    let registry = load_registry(sp)?;
+-    Ok(registry.profiles.into_iter().find(|p| p.id == id))
 +    let mut registry = load_registry(sp)?;
 +    let idx = match registry.profiles.iter().position(|p| p.id == id) {
 +        Some(i) => i,
 +        None => return Ok(None),
 +    };
 +
-+    let mut dirty = false;
 +    let inferred = infer_has_password(sp, &registry.profiles[idx].id, registry.profiles[idx].has_password);
++    let mut dirty = false;
 +    if inferred != registry.profiles[idx].has_password {
 +        registry.profiles[idx].has_password = inferred;
 +        dirty = true;
 +    }
 +
 +    let out = registry.profiles[idx].clone();
-+
 +    if dirty {
 +        let _ = save_registry(sp, &registry);
 +    }
-+
 +    Ok(Some(out))
  }
 ```
 
+Что это даёт: даже если `vault.db` уже encrypted, но `registry.json` врёт — вход больше не пойдёт в `init_database_passwordless()` (SQLite PRAGMA), а пойдёт в `open_protected_vault_session()`. ([SQLite][1])
+
 ---
 
-## 2) `security_service.rs`: дропаем `Backup` до `serialize()`
+## Patch 2 — `set_profile_password()` не “фейлится” после успешного шифрования
 
 ```diff
 diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 4c6cbd9..1e9c6db 100644
+index 9d8b7b1..c4a8a2d 100644
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -294,18 +294,22 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-         let src_conn = rusqlite::Connection::open(&vault_path)
-             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-         migrations::migrate_to_latest(&src_conn)?;
+@@ -286,6 +286,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+     let profile = registry::get_profile(&storage_paths, id)?
+         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
  
-         let mut mem_conn = rusqlite::Connection::open_in_memory()
-             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++    // registry::get_profile now self-heals has_password based on disk state.
+     if profile.has_password {
+         return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
+     }
+@@ -315,18 +316,18 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
+     }
  
--        let backup = Backup::new(&src_conn, &mut mem_conn)
--            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
--        backup
--            .run_to_completion(5, std::time::Duration::from_millis(250), None)
--            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+        {
-+            let mut backup = Backup::new(&src_conn, &mut mem_conn)
-+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+            backup
-+                .run_to_completion(5, std::time::Duration::from_millis(250), None)
-+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+            // `backup` dropped here, releasing the mutable borrow of `mem_conn`.
-+        }
+-    // Serialize passwordless sqlite file to bytes.
+-    let conn = rusqlite::Connection::open(&vault_path)
+-        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+-    migrations::migrate_to_latest(&conn)?;
+-    let serialized = conn
+-        .serialize(DatabaseName::Main)
+-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+-    drop(conn);
+-
+-    let bytes = serialized.to_vec();
++    // Serialize passwordless sqlite file to bytes.
++    // NOTE: serialize() may borrow the connection, so materialize bytes while conn is alive.
++    let bytes: Vec<u8> = {
++        let conn = rusqlite::Connection::open(&vault_path)
++            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++        migrations::migrate_to_latest(&conn)?;
++        let serialized = conn
++            .serialize(DatabaseName::Main)
++            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++        serialized.to_vec()
++    };
+@@ -375,9 +376,18 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+         });
+     }
  
-         let serialized = mem_conn
-             .serialize(DatabaseName::Main)
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         serialized.to_vec()
-     };
+-    // Update registry flag.
+-    let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)?;
+-    Ok(updated.into())
++    // Update registry flag.
++    // IMPORTANT: If the vault has already been encrypted, do not return an error just because
++    // registry/config write failed — otherwise UI shows "Failed..." but the profile is actually protected.
++    match registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true) {
++        Ok(updated) => Ok(updated.into()),
++        Err(_) => Ok(ProfileMeta {
++            id: profile.id,
++            name: profile.name,
++            has_password: true,
++        }),
++    }
+ }
+```
+
+Почему это правильно: состояние “vault уже зашифрован” — факт на диске. Ошибка записи registry после этого не должна ломать UX и приводить к не-входимым профилям. (Если запись действительно не удалась — Patch 1 всё равно подлечит `has_password` по magic/файлам.) ([Rust Documentation][2])
+
+---
+
+### Итог
+
+* “Failed to set password” больше не будет появляться в ситуации “vault уже зашифрован”.
+* После rename/любого другого действия профиль будет корректно определяться как protected/passwordless по факту, а не по сломанному флажку в registry.
+
+Если после этого “Failed to set password” всё ещё вылезет — нужен **код ошибки**, который реально возвращает Tauri invoke (например `PROFILE_STORAGE_WRITE` / `DB_OPEN_FAILED` / `DB_QUERY_FAILED`). Тогда точечно добьём конкретную ветку, но два патча выше убирают именно тот класс поломок, который ты описал (частичное успешное шифрование + сломанный `has_password`).
+
+[1]: https://www.sqlite.org/fileformat.html?utm_source=chatgpt.com "Database File Format - SQLite"
+[2]: https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html?utm_source=chatgpt.com "References and Borrowing - The Rust Programming ..."
