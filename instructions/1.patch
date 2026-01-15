@@ -1,114 +1,216 @@
-diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
-index 5759509..b3b8d6e 100644
---- a/src-tauri/src/data/profiles/registry.rs
-+++ b/src-tauri/src/data/profiles/registry.rs
-@@ -1,8 +1,11 @@
- use serde::{Deserialize, Serialize};
- use std::fs;
-+use std::io::Read;
- use std::path::PathBuf;
- use uuid::Uuid;
+diff --git a/src-tauri/src/data/sqlite/pool.rs b/src-tauri/src/data/sqlite/pool.rs
+index 3cbe7a1..c99d0d9 100644
+--- a/src-tauri/src/data/sqlite/pool.rs
++++ b/src-tauri/src/data/sqlite/pool.rs
+@@ -1,4 +1,5 @@
+-use std::collections::HashMap;
++use std::collections::{HashMap, HashSet};
+ use std::sync::Mutex;
+ use std::time::Duration;
  
-+use crate::data::crypto::cipher::PM_ENC_MAGIC;
- use crate::data::fs::atomic_write::write_atomic;
--use crate::data::profiles::paths::{ensure_profiles_dir, profile_config_path, registry_path};
-+use crate::data::profiles::paths::{
-+    ensure_profiles_dir, key_check_path, kdf_salt_path, profile_config_path, registry_path,
-+    vault_db_path,
-+};
- use crate::data::storage_paths::StoragePaths;
- use crate::error::{ErrorCodeString, Result};
- use crate::types::ProfileMeta;
-@@ -38,6 +41,44 @@ fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
-     write_atomic(&path, serialized.as_bytes())
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
- }
+@@ -18,6 +19,10 @@ static POOLS: Lazy<Mutex<HashMap<String, r2d2::Pool<SqliteConnectionManager>>>> =
+     Lazy::new(|| Mutex::new(HashMap::new()));
  
-+fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
-+    let path = match vault_db_path(sp, id) {
-+        Ok(p) => p,
-+        Err(_) => return false,
-+    };
-+    if !path.exists() {
-+        return false;
-+    }
-+    let mut f = match fs::File::open(path) {
-+        Ok(f) => f,
-+        Err(_) => return false,
-+    };
-+    let mut buf = [0u8; 6];
-+    if f.read_exact(&mut buf).is_err() {
-+        return false;
-+    }
-+    buf == PM_ENC_MAGIC
-+}
++static MAINTENANCE: Lazy<Mutex<HashSet<String>>> =
++    Lazy::new(|| Mutex::new(HashSet::new()));
 +
-+fn infer_has_password(sp: &StoragePaths, id: &str, current: bool) -> bool {
-+    if current {
-+        return true;
-+    }
-+    let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
-+    let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
-+    if salt_ok && key_ok {
-+        return true;
-+    }
-+    vault_looks_encrypted(sp, id)
-+}
+ #[derive(Debug)]
+ struct FilePragmas;
+ 
+@@ -67,6 +72,14 @@ fn get_or_create_pool(
+     let key = format!("{profile_id}::file");
+ 
+     log::info!("[DB][pool] profile_id={profile_id} target={target:?} key={key}");
 +
- pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
--    let registry = load_registry(sp)?;
--    Ok(registry
--        .profiles
--        .into_iter()
--        .map(ProfileMeta::from)
--        .collect())
-+    let mut registry = load_registry(sp)?;
-+    let mut dirty = false;
-+
-+    for rec in registry.profiles.iter_mut() {
-+        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
-+        if inferred != rec.has_password {
-+            rec.has_password = inferred;
-+            dirty = true;
++    if let Ok(m) = MAINTENANCE.lock() {
++        if m.contains(profile_id) {
++            log::warn!("[DB][pool] profile_id={profile_id} is in maintenance");
++            return Err(ErrorCodeString::new("DB_MAINTENANCE"));
 +        }
 +    }
+ 
+     if let Some(pool) = pools.get(&key) {
+         return Ok(pool.clone());
+@@ -100,11 +113,45 @@ pub fn get_conn(
+     profile_id: &str,
+     target: DbTarget,
+ ) -> Result<PooledConnection<SqliteConnectionManager>> {
++    if let Ok(m) = MAINTENANCE.lock() {
++        if m.contains(profile_id) {
++            return Err(ErrorCodeString::new("DB_MAINTENANCE"));
++        }
++    }
+     let pool = get_or_create_pool(profile_id, target)?;
+     pool.get()
+         .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))
+ }
+ 
++pub struct MaintenanceGuard {
++    profile_id: String,
++}
 +
-+    if dirty {
-+        let _ = save_registry(sp, &registry);
++impl MaintenanceGuard {
++    pub fn new(profile_id: &str) -> Result<Self> {
++        let mut m = MAINTENANCE
++            .lock()
++            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
++        m.insert(profile_id.to_string());
++        Ok(Self {
++            profile_id: profile_id.to_string(),
++        })
++    }
++}
++
++impl Drop for MaintenanceGuard {
++    fn drop(&mut self) {
++        if let Ok(mut m) = MAINTENANCE.lock() {
++            m.remove(&self.profile_id);
++        }
++    }
++}
++
+ pub fn clear_pool(profile_id: &str) {
+     if let Ok(mut pools) = POOLS.lock() {
+         pools.retain(|key, _| !key.starts_with(&format!("{profile_id}::")));
+     }
+ }
+diff --git a/src-tauri/src/data/fs/atomic_write.rs b/src-tauri/src/data/fs/atomic_write.rs
+index 9b9f0b0..1e0f7c2 100644
+--- a/src-tauri/src/data/fs/atomic_write.rs
++++ b/src-tauri/src/data/fs/atomic_write.rs
+@@ -1,6 +1,7 @@
+ use std::fs::{self, OpenOptions};
+ use std::io::{self, Write};
+ use std::path::Path;
++use std::time::Duration;
+ use uuid::Uuid;
+ 
+ /// Atomic file write:
+@@ -10,6 +11,31 @@ use uuid::Uuid;
+ /// - rename temp -> target
+ /// - cleanup backup
+ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
++    fn rename_with_retry(from: &Path, to: &Path) -> io::Result<()> {
++        let mut last: Option<io::Error> = None;
++        // Windows часто даёт PermissionDenied если файл ещё открыт (SQLite/AV/indexer).
++        // Делаем короткие ретраи.
++        for _ in 0..25 {
++            match fs::rename(from, to) {
++                Ok(()) => return Ok(()),
++                Err(e) => {
++                    last = Some(e);
++                    let kind = last.as_ref().unwrap().kind();
++                    if kind != io::ErrorKind::PermissionDenied && kind != io::ErrorKind::Other {
++                        break;
++                    }
++                    std::thread::sleep(Duration::from_millis(40));
++                }
++            }
++        }
++        Err(last.unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, "rename failed")))
 +    }
 +
-+    Ok(registry.profiles.into_iter().map(ProfileMeta::from).collect())
- }
-@@ -173,6 +214,9 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
-     let meta = ProfileMeta {
-         id: registry.profiles[idx].id.clone(),
-         name: registry.profiles[idx].name.clone(),
--        has_password: registry.profiles[idx].has_password,
-+        has_password: infer_has_password(
-+            sp,
-+            &registry.profiles[idx].id,
-+            registry.profiles[idx].has_password,
-+        ),
+     let parent = path.parent().ok_or_else(|| {
+         io::Error::new(io::ErrorKind::InvalidInput, "write_atomic: path has no parent")
+     })?;
+@@ -38,16 +64,16 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+ 
+         // 2) move current to backup (if exists)
+         if path.exists() {
+-            fs::rename(path, &bak_path)?;
++            rename_with_retry(path, &bak_path)?;
+         }
+ 
+         // 3) move temp into place
+-        fs::rename(&tmp_path, path)?;
++        rename_with_retry(&tmp_path, path)?;
+ 
+         // 4) remove backup
+         if bak_path.exists() {
+             let _ = fs::remove_file(&bak_path);
+         }
+diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
+index e0c1c4b..f4c78df 100644
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -1,6 +1,7 @@
+ use std::ptr::NonNull;
+ use std::path::Path;
+ use std::sync::atomic::Ordering;
+ use std::sync::Arc;
++use std::time::Duration;
+ 
+ use rusqlite::ffi;
+ use rusqlite::serialize::OwnedData;
+ use rusqlite::DatabaseName;
+ use zeroize::{Zeroize, Zeroizing};
+@@ -11,6 +12,7 @@ use crate::app_state::{AppState, VaultSession};
+ use crate::data::crypto::{cipher, kdf, key_check};
+ use crate::data::fs::atomic_write::write_atomic;
+ use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path, vault_db_path};
++use crate::data::sqlite::pool::MaintenanceGuard;
+ use crate::data::profiles::registry;
+ use crate::data::sqlite::init::init_database_passwordless;
+ use crate::data::sqlite::migrations;
+ use crate::data::sqlite::pool::clear_pool;
+@@ -256,6 +258,11 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+     let profile = registry::get_profile(&storage_paths, id)?
+         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+ 
++    // Block any new pooled sqlite connections during conversion.
++    let _maintenance = MaintenanceGuard::new(id)?;
++
+     if profile.has_password {
+         return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
+     }
+@@ -276,6 +283,9 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+ 
+     // Close file-based sqlite connections before touching vault.db bytes.
+     clear_pool(id);
++    // Give any in-flight requests a moment to drop their pooled conns.
++    std::thread::sleep(Duration::from_millis(80));
+ 
+     let vault_path = vault_db_path(&storage_paths, id)?;
+     if !vault_path.exists() {
+@@ -285,14 +295,21 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+     // Serialize passwordless sqlite file to bytes.
+     // NOTE: serialize() may borrow the connection, so materialize bytes while conn is alive.
+     let bytes: Vec<u8> = {
+         let conn = rusqlite::Connection::open(&vault_path)
+             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++        conn.busy_timeout(Duration::from_secs(15))
++            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++        // Exclusive lock ensures no other connection is using the file during the snapshot.
++        conn.execute_batch("BEGIN EXCLUSIVE;")
++            .map_err(|_| ErrorCodeString::new("DB_BUSY"))?;
+         migrations::migrate_to_latest(&conn)?;
+         let serialized = conn
+             .serialize(DatabaseName::Main)
+             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+         serialized.to_vec()
      };
-@@ -231,7 +275,22 @@ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>>
--    let registry = load_registry(sp)?;
--    Ok(registry.profiles.into_iter().find(|p| p.id == id))
-+    let mut registry = load_registry(sp)?;
-+    let idx = match registry.profiles.iter().position(|p| p.id == id) {
-+        Some(i) => i,
-+        None => return Ok(None),
-+    };
-+
-+    let inferred = infer_has_password(sp, &registry.profiles[idx].id, registry.profiles[idx].has_password);
-+    let mut dirty = false;
-+    if inferred != registry.profiles[idx].has_password {
-+        registry.profiles[idx].has_password = inferred;
-+        dirty = true;
-+    }
-+
-+    let out = registry.profiles[idx].clone();
-+    if dirty {
-+        let _ = save_registry(sp, &registry);
-+    }
-+    Ok(Some(out))
- }
+diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
+index bb4a80a..3c4e4f8 100644
+--- a/src/features/Vault/components/modals/SettingsModal.tsx
++++ b/src/features/Vault/components/modals/SettingsModal.tsx
+@@ -157,13 +157,22 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
+     setIsSettingPassword(true);
+     try {
+       const updated = await setProfilePassword(profileId, setPasswordValue);
+       onProfileUpdated?.(updated);
+       showToast(tVault('settingsModal.profile.setPasswordSuccess'));
+       setSetPasswordOpen(false);
+-    } catch {
+-      showToast(tVault('settingsModal.profile.setPasswordError'), 'error');
++    } catch (e) {
++      // Show real backend error code in console + toast for debugging.
++      // Tauri commands can return error values to the frontend. :contentReference[oaicite:1]{index=1}
++      // Debugging guidance: webview console/devtools. :contentReference[oaicite:2]{index=2}
++      // eslint-disable-next-line no-console
++      console.error('profile_set_password failed:', e);
++      const code = (e as any)?.message ?? String(e);
++      showToast(`${tVault('settingsModal.profile.setPasswordError')}: ${code}`, 'error');
+     } finally {
+       setIsSettingPassword(false);
+     }
+   };
