@@ -318,8 +318,12 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
         }
 
-        // Snapshot the file DB into memory using SQLite online backup, then serialize the in-memory DB.
-        let bytes: Vec<u8> = {
+        // Snapshot the file DB into memory using SQLite online backup.
+        // IMPORTANT: The file DB is WAL-mode (init_database_passwordless sets journal_mode=WAL persistently).
+        // Reading/validating a WAL DB can require accessing sidecar files (-wal/-shm). If those cannot be opened,
+        // SQLite returns SQLITE_CANTOPEN (14). We avoid that by doing all validation/migrations on the in-memory copy
+        // and forcing journal_mode=MEMORY there.
+        let (mut mem_conn, bytes): (rusqlite::Connection, Vec<u8>) = {
             // Open read-only to avoid taking write locks / WAL side-effects during snapshot.
             let src = rusqlite::Connection::open_with_flags(
                 &vault_path,
@@ -382,6 +386,23 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
                     })?;
             }
 
+            // Ensure the in-memory copy never tries to use WAL (no -wal/-shm files).
+            // This also makes the serialized image safe to deserialize later into :memory:.
+            let _: String = mem
+                .query_row("PRAGMA journal_mode=MEMORY;", [], |row| row.get(0))
+                .map_err(|e| {
+                    log::error!(
+                        "[SECURITY][set_profile_password] profile_id={} step=set_journal_mode_memory err={}",
+                        id,
+                        format_rusqlite_error(&e)
+                    );
+                    classify_db_error(&e)
+                })?;
+
+            migrations::migrate_to_latest(&mem)?;
+            migrations::validate_core_schema(&mem)
+                .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+
             let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
                 log::error!(
                     "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
@@ -390,33 +411,10 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
                 );
                 classify_db_error(&e)
             })?;
-            serialized.to_vec()
+            (mem, serialized.to_vec())
         };
 
-        // Validate we can open this snapshot in-memory BEFORE writing any encrypted files.
-        let mut mem_conn = rusqlite::Connection::open_in_memory()
-            .map_err(|e| {
-                log::error!(
-                    "[SECURITY][set_profile_password] profile_id={} step=open_mem_validate err={}",
-                    id,
-                    format_rusqlite_error(&e)
-                );
-                ErrorCodeString::new("DB_OPEN_FAILED")
-            })?;
-        let owned = owned_data_from_bytes(bytes.clone())?;
-        mem_conn
-            .deserialize(DatabaseName::Main, owned, false)
-            .map_err(|e| {
-                log::error!(
-                    "[SECURITY][set_profile_password] profile_id={} step=deserialize_mem err={}",
-                    id,
-                    format_rusqlite_error(&e)
-                );
-                ErrorCodeString::new("VAULT_CORRUPTED")
-            })?;
-        migrations::migrate_to_latest(&mem_conn)?;
-        migrations::validate_core_schema(&mem_conn)
-            .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+        // mem_conn is already validated/migrated in-memory above.
 
         // Create new salt + key.
         let salt = kdf::generate_kdf_salt();
