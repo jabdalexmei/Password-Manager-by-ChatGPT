@@ -1,56 +1,114 @@
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 9d8b7b1..c4a8a2d 100644
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -286,6 +286,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-     let profile = registry::get_profile(&storage_paths, id)?
-         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
+index 5759509..b3b8d6e 100644
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -1,8 +1,11 @@
+ use serde::{Deserialize, Serialize};
+ use std::fs;
++use std::io::Read;
+ use std::path::PathBuf;
+ use uuid::Uuid;
  
-+    // registry::get_profile now self-heals has_password based on disk state.
-     if profile.has_password {
-         return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
-     }
-@@ -315,18 +316,18 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
-     }
++use crate::data::crypto::cipher::PM_ENC_MAGIC;
+ use crate::data::fs::atomic_write::write_atomic;
+-use crate::data::profiles::paths::{ensure_profiles_dir, profile_config_path, registry_path};
++use crate::data::profiles::paths::{
++    ensure_profiles_dir, key_check_path, kdf_salt_path, profile_config_path, registry_path,
++    vault_db_path,
++};
+ use crate::data::storage_paths::StoragePaths;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::types::ProfileMeta;
+@@ -38,6 +41,44 @@ fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
+     write_atomic(&path, serialized.as_bytes())
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+ }
  
--    // Serialize passwordless sqlite file to bytes.
--    let conn = rusqlite::Connection::open(&vault_path)
--        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
--    migrations::migrate_to_latest(&conn)?;
--    let serialized = conn
--        .serialize(DatabaseName::Main)
--        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
--    drop(conn);
--
--    let bytes = serialized.to_vec();
-+    // Serialize passwordless sqlite file to bytes.
-+    // NOTE: serialize() may borrow the connection, so materialize bytes while conn is alive.
-+    let bytes: Vec<u8> = {
-+        let conn = rusqlite::Connection::open(&vault_path)
-+            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-+        migrations::migrate_to_latest(&conn)?;
-+        let serialized = conn
-+            .serialize(DatabaseName::Main)
-+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+        serialized.to_vec()
++fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
++    let path = match vault_db_path(sp, id) {
++        Ok(p) => p,
++        Err(_) => return false,
 +    };
-@@ -375,9 +376,18 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-         });
-     }
- 
--    // Update registry flag.
--    let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)?;
--    Ok(updated.into())
-+    // Update registry flag.
-+    // IMPORTANT: If the vault has already been encrypted, do not return an error just because
-+    // registry/config write failed — otherwise UI shows "Failed..." but the profile is actually protected.
-+    match registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true) {
-+        Ok(updated) => Ok(updated.into()),
-+        Err(_) => Ok(ProfileMeta {
-+            id: profile.id,
-+            name: profile.name,
-+            has_password: true,
-+        }),
++    if !path.exists() {
++        return false;
 +    }
++    let mut f = match fs::File::open(path) {
++        Ok(f) => f,
++        Err(_) => return false,
++    };
++    let mut buf = [0u8; 6];
++    if f.read_exact(&mut buf).is_err() {
++        return false;
++    }
++    buf == PM_ENC_MAGIC
++}
++
++fn infer_has_password(sp: &StoragePaths, id: &str, current: bool) -> bool {
++    if current {
++        return true;
++    }
++    let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
++    let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
++    if salt_ok && key_ok {
++        return true;
++    }
++    vault_looks_encrypted(sp, id)
++}
++
+ pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
+-    let registry = load_registry(sp)?;
+-    Ok(registry
+-        .profiles
+-        .into_iter()
+-        .map(ProfileMeta::from)
+-        .collect())
++    let mut registry = load_registry(sp)?;
++    let mut dirty = false;
++
++    for rec in registry.profiles.iter_mut() {
++        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
++        if inferred != rec.has_password {
++            rec.has_password = inferred;
++            dirty = true;
++        }
++    }
++
++    if dirty {
++        let _ = save_registry(sp, &registry);
++    }
++
++    Ok(registry.profiles.into_iter().map(ProfileMeta::from).collect())
+ }
+@@ -173,6 +214,9 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
+     let meta = ProfileMeta {
+         id: registry.profiles[idx].id.clone(),
+         name: registry.profiles[idx].name.clone(),
+-        has_password: registry.profiles[idx].has_password,
++        has_password: infer_has_password(
++            sp,
++            &registry.profiles[idx].id,
++            registry.profiles[idx].has_password,
++        ),
+     };
+@@ -231,7 +275,22 @@ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>>
+-    let registry = load_registry(sp)?;
+-    Ok(registry.profiles.into_iter().find(|p| p.id == id))
++    let mut registry = load_registry(sp)?;
++    let idx = match registry.profiles.iter().position(|p| p.id == id) {
++        Some(i) => i,
++        None => return Ok(None),
++    };
++
++    let inferred = infer_has_password(sp, &registry.profiles[idx].id, registry.profiles[idx].has_password);
++    let mut dirty = false;
++    if inferred != registry.profiles[idx].has_password {
++        registry.profiles[idx].has_password = inferred;
++        dirty = true;
++    }
++
++    let out = registry.profiles[idx].clone();
++    if dirty {
++        let _ = save_registry(sp, &registry);
++    }
++    Ok(Some(out))
  }
