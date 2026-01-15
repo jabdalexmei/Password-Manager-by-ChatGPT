@@ -1,125 +1,63 @@
-
-## PATCH
-
-### 1) Frontend: показываем `e.code` (а не `message`)
-
-```diff
-diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
-index bb4a80a..a2f3c44 100644
---- a/src/features/Vault/components/modals/SettingsModal.tsx
-+++ b/src/features/Vault/components/modals/SettingsModal.tsx
-@@ -169,10 +169,24 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
-     } catch (e) {
-       // eslint-disable-next-line no-console
-       console.error('profile_set_password failed:', e);
--      const code = (e as any)?.message ?? String(e);
--      showToast(`${tVault('settingsModal.profile.setPasswordError')}: ${code}`, 'error');
-+
-+      // Backend returns `ErrorCodeString { code: string }` serialized over invoke,
-+      // so the useful value is usually on `e.code` (not `message`).
-+      const anyErr = e as any;
-+      const code =
-+        anyErr?.code ??
-+        anyErr?.error?.code ??
-+        anyErr?.message ??
-+        (() => {
-+          try {
-+            return JSON.stringify(anyErr);
-+          } catch {
-+            return String(anyErr);
-+          }
-+        })();
-+
-+      showToast(`${tVault('settingsModal.profile.setPasswordError')}: ${code}`, 'error');
-     } finally {
-       setIsSettingPassword(false);
+diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
+index 9d8b7b1..b4a6f2a 100644
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -1,10 +1,12 @@
+ use std::path::Path;
+ use std::ptr::NonNull;
+ use std::sync::atomic::Ordering;
+ use std::sync::Arc;
++use std::time::Duration;
+ 
++use rusqlite::backup::Backup;
+ use rusqlite::ffi;
+ use rusqlite::serialize::OwnedData;
+ use rusqlite::DatabaseName;
+ use zeroize::{Zeroize, Zeroizing};
+@@ -286,17 +288,45 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
      }
-```
-
-
-
-### 2) Backend: реально освобождаем `vault.db` перед заменой (Windows)
-
-**Идея:** под `MaintenanceGuard` запрещаем новые выдачи коннектов, затем ждём, пока все уже взятые вернутся, и только после этого дропаем пул (тем самым закрывая idle-хендлы).
-
-```diff
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index e0c1c4b..9b3f9b0 100644
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -11,7 +11,7 @@ use crate::data::profiles::registry;
- use crate::data::sqlite::init::init_database_passwordless;
- use crate::data::sqlite::migrations;
--use crate::data::sqlite::pool::clear_pool;
-+use crate::data::sqlite::pool::{clear_pool, drain_and_drop_profile_pools};
- use crate::data::sqlite::pool::MaintenanceGuard;
  
- pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-@@ -286,9 +286,12 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-     ensure_profile_dirs(&storage_paths, id)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
- 
-     // Close file-based sqlite connections before touching vault.db bytes.
--    clear_pool(id);
-+    // 1) Block new connections via MaintenanceGuard
-+    // 2) Wait for checked-out connections to be returned
-+    // 3) Drop pools to close idle connections and release OS file handles (Windows)
-+    drain_and_drop_profile_pools(id, Duration::from_secs(5));
-+    clear_pool(id);
-```
-
----
-
-### 3) Backend: логируем код ошибки в `set_profile_password`
-
-```diff
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 9b3f9b0..4c1c0a9 100644
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -264,7 +264,11 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
--    let storage_paths = state.get_storage_paths()?;
-+    let res = (|| {
-+        let storage_paths = state.get_storage_paths()?;
- 
--    let profile = registry::get_profile(&storage_paths, id)?
-+        let profile = registry::get_profile(&storage_paths, id)?
-         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
- 
-         // ...
--    match registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true) {
-+        match registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true) {
-             Ok(updated) => Ok(updated.into()),
-             Err(_) => Ok(ProfileMeta { id: profile.id, name: profile.name, has_password: true }),
--    }
-+        }
-+    })();
+     // Serialize passwordless sqlite file to bytes.
+-    // NOTE: serialize() may borrow the connection, so materialize bytes while conn is alive.
+     let bytes: Vec<u8> = {
+-        let conn = rusqlite::Connection::open(&vault_path)
+-            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+-        migrations::migrate_to_latest(&conn)?;
+-        let serialized = conn
+-            .serialize(DatabaseName::Main)
+-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+-        serialized.to_vec()
++        // Source connection (file)
++        let src = rusqlite::Connection::open(&vault_path)
++            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++        src.busy_timeout(Duration::from_secs(15))
++            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 +
-+    if let Err(err) = &res {
-+        log::error!("[SECURITY][set_profile_password] failed: code={}", err.code);
-+    }
-+    res
- }
-```
-
----
-
-### 4) Backend: логируем реальную `io::Error` при записи encrypted файла
-
-```diff
-diff --git a/src-tauri/src/data/crypto/cipher.rs b/src-tauri/src/data/crypto/cipher.rs
-index 7b7d2d1..c27ed63 100644
---- a/src-tauri/src/data/crypto/cipher.rs
-+++ b/src-tauri/src/data/crypto/cipher.rs
-@@ -80,7 +80,10 @@ pub fn decrypt_bytes(key: &[u8; KEY_LEN], aad: &[u8], blob: &[u8]) -> Result<Vec<u8>> {
- }
- 
- pub fn write_encrypted_file(path: &std::path::Path, blob: &[u8]) -> Result<()> {
--    write_atomic(path, blob).map_err(|_| ErrorCodeString::new("ENCRYPTED_FILE_WRITE"))
-+    write_atomic(path, blob).map_err(|e| {
-+        log::error!("[CRYPTO][write_encrypted_file] failed path={:?} err={:?}", path, e);
-+        ErrorCodeString::new("ENCRYPTED_FILE_WRITE")
-+    })
- }
-```
-
++        // Ensure schema is current before snapshot
++        migrations::migrate_to_latest(&src)?;
++
++        // Destination connection (in-memory snapshot)
++        let mut mem = rusqlite::Connection::open_in_memory()
++            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++
++        // SQLite forbids using destination connection during backup; keep it in its own scope.
++        {
++            let mut backup = Backup::new(&src, &mut mem).map_err(|e| {
++                log::error!("[SECURITY][set_profile_password] backup new failed: {e:?}");
++                ErrorCodeString::new("DB_QUERY_FAILED")
++            })?;
++            backup
++                .run_to_completion(5, Duration::from_millis(250), None)
++                .map_err(|e| {
++                    log::error!("[SECURITY][set_profile_password] backup run failed: {e:?}");
++                    ErrorCodeString::new("DB_QUERY_FAILED")
++                })?;
++        }
++
++        // Now serialize from the in-memory snapshot (no WAL/locks).
++        let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
++            log::error!("[SECURITY][set_profile_password] serialize(mem) failed: {e:?}");
++            ErrorCodeString::new("DB_QUERY_FAILED")
++        })?;
++        serialized.to_vec()
+     };
