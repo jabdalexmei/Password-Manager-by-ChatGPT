@@ -24,6 +24,7 @@ import {
   Attachment,
   PasswordHistoryEntry,
 } from './ui';
+import { normalizeBankCardPreviewFields } from '../lib/bankcardPreviewFields';
 
 export function mapFolderFromBackend(folder: BackendFolder): Folder {
   return {
@@ -105,6 +106,7 @@ export function mapCardSummaryFromBackend(
     isFavorite: card.is_favorite,
     hasTotp: card.has_totp,
     hasSeedPhrase: card.has_seed_phrase,
+    hasRecoveryEmail: (card.recovery_email ?? '').trim().length > 0,
     hasPhone: card.has_phone,
     hasNotes: card.has_note,
     hasAttachments: card.has_attachments,
@@ -203,13 +205,7 @@ export function mapBankCardFromBackend(card: BackendBankCardItem): BankCardItem 
     cvc: card.cvc,
     note: card.note,
     tags: card.tags ?? [],
-    previewFields: {
-      fields: card.preview_fields?.fields ?? [],
-      cardNumberMode:
-        card.preview_fields?.card_number_mode === 'full' || card.preview_fields?.card_number_mode === 'last_four'
-          ? (card.preview_fields.card_number_mode as 'full' | 'last_four')
-          : null,
-    },
+    previewFields: normalizeBankCardPreviewFields(card.preview_fields),
     isFavorite: card.is_favorite,
     createdAt: card.created_at,
     updatedAt: card.updated_at,
@@ -237,13 +233,7 @@ export function mapBankCardSummaryFromBackend(
     cvc: null,
     note: card.note ?? null,
     tags: card.tags ?? [],
-    previewFields: {
-      fields: card.preview_fields?.fields ?? [],
-      cardNumberMode:
-        card.preview_fields?.card_number_mode === 'full' || card.preview_fields?.card_number_mode === 'last_four'
-          ? (card.preview_fields.card_number_mode as 'full' | 'last_four')
-          : null,
-    },
+    previewFields: normalizeBankCardPreviewFields(card.preview_fields),
     isFavorite: card.is_favorite,
     createdAt: card.created_at,
     updatedAt: card.updated_at,

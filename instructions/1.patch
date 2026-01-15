@@ -1,85 +1,428 @@
-diff --git a/src/features/Vault/components/Details/Details.tsx b/src/features/Vault/components/Details/Details.tsx
-index 07b9d67..8689e94 100644
---- a/src/features/Vault/components/Details/Details.tsx
-+++ b/src/features/Vault/components/Details/Details.tsx
-@@ -797,7 +797,10 @@ export function Details({
-                   <button
-                     className="vault-actionmenu-item"
-                     type="button"
--                    onClick={() => togglePreviewFieldForAllCards(previewMenu.field)}
-+                    onClick={() => {
-+                      if (isCustomPreviewField(previewMenu.field)) return;
-+                      togglePreviewFieldForAllCards(previewMenu.field);
-+                    }}
-                   >
-                     {isFieldInGlobalPreview(previewMenu.field)
-                       ? t('previewMenu.hideAll')
-diff --git a/src/features/Vault/types/mappers.ts b/src/features/Vault/types/mappers.ts
-index 33321aa..5de745e 100644
---- a/src/features/Vault/types/mappers.ts
-+++ b/src/features/Vault/types/mappers.ts
-@@ -24,6 +24,7 @@ import {
-   Attachment,
-   PasswordHistoryEntry,
- } from './ui';
-+import { normalizeBankCardPreviewFields } from '../lib/bankcardPreviewFields';
+diff --git a/src/app/App.tsx b/src/app/App.tsx
+index 30b2801..625c457 100644
+--- a/src/app/App.tsx
++++ b/src/app/App.tsx
+@@ -80,6 +80,7 @@ const App: React.FC = () => {
+             profileId={activeProfile.id}
+             profileName={activeProfile.name}
+             isPasswordless={!activeProfile.has_password}
++            onProfileRenamed={(name) => setProfile((p) => (p ? { ...p, name } : p))}
+             onLocked={() => {
+               if (activeProfile.has_password) {
+                 setView('login');
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+index 64bd2f3..915bc97 100644
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -43,9 +43,10 @@ type VaultProps = {
+   profileName: string;
+   isPasswordless: boolean;
+   onLocked: () => void;
++  onProfileRenamed?: (name: string) => void;
+ };
  
- export function mapFolderFromBackend(folder: BackendFolder): Folder {
-   return {
-@@ -105,6 +106,7 @@ export function mapCardSummaryFromBackend(
-     isFavorite: card.is_favorite,
-     hasTotp: card.has_totp,
-     hasSeedPhrase: card.has_seed_phrase,
-+    hasRecoveryEmail: (card.recovery_email ?? '').trim().length > 0,
-     hasPhone: card.has_phone,
-     hasNotes: card.has_note,
-     hasAttachments: card.has_attachments,
-@@ -203,13 +205,7 @@ export function mapBankCardFromBackend(card: BackendBankCardItem): BankCardItem
-     cvc: card.cvc,
-     note: card.note,
-     tags: card.tags ?? [],
--    previewFields: {
--      fields: card.preview_fields?.fields ?? [],
--      cardNumberMode:
--        card.preview_fields?.card_number_mode === 'full' || card.preview_fields?.card_number_mode === 'last_four'
--          ? (card.preview_fields.card_number_mode as 'full' | 'last_four')
--          : null,
--    },
-+    previewFields: normalizeBankCardPreviewFields(card.preview_fields),
-     isFavorite: card.is_favorite,
-     createdAt: card.created_at,
-     updatedAt: card.updated_at,
-@@ -237,13 +233,7 @@ export function mapBankCardSummaryFromBackend(
-     cvc: null,
-     note: card.note ?? null,
-     tags: card.tags ?? [],
--    previewFields: {
--      fields: card.preview_fields?.fields ?? [],
--      cardNumberMode:
--        card.preview_fields?.card_number_mode === 'full' || card.preview_fields?.card_number_mode === 'last_four'
--          ? (card.preview_fields.card_number_mode as 'full' | 'last_four')
--          : null,
--    },
-+    previewFields: normalizeBankCardPreviewFields(card.preview_fields),
-     isFavorite: card.is_favorite,
-     createdAt: card.created_at,
-     updatedAt: card.updated_at,
-diff --git a/src/features/Vault/types/ui.ts b/src/features/Vault/types/ui.ts
-index e82d1ee..4771d89 100644
---- a/src/features/Vault/types/ui.ts
-+++ b/src/features/Vault/types/ui.ts
-@@ -1,3 +1,5 @@
-+import type { BankCardPreviewField } from "../lib/bankcardPreviewFields";
+-export default function Vault({ profileId, profileName, isPasswordless, onLocked }: VaultProps) {
++export default function Vault({ profileId, profileName, isPasswordless, onLocked, onProfileRenamed }: VaultProps) {
+   const vault = useVault(profileId, onLocked);
+   const bankCards = useBankCards(profileId, onLocked, vault.folders);
+   const { t: tDataCards } = useTranslation('DataCards');
+@@ -599,7 +600,10 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+             settings={vault.settings}
+             isSaving={isSavingSettings}
+             onCancel={() => setSettingsModalOpen(false)}
+-            onSave={handleSaveSettings}
++            onSave={handleSaveSettings}
++            profileId={profileId}
++            profileName={profileName}
++            onProfileRenamed={onProfileRenamed}
+           />
+         </Suspense>
+       )}
+diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
+index bd27da8..35115c6 100644
+--- a/src/features/Vault/components/modals/SettingsModal.tsx
++++ b/src/features/Vault/components/modals/SettingsModal.tsx
+@@ -1,6 +1,8 @@
+ import React, { useEffect, useMemo, useState } from 'react';
+ import { BackendUserSettings } from '../../types/backend';
+ import { useTranslation } from '../../../../shared/lib/i18n';
++import { useToaster } from '../../../../shared/components/Toaster';
++import { renameProfile } from '../../../../shared/lib/tauri';
+ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/ui/dialog';
+ 
+ export type SettingsModalProps = {
+@@ -9,10 +11,14 @@ export type SettingsModalProps = {
+   settings: BackendUserSettings | null;
+   isSaving: boolean;
+   onCancel: () => void;
+   onSave: (nextSettings: BackendUserSettings) => void;
++  profileId: string;
++  profileName: string;
++  onProfileRenamed?: (name: string) => void;
+ };
+ 
+-export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: SettingsModalProps) {
++export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profileId, profileName, onProfileRenamed }: SettingsModalProps) {
+   const { t: tVault } = useTranslation('Vault');
+   const { t: tCommon } = useTranslation('Common');
++  const { show: showToast } = useToaster();
+ 
+   const [autoLockEnabled, setAutoLockEnabled] = useState(false);
+   const [autoLockTimeoutSeconds, setAutoLockTimeoutSeconds] = useState('60');
+   const [clipboardAutoClearEnabled, setClipboardAutoClearEnabled] = useState(false);
+   const [clipboardClearTimeoutSeconds, setClipboardClearTimeoutSeconds] = useState('20');
+   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
+   const [intervalMinutes, setIntervalMinutes] = useState('60');
+   const [maxCopies, setMaxCopies] = useState('10');
 +
- export type Folder = {
-   id: string;
-   name: string;
-@@ -102,7 +104,7 @@ export type BankCardItem = {
-   cvc: string | null;
-   note: string | null;
-   tags: string[];
--  previewFields: { fields: string[]; cardNumberMode: 'full' | 'last_four' | null };
-+  previewFields: { fields: BankCardPreviewField[]; cardNumberMode: 'full' | 'last_four' | null };
-   isFavorite: boolean;
-   createdAt: string;
-   updatedAt: string;
++  const [renameProfileOpen, setRenameProfileOpen] = useState(false);
++  const [renameProfileValue, setRenameProfileValue] = useState('');
++  const [isRenamingProfile, setIsRenamingProfile] = useState(false);
+ 
+   useEffect(() => {
+     if (!open || !settings) return;
+     setAutoLockEnabled(settings.auto_lock_enabled);
+     setAutoLockTimeoutSeconds(String(settings.auto_lock_timeout));
+     setClipboardAutoClearEnabled(settings.clipboard_auto_clear_enabled);
+     setClipboardClearTimeoutSeconds(String(settings.clipboard_clear_timeout_seconds));
+     setAutoBackupEnabled(settings.backups_enabled);
+     setIntervalMinutes(String(settings.auto_backup_interval_minutes));
+     setMaxCopies(String(settings.backup_max_copies));
+   }, [open, settings]);
++
++  useEffect(() => {
++    if (!renameProfileOpen) return;
++    setRenameProfileValue(profileName || '');
++  }, [renameProfileOpen, profileName]);
+ 
+   const busy = isSaving;
+ 
+   const canSave = useMemo(() => {
+@@ -73,6 +79,34 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
+     return true;
+   }, [
+     autoBackupEnabled,
+     autoLockEnabled,
+     autoLockTimeoutSeconds,
+     clipboardClearTimeoutSeconds,
+     intervalMinutes,
+     maxCopies,
+   ]);
+ 
++  const canSaveRename = useMemo(() => {
++    const next = renameProfileValue.trim();
++    if (!next) return false;
++    if (next === (profileName || '').trim()) return false;
++    return true;
++  }, [profileName, renameProfileValue]);
++
++  const handleRenameSave = async () => {
++    const next = renameProfileValue.trim();
++    if (!next) return;
++
++    setIsRenamingProfile(true);
++    try {
++      const updated = await renameProfile(profileId, next);
++      onProfileRenamed?.(updated.name);
++      showToast(tVault('settingsModal.profile.renameSuccess'));
++      setRenameProfileOpen(false);
++    } catch {
++      showToast(tVault('settingsModal.profile.renameError'), 'error');
++    } finally {
++      setIsRenamingProfile(false);
++    }
++  };
++
+   const handleSave = () => {
+     if (!settings) return;
+ 
+     const lockTimeout = Number(autoLockTimeoutSeconds);
+     const clipTimeout = Number(clipboardClearTimeoutSeconds);
+     const interval = Number(intervalMinutes);
+     const max = Number(maxCopies);
+@@ -160,7 +194,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
+   const fullWidthInputStyle: React.CSSProperties = {
+     width: '100%',
+   };
+ 
+   return (
+-    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
++    <>
++    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
+       <DialogContent aria-labelledby="settings-title">
+         <DialogHeader>
+           <DialogTitle id="settings-title">{tVault('settings')}</DialogTitle>
+         </DialogHeader>
+ 
+         <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+@@ -366,6 +400,56 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
+             </div>
+           </div>
+         </div>
+ 
++          <h3 id="profile-title" style={subtitleStyle}>
++            {tVault('settingsModal.profileTitle')}
++          </h3>
++
++          <div
++            role="group"
++            aria-labelledby="profile-title"
++            style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
++          >
++            <div className="form-field" style={toggleRowStyle}>
++              <span className="form-label settings-subheader">
++                {tVault('settingsModal.profile.nameLabel')}
++              </span>
++
++              <div
++                style={{
++                  display: 'flex',
++                  justifyContent: 'flex-end',
++                  gap: 8,
++                  alignItems: 'center',
++                  minWidth: 0,
++                }}
++              >
++                <span
++                  className="muted"
++                  style={{
++                    whiteSpace: 'nowrap',
++                    overflow: 'hidden',
++                    textOverflow: 'ellipsis',
++                    maxWidth: 260,
++                  }}
++                >
++                  {profileName || ''}
++                </span>
++
++                <button
++                  className="btn btn-secondary"
++                  type="button"
++                  onClick={() => setRenameProfileOpen(true)}
++                  disabled={busy}
++                >
++                  {tVault('settingsModal.profile.rename')}
++                </button>
++              </div>
++            </div>
++          </div>
++
+         <DialogFooter className="dialog-footer--split">
+           <div className="dialog-footer-left">
+             <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={busy}>
+               {tCommon('action.cancel')}
+             </button>
+           </div>
+ 
+           <div className="dialog-footer-right">
+             <button className="btn btn-primary" type="button" onClick={handleSave} disabled={busy || !settings || !canSave}>
+               {tVault('backup.settings.save')}
+             </button>
+           </div>
+         </DialogFooter>
+       </DialogContent>
+     </Dialog>
++
++    <Dialog
++      open={renameProfileOpen}
++      onOpenChange={(nextOpen) => (!nextOpen ? setRenameProfileOpen(false) : undefined)}
++    >
++      <DialogContent aria-labelledby="rename-profile-title">
++        <DialogHeader>
++          <DialogTitle id="rename-profile-title">{tVault('settingsModal.profile.renameTitle')}</DialogTitle>
++        </DialogHeader>
++
++        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
++          <div className="form-field">
++            <label className="form-label" htmlFor="rename-profile-input">
++              {tVault('settingsModal.profile.nameLabel')}
++            </label>
++            <input
++              id="rename-profile-input"
++              type="text"
++              value={renameProfileValue}
++              disabled={busy || isRenamingProfile}
++              onChange={(event) => setRenameProfileValue(event.target.value)}
++              autoComplete="off"
++              style={fullWidthInputStyle}
++            />
++          </div>
++        </div>
++
++        <DialogFooter className="dialog-footer--split">
++          <div className="dialog-footer-left">
++            <button
++              className="btn btn-secondary"
++              type="button"
++              onClick={() => setRenameProfileOpen(false)}
++              disabled={busy || isRenamingProfile}
++            >
++              {tCommon('action.cancel')}
++            </button>
++          </div>
++
++          <div className="dialog-footer-right">
++            <button
++              className="btn btn-primary"
++              type="button"
++              onClick={handleRenameSave}
++              disabled={busy || isRenamingProfile || !canSaveRename}
++            >
++              {tVault('backup.settings.save')}
++            </button>
++          </div>
++        </DialogFooter>
++      </DialogContent>
++    </Dialog>
++    </>
+   );
+ }
+diff --git a/src/i18n/locales/en/Vault.json b/src/i18n/locales/en/Vault.json
+index d424392..69a1461 100644
+--- a/src/i18n/locales/en/Vault.json
++++ b/src/i18n/locales/en/Vault.json
+@@ -8,7 +8,6 @@
+   "lock": "Lock",
+   "logout": "Log out",
+   "search.placeholder": "Search",
+-
+   "filters.title": "Filters",
+   "filters.2fa": "2FA",
+   "filters.seedPhrase": "Seed phrase",
+@@ -46,5 +45,11 @@
+   "settingsModal.autoLock.timeoutSeconds": "Auto-lock timeout (seconds)",
+   "settingsModal.clipboard.enabled": "Enable clipboard auto-clear",
+   "settingsModal.clipboard.timeoutSeconds": "Clipboard clear timeout (seconds)",
+-  "backup.auto.success": "Auto-backup created"
++  "backup.auto.success": "Auto-backup created",
++  "settingsModal.profileTitle": "Profile",
++  "settingsModal.profile.rename": "Rename profile",
++  "settingsModal.profile.renameTitle": "Rename profile",
++  "settingsModal.profile.nameLabel": "Profile name",
++  "settingsModal.profile.renameSuccess": "Profile renamed",
++  "settingsModal.profile.renameError": "Failed to rename profile"
+ }
+diff --git a/src/shared/lib/tauri.ts b/src/shared/lib/tauri.ts
+index 68cac76..5bd8e2f 100644
+--- a/src/shared/lib/tauri.ts
++++ b/src/shared/lib/tauri.ts
+@@ -31,6 +31,11 @@ export async function deleteProfile(id: string): Promise<boolean> {
+   return invoke('profile_delete', { id });
+ }
+ 
++export async function renameProfile(id: string, name: string): Promise<ProfileMeta> {
++  return invoke('profile_rename', { id, name });
++}
++
+ export async function setActiveProfile(id: string): Promise<boolean> {
+   return invoke('set_active_profile', { id });
+ }
+diff --git a/src-tauri/permissions/app-default.toml b/src-tauri/permissions/app-default.toml
+index 0369056..85f9bd6 100644
+--- a/src-tauri/permissions/app-default.toml
++++ b/src-tauri/permissions/app-default.toml
+@@ -9,6 +9,7 @@ commands.allow = [
+   "profiles_list",
+   "profile_create",
+   "profile_delete",
++  "profile_rename",
+   "get_active_profile",
+   "set_active_profile",
+   "login_vault",
+diff --git a/src-tauri/src/commands/profiles.rs b/src-tauri/src/commands/profiles.rs
+index 773aa04..4bb0bdb 100644
+--- a/src-tauri/src/commands/profiles.rs
++++ b/src-tauri/src/commands/profiles.rs
+@@ -35,6 +35,22 @@ pub async fn profile_create(
+     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+ }
+ 
++#[tauri::command]
++pub async fn profile_rename(
++    id: String,
++    name: String,
++    state: State<'_, Arc<AppState>>,
++) -> Result<ProfileMeta> {
++    let app_state = state.inner().clone();
++
++    tauri::async_runtime::spawn_blocking(move || {
++        let storage_paths = app_state.get_storage_paths()?;
++        profiles_service::rename_profile(&storage_paths, &id, &name)
++    })
++    .await
++    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
++}
++
+ #[tauri::command]
+ pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
+     let app_state = state.inner().clone();
+diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
+index 82fe9b5..5759509 100644
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -208,6 +208,35 @@ pub fn upsert_profile_with_id(
+     })
+ }
+ 
++pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
++    ensure_profiles_dir(sp)?;
++    let mut registry = load_registry(sp)?;
++    let record = registry
++        .profiles
++        .iter_mut()
++        .find(|p| p.id == id)
++        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++
++    record.name = name.to_string();
++    save_registry(sp, &registry)?;
++
++    // Keep per-profile config.json consistent with registry.
++    let config_path: PathBuf = profile_config_path(sp, id)?;
++    let config = serde_json::json!({ "name": name });
++    let serialized_config = serde_json::to_string_pretty(&config)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    write_atomic(&config_path, serialized_config.as_bytes())
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
++    Ok(ProfileMeta {
++        id: record.id.clone(),
++        name: record.name.clone(),
++        has_password: record.has_password,
++    })
++}
++
+ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
+     ensure_profiles_dir(sp)?;
+     let mut registry = load_registry(sp)?;
+diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
+index 2a4cae7..df1686c 100644
+--- a/src-tauri/src/main.rs
++++ b/src-tauri/src/main.rs
+@@ -121,6 +121,7 @@ fn main() {
+             profiles_list,
+             profile_create,
+             profile_delete,
++            profile_rename,
+             get_active_profile,
+             set_active_profile,
+             login_vault,
+diff --git a/src-tauri/src/services/profiles_service.rs b/src-tauri/src/services/profiles_service.rs
+index 0f1eac0..3294f1e 100644
+--- a/src-tauri/src/services/profiles_service.rs
++++ b/src-tauri/src/services/profiles_service.rs
+@@ -73,6 +73,14 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
+     registry::delete_profile(sp, id)
+ }
+ 
++pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
++    let trimmed = name.trim();
++    if trimmed.is_empty() {
++        return Err(ErrorCodeString::new("PROFILE_NAME_REQUIRED"));
++    }
++    registry::rename_profile(sp, id, trimmed)
++}
++
+ pub fn get_active_profile(sp: &StoragePaths) -> Result<Option<ProfileMeta>> {
+     let settings = config::load_settings(sp)?;
+     if let Some(id) = settings.active_profile {
+       ...
