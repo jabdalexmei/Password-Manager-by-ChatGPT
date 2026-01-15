@@ -1,34 +1,9 @@
-diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
-index c2a5b71..d8e4b2a 100644
---- a/src/features/Vault/components/modals/SettingsModal.tsx
-+++ b/src/features/Vault/components/modals/SettingsModal.tsx
-@@ -330,7 +330,7 @@ export function SettingsModal({
-             </button>
- 
-             <button
--              className="btn btn-secondary settings-profile-action settings-profile-action--tall"
-+              className="btn btn-secondary settings-profile-action"
-               type="button"
-               onClick={() => setChangePasswordOpen(true)}
-               disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
-diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
-index 7a2f3be..b6b0c6c 100644
---- a/src/shared/styles/ui.css
-+++ b/src/shared/styles/ui.css
-@@ -1034,21 +1034,17 @@
- .settings-profile-action {
-   width: 168px;
-   justify-content: center;
-   min-height: 40px;
-+  padding: 0 16px;
- }
- 
--.settings-profile-action--tall {
--  min-height: 56px;
--  padding-top: 14px;
--  padding-bottom: 14px;
--  white-space: normal;
--  line-height: 18px;
--  text-align: center;
--}
-+/* keep Profile buttons identical */
+diff --git a/src/services/security_service.rs b/src/services/security_service.rs
+index 1234567..89abcde 100644
+--- a/src/services/security_service.rs
++++ b/src/services/security_service.rs
+@@ -399,7 +399,7 @@
+-        let (mut mem_conn, bytes): (rusqlite::Connection, Vec<u8>) = {
++        let (mem_conn, bytes): (rusqlite::Connection, Vec<u8>) = {
+             // ...
+         };
