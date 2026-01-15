@@ -1,13 +1,82 @@
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 1f6b2a3..c4d8c9e 100644
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -770,7 +770,7 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profile
+
+### A) Fix сборки фронта: ConfirmDialog принимает disabled-пропсы
+
+```diff
+*** a/src/shared/components/ConfirmDialog.tsx
+--- b/src/shared/components/ConfirmDialog.tsx
+***************
+ interface ConfirmDialogProps {
+   open: boolean;
+   title: string;
+   description?: string;
+   confirmText: string;
+   cancelText: string;
+   onConfirm: () => void;
+   onCancel: () => void;
+   danger?: boolean;
++  confirmDisabled?: boolean;
++  cancelDisabled?: boolean;
+ }
  
-     let key = Zeroizing::new(*session.key);
+ export function ConfirmDialog({
+   open,
+   title,
+   description,
+   confirmText,
+   cancelText,
+   onConfirm,
+   onCancel,
+   danger,
++  confirmDisabled,
++  cancelDisabled,
+ }: ConfirmDialogProps) {
+   return (
+-    <Dialog open={open} onOpenChange={(next) => (!next ? onCancel() : undefined)}>
++    <Dialog
++      open={open}
++      onOpenChange={(next) => {
++        if (!next && !cancelDisabled) onCancel();
++      }}
++    >
+       <DialogContent aria-labelledby="confirm-title" className="confirm-dialog">
+         <DialogHeader>
+           <DialogTitle id="confirm-title">{title}</DialogTitle>
+         </DialogHeader>
+         {description ? <p className="confirm-dialog-description">{description}</p> : null}
  
--    if write_atomic(&vault_path, db_bytes.as_slice()).is_err() {
-+    if write_atomic(&vault_path, &db_bytes[..]).is_err() {
-         rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
-         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
-     }
+         <div className="confirm-dialog-actions">
+           <button
+             type="button"
+             className="btn btn-secondary"
+             onClick={onCancel}
++            disabled={!!cancelDisabled}
+           >
+             {cancelText}
+           </button>
+           <button
+             type="button"
+             className={danger ? 'btn btn-danger' : 'btn btn-primary'}
+             onClick={onConfirm}
++            disabled={!!confirmDisabled}
+           >
+             {confirmText}
+           </button>
+         </div>
+       </DialogContent>
+     </Dialog>
+   );
+ }
+```
+
+### B) Убрать мусорный комментарий в SettingsModal (не обязательно, но лучше)
+
+```diff
+*** a/src/features/Vault/components/modals/SettingsModal.tsx
+--- b/src/features/Vault/components/modals/SettingsModal.tsx
+***************
+-      // Tauri commands return errors as rejected promises. :contentReference[oaicite:3]{index=3}
+       // Our backend uses structured error objects (e.g. { code: "DB_QUERY_FAILED" }).
+       const err = e as any;
+```
+
+
