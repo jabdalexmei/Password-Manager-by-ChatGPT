@@ -325,9 +325,24 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
                 &vault_path,
                 OpenFlags::SQLITE_OPEN_READ_ONLY,
             )
-                .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-            src.busy_timeout(Duration::from_secs(15))
-                .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+                .map_err(|e| {
+                    log::error!(
+                        "[SECURITY][set_profile_password] profile_id={} step=open_src vault={:?} err={}",
+                        id,
+                        vault_path,
+                        format_rusqlite_error(&e)
+                    );
+                    ErrorCodeString::new("DB_OPEN_FAILED")
+                })?;
+            src.busy_timeout(Duration::from_secs(15)).map_err(|e| {
+                log::error!(
+                    "[SECURITY][set_profile_password] profile_id={} step=busy_timeout_src vault={:?} err={}",
+                    id,
+                    vault_path,
+                    format_rusqlite_error(&e)
+                );
+                ErrorCodeString::new("DB_OPEN_FAILED")
+            })?;
 
             // IMPORTANT:
             // Do NOT run migrations on the file DB here.
@@ -335,7 +350,14 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             // We run migrations on the in-memory snapshot below (mem_conn), which is lock-free.
 
             let mut mem = rusqlite::Connection::open_in_memory()
-                .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+                .map_err(|e| {
+                    log::error!(
+                        "[SECURITY][set_profile_password] profile_id={} step=open_mem err={}",
+                        id,
+                        format_rusqlite_error(&e)
+                    );
+                    ErrorCodeString::new("DB_OPEN_FAILED")
+                })?;
 
             {
                 let backup = Backup::new(&src, &mut mem).map_err(|e| {
@@ -373,11 +395,25 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
         // Validate we can open this snapshot in-memory BEFORE writing any encrypted files.
         let mut mem_conn = rusqlite::Connection::open_in_memory()
-            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+            .map_err(|e| {
+                log::error!(
+                    "[SECURITY][set_profile_password] profile_id={} step=open_mem_validate err={}",
+                    id,
+                    format_rusqlite_error(&e)
+                );
+                ErrorCodeString::new("DB_OPEN_FAILED")
+            })?;
         let owned = owned_data_from_bytes(bytes.clone())?;
         mem_conn
             .deserialize(DatabaseName::Main, owned, false)
-            .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+            .map_err(|e| {
+                log::error!(
+                    "[SECURITY][set_profile_password] profile_id={} step=deserialize_mem err={}",
+                    id,
+                    format_rusqlite_error(&e)
+                );
+                ErrorCodeString::new("VAULT_CORRUPTED")
+            })?;
         migrations::migrate_to_latest(&mem_conn)?;
         migrations::validate_core_schema(&mem_conn)
             .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;

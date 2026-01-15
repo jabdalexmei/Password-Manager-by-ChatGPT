@@ -1,9 +1,27 @@
 use rusqlite::Connection;
+use rusqlite::Error as RusqliteError;
 use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
 const CURRENT_SCHEMA_VERSION: i32 = 8;
+
+fn log_sqlite_err(ctx: &str, err: &RusqliteError) {
+    match err {
+        RusqliteError::SqliteFailure(e, msg) => {
+            log::error!(
+                "[DB][sqlite_error] ctx={} code={:?} extended_code={} msg={}",
+                ctx,
+                e.code,
+                e.extended_code,
+                msg.as_deref().unwrap_or("")
+            );
+        }
+        other => {
+            log::error!("[DB][sqlite_error] ctx={} err={other:?}", ctx);
+        }
+    }
+}
 
 fn ensure_ui_preferences_table(conn: &Connection) -> Result<()> {
     // Dev-mode friendly: create idempotently so existing schema DBs also get it.
@@ -16,7 +34,10 @@ CREATE TABLE IF NOT EXISTS ui_preferences (
 );
 "#,
     )
-    .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+    .map_err(|e| {
+        log_sqlite_err("ensure_ui_preferences_table.execute_batch", &e);
+        ErrorCodeString::new("DB_MIGRATION_FAILED")
+    })?;
     Ok(())
 }
 
@@ -25,7 +46,10 @@ fn has_table(conn: &Connection, name: &str) -> Result<bool> {
     let exists: Option<i32> = conn
         .query_row(sql, [name], |row| row.get(0))
         .optional()
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        .map_err(|e| {
+            log_sqlite_err(&format!("has_table.query_row name={name} sql={sql}"), &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
     Ok(exists.is_some())
 }
 
@@ -33,17 +57,29 @@ fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
     let sql = format!("PRAGMA table_info({table});");
     let mut stmt = conn
         .prepare(&sql)
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        .map_err(|e| {
+            log_sqlite_err(&format!("has_column.prepare table={table} column={column} sql={sql}"), &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
 
     let mut rows = stmt
         .query([])
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        .map_err(|e| {
+            log_sqlite_err(&format!("has_column.query table={table} column={column} sql={sql}"), &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
 
     while let Some(row) = rows
         .next()
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
+        .map_err(|e| {
+            log_sqlite_err(&format!("has_column.next table={table} column={column} sql={sql}"), &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?
     {
-        let name: String = row.get(1).map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        let name: String = row.get(1).map_err(|e| {
+            log_sqlite_err(&format!("has_column.row_get table={table} column={column} sql={sql}"), &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
         if name == column {
             return Ok(true);
         }
@@ -246,11 +282,17 @@ ADD COLUMN bank_name TEXT NULL;
 
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        .map_err(|e| {
+            log_sqlite_err("migrate_to_latest.execute_batch PRAGMA foreign_keys=ON", &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
 
     let version: i32 = conn
         .query_row("PRAGMA user_version;", [], |row| row.get(0))
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        .map_err(|e| {
+            log_sqlite_err("migrate_to_latest.query_row PRAGMA user_version", &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
 
     log::info!(
         "[DB][migrate] user_version={version}, current={CURRENT_SCHEMA_VERSION}"
