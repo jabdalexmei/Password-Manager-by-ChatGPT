@@ -1,140 +1,216 @@
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index b4f7c2d..d8a3c01 100644
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -68,27 +68,62 @@ fn owned_data_from_bytes(bytes: Zeroizing<Vec<u8>>) -> Result<OwnedData> {
-     Ok(owned)
+--- a/src/features/Vault/components/modals/SettingsModal.tsx
++++ b/src/features/Vault/components/modals/SettingsModal.tsx
+@@ -239,14 +239,6 @@
+     onSave(nextSettings);
+   };
+ 
+-  // ---- Layout styles (no borders). "Backups" is a subtitle (h3). ----
+-  const subtitleStyle: React.CSSProperties = {
+-    margin: 0,
+-    fontSize: 16,
+-    fontWeight: 700,
+-    lineHeight: '20px',
+-  };
+-
+   const toggleRowStyle: React.CSSProperties = {
+     display: 'grid',
+     gridTemplateColumns: '1fr 140px', // fixed control column (not flush to modal edge)
+@@ -277,7 +269,6 @@
+     outline: 'none',
+   };
+ 
+-
+   const switchThumbStyle: React.CSSProperties = {
+     width: 18,
+     height: 18,
+@@ -294,13 +285,46 @@
+   return (
+     <>
+       <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
+-      <DialogContent aria-labelledby="settings-title">
++      <DialogContent aria-labelledby="settings-title" className="settings-modal">
+         <DialogHeader>
+           <DialogTitle id="settings-title">{tVault('settings')}</DialogTitle>
+         </DialogHeader>
+ 
+-        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+-          <h3 id="security-title" style={subtitleStyle}>
++        <div className="dialog-body settings-modal-body">
++          <h3 id="profile-title" className="settings-modal-section-title">
++            {tVault('settingsModal.profileTitle')}
++          </h3>
++
++          <div className="settings-profile-actions" role="group" aria-labelledby="profile-title">
++            <button
++              className="btn btn-secondary settings-profile-action"
++              type="button"
++              onClick={() => setRenameProfileOpen(true)}
++              disabled={busy}
++            >
++              {tVault('settingsModal.profile.rename')}
++            </button>
++
++            <button
++              className="btn btn-secondary settings-profile-action"
++              type="button"
++              onClick={() => setSetPasswordOpen(true)}
++              disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
++            >
++              {tVault('settingsModal.profile.setPasswordAction')}
++            </button>
++
++            <button
++              className="btn btn-secondary settings-profile-action settings-profile-action--tall"
++              type="button"
++              onClick={() => setChangePasswordOpen(true)}
++              disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
++            >
++              {tVault('settingsModal.profile.changePasswordAction')}
++            </button>
++          </div>
++
++          <h3 id="security-title" className="settings-modal-section-title">
+             {tVault('settingsModal.securityTitle')}
+           </h3>
+ 
+@@ -452,7 +476,7 @@
+             </div>
+           </div>
+ 
+-          <h3 id="backups-title" style={subtitleStyle}>
++          <h3 id="backups-title" className="settings-modal-section-title">
+             {tVault('backup.settings.title')}
+           </h3>
+ 
+@@ -521,87 +545,6 @@
+             </div>
+           </div>
+         </div>
+-
+-        <h3 id="profile-title" style={subtitleStyle}>
+-          {tVault('settingsModal.profileTitle')}
+-        </h3>
+-
+-        <div role="group" aria-labelledby="profile-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+-          <div className="form-field" style={toggleRowStyle}>
+-            <span className="form-label settings-subheader">{tVault('settingsModal.profile.nameLabel')}</span>
+-
+-            <div
+-              style={{
+-                display: 'flex',
+-                justifyContent: 'flex-end',
+-                gap: 8,
+-                alignItems: 'center',
+-                minWidth: 0,
+-              }}
+-            >
+-              <span
+-                className="muted"
+-                style={{
+-                  whiteSpace: 'nowrap',
+-                  overflow: 'hidden',
+-                  textOverflow: 'ellipsis',
+-                  maxWidth: 260,
+-                }}
+-              >
+-                {profileName || ''}
+-              </span>
+-
+-              <button
+-                className="btn btn-secondary"
+-                type="button"
+-                onClick={() => setRenameProfileOpen(true)}
+-                disabled={busy}
+-              >
+-                {tVault('settingsModal.profile.rename')}
+-              </button>
+-            </div>
+-          </div>
+-        </div>
+-
+-        <h3 id="profile-security-title" style={subtitleStyle}>
+-          {tVault('settingsModal.profileSecurityTitle')}
+-        </h3>
+-
+-        <div
+-          role="group"
+-          aria-labelledby="profile-security-title"
+-          style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+-        >
+-          <div className="form-field" style={toggleRowStyle}>
+-            <span className="form-label settings-subheader">{tVault('settingsModal.profile.setPasswordSection')}</span>
+-
+-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
+-              <button
+-                className="btn btn-secondary"
+-                type="button"
+-                onClick={() => setSetPasswordOpen(true)}
+-                disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
+-              >
+-                {tVault('settingsModal.profile.setPasswordAction')}
+-              </button>
+-            </div>
+-          </div>
+-
+-          <div className="form-field" style={toggleRowStyle}>
+-            <span className="form-label settings-subheader">{tVault('settingsModal.profile.changePasswordSection')}</span>
+-
+-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
+-              <button
+-                className="btn btn-secondary"
+-                type="button"
+-                onClick={() => setChangePasswordOpen(true)}
+-                disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
+-              >
+-                {tVault('settingsModal.profile.changePasswordAction')}
+-              </button>
+-            </div>
+-          </div>
+-        </div>
+ 
+         <DialogFooter className="dialog-footer--split">
+           <div className="dialog-footer-left">
+--- a/src/shared/styles/ui.css
++++ b/src/shared/styles/ui.css
+@@ -1012,6 +1012,41 @@
+   gap: 10px;
  }
  
--fn apply_in_memory_pragmas(conn: &rusqlite::Connection, profile_id: &str, ctx: &str) -> Result<()> {
--    // Avoid any disk I/O from temp/WAL sidecars when the vault DB is deserialized into :memory:.
--    // This prevents SQLITE_CANTOPEN when SQLite tries to create/open temp files or -wal/-shm.
--    conn.execute_batch(
--        "PRAGMA temp_store=MEMORY;
--PRAGMA synchronous=OFF;
--PRAGMA journal_mode=MEMORY;
--",
--    )
--    .map_err(|e| {
--        log::error!(
--            "[SECURITY][pragmas] profile_id={} ctx={} err={}",
--            profile_id,
--            ctx,
--            format_rusqlite_error(&e)
--        );
--        classify_db_error(&e)
--    })
-+fn apply_in_memory_pragmas(conn: &rusqlite::Connection, profile_id: &str, ctx: &str) -> Result<()> {
-+    // Keep this minimal and non-invasive. Setting journal_mode can itself trigger SQLITE_CANTOPEN
-+    // if the deserialized image is marked as WAL and SQLite attempts to open sidecars.
-+    conn.execute_batch(
-+        "PRAGMA temp_store=MEMORY;
-+PRAGMA synchronous=OFF;
-+",
-+    )
-+    .map_err(|e| {
-+        log::error!(
-+            "[SECURITY][pragmas] profile_id={} ctx={} err={}",
-+            profile_id,
-+            ctx,
-+            format_rusqlite_error(&e)
-+        );
-+        classify_db_error(&e)
-+    })
++/* ========================================================================
++   Settings modal
++   ======================================================================== */
++
++.settings-modal-body {
++  gap: 18px;
 +}
 +
-+fn normalize_sqlite_header_disable_wal(bytes: &mut [u8], profile_id: &str, ctx: &str) {
-+    // SQLite header magic: "SQLite format 3\0"
-+    const MAGIC: &[u8; 16] = b"SQLite format 3\0";
-+    if bytes.len() < 20 {
-+        return;
-+    }
-+    if &bytes[..16] != MAGIC {
-+        return;
-+    }
++.settings-modal-section-title {
++  margin: 0;
++  font-size: 22px;
++  line-height: 28px;
++  font-weight: 800;
++}
 +
-+    // As per SQLite documentation/notes: WAL mode persistence is reflected in the DB header bytes.
-+    // Values 2 at offsets 18/19 indicate WAL read/write versions. Setting them to 1 disables WAL
-+    // expectations and prevents attempts to open -wal/-shm for deserialized in-memory images.
-+    // (This is safe for our use-case because we always serialize a consistent image.)
-+    let mut changed = false;
-+    if bytes[18] == 2 {
-+        bytes[18] = 1;
-+        changed = true;
-+    }
-+    if bytes[19] == 2 {
-+        bytes[19] = 1;
-+        changed = true;
-+    }
-+    if changed {
-+        log::warn!(
-+            "[SECURITY][sqlite_header] profile_id={} ctx={} action=disable_wal_header_bytes",
-+            profile_id,
-+            ctx
-+        );
-+    }
- }
- 
- fn open_protected_vault_session(
-@@ -98,6 +133,12 @@ fn open_protected_vault_session(
-     let encrypted = read_encrypted_vault_blob(profile_id, state)?;
-     let decrypted = cipher::decrypt_vault_blob(profile_id, &key, &encrypted)
-         .map_err(|_| ErrorCodeString::new("VAULT_DECRYPT_FAILED"))?;
++.settings-profile-actions {
++  display: flex;
++  flex-direction: column;
++  align-items: flex-start;
++  gap: 12px;
++}
 +
-+    // If the stored DB image is marked WAL, SQLite may try to open -wal/-shm even for :memory:
-+    // deserialization and fail with SQLITE_CANTOPEN (14). Normalize header before deserialize.
-+    let mut decrypted = decrypted;
-+    normalize_sqlite_header_disable_wal(decrypted.as_mut_slice(), profile_id, "unlock_before_deserialize");
- 
-     let mut conn = rusqlite::Connection::open_in_memory().map_err(|e| {
-         log::error!(
-@@ -111,21 +152,18 @@ fn open_protected_vault_session(
-         ErrorCodeString::new("DB_OPEN_FAILED")
-     })?;
- 
-     // Set pragmas BEFORE deserialize to avoid temp file writes during the first statements.
-     apply_in_memory_pragmas(&conn, profile_id, "open_in_memory_before_deserialize")?;
- 
-     let owned = owned_data_from_bytes(decrypted)?;
-     conn.deserialize(DatabaseName::Main, owned, false).map_err(|e| {
-         log::error!(
-             "[SECURITY][login] profile_id={} step=deserialize err={}",
-             profile_id,
-             format_rusqlite_error(&e)
-         );
-         ErrorCodeString::new("VAULT_CORRUPTED")
-     })?;
- 
--    // Re-apply pragmas AFTER deserialize, in case the serialized image was created from a WAL database.
--    apply_in_memory_pragmas(&conn, profile_id, "after_deserialize")?;
--
-     if let Err(e) = migrations::migrate_to_latest(&conn) {
-         log::error!(
-             "[SECURITY][login] profile_id={} step=migrate_to_latest failed code={}",
-             profile_id,
-             e.code
-         );
-         return Err(e);
-     }
- 
-     migrations::validate_core_schema(&conn)
-         .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
- 
-@@ -410,6 +448,12 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-             let bytes = {
-                 let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
-                     log::error!(
-                         "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
-                         id,
-                         format_rusqlite_error(&e)
-                     );
-                     classify_db_error(&e)
-                 })?;
--                serialized.to_vec()
-+                let mut bytes = serialized.to_vec();
-+                // Ensure the encrypted vault image is not marked as WAL (prevents unlock-side CANTOPEN).
-+                normalize_sqlite_header_disable_wal(bytes.as_mut_slice(), id, "set_password_before_encrypt");
-+                bytes
-             };
-             (mem, bytes)
-         };
++.settings-profile-action {
++  width: 160px;
++  justify-content: center;
++}
++
++.settings-profile-action--tall {
++  padding-top: 16px;
++  padding-bottom: 16px;
++  white-space: normal;
++  line-height: 18px;
++  text-align: center;
++}
++
+ /* Attachments block inside a dialog (list of attached files) */
+ .dialog-attachments {
+   display: flex;
