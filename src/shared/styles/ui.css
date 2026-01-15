@@ -1012,6 +1012,41 @@ select:autofill {
   gap: 10px;
 }
 
+/* ========================================================================
+   Settings modal
+   ======================================================================== */
+
+.settings-modal-body {
+  gap: 18px;
+}
+
+.settings-modal-section-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+}
+
+.settings-profile-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.settings-profile-action {
+  width: 160px;
+  justify-content: center;
+}
+
+.settings-profile-action--tall {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  white-space: normal;
+  line-height: 18px;
+  text-align: center;
+}
+
 /* Attachments block inside a dialog (list of attached files) */
 .dialog-attachments {
   display: flex;

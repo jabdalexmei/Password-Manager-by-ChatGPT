@@ -239,14 +239,6 @@ export function SettingsModal({
     onSave(nextSettings);
   };
 
-  // ---- Layout styles (no borders). "Backups" is a subtitle (h3). ----
-  const subtitleStyle: React.CSSProperties = {
-    margin: 0,
-    fontSize: 16,
-    fontWeight: 700,
-    lineHeight: '20px',
-  };
-
   const toggleRowStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: '1fr 140px', // fixed control column (not flush to modal edge)
@@ -277,7 +269,6 @@ export function SettingsModal({
     outline: 'none',
   };
 
-
   const switchThumbStyle: React.CSSProperties = {
     width: 18,
     height: 18,
@@ -294,13 +285,46 @@ export function SettingsModal({
   return (
     <>
       <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
-      <DialogContent aria-labelledby="settings-title">
+      <DialogContent aria-labelledby="settings-title" className="settings-modal">
         <DialogHeader>
           <DialogTitle id="settings-title">{tVault('settings')}</DialogTitle>
         </DialogHeader>
 
-        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <h3 id="security-title" style={subtitleStyle}>
+        <div className="dialog-body settings-modal-body">
+          <h3 id="profile-title" className="settings-modal-section-title">
+            {tVault('settingsModal.profileTitle')}
+          </h3>
+
+          <div className="settings-profile-actions" role="group" aria-labelledby="profile-title">
+            <button
+              className="btn btn-secondary settings-profile-action"
+              type="button"
+              onClick={() => setRenameProfileOpen(true)}
+              disabled={busy}
+            >
+              {tVault('settingsModal.profile.rename')}
+            </button>
+
+            <button
+              className="btn btn-secondary settings-profile-action"
+              type="button"
+              onClick={() => setSetPasswordOpen(true)}
+              disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
+            >
+              {tVault('settingsModal.profile.setPasswordAction')}
+            </button>
+
+            <button
+              className="btn btn-secondary settings-profile-action settings-profile-action--tall"
+              type="button"
+              onClick={() => setChangePasswordOpen(true)}
+              disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
+            >
+              {tVault('settingsModal.profile.changePasswordAction')}
+            </button>
+          </div>
+
+          <h3 id="security-title" className="settings-modal-section-title">
             {tVault('settingsModal.securityTitle')}
           </h3>
 
@@ -452,7 +476,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          <h3 id="backups-title" style={subtitleStyle}>
+          <h3 id="backups-title" className="settings-modal-section-title">
             {tVault('backup.settings.title')}
           </h3>
 
@@ -518,87 +542,6 @@ export function SettingsModal({
                 onChange={(event) => setMaxCopies(event.target.value)}
                 style={fullWidthInputStyle}
               />
-            </div>
-          </div>
-        </div>
-
-        <h3 id="profile-title" style={subtitleStyle}>
-          {tVault('settingsModal.profileTitle')}
-        </h3>
-
-        <div role="group" aria-labelledby="profile-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="form-field" style={toggleRowStyle}>
-            <span className="form-label settings-subheader">{tVault('settingsModal.profile.nameLabel')}</span>
-
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'flex-end',
-                gap: 8,
-                alignItems: 'center',
-                minWidth: 0,
-              }}
-            >
-              <span
-                className="muted"
-                style={{
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: 260,
-                }}
-              >
-                {profileName || ''}
-              </span>
-
-              <button
-                className="btn btn-secondary"
-                type="button"
-                onClick={() => setRenameProfileOpen(true)}
-                disabled={busy}
-              >
-                {tVault('settingsModal.profile.rename')}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <h3 id="profile-security-title" style={subtitleStyle}>
-          {tVault('settingsModal.profileSecurityTitle')}
-        </h3>
-
-        <div
-          role="group"
-          aria-labelledby="profile-security-title"
-          style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
-        >
-          <div className="form-field" style={toggleRowStyle}>
-            <span className="form-label settings-subheader">{tVault('settingsModal.profile.setPasswordSection')}</span>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
-              <button
-                className="btn btn-secondary"
-                type="button"
-                onClick={() => setSetPasswordOpen(true)}
-                disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
-              >
-                {tVault('settingsModal.profile.setPasswordAction')}
-              </button>
-            </div>
-          </div>
-
-          <div className="form-field" style={toggleRowStyle}>
-            <span className="form-label settings-subheader">{tVault('settingsModal.profile.changePasswordSection')}</span>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
-              <button
-                className="btn btn-secondary"
-                type="button"
-                onClick={() => setChangePasswordOpen(true)}
-                disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
-              >
-                {tVault('settingsModal.profile.changePasswordAction')}
-              </button>
             </div>
           </div>
         </div>
