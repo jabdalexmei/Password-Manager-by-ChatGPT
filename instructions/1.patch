@@ -1,16 +1,4 @@
-Причина тут почти наверняка одна и та же для обоих симптомов:
 
-* `set_profile_password()` **успевает зашифровать `vault.db`**, но потом **падает на обновлении registry/config** (или другом шаге после шифрования) → фронт показывает “Failed to set password”, **хотя файл уже стал encrypted**.
-* После этого `registry.json` по-прежнему говорит `has_password=false`, и при входе приложение пытается открыть уже **не-SQLite** файл как SQLite (делает `PRAGMA journal_mode`) → вылетает `DB_QUERY_FAILED`. Это ровно то, что видно у тебя в логе. SQLite файл должен иметь заголовок `SQLite format 3`, а у твоего encrypted файла в начале другой “magic”. ([SQLite][1])
-
-Фикс должен делать 2 вещи:
-
-1. **Self-heal**: определять `has_password` по факту файлов (`kdf_salt.bin`, `key_check.bin` и magic `PMENC1`) и подлечивать registry на лету.
-2. **Не возвращать ошибку после успешного шифрования**: обновление registry/config делаем best-effort (иначе получаешь “Failed…” при уже установленном пароле).
-
-Ниже патч под твой текущий код из архива.
-
----
 
 ## Patch 1 — self-heal `has_password` в registry (чинит “после rename войти невозможно”)
 
@@ -131,9 +119,6 @@ index 5759509..b3b8d6e 100644
  }
 ```
 
-Что это даёт: даже если `vault.db` уже encrypted, но `registry.json` врёт — вход больше не пойдёт в `init_database_passwordless()` (SQLite PRAGMA), а пойдёт в `open_protected_vault_session()`. ([SQLite][1])
-
----
 
 ## Patch 2 — `set_profile_password()` не “фейлится” после успешного шифрования
 
@@ -194,18 +179,3 @@ index 9d8b7b1..c4a8a2d 100644
 +        }),
 +    }
  }
-```
-
-Почему это правильно: состояние “vault уже зашифрован” — факт на диске. Ошибка записи registry после этого не должна ломать UX и приводить к не-входимым профилям. (Если запись действительно не удалась — Patch 1 всё равно подлечит `has_password` по magic/файлам.) ([Rust Documentation][2])
-
----
-
-### Итог
-
-* “Failed to set password” больше не будет появляться в ситуации “vault уже зашифрован”.
-* После rename/любого другого действия профиль будет корректно определяться как protected/passwordless по факту, а не по сломанному флажку в registry.
-
-Если после этого “Failed to set password” всё ещё вылезет — нужен **код ошибки**, который реально возвращает Tauri invoke (например `PROFILE_STORAGE_WRITE` / `DB_OPEN_FAILED` / `DB_QUERY_FAILED`). Тогда точечно добьём конкретную ветку, но два патча выше убирают именно тот класс поломок, который ты описал (частичное успешное шифрование + сломанный `has_password`).
-
-[1]: https://www.sqlite.org/fileformat.html?utm_source=chatgpt.com "Database File Format - SQLite"
-[2]: https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html?utm_source=chatgpt.com "References and Borrowing - The Rust Programming ..."
