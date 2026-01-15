@@ -770,7 +770,7 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
 
     let key = Zeroizing::new(*session.key);
 
-    if write_atomic(&vault_path, db_bytes.as_slice()).is_err() {
+    if write_atomic(&vault_path, &db_bytes[..]).is_err() {
         rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
     }
