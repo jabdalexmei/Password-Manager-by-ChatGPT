@@ -49,6 +49,66 @@ fn classify_db_error(err: &rusqlite::Error) -> ErrorCodeString {
     }
 }
 
+fn should_retry_open(err: &rusqlite::Error) -> bool {
+    match err {
+        rusqlite::Error::SqliteFailure(e, _) => {
+            use rusqlite::ErrorCode::*;
+            matches!(e.code, CannotOpen | DatabaseBusy | DatabaseLocked)
+        }
+        _ => false,
+    }
+}
+
+fn open_snapshot_connection(id: &str, vault_path: &Path) -> Result<rusqlite::Connection> {
+    let mut last_err: Option<rusqlite::Error> = None;
+    for attempt in 0..=20 {
+        match rusqlite::Connection::open_with_flags(vault_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+            Ok(conn) => {
+                if let Err(e) = conn.busy_timeout(Duration::from_secs(15)) {
+                    log::error!(
+                        "[SECURITY][set_profile_password] profile_id={} step=busy_timeout_src vault={:?} err={}",
+                        id,
+                        vault_path,
+                        format_rusqlite_error(&e)
+                    );
+                    return Err(ErrorCodeString::new("DB_OPEN_FAILED"));
+                }
+                return Ok(conn);
+            }
+            Err(e) => {
+                if !should_retry_open(&e) || attempt == 20 {
+                    log::error!(
+                        "[SECURITY][set_profile_password] profile_id={} step=open_src vault={:?} err={}",
+                        id,
+                        vault_path,
+                        format_rusqlite_error(&e)
+                    );
+                    return Err(ErrorCodeString::new("DB_OPEN_FAILED"));
+                }
+                log::warn!(
+                    "[SECURITY][set_profile_password] profile_id={} step=open_src_retry vault={:?} attempt={} err={}",
+                    id,
+                    vault_path,
+                    attempt + 1,
+                    format_rusqlite_error(&e)
+                );
+                last_err = Some(e);
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+
+    if let Some(err) = last_err {
+        log::error!(
+            "[SECURITY][set_profile_password] profile_id={} step=open_src vault={:?} err={}",
+            id,
+            vault_path,
+            format_rusqlite_error(&err)
+        );
+    }
+    Err(ErrorCodeString::new("DB_OPEN_FAILED"))
+}
+
 fn owned_data_from_bytes(mut bytes: Vec<u8>) -> Result<OwnedData> {
     if bytes.is_empty() {
         return Err(ErrorCodeString::new("EMPTY_SERIALIZED_DB"));
@@ -321,28 +381,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         // Snapshot the file DB into memory using SQLite online backup, then serialize the in-memory DB.
         let bytes: Vec<u8> = {
             // Open read-only to avoid taking write locks / WAL side-effects during snapshot.
-            let src = rusqlite::Connection::open_with_flags(
-                &vault_path,
-                OpenFlags::SQLITE_OPEN_READ_ONLY,
-            )
-                .map_err(|e| {
-                    log::error!(
-                        "[SECURITY][set_profile_password] profile_id={} step=open_src vault={:?} err={}",
-                        id,
-                        vault_path,
-                        format_rusqlite_error(&e)
-                    );
-                    ErrorCodeString::new("DB_OPEN_FAILED")
-                })?;
-            src.busy_timeout(Duration::from_secs(15)).map_err(|e| {
-                log::error!(
-                    "[SECURITY][set_profile_password] profile_id={} step=busy_timeout_src vault={:?} err={}",
-                    id,
-                    vault_path,
-                    format_rusqlite_error(&e)
-                );
-                ErrorCodeString::new("DB_OPEN_FAILED")
-            })?;
+            let src = open_snapshot_connection(id, &vault_path)?;
 
             // IMPORTANT:
             // Do NOT run migrations on the file DB here.
