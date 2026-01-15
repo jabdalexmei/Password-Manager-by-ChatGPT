@@ -3,7 +3,6 @@ use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use rusqlite::backup::Backup;
 use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
 use rusqlite::DatabaseName;
@@ -266,7 +265,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
     let profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
-    // registry::get_profile now self-heals has_password from disk state.
+    // registry::get_profile now self-heals has_password based on disk state.
     if profile.has_password {
         return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
     }
@@ -287,25 +286,13 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
     }
 
-    // Serialize passwordless sqlite file to bytes via BACKUP snapshot to avoid WAL/in-flight locks.
+    // Serialize passwordless sqlite file to bytes.
+    // NOTE: serialize() may borrow the connection, so materialize bytes while conn is alive.
     let bytes: Vec<u8> = {
-        let src_conn = rusqlite::Connection::open(&vault_path)
+        let conn = rusqlite::Connection::open(&vault_path)
             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-        migrations::migrate_to_latest(&src_conn)?;
-
-        let mut mem_conn = rusqlite::Connection::open_in_memory()
-            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-
-        {
-            let mut backup = Backup::new(&src_conn, &mut mem_conn)
-                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-            backup
-                .run_to_completion(5, std::time::Duration::from_millis(250), None)
-                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-            // `backup` dropped here, releasing the mutable borrow of `mem_conn`.
-        }
-
-        let serialized = mem_conn
+        migrations::migrate_to_latest(&conn)?;
+        let serialized = conn
             .serialize(DatabaseName::Main)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         serialized.to_vec()
@@ -352,15 +339,17 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         });
     }
 
-    // Update registry flag. If it fails, do NOT pretend the operation failed:
-    // the vault is already encrypted and self-heal will recover on next load.
-    let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)
-        .unwrap_or(ProfileMeta {
+    // Update registry flag.
+    // IMPORTANT: If the vault has already been encrypted, do not return an error just because
+    // registry/config write failed — otherwise UI shows "Failed..." but the profile is actually protected.
+    match registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true) {
+        Ok(updated) => Ok(updated.into()),
+        Err(_) => Ok(ProfileMeta {
             id: profile.id,
             name: profile.name,
             has_password: true,
-        });
-    Ok(updated)
+        }),
+    }
 }
 
 pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<bool> {
