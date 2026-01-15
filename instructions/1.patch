@@ -1,9 +1,23 @@
-diff --git a/src/services/security_service.rs b/src/services/security_service.rs
-index 1234567..89abcde 100644
---- a/src/services/security_service.rs
-+++ b/src/services/security_service.rs
-@@ -399,7 +399,7 @@
--        let (mut mem_conn, bytes): (rusqlite::Connection, Vec<u8>) = {
-+        let (mem_conn, bytes): (rusqlite::Connection, Vec<u8>) = {
-             // ...
-         };
+diff --git a/src-tauri/src/data/sqlite/pool.rs b/src-tauri/src/data/sqlite/pool.rs
+index 6f1d2c1..b8a4a3e 100644
+--- a/src-tauri/src/data/sqlite/pool.rs
++++ b/src-tauri/src/data/sqlite/pool.rs
+@@ -33,13 +33,17 @@ struct FilePragmas;
+ impl r2d2::CustomizeConnection<rusqlite::Connection, rusqlite::Error> for FilePragmas {
+     fn on_acquire(
+         &self,
+         conn: &mut rusqlite::Connection,
+     ) -> std::result::Result<(), rusqlite::Error> {
+         conn.busy_timeout(Duration::from_secs(DB_BUSY_TIMEOUT_SECS_FILE))?;
+         conn.execute_batch(
+             r#"
+             PRAGMA foreign_keys = ON;
+-            PRAGMA synchronous = NORMAL;
++            -- Stronger durability: in WAL mode, FULL syncs the WAL on each commit.
++            -- This reduces the chance of losing the last transactions after sudden power loss/OS crash,
++            -- at the cost of slower writes.
++            PRAGMA synchronous = FULL;
+             "#,
+         )
+     }
+ }
