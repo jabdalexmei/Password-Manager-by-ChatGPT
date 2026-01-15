@@ -403,15 +403,21 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             migrations::validate_core_schema(&mem)
                 .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
-            let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
-                log::error!(
-                    "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
-                    id,
-                    format_rusqlite_error(&e)
-                );
-                classify_db_error(&e)
-            })?;
-            (mem, serialized.to_vec())
+            // IMPORTANT: `serialize()` returns a value that borrows `mem`.
+            // Materialize bytes inside a narrower scope so the borrow ends
+            // before we move `mem` out.
+            let bytes = {
+                let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
+                    log::error!(
+                        "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
+                        id,
+                        format_rusqlite_error(&e)
+                    );
+                    classify_db_error(&e)
+                })?;
+                serialized.to_vec()
+            };
+            (mem, bytes)
         };
 
         // mem_conn is already validated/migrated in-memory above.
