@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rusqlite::backup::Backup;
+use rusqlite::OpenFlags;
 use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
 use rusqlite::DatabaseName;
@@ -319,17 +320,25 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
         // Snapshot the file DB into memory using SQLite online backup, then serialize the in-memory DB.
         let bytes: Vec<u8> = {
-            let src = rusqlite::Connection::open(&vault_path)
+            // Open read-only to avoid taking write locks / WAL side-effects during snapshot.
+            let src = rusqlite::Connection::open_with_flags(
+                &vault_path,
+                OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
             src.busy_timeout(Duration::from_secs(15))
                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-            migrations::migrate_to_latest(&src)?;
+
+            // IMPORTANT:
+            // Do NOT run migrations on the file DB here.
+            // On Windows/WAL with concurrent connections this can hit SQLITE_BUSY/LOCKED and fail the whole flow.
+            // We run migrations on the in-memory snapshot below (mem_conn), which is lock-free.
 
             let mut mem = rusqlite::Connection::open_in_memory()
                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 
             {
-                let mut backup = Backup::new(&src, &mut mem).map_err(|e| {
+                let backup = Backup::new(&src, &mut mem).map_err(|e| {
                     log::error!(
                         "[SECURITY][set_profile_password] profile_id={} step=backup_init vault={:?} err={}",
                         id,
