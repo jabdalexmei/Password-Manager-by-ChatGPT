@@ -16,8 +16,7 @@ use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path, vault_db_
 use crate::data::profiles::registry;
 use crate::data::sqlite::init::init_database_passwordless;
 use crate::data::sqlite::migrations;
-use crate::data::sqlite::pool::clear_pool;
-use crate::data::sqlite::pool::MaintenanceGuard;
+use crate::data::sqlite::pool::{clear_pool, drain_and_drop_profile_pools, MaintenanceGuard};
 use crate::error::{ErrorCodeString, Result};
 use crate::services::attachments_service;
 use crate::types::ProfileMeta;
@@ -262,106 +261,118 @@ pub fn drop_active_session_without_persist(state: &Arc<AppState>) -> Result<bool
 }
 
 pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
-    let storage_paths = state.get_storage_paths()?;
+    let res = (|| {
+        let storage_paths = state.get_storage_paths()?;
 
-    let profile = registry::get_profile(&storage_paths, id)?
-        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+        let profile = registry::get_profile(&storage_paths, id)?
+            .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
-    // Block any new pooled sqlite connections during conversion.
-    let _maintenance = MaintenanceGuard::new(id)?;
+        // Block any new pooled sqlite connections during conversion.
+        let _maintenance = MaintenanceGuard::new(id)?;
 
-    // registry::get_profile now self-heals has_password based on disk state.
-    if profile.has_password {
-        return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
-    }
+        // registry::get_profile now self-heals has_password based on disk state.
+        if profile.has_password {
+            return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
+        }
 
-    let pwd = password.trim();
-    if pwd.is_empty() {
-        return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
-    }
+        let pwd = password.trim();
+        if pwd.is_empty() {
+            return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
+        }
 
-    ensure_profile_dirs(&storage_paths, id)
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        ensure_profile_dirs(&storage_paths, id)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    // Close file-based sqlite connections before touching vault.db bytes.
-    clear_pool(id);
-    // Give any in-flight requests a moment to drop their pooled conns.
-    std::thread::sleep(Duration::from_millis(80));
+        // Close file-based sqlite connections before touching vault.db bytes.
+        // 1) Block new connections via MaintenanceGuard
+        // 2) Wait for checked-out connections to be returned
+        // 3) Drop pools to close idle connections and release OS file handles (Windows)
+        drain_and_drop_profile_pools(id, Duration::from_secs(5));
+        clear_pool(id);
+        // Give any in-flight requests a moment to drop their pooled conns.
+        std::thread::sleep(Duration::from_millis(80));
 
-    let vault_path = vault_db_path(&storage_paths, id)?;
-    if !vault_path.exists() {
-        return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
-    }
+        let vault_path = vault_db_path(&storage_paths, id)?;
+        if !vault_path.exists() {
+            return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
+        }
 
-    // Serialize passwordless sqlite file to bytes.
-    // NOTE: serialize() may borrow the connection, so materialize bytes while conn is alive.
-    let bytes: Vec<u8> = {
-        let conn = rusqlite::Connection::open(&vault_path)
+        // Serialize passwordless sqlite file to bytes.
+        // NOTE: serialize() may borrow the connection, so materialize bytes while conn is alive.
+        let bytes: Vec<u8> = {
+            let conn = rusqlite::Connection::open(&vault_path)
+                .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+            conn.busy_timeout(Duration::from_secs(15))
+                .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+            // Exclusive lock ensures no other connection is using the file during the snapshot.
+            conn.execute_batch("BEGIN EXCLUSIVE;")
+                .map_err(|_| ErrorCodeString::new("DB_BUSY"))?;
+            migrations::migrate_to_latest(&conn)?;
+            let serialized = conn
+                .serialize(DatabaseName::Main)
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            serialized.to_vec()
+        };
+
+        // Validate we can open this snapshot in-memory BEFORE writing any encrypted files.
+        let mut mem_conn = rusqlite::Connection::open_in_memory()
             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-        conn.busy_timeout(Duration::from_secs(15))
-            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-        // Exclusive lock ensures no other connection is using the file during the snapshot.
-        conn.execute_batch("BEGIN EXCLUSIVE;")
-            .map_err(|_| ErrorCodeString::new("DB_BUSY"))?;
-        migrations::migrate_to_latest(&conn)?;
-        let serialized = conn
-            .serialize(DatabaseName::Main)
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-        serialized.to_vec()
-    };
+        let owned = owned_data_from_bytes(bytes.clone())?;
+        mem_conn
+            .deserialize(DatabaseName::Main, owned, false)
+            .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+        migrations::migrate_to_latest(&mem_conn)?;
+        migrations::validate_core_schema(&mem_conn)
+            .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
-    // Validate we can open this snapshot in-memory BEFORE writing any encrypted files.
-    let mut mem_conn = rusqlite::Connection::open_in_memory()
-        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-    let owned = owned_data_from_bytes(bytes.clone())?;
-    mem_conn
-        .deserialize(DatabaseName::Main, owned, false)
-        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
-    migrations::migrate_to_latest(&mem_conn)?;
-    migrations::validate_core_schema(&mem_conn)
-        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+        // Create new salt + key.
+        let salt = kdf::generate_kdf_salt();
+        let salt_path = kdf_salt_path(&storage_paths, id)?;
+        write_atomic(&salt_path, &salt)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    // Create new salt + key.
-    let salt = kdf::generate_kdf_salt();
-    let salt_path = kdf_salt_path(&storage_paths, id)?;
-    write_atomic(&salt_path, &salt).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        let key = Zeroizing::new(kdf::derive_master_key(pwd, &salt)?);
 
-    let key = Zeroizing::new(kdf::derive_master_key(pwd, &salt)?);
+        // Create key check file first (so we can validate later).
+        key_check::create_key_check_file(&storage_paths, id, &*key)?;
 
-    // Create key check file first (so we can validate later).
-    key_check::create_key_check_file(&storage_paths, id, &*key)?;
+        // Encrypt vault bytes into vault.db (overwriting sqlite file).
+        let encrypted = cipher::encrypt_vault_blob(id, &*key, &bytes)?;
+        cipher::write_encrypted_file(&vault_path, &encrypted)?;
+        cleanup_sqlite_sidecars(&vault_path);
 
-    // Encrypt vault bytes into vault.db (overwriting sqlite file).
-    let encrypted = cipher::encrypt_vault_blob(id, &*key, &bytes)?;
-    cipher::write_encrypted_file(&vault_path, &encrypted)?;
-    cleanup_sqlite_sidecars(&vault_path);
+        // Switch runtime session to protected in-memory session so app stays unlocked.
+        // (mem_conn already validated above)
 
-    // Switch runtime session to protected in-memory session so app stays unlocked.
-    // (mem_conn already validated above)
+        {
+            let mut session = state
+                .vault_session
+                .lock()
+                .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
+            *session = Some(VaultSession {
+                profile_id: id.to_string(),
+                conn: mem_conn,
+                key,
+            });
+        }
 
-    {
-        let mut session = state
-            .vault_session
-            .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
-        *session = Some(VaultSession {
-            profile_id: id.to_string(),
-            conn: mem_conn,
-            key,
-        });
+        // Update registry flag.
+        // IMPORTANT: If the vault has already been encrypted, do not return an error just because
+        // registry/config write failed — otherwise UI shows "Failed..." but the profile is actually protected.
+        match registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true) {
+            Ok(updated) => Ok(updated.into()),
+            Err(_) => Ok(ProfileMeta {
+                id: profile.id,
+                name: profile.name,
+                has_password: true,
+            }),
+        }
+    })();
+
+    if let Err(err) = &res {
+        log::error!("[SECURITY][set_profile_password] failed: code={}", err.code);
     }
-
-    // Update registry flag.
-    // IMPORTANT: If the vault has already been encrypted, do not return an error just because
-    // registry/config write failed — otherwise UI shows "Failed..." but the profile is actually protected.
-    match registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true) {
-        Ok(updated) => Ok(updated.into()),
-        Err(_) => Ok(ProfileMeta {
-            id: profile.id,
-            name: profile.name,
-            has_password: true,
-        }),
-    }
+    res
 }
 
 pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<bool> {

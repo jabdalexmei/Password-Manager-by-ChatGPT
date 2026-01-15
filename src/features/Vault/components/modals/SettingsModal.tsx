@@ -170,7 +170,22 @@ export function SettingsModal({
       // Debugging guidance: webview console/devtools. :contentReference[oaicite:2]{index=2}
       // eslint-disable-next-line no-console
       console.error('profile_set_password failed:', e);
-      const code = (e as any)?.message ?? String(e);
+
+      // Backend returns `ErrorCodeString { code: string }` serialized over invoke,
+      // so the useful value is usually on `e.code` (not `message`).
+      const anyErr = e as any;
+      const code =
+        anyErr?.code ??
+        anyErr?.error?.code ??
+        anyErr?.message ??
+        (() => {
+          try {
+            return JSON.stringify(anyErr);
+          } catch {
+            return String(anyErr);
+          }
+        })();
+
       showToast(`${tVault('settingsModal.profile.setPasswordError')}: ${code}`, 'error');
     } finally {
       setIsSettingPassword(false);

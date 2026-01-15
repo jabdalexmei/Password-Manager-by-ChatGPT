@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
 use r2d2::PooledConnection;
@@ -127,6 +127,38 @@ pub fn clear_pool(profile_id: &str) {
     if let Ok(mut pools) = POOLS.lock() {
         pools.retain(|key, _| !key.starts_with(&format!("{profile_id}::")));
     }
+}
+
+pub fn drain_and_drop_profile_pools(profile_id: &str, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let pools = match POOLS.lock() {
+            Ok(guard) => guard
+                .iter()
+                .filter_map(|(key, pool)| {
+                    if key.starts_with(&format!("{profile_id}::")) {
+                        Some(pool.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>(),
+            Err(_) => return,
+        };
+
+        let all_idle = pools.iter().all(|pool| {
+            let state = pool.state();
+            state.connections == state.idle_connections
+        });
+
+        if all_idle || Instant::now() >= deadline {
+            break;
+        }
+
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    clear_pool(profile_id);
 }
 
 pub fn clear_all_pools() {
