@@ -22,6 +22,32 @@ use crate::error::{ErrorCodeString, Result};
 use crate::services::attachments_service;
 use crate::types::ProfileMeta;
 
+fn format_rusqlite_error(err: &rusqlite::Error) -> String {
+    match err {
+        rusqlite::Error::SqliteFailure(e, msg) => {
+            let m = msg.as_deref().unwrap_or("");
+            format!(
+                "SqliteFailure(code={:?}, extended_code={}, message={})",
+                e.code, e.extended_code, m
+            )
+        }
+        other => format!("{other:?}"),
+    }
+}
+
+fn classify_db_error(err: &rusqlite::Error) -> ErrorCodeString {
+    match err {
+        rusqlite::Error::SqliteFailure(e, _) => {
+            use rusqlite::ErrorCode::*;
+            match e.code {
+                DatabaseBusy | DatabaseLocked => ErrorCodeString::new("DB_BUSY"),
+                _ => ErrorCodeString::new("DB_QUERY_FAILED"),
+            }
+        }
+        _ => ErrorCodeString::new("DB_QUERY_FAILED"),
+    }
+}
+
 fn owned_data_from_bytes(mut bytes: Vec<u8>) -> Result<OwnedData> {
     if bytes.is_empty() {
         return Err(ErrorCodeString::new("EMPTY_SERIALIZED_DB"));
@@ -268,21 +294,6 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         let profile = registry::get_profile(&storage_paths, id)?
             .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
-        fn map_db_error(err: &rusqlite::Error) -> ErrorCodeString {
-            match err {
-                rusqlite::Error::SqliteFailure(e, _) => {
-                    use rusqlite::ErrorCode::*;
-                    match e.code {
-                        DatabaseBusy | DatabaseLocked | Busy | Locked => {
-                            ErrorCodeString::new("DB_BUSY")
-                        }
-                        _ => ErrorCodeString::new("DB_QUERY_FAILED"),
-                    }
-                }
-                _ => ErrorCodeString::new("DB_QUERY_FAILED"),
-            }
-        }
-
         // registry::get_profile now self-heals has_password based on disk state.
         if profile.has_password {
             return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
@@ -319,20 +330,34 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
             {
                 let mut backup = Backup::new(&src, &mut mem).map_err(|e| {
-                    log::error!("[SECURITY][set_profile_password] backup init failed: {e:?}");
-                    map_db_error(&e)
+                    log::error!(
+                        "[SECURITY][set_profile_password] profile_id={} step=backup_init vault={:?} err={}",
+                        id,
+                        vault_path,
+                        format_rusqlite_error(&e)
+                    );
+                    classify_db_error(&e)
                 })?;
                 backup
                     .run_to_completion(5, Duration::from_millis(250), None)
                     .map_err(|e| {
-                        log::error!("[SECURITY][set_profile_password] backup run failed: {e:?}");
-                        map_db_error(&e)
+                        log::error!(
+                            "[SECURITY][set_profile_password] profile_id={} step=backup_run vault={:?} err={}",
+                            id,
+                            vault_path,
+                            format_rusqlite_error(&e)
+                        );
+                        classify_db_error(&e)
                     })?;
             }
 
             let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
-                log::error!("[SECURITY][set_profile_password] serialize(mem) failed: {e:?}");
-                map_db_error(&e)
+                log::error!(
+                    "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
+                    id,
+                    format_rusqlite_error(&e)
+                );
+                classify_db_error(&e)
             })?;
             serialized.to_vec()
         };
@@ -361,7 +386,15 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
         // Encrypt vault bytes into vault.db (overwriting sqlite file).
         let encrypted = cipher::encrypt_vault_blob(id, &*key, &bytes)?;
-        cipher::write_encrypted_file(&vault_path, &encrypted)?;
+        if let Err(e) = cipher::write_encrypted_file(&vault_path, &encrypted) {
+            log::error!(
+                "[SECURITY][set_profile_password] profile_id={} step=write_encrypted vault={:?} code={}",
+                id,
+                vault_path,
+                e.code
+            );
+            return Err(e);
+        }
         cleanup_sqlite_sidecars(&vault_path);
 
         // Switch runtime session to protected in-memory session so app stays unlocked.

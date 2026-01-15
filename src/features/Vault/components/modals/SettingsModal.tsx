@@ -165,27 +165,29 @@ export function SettingsModal({
       showToast(tVault('settingsModal.profile.setPasswordSuccess'));
       setSetPasswordOpen(false);
     } catch (e) {
-      // Show real backend error code in console + toast for debugging.
-      // Tauri commands can return error values to the frontend. :contentReference[oaicite:1]{index=1}
-      // Debugging guidance: webview console/devtools. :contentReference[oaicite:2]{index=2}
       // eslint-disable-next-line no-console
       console.error('profile_set_password failed:', e);
 
-      // Backend returns `ErrorCodeString { code: string }` serialized over invoke,
-      // so the useful value is usually on `e.code` (not `message`).
-      const anyErr = e as any;
+      // Tauri commands return errors as rejected promises. :contentReference[oaicite:3]{index=3}
+      // Our backend uses structured error objects (e.g. { code: "DB_QUERY_FAILED" }).
+      const err = e as any;
       const code =
-        anyErr?.code ??
-        anyErr?.error?.code ??
-        anyErr?.message ??
-        (() => {
-          try {
-            return JSON.stringify(anyErr);
-          } catch {
-            return String(anyErr);
-          }
-        })();
+        err?.code ??
+        err?.error?.code ??
+        err?.message ??
+        'UNKNOWN_ERROR';
 
+      let details = '';
+      try {
+        details = JSON.stringify(err);
+      } catch {
+        details = String(err);
+      }
+
+      // eslint-disable-next-line no-console
+      console.error('profile_set_password error details:', { code, details });
+
+      // Keep toast short but informative.
       showToast(`${tVault('settingsModal.profile.setPasswordError')}: ${code}`, 'error');
     } finally {
       setIsSettingPassword(false);

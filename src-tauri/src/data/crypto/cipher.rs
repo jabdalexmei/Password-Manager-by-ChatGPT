@@ -78,8 +78,12 @@ pub fn decrypt_bytes(key: &[u8; KEY_LEN], aad: &[u8], blob: &[u8]) -> Result<Vec
 }
 
 pub fn write_encrypted_file(path: &std::path::Path, blob: &[u8]) -> Result<()> {
-    write_atomic(path, blob).map_err(|e| {
-        log::error!("[CRYPTO][write_encrypted_file] failed path={:?} err={:?}", path, e);
+    write_atomic(path, blob).map_err(|ioe| {
+        log::error!(
+            "[CRYPTO][write_encrypted_file] path={:?} io_error={:?}",
+            path,
+            ioe
+        );
         ErrorCodeString::new("ENCRYPTED_FILE_WRITE")
     })
 }
