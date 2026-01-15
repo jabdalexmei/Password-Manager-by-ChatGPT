@@ -1,10 +1,134 @@
+diff --git a/src-tauri/src/data/sqlite/pool.rs b/src-tauri/src/data/sqlite/pool.rs
+index 3cbe7a1..c7c2a4b 100644
+--- a/src-tauri/src/data/sqlite/pool.rs
++++ b/src-tauri/src/data/sqlite/pool.rs
+@@ -1,6 +1,7 @@
+-use std::collections::HashMap;
++use std::collections::{HashMap, HashSet};
+ use std::sync::Mutex;
+ use std::time::Duration;
++use std::time::Instant;
+ 
+ use once_cell::sync::Lazy;
+ use r2d2::PooledConnection;
+ use r2d2_sqlite::SqliteConnectionManager;
+ 
+ use crate::error::{ErrorCodeString, Result};
+@@ -17,6 +18,9 @@ pub enum DbTarget {
+ }
+ 
+ static POOLS: Lazy<Mutex<HashMap<String, r2d2::Pool<SqliteConnectionManager>>>> =
+     Lazy::new(|| Mutex::new(HashMap::new()));
++
++static MAINTENANCE: Lazy<Mutex<HashSet<String>>> =
++    Lazy::new(|| Mutex::new(HashSet::new()));
+ 
+ #[derive(Debug)]
+ struct FilePragmas;
+@@ -46,6 +50,15 @@ fn get_or_create_pool(
+ 
+     let key = format!("{profile_id}::file");
+ 
+     log::info!("[DB][pool] profile_id={profile_id} target={target:?} key={key}");
+ 
++    if let Ok(m) = MAINTENANCE.lock() {
++        if m.contains(profile_id) {
++            return Err(ErrorCodeString::new("DB_MAINTENANCE"));
++        }
++    }
++
+     if let Some(pool) = pools.get(&key) {
+         return Ok(pool.clone());
+     }
+@@ -77,6 +90,12 @@ pub fn get_conn(
+     profile_id: &str,
+     target: DbTarget,
+ ) -> Result<PooledConnection<SqliteConnectionManager>> {
++    if let Ok(m) = MAINTENANCE.lock() {
++        if m.contains(profile_id) {
++            return Err(ErrorCodeString::new("DB_MAINTENANCE"));
++        }
++    }
+     let pool = get_or_create_pool(profile_id, target)?;
+     pool.get()
+         .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))
+ }
+ 
++pub struct MaintenanceGuard {
++    profile_id: String,
++}
++
++impl MaintenanceGuard {
++    pub fn new(profile_id: &str) -> Result<Self> {
++        let mut m = MAINTENANCE
++            .lock()
++            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
++        m.insert(profile_id.to_string());
++        Ok(Self {
++            profile_id: profile_id.to_string(),
++        })
++    }
++}
++
++impl Drop for MaintenanceGuard {
++    fn drop(&mut self) {
++        if let Ok(mut m) = MAINTENANCE.lock() {
++            m.remove(&self.profile_id);
++        }
++    }
++}
++
++pub fn drain_and_drop_profile_pools(profile_id: &str, timeout: Duration) {
++    let prefix = format!("{profile_id}::");
++    let deadline = Instant::now() + timeout;
++
++    loop {
++        let pools_snapshot: Vec<r2d2::Pool<SqliteConnectionManager>> = match POOLS.lock() {
++            Ok(p) => p
++                .iter()
++                .filter(|(k, _)| k.starts_with(&prefix))
++                .map(|(_, v)| v.clone())
++                .collect(),
++            Err(_) => return,
++        };
++
++        if pools_snapshot.is_empty() {
++            break;
++        }
++
++        let mut all_idle = true;
++        for pool in &pools_snapshot {
++            let st = pool.state();
++            if st.connections > st.idle_connections {
++                all_idle = false;
++                break;
++            }
++        }
++
++        if all_idle || Instant::now() >= deadline {
++            break;
++        }
++
++        std::thread::sleep(Duration::from_millis(50));
++    }
++
++    if let Ok(mut pools) = POOLS.lock() {
++        pools.retain(|k, _| !k.starts_with(&prefix));
++    }
++}
++
+ pub fn clear_pool(profile_id: &str) {
+     if let Ok(mut pools) = POOLS.lock() {
+         pools.retain(|key, _| !key.starts_with(&format!("{profile_id}::")));
+     }
+ }
 diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 9d8b7b1..b4a6f2a 100644
+index 1f4a3b2..2c2a9c6 100644
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
 @@ -1,10 +1,12 @@
- use std::path::Path;
  use std::ptr::NonNull;
+ use std::path::Path;
  use std::sync::atomic::Ordering;
  use std::sync::Arc;
 +use std::time::Duration;
@@ -14,11 +138,60 @@ index 9d8b7b1..b4a6f2a 100644
  use rusqlite::serialize::OwnedData;
  use rusqlite::DatabaseName;
  use zeroize::{Zeroize, Zeroizing};
-@@ -286,17 +288,45 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+ 
+ use crate::app_state::{AppState, VaultSession};
+ use crate::data::crypto::{cipher, kdf, key_check};
+ use crate::data::fs::atomic_write::write_atomic;
+ use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path, vault_db_path};
+ use crate::data::profiles::registry;
+ use crate::data::sqlite::migrations;
+-use crate::data::sqlite::pool::clear_pool;
++use crate::data::sqlite::pool::{MaintenanceGuard, clear_pool, drain_and_drop_profile_pools};
+ use crate::error::{ErrorCodeString, Result};
+ use crate::services::attachments_service;
+ use crate::types::ProfileMeta;
+@@ -262,6 +264,26 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+     let storage_paths = state.get_storage_paths()?;
+ 
+     let profile = registry::get_profile(&storage_paths, id)?
+         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+ 
++    fn map_db_error(err: &rusqlite::Error) -> ErrorCodeString {
++        match err {
++            rusqlite::Error::SqliteFailure(e, _) => {
++                use rusqlite::ErrorCode::*;
++                match e.code {
++                    DatabaseBusy | DatabaseLocked | Busy | Locked => ErrorCodeString::new("DB_BUSY"),
++                    _ => ErrorCodeString::new("DB_QUERY_FAILED"),
++                }
++            }
++            _ => ErrorCodeString::new("DB_QUERY_FAILED"),
++        }
++    }
++
+     // registry::get_profile now self-heals has_password based on disk state.
+     if profile.has_password {
+         return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
+     }
+@@ -279,8 +301,14 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+     ensure_profile_dirs(&storage_paths, id)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
+-    // Close file-based sqlite connections before touching vault.db bytes.
+-    clear_pool(id);
++    // Block any new pooled sqlite connections and wait for checked-out conns to return.
++    let _maintenance = MaintenanceGuard::new(id)?;
++    drain_and_drop_profile_pools(id, Duration::from_secs(5));
++    clear_pool(id);
+ 
+     let vault_path = vault_db_path(&storage_paths, id)?;
+     if !vault_path.exists() {
+         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
      }
  
-     // Serialize passwordless sqlite file to bytes.
+-    // Serialize passwordless sqlite file to bytes.
 -    // NOTE: serialize() may borrow the connection, so materialize bytes while conn is alive.
++    // Snapshot the file DB into memory using SQLite online backup, then serialize the in-memory DB.
      let bytes: Vec<u8> = {
 -        let conn = rusqlite::Connection::open(&vault_path)
 -            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
@@ -27,37 +200,32 @@ index 9d8b7b1..b4a6f2a 100644
 -            .serialize(DatabaseName::Main)
 -            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 -        serialized.to_vec()
-+        // Source connection (file)
 +        let src = rusqlite::Connection::open(&vault_path)
 +            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 +        src.busy_timeout(Duration::from_secs(15))
 +            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 +
-+        // Ensure schema is current before snapshot
 +        migrations::migrate_to_latest(&src)?;
 +
-+        // Destination connection (in-memory snapshot)
 +        let mut mem = rusqlite::Connection::open_in_memory()
 +            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 +
-+        // SQLite forbids using destination connection during backup; keep it in its own scope.
 +        {
 +            let mut backup = Backup::new(&src, &mut mem).map_err(|e| {
-+                log::error!("[SECURITY][set_profile_password] backup new failed: {e:?}");
-+                ErrorCodeString::new("DB_QUERY_FAILED")
++                log::error!("[SECURITY][set_profile_password] backup init failed: {e:?}");
++                map_db_error(&e)
 +            })?;
 +            backup
 +                .run_to_completion(5, Duration::from_millis(250), None)
 +                .map_err(|e| {
 +                    log::error!("[SECURITY][set_profile_password] backup run failed: {e:?}");
-+                    ErrorCodeString::new("DB_QUERY_FAILED")
++                    map_db_error(&e)
 +                })?;
 +        }
 +
-+        // Now serialize from the in-memory snapshot (no WAL/locks).
 +        let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
 +            log::error!("[SECURITY][set_profile_password] serialize(mem) failed: {e:?}");
-+            ErrorCodeString::new("DB_QUERY_FAILED")
++            map_db_error(&e)
 +        })?;
 +        serialized.to_vec()
      };
