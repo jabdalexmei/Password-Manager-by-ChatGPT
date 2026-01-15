@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BackendUserSettings } from '../../types/backend';
 import { useTranslation } from '../../../../shared/lib/i18n';
+import { useToaster } from '../../../../shared/components/Toaster';
+import { renameProfile } from '../../../../shared/lib/tauri';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/ui/dialog';
 
 export type SettingsModalProps = {
@@ -9,11 +11,24 @@ export type SettingsModalProps = {
   isSaving: boolean;
   onCancel: () => void;
   onSave: (nextSettings: BackendUserSettings) => void;
+  profileId: string;
+  profileName: string;
+  onProfileRenamed?: (name: string) => void;
 };
 
-export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: SettingsModalProps) {
+export function SettingsModal({
+  open,
+  settings,
+  isSaving,
+  onCancel,
+  onSave,
+  profileId,
+  profileName,
+  onProfileRenamed,
+}: SettingsModalProps) {
   const { t: tVault } = useTranslation('Vault');
   const { t: tCommon } = useTranslation('Common');
+  const { show: showToast } = useToaster();
 
   const [autoLockEnabled, setAutoLockEnabled] = useState(false);
   const [autoLockTimeoutSeconds, setAutoLockTimeoutSeconds] = useState('60');
@@ -22,6 +37,9 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState('60');
   const [maxCopies, setMaxCopies] = useState('10');
+  const [renameProfileOpen, setRenameProfileOpen] = useState(false);
+  const [renameProfileValue, setRenameProfileValue] = useState('');
+  const [isRenamingProfile, setIsRenamingProfile] = useState(false);
 
   useEffect(() => {
     if (!open || !settings) return;
@@ -33,6 +51,11 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     setIntervalMinutes(String(settings.auto_backup_interval_minutes));
     setMaxCopies(String(settings.backup_max_copies));
   }, [open, settings]);
+
+  useEffect(() => {
+    if (!renameProfileOpen) return;
+    setRenameProfileValue(profileName || '');
+  }, [renameProfileOpen, profileName]);
 
   const busy = isSaving;
 
@@ -62,6 +85,30 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
     intervalMinutes,
     maxCopies,
   ]);
+
+  const canSaveRename = useMemo(() => {
+    const next = renameProfileValue.trim();
+    if (!next) return false;
+    if (next === (profileName || '').trim()) return false;
+    return true;
+  }, [profileName, renameProfileValue]);
+
+  const handleRenameSave = async () => {
+    const next = renameProfileValue.trim();
+    if (!next) return;
+
+    setIsRenamingProfile(true);
+    try {
+      const updated = await renameProfile(profileId, next);
+      onProfileRenamed?.(updated.name);
+      showToast(tVault('settingsModal.profile.renameSuccess'));
+      setRenameProfileOpen(false);
+    } catch {
+      showToast(tVault('settingsModal.profile.renameError'), 'error');
+    } finally {
+      setIsRenamingProfile(false);
+    }
+  };
 
   const handleSave = () => {
     if (!settings) return;
@@ -145,7 +192,8 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
   };
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
+    <>
+      <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
       <DialogContent aria-labelledby="settings-title">
         <DialogHeader>
           <DialogTitle id="settings-title">{tVault('settings')}</DialogTitle>
@@ -374,6 +422,47 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
           </div>
         </div>
 
+        <h3 id="profile-title" style={subtitleStyle}>
+          {tVault('settingsModal.profileTitle')}
+        </h3>
+
+        <div role="group" aria-labelledby="profile-title" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="form-field" style={toggleRowStyle}>
+            <span className="form-label settings-subheader">{tVault('settingsModal.profile.nameLabel')}</span>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 8,
+                alignItems: 'center',
+                minWidth: 0,
+              }}
+            >
+              <span
+                className="muted"
+                style={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: 260,
+                }}
+              >
+                {profileName || ''}
+              </span>
+
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={() => setRenameProfileOpen(true)}
+                disabled={busy}
+              >
+                {tVault('settingsModal.profile.rename')}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <DialogFooter className="dialog-footer--split">
           <div className="dialog-footer-left">
             <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={busy}>
@@ -389,5 +478,58 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Se
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={renameProfileOpen}
+      onOpenChange={(nextOpen) => (!nextOpen ? setRenameProfileOpen(false) : undefined)}
+    >
+      <DialogContent aria-labelledby="rename-profile-title">
+        <DialogHeader>
+          <DialogTitle id="rename-profile-title">{tVault('settingsModal.profile.renameTitle')}</DialogTitle>
+        </DialogHeader>
+
+        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="form-field">
+            <label className="form-label" htmlFor="rename-profile-input">
+              {tVault('settingsModal.profile.nameLabel')}
+            </label>
+            <input
+              id="rename-profile-input"
+              type="text"
+              value={renameProfileValue}
+              disabled={busy || isRenamingProfile}
+              onChange={(event) => setRenameProfileValue(event.target.value)}
+              autoComplete="off"
+              style={fullWidthInputStyle}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="dialog-footer--split">
+          <div className="dialog-footer-left">
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => setRenameProfileOpen(false)}
+              disabled={busy || isRenamingProfile}
+            >
+              {tCommon('action.cancel')}
+            </button>
+          </div>
+
+          <div className="dialog-footer-right">
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={handleRenameSave}
+              disabled={busy || isRenamingProfile || !canSaveRename}
+            >
+              {tVault('backup.settings.save')}
+            </button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

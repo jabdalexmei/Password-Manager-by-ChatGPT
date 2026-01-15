@@ -31,6 +31,10 @@ export async function deleteProfile(id: string): Promise<boolean> {
   return invoke('profile_delete', { id });
 }
 
+export async function renameProfile(id: string, name: string): Promise<ProfileMeta> {
+  return invoke('profile_rename', { id, name });
+}
+
 export async function setActiveProfile(id: string): Promise<boolean> {
   return invoke('set_active_profile', { id });
 }

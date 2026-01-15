@@ -80,6 +80,7 @@ const App: React.FC = () => {
             profileId={activeProfile.id}
             profileName={activeProfile.name}
             isPasswordless={!activeProfile.has_password}
+            onProfileRenamed={(name) => setProfile((p) => (p ? { ...p, name } : p))}
             onLocked={() => {
               if (activeProfile.has_password) {
                 setView('login');

@@ -64,6 +64,14 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
     registry::delete_profile(sp, id)
 }
 
+pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(ErrorCodeString::new("PROFILE_NAME_REQUIRED"));
+    }
+    registry::rename_profile(sp, id, trimmed)
+}
+
 pub fn get_active_profile(sp: &StoragePaths) -> Result<Option<ProfileMeta>> {
     let settings = config::load_settings(sp)?;
     if let Some(id) = settings.active_profile {
