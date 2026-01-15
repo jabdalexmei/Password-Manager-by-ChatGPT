@@ -4,6 +4,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
+use rusqlite::backup::Backup;
 use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
 use rusqlite::DatabaseName;
@@ -298,19 +299,38 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         }
 
         // Serialize passwordless sqlite file to bytes.
-        // NOTE: serialize() may borrow the connection, so materialize bytes while conn is alive.
         let bytes: Vec<u8> = {
-            let conn = rusqlite::Connection::open(&vault_path)
+            // Source connection (file)
+            let src = rusqlite::Connection::open(&vault_path)
                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-            conn.busy_timeout(Duration::from_secs(15))
+            src.busy_timeout(Duration::from_secs(15))
                 .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-            // Exclusive lock ensures no other connection is using the file during the snapshot.
-            conn.execute_batch("BEGIN EXCLUSIVE;")
-                .map_err(|_| ErrorCodeString::new("DB_BUSY"))?;
-            migrations::migrate_to_latest(&conn)?;
-            let serialized = conn
-                .serialize(DatabaseName::Main)
-                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            // Ensure schema is current before snapshot
+            migrations::migrate_to_latest(&src)?;
+
+            // Destination connection (in-memory snapshot)
+            let mut mem = rusqlite::Connection::open_in_memory()
+                .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+
+            // SQLite forbids using destination connection during backup; keep it in its own scope.
+            {
+                let mut backup = Backup::new(&src, &mut mem).map_err(|e| {
+                    log::error!("[SECURITY][set_profile_password] backup new failed: {e:?}");
+                    ErrorCodeString::new("DB_QUERY_FAILED")
+                })?;
+                backup
+                    .run_to_completion(5, Duration::from_millis(250), None)
+                    .map_err(|e| {
+                        log::error!("[SECURITY][set_profile_password] backup run failed: {e:?}");
+                        ErrorCodeString::new("DB_QUERY_FAILED")
+                    })?;
+            }
+
+            // Now serialize from the in-memory snapshot (no WAL/locks).
+            let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
+                log::error!("[SECURITY][set_profile_password] serialize(mem) failed: {e:?}");
+                ErrorCodeString::new("DB_QUERY_FAILED")
+            })?;
             serialized.to_vec()
         };
 
