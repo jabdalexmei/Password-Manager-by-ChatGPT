@@ -164,8 +164,14 @@ export function SettingsModal({
       onProfileUpdated?.(updated);
       showToast(tVault('settingsModal.profile.setPasswordSuccess'));
       setSetPasswordOpen(false);
-    } catch {
-      showToast(tVault('settingsModal.profile.setPasswordError'), 'error');
+    } catch (e) {
+      // Show real backend error code in console + toast for debugging.
+      // Tauri commands can return error values to the frontend. :contentReference[oaicite:1]{index=1}
+      // Debugging guidance: webview console/devtools. :contentReference[oaicite:2]{index=2}
+      // eslint-disable-next-line no-console
+      console.error('profile_set_password failed:', e);
+      const code = (e as any)?.message ?? String(e);
+      showToast(`${tVault('settingsModal.profile.setPasswordError')}: ${code}`, 'error');
     } finally {
       setIsSettingPassword(false);
     }

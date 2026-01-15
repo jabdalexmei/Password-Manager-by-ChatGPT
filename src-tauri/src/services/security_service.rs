@@ -2,6 +2,7 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
 use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
@@ -16,6 +17,7 @@ use crate::data::profiles::registry;
 use crate::data::sqlite::init::init_database_passwordless;
 use crate::data::sqlite::migrations;
 use crate::data::sqlite::pool::clear_pool;
+use crate::data::sqlite::pool::MaintenanceGuard;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::attachments_service;
 use crate::types::ProfileMeta;
@@ -265,6 +267,9 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
     let profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
+    // Block any new pooled sqlite connections during conversion.
+    let _maintenance = MaintenanceGuard::new(id)?;
+
     // registry::get_profile now self-heals has_password based on disk state.
     if profile.has_password {
         return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
@@ -280,6 +285,8 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
     // Close file-based sqlite connections before touching vault.db bytes.
     clear_pool(id);
+    // Give any in-flight requests a moment to drop their pooled conns.
+    std::thread::sleep(Duration::from_millis(80));
 
     let vault_path = vault_db_path(&storage_paths, id)?;
     if !vault_path.exists() {
@@ -291,6 +298,11 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
     let bytes: Vec<u8> = {
         let conn = rusqlite::Connection::open(&vault_path)
             .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+        conn.busy_timeout(Duration::from_secs(15))
+            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+        // Exclusive lock ensures no other connection is using the file during the snapshot.
+        conn.execute_batch("BEGIN EXCLUSIVE;")
+            .map_err(|_| ErrorCodeString::new("DB_BUSY"))?;
         migrations::migrate_to_latest(&conn)?;
         let serialized = conn
             .serialize(DatabaseName::Main)

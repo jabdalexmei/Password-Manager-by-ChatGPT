@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -20,6 +20,9 @@ pub enum DbTarget {
 
 static POOLS: Lazy<Mutex<HashMap<String, r2d2::Pool<SqliteConnectionManager>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+
+static MAINTENANCE: Lazy<Mutex<HashSet<String>>> =
+    Lazy::new(|| Mutex::new(HashSet::new()));
 
 #[derive(Debug)]
 struct FilePragmas;
@@ -51,6 +54,13 @@ fn get_or_create_pool(
 
     log::info!("[DB][pool] profile_id={profile_id} target={target:?} key={key}");
 
+    if let Ok(m) = MAINTENANCE.lock() {
+        if m.contains(profile_id) {
+            log::warn!("[DB][pool] profile_id={profile_id} is in maintenance");
+            return Err(ErrorCodeString::new("DB_MAINTENANCE"));
+        }
+    }
+
     if let Some(pool) = pools.get(&key) {
         return Ok(pool.clone());
     }
@@ -79,9 +89,38 @@ pub fn get_conn(
     profile_id: &str,
     target: DbTarget,
 ) -> Result<PooledConnection<SqliteConnectionManager>> {
+    if let Ok(m) = MAINTENANCE.lock() {
+        if m.contains(profile_id) {
+            return Err(ErrorCodeString::new("DB_MAINTENANCE"));
+        }
+    }
     let pool = get_or_create_pool(profile_id, target)?;
     pool.get()
         .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))
+}
+
+pub struct MaintenanceGuard {
+    profile_id: String,
+}
+
+impl MaintenanceGuard {
+    pub fn new(profile_id: &str) -> Result<Self> {
+        let mut m = MAINTENANCE
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        m.insert(profile_id.to_string());
+        Ok(Self {
+            profile_id: profile_id.to_string(),
+        })
+    }
+}
+
+impl Drop for MaintenanceGuard {
+    fn drop(&mut self) {
+        if let Ok(mut m) = MAINTENANCE.lock() {
+            m.remove(&self.profile_id);
+        }
+    }
 }
 
 pub fn clear_pool(profile_id: &str) {
