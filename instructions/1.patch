@@ -1,249 +1,287 @@
 diff --git a/src/app/App.tsx b/src/app/App.tsx
-index 30b2801..625c457 100644
+index 625c457..d6d4f60 100644
 --- a/src/app/App.tsx
 +++ b/src/app/App.tsx
-@@ -80,6 +80,7 @@ const App: React.FC = () => {
+@@ -79,13 +79,15 @@ const App: React.FC = () => {
+       case 'vault':
+         return activeProfile ? (
+           <Vault
              profileId={activeProfile.id}
              profileName={activeProfile.name}
              isPasswordless={!activeProfile.has_password}
-+            onProfileRenamed={(name) => setProfile((p) => (p ? { ...p, name } : p))}
+             onProfileRenamed={(name) => setProfile((p) => (p ? { ...p, name } : p))}
++            onProfileUpdated={(next) => setProfile((p) => (p && p.id === next.id ? next : p))}
              onLocked={() => {
                if (activeProfile.has_password) {
                  setView('login');
+               } else {
+                 setProfile(null);
+                 setView('startup');
+               }
+             }}
+           />
+         ) : null;
+
 diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
-index 64bd2f3..915bc97 100644
+index 915bc97..22b7c88 100644
 --- a/src/features/Vault/Vault.tsx
 +++ b/src/features/Vault/Vault.tsx
-@@ -43,9 +43,10 @@ type VaultProps = {
+@@ -1,6 +1,7 @@
+ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+ import { useTranslation } from '../../shared/lib/i18n';
++import type { ProfileMeta } from '../../shared/lib/tauri';
+ 
+ type VaultProps = {
+   profileId: string;
    profileName: string;
    isPasswordless: boolean;
    onLocked: () => void;
-+  onProfileRenamed?: (name: string) => void;
+   onProfileRenamed?: (name: string) => void;
++  onProfileUpdated?: (profile: ProfileMeta) => void;
  };
  
--export default function Vault({ profileId, profileName, isPasswordless, onLocked }: VaultProps) {
-+export default function Vault({ profileId, profileName, isPasswordless, onLocked, onProfileRenamed }: VaultProps) {
+-export default function Vault({ profileId, profileName, isPasswordless, onLocked, onProfileRenamed }: VaultProps) {
++export default function Vault({ profileId, profileName, isPasswordless, onLocked, onProfileRenamed, onProfileUpdated }: VaultProps) {
    const vault = useVault(profileId, onLocked);
    const bankCards = useBankCards(profileId, onLocked, vault.folders);
    const { t: tDataCards } = useTranslation('DataCards');
-@@ -599,7 +600,10 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
+@@ -596,12 +597,15 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked,
+       {settingsModalOpen && (
+         <Suspense fallback={null}>
+           <LazySettingsModal
+             open={settingsModalOpen}
              settings={vault.settings}
              isSaving={isSavingSettings}
              onCancel={() => setSettingsModalOpen(false)}
--            onSave={handleSaveSettings}
-+            onSave={handleSaveSettings}
+             onSave={handleSaveSettings}
 +            profileId={profileId}
 +            profileName={profileName}
++            profileHasPassword={!isPasswordless}
 +            onProfileRenamed={onProfileRenamed}
++            onProfileUpdated={onProfileUpdated}
            />
          </Suspense>
        )}
+
 diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
-index bd27da8..35115c6 100644
+index 35115c6..bb4a80a 100644
 --- a/src/features/Vault/components/modals/SettingsModal.tsx
 +++ b/src/features/Vault/components/modals/SettingsModal.tsx
-@@ -1,6 +1,8 @@
+@@ -1,8 +1,8 @@
  import React, { useEffect, useMemo, useState } from 'react';
  import { BackendUserSettings } from '../../types/backend';
  import { useTranslation } from '../../../../shared/lib/i18n';
-+import { useToaster } from '../../../../shared/components/Toaster';
-+import { renameProfile } from '../../../../shared/lib/tauri';
+ import { useToaster } from '../../../../shared/components/Toaster';
+-import { renameProfile } from '../../../../shared/lib/tauri';
++import { changeProfilePassword, renameProfile, setProfilePassword, type ProfileMeta } from '../../../../shared/lib/tauri';
  import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/ui/dialog';
  
  export type SettingsModalProps = {
-@@ -9,10 +11,14 @@ export type SettingsModalProps = {
-   settings: BackendUserSettings | null;
-   isSaving: boolean;
+@@ -13,10 +13,12 @@ export type SettingsModalProps = {
    onCancel: () => void;
    onSave: (nextSettings: BackendUserSettings) => void;
-+  profileId: string;
-+  profileName: string;
-+  onProfileRenamed?: (name: string) => void;
+   profileId: string;
+   profileName: string;
++  profileHasPassword: boolean;
+   onProfileRenamed?: (name: string) => void;
++  onProfileUpdated?: (profile: ProfileMeta) => void;
  };
  
--export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: SettingsModalProps) {
-+export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profileId, profileName, onProfileRenamed }: SettingsModalProps) {
+-export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profileId, profileName, onProfileRenamed }: SettingsModalProps) {
++export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profileId, profileName, profileHasPassword, onProfileRenamed, onProfileUpdated }: SettingsModalProps) {
    const { t: tVault } = useTranslation('Vault');
    const { t: tCommon } = useTranslation('Common');
-+  const { show: showToast } = useToaster();
+   const { show: showToast } = useToaster();
+@@ -30,6 +32,18 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
+   const [renameProfileOpen, setRenameProfileOpen] = useState(false);
+   const [renameProfileValue, setRenameProfileValue] = useState('');
+   const [isRenamingProfile, setIsRenamingProfile] = useState(false);
  
-   const [autoLockEnabled, setAutoLockEnabled] = useState(false);
-   const [autoLockTimeoutSeconds, setAutoLockTimeoutSeconds] = useState('60');
-   const [clipboardAutoClearEnabled, setClipboardAutoClearEnabled] = useState(false);
-   const [clipboardClearTimeoutSeconds, setClipboardClearTimeoutSeconds] = useState('20');
-   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
-   const [intervalMinutes, setIntervalMinutes] = useState('60');
-   const [maxCopies, setMaxCopies] = useState('10');
++  const [setPasswordOpen, setSetPasswordOpen] = useState(false);
++  const [setPasswordValue, setSetPasswordValue] = useState('');
++  const [setPasswordConfirm, setSetPasswordConfirm] = useState('');
++  const [isSettingPassword, setIsSettingPassword] = useState(false);
 +
-+  const [renameProfileOpen, setRenameProfileOpen] = useState(false);
-+  const [renameProfileValue, setRenameProfileValue] = useState('');
-+  const [isRenamingProfile, setIsRenamingProfile] = useState(false);
- 
++  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
++  const [changePasswordValue, setChangePasswordValue] = useState('');
++  const [changePasswordConfirm, setChangePasswordConfirm] = useState('');
++  const [isChangingPassword, setIsChangingPassword] = useState(false);
++
    useEffect(() => {
      if (!open || !settings) return;
      setAutoLockEnabled(settings.auto_lock_enabled);
-     setAutoLockTimeoutSeconds(String(settings.auto_lock_timeout));
-     setClipboardAutoClearEnabled(settings.clipboard_auto_clear_enabled);
-     setClipboardClearTimeoutSeconds(String(settings.clipboard_clear_timeout_seconds));
-     setAutoBackupEnabled(settings.backups_enabled);
-     setIntervalMinutes(String(settings.auto_backup_interval_minutes));
-     setMaxCopies(String(settings.backup_max_copies));
-   }, [open, settings]);
+@@ -48,6 +62,26 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
+     setRenameProfileValue(profileName || '');
+   }, [renameProfileOpen, profileName]);
+ 
++  useEffect(() => {
++    if (!setPasswordOpen) return;
++    setSetPasswordValue('');
++    setSetPasswordConfirm('');
++  }, [setPasswordOpen]);
 +
 +  useEffect(() => {
-+    if (!renameProfileOpen) return;
-+    setRenameProfileValue(profileName || '');
-+  }, [renameProfileOpen, profileName]);
- 
++    if (!changePasswordOpen) return;
++    setChangePasswordValue('');
++    setChangePasswordConfirm('');
++  }, [changePasswordOpen]);
++
    const busy = isSaving;
  
-   const canSave = useMemo(() => {
-@@ -73,6 +79,34 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-     return true;
-   }, [
-     autoBackupEnabled,
-     autoLockEnabled,
-     autoLockTimeoutSeconds,
-     clipboardClearTimeoutSeconds,
-     intervalMinutes,
-     maxCopies,
-   ]);
+@@ -103,6 +137,56 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
+   const handleRenameSave = async () => {
+@@ -123,6 +207,84 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
+     }
+   };
  
-+  const canSaveRename = useMemo(() => {
-+    const next = renameProfileValue.trim();
-+    if (!next) return false;
-+    if (next === (profileName || '').trim()) return false;
++  const canSaveSetPassword = useMemo(() => {
++    if (profileHasPassword) return false;
++    const p1 = setPasswordValue;
++    const p2 = setPasswordConfirm;
++    if (!p1 || !p2) return false;
++    if (p1 !== p2) return false;
 +    return true;
-+  }, [profileName, renameProfileValue]);
++  }, [profileHasPassword, setPasswordConfirm, setPasswordValue]);
 +
-+  const handleRenameSave = async () => {
-+    const next = renameProfileValue.trim();
-+    if (!next) return;
++  const canSaveChangePassword = useMemo(() => {
++    if (!profileHasPassword) return false;
++    const p1 = changePasswordValue;
++    const p2 = changePasswordConfirm;
++    if (!p1 || !p2) return false;
++    if (p1 !== p2) return false;
++    return true;
++  }, [changePasswordConfirm, changePasswordValue, profileHasPassword]);
 +
-+    setIsRenamingProfile(true);
++  const handleSetPasswordSave = async () => {
++    if (profileHasPassword) return;
++    if (!canSaveSetPassword) return;
++
++    setIsSettingPassword(true);
 +    try {
-+      const updated = await renameProfile(profileId, next);
-+      onProfileRenamed?.(updated.name);
-+      showToast(tVault('settingsModal.profile.renameSuccess'));
-+      setRenameProfileOpen(false);
++      const updated = await setProfilePassword(profileId, setPasswordValue);
++      onProfileUpdated?.(updated);
++      showToast(tVault('settingsModal.profile.setPasswordSuccess'));
++      setSetPasswordOpen(false);
 +    } catch {
-+      showToast(tVault('settingsModal.profile.renameError'), 'error');
++      showToast(tVault('settingsModal.profile.setPasswordError'), 'error');
 +    } finally {
-+      setIsRenamingProfile(false);
++      setIsSettingPassword(false);
 +    }
 +  };
 +
-   const handleSave = () => {
-     if (!settings) return;
- 
-     const lockTimeout = Number(autoLockTimeoutSeconds);
-     const clipTimeout = Number(clipboardClearTimeoutSeconds);
-     const interval = Number(intervalMinutes);
-     const max = Number(maxCopies);
-@@ -160,7 +194,7 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
-   const fullWidthInputStyle: React.CSSProperties = {
-     width: '100%',
-   };
- 
-   return (
--    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
-+    <>
-+    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onCancel() : undefined)}>
-       <DialogContent aria-labelledby="settings-title">
-         <DialogHeader>
-           <DialogTitle id="settings-title">{tVault('settings')}</DialogTitle>
-         </DialogHeader>
- 
-         <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-@@ -366,6 +400,56 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave }: Set
++  const handleChangePasswordSave = async () => {
++    if (!profileHasPassword) return;
++    if (!canSaveChangePassword) return;
++
++    setIsChangingPassword(true);
++    try {
++      await changeProfilePassword(profileId, changePasswordValue);
++      showToast(tVault('settingsModal.profile.changePasswordSuccess'));
++      setChangePasswordOpen(false);
++    } catch {
++      showToast(tVault('settingsModal.profile.changePasswordError'), 'error');
++    } finally {
++      setIsChangingPassword(false);
++    }
++  };
++
+@@ -408,6 +570,82 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
+           <div
+             role="group"
+             aria-labelledby="profile-title"
+             style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+           >
+             <div className="form-field" style={toggleRowStyle}>
+               <span className="form-label settings-subheader">
+                 {tVault('settingsModal.profile.nameLabel')}
+               </span>
+@@ -450,6 +688,63 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
+               </div>
              </div>
            </div>
-         </div>
  
-+          <h3 id="profile-title" style={subtitleStyle}>
-+            {tVault('settingsModal.profileTitle')}
++          <h3 id="profile-security-title" style={subtitleStyle}>
++            {tVault('settingsModal.profileSecurityTitle')}
 +          </h3>
 +
 +          <div
 +            role="group"
-+            aria-labelledby="profile-title"
++            aria-labelledby="profile-security-title"
 +            style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
 +          >
 +            <div className="form-field" style={toggleRowStyle}>
 +              <span className="form-label settings-subheader">
-+                {tVault('settingsModal.profile.nameLabel')}
++                {tVault('settingsModal.profile.setPasswordSection')}
 +              </span>
 +
-+              <div
-+                style={{
-+                  display: 'flex',
-+                  justifyContent: 'flex-end',
-+                  gap: 8,
-+                  alignItems: 'center',
-+                  minWidth: 0,
-+                }}
-+              >
-+                <span
-+                  className="muted"
-+                  style={{
-+                    whiteSpace: 'nowrap',
-+                    overflow: 'hidden',
-+                    textOverflow: 'ellipsis',
-+                    maxWidth: 260,
-+                  }}
-+                >
-+                  {profileName || ''}
-+                </span>
-+
++              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
 +                <button
 +                  className="btn btn-secondary"
 +                  type="button"
-+                  onClick={() => setRenameProfileOpen(true)}
-+                  disabled={busy}
++                  onClick={() => setSetPasswordOpen(true)}
++                  disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
 +                >
-+                  {tVault('settingsModal.profile.rename')}
++                  {tVault('settingsModal.profile.setPasswordAction')}
++                </button>
++              </div>
++            </div>
++
++            <div className="form-field" style={toggleRowStyle}>
++              <span className="form-label settings-subheader">
++                {tVault('settingsModal.profile.changePasswordSection')}
++              </span>
++
++              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
++                <button
++                  className="btn btn-secondary"
++                  type="button"
++                  onClick={() => setChangePasswordOpen(true)}
++                  disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
++                >
++                  {tVault('settingsModal.profile.changePasswordAction')}
 +                </button>
 +              </div>
 +            </div>
 +          </div>
 +
          <DialogFooter className="dialog-footer--split">
-           <div className="dialog-footer-left">
-             <button className="btn btn-secondary" type="button" onClick={onCancel} disabled={busy}>
-               {tCommon('action.cancel')}
-             </button>
-           </div>
- 
-           <div className="dialog-footer-right">
-             <button className="btn btn-primary" type="button" onClick={handleSave} disabled={busy || !settings || !canSave}>
-               {tVault('backup.settings.save')}
-             </button>
-           </div>
-         </DialogFooter>
+@@ -542,5 +837,151 @@ export function SettingsModal({ open, settings, isSaving, onCancel, onSave, profi
        </DialogContent>
      </Dialog>
-+
-+    <Dialog
-+      open={renameProfileOpen}
-+      onOpenChange={(nextOpen) => (!nextOpen ? setRenameProfileOpen(false) : undefined)}
-+    >
-+      <DialogContent aria-labelledby="rename-profile-title">
+ 
++    <Dialog open={setPasswordOpen} onOpenChange={(nextOpen) => (!nextOpen ? setSetPasswordOpen(false) : undefined)}>
++      <DialogContent aria-labelledby="set-password-title">
 +        <DialogHeader>
-+          <DialogTitle id="rename-profile-title">{tVault('settingsModal.profile.renameTitle')}</DialogTitle>
++          <DialogTitle id="set-password-title">{tVault('settingsModal.profile.setPasswordTitle')}</DialogTitle>
 +        </DialogHeader>
 +
 +        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 +          <div className="form-field">
-+            <label className="form-label" htmlFor="rename-profile-input">
-+              {tVault('settingsModal.profile.nameLabel')}
++            <label className="form-label" htmlFor="set-password-input">
++              {tVault('settingsModal.profile.passwordLabel')}
 +            </label>
 +            <input
-+              id="rename-profile-input"
-+              type="text"
-+              value={renameProfileValue}
-+              disabled={busy || isRenamingProfile}
-+              onChange={(event) => setRenameProfileValue(event.target.value)}
-+              autoComplete="off"
++              id="set-password-input"
++              type="password"
++              value={setPasswordValue}
++              disabled={busy || isSettingPassword || profileHasPassword}
++              onChange={(e) => setSetPasswordValue(e.target.value)}
++              autoComplete="new-password"
++              style={fullWidthInputStyle}
++            />
++          </div>
++
++          <div className="form-field">
++            <label className="form-label" htmlFor="set-password-confirm-input">
++              {tVault('settingsModal.profile.confirmPasswordLabel')}
++            </label>
++            <input
++              id="set-password-confirm-input"
++              type="password"
++              value={setPasswordConfirm}
++              disabled={busy || isSettingPassword || profileHasPassword}
++              onChange={(e) => setSetPasswordConfirm(e.target.value)}
++              autoComplete="new-password"
 +              style={fullWidthInputStyle}
 +            />
 +          </div>
@@ -254,8 +292,8 @@ index bd27da8..35115c6 100644
 +            <button
 +              className="btn btn-secondary"
 +              type="button"
-+              onClick={() => setRenameProfileOpen(false)}
-+              disabled={busy || isRenamingProfile}
++              onClick={() => setSetPasswordOpen(false)}
++              disabled={busy || isSettingPassword}
 +            >
 +              {tCommon('action.cancel')}
 +            </button>
@@ -265,8 +303,8 @@ index bd27da8..35115c6 100644
 +            <button
 +              className="btn btn-primary"
 +              type="button"
-+              onClick={handleRenameSave}
-+              disabled={busy || isRenamingProfile || !canSaveRename}
++              onClick={handleSetPasswordSave}
++              disabled={busy || isSettingPassword || !canSaveSetPassword}
 +            >
 +              {tVault('backup.settings.save')}
 +            </button>
@@ -274,155 +312,403 @@ index bd27da8..35115c6 100644
 +        </DialogFooter>
 +      </DialogContent>
 +    </Dialog>
-+    </>
++
++    <Dialog open={changePasswordOpen} onOpenChange={(nextOpen) => (!nextOpen ? setChangePasswordOpen(false) : undefined)}>
++      <DialogContent aria-labelledby="change-password-title">
++        <DialogHeader>
++          <DialogTitle id="change-password-title">{tVault('settingsModal.profile.changePasswordTitle')}</DialogTitle>
++        </DialogHeader>
++
++        <div className="dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
++          <div className="form-field">
++            <label className="form-label" htmlFor="change-password-input">
++              {tVault('settingsModal.profile.passwordLabel')}
++            </label>
++            <input
++              id="change-password-input"
++              type="password"
++              value={changePasswordValue}
++              disabled={busy || isChangingPassword || !profileHasPassword}
++              onChange={(e) => setChangePasswordValue(e.target.value)}
++              autoComplete="new-password"
++              style={fullWidthInputStyle}
++            />
++          </div>
++
++          <div className="form-field">
++            <label className="form-label" htmlFor="change-password-confirm-input">
++              {tVault('settingsModal.profile.confirmPasswordLabel')}
++            </label>
++            <input
++              id="change-password-confirm-input"
++              type="password"
++              value={changePasswordConfirm}
++              disabled={busy || isChangingPassword || !profileHasPassword}
++              onChange={(e) => setChangePasswordConfirm(e.target.value)}
++              autoComplete="new-password"
++              style={fullWidthInputStyle}
++            />
++          </div>
++        </div>
++
++        <DialogFooter className="dialog-footer--split">
++          <div className="dialog-footer-left">
++            <button
++              className="btn btn-secondary"
++              type="button"
++              onClick={() => setChangePasswordOpen(false)}
++              disabled={busy || isChangingPassword}
++            >
++              {tCommon('action.cancel')}
++            </button>
++          </div>
++
++          <div className="dialog-footer-right">
++            <button
++              className="btn btn-primary"
++              type="button"
++              onClick={handleChangePasswordSave}
++              disabled={busy || isChangingPassword || !canSaveChangePassword}
++            >
++              {tVault('backup.settings.save')}
++            </button>
++          </div>
++        </DialogFooter>
++      </DialogContent>
++    </Dialog>
+     </>
    );
  }
+
 diff --git a/src/i18n/locales/en/Vault.json b/src/i18n/locales/en/Vault.json
-index d424392..69a1461 100644
+index 69a1461..6fd4a85 100644
 --- a/src/i18n/locales/en/Vault.json
 +++ b/src/i18n/locales/en/Vault.json
-@@ -8,7 +8,6 @@
-   "lock": "Lock",
-   "logout": "Log out",
-   "search.placeholder": "Search",
--
-   "filters.title": "Filters",
-   "filters.2fa": "2FA",
-   "filters.seedPhrase": "Seed phrase",
-@@ -46,5 +45,11 @@
-   "settingsModal.autoLock.timeoutSeconds": "Auto-lock timeout (seconds)",
+@@ -49,7 +49,25 @@
    "settingsModal.clipboard.enabled": "Enable clipboard auto-clear",
    "settingsModal.clipboard.timeoutSeconds": "Clipboard clear timeout (seconds)",
--  "backup.auto.success": "Auto-backup created"
-+  "backup.auto.success": "Auto-backup created",
-+  "settingsModal.profileTitle": "Profile",
-+  "settingsModal.profile.rename": "Rename profile",
-+  "settingsModal.profile.renameTitle": "Rename profile",
-+  "settingsModal.profile.nameLabel": "Profile name",
-+  "settingsModal.profile.renameSuccess": "Profile renamed",
-+  "settingsModal.profile.renameError": "Failed to rename profile"
+   "backup.auto.success": "Auto-backup created",
+   "settingsModal.profileTitle": "Profile",
+   "settingsModal.profile.rename": "Rename profile",
+   "settingsModal.profile.renameTitle": "Rename profile",
+   "settingsModal.profile.nameLabel": "Profile name",
+   "settingsModal.profile.renameSuccess": "Profile renamed",
+-  "settingsModal.profile.renameError": "Failed to rename profile"
++  "settingsModal.profile.renameError": "Failed to rename profile",
++
++  "settingsModal.profileSecurityTitle": "Profile security",
++  "settingsModal.profile.setPasswordSection": "Set password to profile",
++  "settingsModal.profile.setPasswordAction": "Set password",
++  "settingsModal.profile.changePasswordSection": "Change password",
++  "settingsModal.profile.changePasswordAction": "Change password",
++
++  "settingsModal.profile.setPasswordTitle": "Set password",
++  "settingsModal.profile.changePasswordTitle": "Change password",
++  "settingsModal.profile.passwordLabel": "Password",
++  "settingsModal.profile.confirmPasswordLabel": "Confirm password",
++  "settingsModal.profile.setPasswordSuccess": "Password set",
++  "settingsModal.profile.setPasswordError": "Failed to set password",
++  "settingsModal.profile.changePasswordSuccess": "Password changed",
++  "settingsModal.profile.changePasswordError": "Failed to change password"
  }
+
 diff --git a/src/shared/lib/tauri.ts b/src/shared/lib/tauri.ts
-index 68cac76..5bd8e2f 100644
+index 5bd8e2f..b477e63 100644
 --- a/src/shared/lib/tauri.ts
 +++ b/src/shared/lib/tauri.ts
-@@ -31,6 +31,11 @@ export async function deleteProfile(id: string): Promise<boolean> {
-   return invoke('profile_delete', { id });
+@@ -35,6 +35,14 @@ export async function renameProfile(id: string, name: string): Promise<ProfileMe
+   return invoke('profile_rename', { id, name });
  }
  
-+export async function renameProfile(id: string, name: string): Promise<ProfileMeta> {
-+  return invoke('profile_rename', { id, name });
++export async function setProfilePassword(id: string, password: string): Promise<ProfileMeta> {
++  return invoke('profile_set_password', { id, password });
++}
++
++export async function changeProfilePassword(id: string, password: string): Promise<boolean> {
++  return invoke('profile_change_password', { id, password });
 +}
 +
  export async function setActiveProfile(id: string): Promise<boolean> {
    return invoke('set_active_profile', { id });
  }
+
 diff --git a/src-tauri/permissions/app-default.toml b/src-tauri/permissions/app-default.toml
-index 0369056..85f9bd6 100644
+index 85f9bd6..73f3db1 100644
 --- a/src-tauri/permissions/app-default.toml
 +++ b/src-tauri/permissions/app-default.toml
-@@ -9,6 +9,7 @@ commands.allow = [
+@@ -9,10 +9,12 @@ commands.allow = [
    "profiles_list",
    "profile_create",
    "profile_delete",
-+  "profile_rename",
+   "profile_rename",
++  "profile_set_password",
++  "profile_change_password",
    "get_active_profile",
    "set_active_profile",
    "login_vault",
-diff --git a/src-tauri/src/commands/profiles.rs b/src-tauri/src/commands/profiles.rs
-index 773aa04..4bb0bdb 100644
---- a/src-tauri/src/commands/profiles.rs
-+++ b/src-tauri/src/commands/profiles.rs
-@@ -35,6 +35,22 @@ pub async fn profile_create(
-     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+   "lock_vault",
+
+diff --git a/src-tauri/src/commands/security.rs b/src-tauri/src/commands/security.rs
+index 2c61b92..5d4ae2a 100644
+--- a/src-tauri/src/commands/security.rs
++++ b/src-tauri/src/commands/security.rs
+@@ -3,6 +3,7 @@ use std::sync::Arc;
+ use tauri::State;
+ 
+ use crate::app_state::AppState;
+ use crate::error::{ErrorCodeString, Result};
++use crate::types::ProfileMeta;
+ use crate::services::security_service;
+ 
+ #[tauri::command]
+ pub async fn login_vault(
+@@ -46,6 +47,38 @@ pub async fn is_logged_in(state: State<'_, Arc<AppState>>) -> Result<bool> {
+         .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
  }
  
 +#[tauri::command]
-+pub async fn profile_rename(
++pub async fn profile_set_password(
 +    id: String,
-+    name: String,
++    password: String,
 +    state: State<'_, Arc<AppState>>,
 +) -> Result<ProfileMeta> {
 +    let app_state = state.inner().clone();
-+
 +    tauri::async_runtime::spawn_blocking(move || {
-+        let storage_paths = app_state.get_storage_paths()?;
-+        profiles_service::rename_profile(&storage_paths, &id, &name)
++        security_service::set_profile_password(&id, &password, &app_state)
++    })
++    .await
++    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
++}
++
++#[tauri::command]
++pub async fn profile_change_password(
++    id: String,
++    password: String,
++    state: State<'_, Arc<AppState>>,
++) -> Result<bool> {
++    let app_state = state.inner().clone();
++    tauri::async_runtime::spawn_blocking(move || {
++        security_service::change_profile_password(&id, &password, &app_state)
 +    })
 +    .await
 +    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 +}
 +
  #[tauri::command]
- pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
-     let app_state = state.inner().clone();
-diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
-index 82fe9b5..5759509 100644
---- a/src-tauri/src/data/profiles/registry.rs
-+++ b/src-tauri/src/data/profiles/registry.rs
-@@ -208,6 +208,35 @@ pub fn upsert_profile_with_id(
-     })
+ pub async fn health_check() -> Result<bool> {
+   tauri::async_runtime::spawn_blocking(security_service::health_check)
+     .await
+     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
  }
- 
-+pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
-+    ensure_profiles_dir(sp)?;
-+    let mut registry = load_registry(sp)?;
-+    let record = registry
-+        .profiles
-+        .iter_mut()
-+        .find(|p| p.id == id)
-+        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
-+
-+    record.name = name.to_string();
-+    save_registry(sp, &registry)?;
-+
-+    // Keep per-profile config.json consistent with registry.
-+    let config_path: PathBuf = profile_config_path(sp, id)?;
-+    let config = serde_json::json!({ "name": name });
-+    let serialized_config = serde_json::to_string_pretty(&config)
-+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+    write_atomic(&config_path, serialized_config.as_bytes())
-+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+
-+    Ok(ProfileMeta {
-+        id: record.id.clone(),
-+        name: record.name.clone(),
-+        has_password: record.has_password,
-+    })
-+}
-+
- pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
-     ensure_profiles_dir(sp)?;
-     let mut registry = load_registry(sp)?;
+
 diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
-index 2a4cae7..df1686c 100644
+index df1686c..1d2af54 100644
 --- a/src-tauri/src/main.rs
 +++ b/src-tauri/src/main.rs
-@@ -121,6 +121,7 @@ fn main() {
-             profiles_list,
+@@ -124,6 +124,8 @@ fn main() {
              profile_create,
              profile_delete,
-+            profile_rename,
+             profile_rename,
++            profile_set_password,
++            profile_change_password,
              get_active_profile,
              set_active_profile,
              login_vault,
-diff --git a/src-tauri/src/services/profiles_service.rs b/src-tauri/src/services/profiles_service.rs
-index 0f1eac0..3294f1e 100644
---- a/src-tauri/src/services/profiles_service.rs
-+++ b/src-tauri/src/services/profiles_service.rs
-@@ -73,6 +73,14 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
-     registry::delete_profile(sp, id)
+             lock_vault,
+             is_logged_in,
+             health_check,
+
+diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
+index 2e9b9f1..e38cbe6 100644
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -1,4 +1,6 @@
+ use std::ptr::NonNull;
++use std::path::Path;
+ use std::sync::atomic::Ordering;
+ use std::sync::Arc;
+ 
+@@ -7,17 +9,23 @@ use rusqlite::ffi;
+ use rusqlite::serialize::OwnedData;
+ use rusqlite::DatabaseName;
+ use zeroize::{Zeroize, Zeroizing};
+ 
+ use crate::app_state::{AppState, VaultSession};
+ use crate::data::crypto::{cipher, kdf, key_check};
+-use crate::data::profiles::paths::{kdf_salt_path, vault_db_path};
++use crate::data::fs::atomic_write::write_atomic;
++use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path, vault_db_path};
+ use crate::data::profiles::registry;
++use crate::data::sqlite::init::init_database_passwordless;
+ use crate::data::sqlite::init::init_database_passwordless;
+ use crate::data::sqlite::migrations;
+ use crate::data::sqlite::pool::clear_pool;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::services::attachments_service;
++use crate::types::ProfileMeta;
+ 
+ fn owned_data_from_bytes(mut bytes: Vec<u8>) -> Result<OwnedData> {
+@@ -86,6 +94,24 @@ fn open_protected_vault_session(
+     Ok(())
  }
  
-+pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
-+    let trimmed = name.trim();
-+    if trimmed.is_empty() {
-+        return Err(ErrorCodeString::new("PROFILE_NAME_REQUIRED"));
++fn cleanup_sqlite_sidecars(vault_path: &Path) {
++    // After converting passwordless (sqlite file) -> protected (encrypted blob),
++    // old WAL/SHM sidecars may remain. Remove best-effort.
++    if let Some(p) = vault_path.to_str() {
++        let wal = format!("{p}-wal");
++        let shm = format!("{p}-shm");
++        let _ = std::fs::remove_file(wal);
++        let _ = std::fs::remove_file(shm);
 +    }
-+    registry::rename_profile(sp, id, trimmed)
 +}
 +
- pub fn get_active_profile(sp: &StoragePaths) -> Result<Option<ProfileMeta>> {
-     let settings = config::load_settings(sp)?;
-     if let Some(id) = settings.active_profile {
-       ...
+ pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) -> Result<bool> {
+@@ -220,6 +246,152 @@ pub fn drop_active_session_without_persist(state: &Arc<AppState>) -> Result<bool
+     Ok(true)
+ }
+ 
++pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
++    let storage_paths = state.get_storage_paths()?;
++
++    let profile = registry::get_profile(&storage_paths, id)?
++        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++
++    if profile.has_password {
++        return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
++    }
++
++    let pwd = password.trim();
++    if pwd.is_empty() {
++        return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
++    }
++
++    ensure_profile_dirs(&storage_paths, id)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
++    // Close file-based sqlite connections before touching vault.db bytes.
++    clear_pool(id);
++
++    // Ensure DB exists (passwordless profiles may not have opened yet in some flows).
++    init_database_passwordless(&storage_paths, id)?;
++
++    let vault_path = vault_db_path(&storage_paths, id)?;
++    if !vault_path.exists() {
++        return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
++    }
++
++    // Serialize passwordless sqlite file to bytes.
++    let conn = rusqlite::Connection::open(&vault_path)
++        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++    migrations::migrate_to_latest(&conn)?;
++    let serialized = conn
++        .serialize(DatabaseName::Main)
++        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++    drop(conn);
++
++    let bytes = serialized.to_vec();
++
++    // Create new salt + key.
++    let salt = kdf::generate_kdf_salt();
++    let salt_path = kdf_salt_path(&storage_paths, id)?;
++    write_atomic(&salt_path, &salt).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
++    let key = Zeroizing::new(kdf::derive_master_key(pwd, &salt)?);
++
++    // Create key check file first (so we can validate later).
++    key_check::create_key_check_file(&storage_paths, id, &*key)?;
++
++    // Encrypt vault bytes into vault.db (overwriting sqlite file).
++    let encrypted = cipher::encrypt_vault_blob(id, &*key, &bytes)?;
++    cipher::write_encrypted_file(&vault_path, &encrypted)?;
++    cleanup_sqlite_sidecars(&vault_path);
++
++    // Switch runtime session to protected in-memory session so app stays unlocked.
++    let mut mem_conn = rusqlite::Connection::open_in_memory()
++        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
++    let owned = owned_data_from_bytes(bytes)?;
++    mem_conn
++        .deserialize(DatabaseName::Main, owned, false)
++        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
++    migrations::migrate_to_latest(&mem_conn)?;
++    migrations::validate_core_schema(&mem_conn)
++        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
++
++    {
++        let mut session = state
++            .vault_session
++            .lock()
++            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
++        *session = Some(VaultSession {
++            profile_id: id.to_string(),
++            conn: mem_conn,
++            key: *key,
++        });
++    }
++
++    // Update registry flag.
++    let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)?;
++    Ok(updated.into())
++}
++
++pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<bool> {
++    let storage_paths = state.get_storage_paths()?;
++
++    let profile = registry::get_profile(&storage_paths, id)?
++        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++
++    if !profile.has_password {
++        return Err(ErrorCodeString::new("PROFILE_NOT_PROTECTED"));
++    }
++
++    let pwd = password.trim();
++    if pwd.is_empty() {
++        return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
++    }
++
++    // Must be unlocked (session exists and matches profile).
++    let (bytes, old_profile_id) = {
++        let session = state
++            .vault_session
++            .lock()
++            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
++        let s = session.as_ref().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
++        if s.profile_id != id {
++            return Err(ErrorCodeString::new("VAULT_LOCKED"));
++        }
++        let serialized = s
++            .conn
++            .serialize(DatabaseName::Main)
++            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++        (serialized.to_vec(), s.profile_id.clone())
++    };
++
++    let salt = kdf::generate_kdf_salt();
++    let salt_path = kdf_salt_path(&storage_paths, id)?;
++    write_atomic(&salt_path, &salt).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    let key = Zeroizing::new(kdf::derive_master_key(pwd, &salt)?);
++
++    key_check::create_key_check_file(&storage_paths, id, &*key)?;
++
++    let vault_path = vault_db_path(&storage_paths, id)?;
++    let encrypted = cipher::encrypt_vault_blob(&old_profile_id, &*key, &bytes)?;
++    cipher::write_encrypted_file(&vault_path, &encrypted)?;
++
++    // Update in-memory session key to keep vault unlocked.
++    {
++        let mut session = state
++            .vault_session
++            .lock()
++            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
++        let s = session.as_mut().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
++        if s.profile_id != id {
++            return Err(ErrorCodeString::new("VAULT_LOCKED"));
++        }
++        s.key = *key;
++    }
++
++    Ok(true)
++}
++
+ pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
+     let storage_paths = state.get_storage_paths()?;
