@@ -69,12 +69,11 @@ fn owned_data_from_bytes(mut bytes: Vec<u8>) -> Result<OwnedData> {
 }
 
 fn apply_in_memory_pragmas(conn: &rusqlite::Connection, profile_id: &str, ctx: &str) -> Result<()> {
-    // Avoid any disk I/O from temp/WAL sidecars when the vault DB is deserialized into :memory:.
-    // This prevents SQLITE_CANTOPEN when SQLite tries to create/open temp files or -wal/-shm.
+    // Keep this minimal and non-invasive. Setting journal_mode can itself trigger SQLITE_CANTOPEN
+    // if the deserialized image is marked as WAL and SQLite attempts to open sidecars.
     conn.execute_batch(
         "PRAGMA temp_store=MEMORY;
 PRAGMA synchronous=OFF;
-PRAGMA journal_mode=MEMORY;
 ",
     )
     .map_err(|e| {
@@ -86,6 +85,38 @@ PRAGMA journal_mode=MEMORY;
         );
         classify_db_error(&e)
     })
+}
+
+fn normalize_sqlite_header_disable_wal(bytes: &mut [u8], profile_id: &str, ctx: &str) {
+    // SQLite header magic: "SQLite format 3\0"
+    const MAGIC: &[u8; 16] = b"SQLite format 3\0";
+    if bytes.len() < 20 {
+        return;
+    }
+    if &bytes[..16] != MAGIC {
+        return;
+    }
+
+    // As per SQLite documentation/notes: WAL mode persistence is reflected in the DB header bytes.
+    // Values 2 at offsets 18/19 indicate WAL read/write versions. Setting them to 1 disables WAL
+    // expectations and prevents attempts to open -wal/-shm for deserialized in-memory images.
+    // (This is safe for our use-case because we always serialize a consistent image.)
+    let mut changed = false;
+    if bytes[18] == 2 {
+        bytes[18] = 1;
+        changed = true;
+    }
+    if bytes[19] == 2 {
+        bytes[19] = 1;
+        changed = true;
+    }
+    if changed {
+        log::warn!(
+            "[SECURITY][sqlite_header] profile_id={} ctx={} action=disable_wal_header_bytes",
+            profile_id,
+            ctx
+        );
+    }
 }
 
 fn open_protected_vault_session(
@@ -114,6 +145,11 @@ fn open_protected_vault_session(
     let decrypted = cipher::decrypt_vault_blob(profile_id, &key, &encrypted)
         .map_err(|_| ErrorCodeString::new("VAULT_DECRYPT_FAILED"))?;
 
+    // If the stored DB image is marked WAL, SQLite may try to open -wal/-shm even for :memory:
+    // deserialization and fail with SQLITE_CANTOPEN (14). Normalize header before deserialize.
+    let mut decrypted = decrypted;
+    normalize_sqlite_header_disable_wal(decrypted.as_mut_slice(), profile_id, "unlock_before_deserialize");
+
     let mut conn = rusqlite::Connection::open_in_memory().map_err(|e| {
         log::error!(
             "[SECURITY][login] profile_id={} step=open_in_memory err={}",
@@ -133,9 +169,6 @@ fn open_protected_vault_session(
         );
         ErrorCodeString::new("VAULT_CORRUPTED")
     })?;
-    // Re-apply pragmas AFTER deserialize, in case the serialized image was created from a WAL database.
-    apply_in_memory_pragmas(&conn, profile_id, "after_deserialize")?;
-
     if let Err(e) = migrations::migrate_to_latest(&conn) {
         log::error!(
             "[SECURITY][login] profile_id={} step=migrate_to_latest failed code={}",
@@ -451,7 +484,10 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
                     );
                     classify_db_error(&e)
                 })?;
-                serialized.to_vec()
+                let mut bytes = serialized.to_vec();
+                // Ensure the encrypted vault image is not marked as WAL (prevents unlock-side CANTOPEN).
+                normalize_sqlite_header_disable_wal(bytes.as_mut_slice(), id, "set_password_before_encrypt");
+                bytes
             };
             (mem, bytes)
         };
