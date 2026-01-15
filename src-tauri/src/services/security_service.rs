@@ -289,15 +289,17 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
     }
 
     // Serialize passwordless sqlite file to bytes.
-    let conn = rusqlite::Connection::open(&vault_path)
-        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-    migrations::migrate_to_latest(&conn)?;
-    let serialized = conn
-        .serialize(DatabaseName::Main)
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-    drop(conn);
-
-    let bytes = serialized.to_vec();
+    // NOTE: `serialize()` returns `Data<'_>` which may borrow `conn` (Shared variant),
+    // so we must materialize bytes while `conn` is still alive.
+    let bytes: Vec<u8> = {
+        let conn = rusqlite::Connection::open(&vault_path)
+            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+        migrations::migrate_to_latest(&conn)?;
+        let serialized = conn
+            .serialize(DatabaseName::Main)
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+        serialized.to_vec()
+    };
 
     // Create new salt + key.
     let salt = kdf::generate_kdf_salt();
