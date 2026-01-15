@@ -164,13 +164,20 @@ pub fn upsert_profile_with_id(
 pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
     ensure_profiles_dir(sp)?;
     let mut registry = load_registry(sp)?;
-    let record = registry
+    let idx = registry
         .profiles
-        .iter_mut()
-        .find(|p| p.id == id)
+        .iter()
+        .position(|p| p.id == id)
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
-    record.name = name.to_string();
+    registry.profiles[idx].name = name.to_string();
+
+    let meta = ProfileMeta {
+        id: registry.profiles[idx].id.clone(),
+        name: registry.profiles[idx].name.clone(),
+        has_password: registry.profiles[idx].has_password,
+    };
+
     save_registry(sp, &registry)?;
 
     let config_path: PathBuf = profile_config_path(sp, id)?;
@@ -180,11 +187,7 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
     write_atomic(&config_path, serialized_config.as_bytes())
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    Ok(ProfileMeta {
-        id: record.id.clone(),
-        name: record.name.clone(),
-        has_password: record.has_password,
-    })
+    Ok(meta)
 }
 
 pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {

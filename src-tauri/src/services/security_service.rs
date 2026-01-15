@@ -333,7 +333,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         *session = Some(VaultSession {
             profile_id: id.to_string(),
             conn: mem_conn,
-            key: *key,
+            key,
         });
     }
 
@@ -395,7 +395,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
         if s.profile_id != id {
             return Err(ErrorCodeString::new("VAULT_LOCKED"));
         }
-        s.key = *key;
+        s.key = key;
     }
 
     Ok(true)
