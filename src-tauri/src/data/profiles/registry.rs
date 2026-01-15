@@ -48,10 +48,9 @@ fn load_registry(sp: &StoragePaths) -> Result<ProfileRegistry> {
 }
 
 fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
-    ensure_profiles_dir(sp)?;
     let path = registry_path(sp)?;
     let serialized = serde_json::to_string_pretty(registry)
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        .map_err(|_| ErrorCodeString::new("PROFILE_REGISTRY_SERIALIZATION_FAILED"))?;
     write_atomic(&path, serialized.as_bytes())
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
 }
