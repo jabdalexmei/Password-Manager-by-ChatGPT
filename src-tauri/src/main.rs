@@ -123,6 +123,7 @@ fn main() {
             profiles_list,
             profile_create,
             profile_delete,
+            profile_rename,
             get_active_profile,
             set_active_profile,
             login_vault,

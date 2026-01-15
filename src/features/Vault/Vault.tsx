@@ -43,9 +43,10 @@ type VaultProps = {
   profileName: string;
   isPasswordless: boolean;
   onLocked: () => void;
+  onProfileRenamed?: (name: string) => void;
 };
 
-export default function Vault({ profileId, profileName, isPasswordless, onLocked }: VaultProps) {
+export default function Vault({ profileId, profileName, isPasswordless, onLocked, onProfileRenamed }: VaultProps) {
   const vault = useVault(profileId, onLocked);
   const bankCards = useBankCards(profileId, onLocked, vault.folders);
   const { t: tDataCards } = useTranslation('DataCards');
@@ -599,6 +600,9 @@ export default function Vault({ profileId, profileName, isPasswordless, onLocked
             isSaving={isSavingSettings}
             onCancel={() => setSettingsModalOpen(false)}
             onSave={handleSaveSettings}
+            profileId={profileId}
+            profileName={profileName}
+            onProfileRenamed={onProfileRenamed}
           />
         </Suspense>
       )}

@@ -36,6 +36,22 @@ pub async fn profile_create(
 }
 
 #[tauri::command]
+pub async fn profile_rename(
+    id: String,
+    name: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<ProfileMeta> {
+    let app_state = state.inner().clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let storage_paths = app_state.get_storage_paths()?;
+        profiles_service::rename_profile(&storage_paths, &id, &name)
+    })
+    .await
+    .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+}
+
+#[tauri::command]
 pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
     let app_state = state.inner().clone();
 
