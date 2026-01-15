@@ -68,6 +68,26 @@ fn owned_data_from_bytes(mut bytes: Vec<u8>) -> Result<OwnedData> {
     Ok(owned)
 }
 
+fn apply_in_memory_pragmas(conn: &rusqlite::Connection, profile_id: &str, ctx: &str) -> Result<()> {
+    // Avoid any disk I/O from temp/WAL sidecars when the vault DB is deserialized into :memory:.
+    // This prevents SQLITE_CANTOPEN when SQLite tries to create/open temp files or -wal/-shm.
+    conn.execute_batch(
+        "PRAGMA temp_store=MEMORY;
+PRAGMA synchronous=OFF;
+PRAGMA journal_mode=MEMORY;
+",
+    )
+    .map_err(|e| {
+        log::error!(
+            "[SECURITY][pragmas] profile_id={} ctx={} err={}",
+            profile_id,
+            ctx,
+            format_rusqlite_error(&e)
+        );
+        classify_db_error(&e)
+    })
+}
+
 fn open_protected_vault_session(
     profile_id: &str,
     password: &str,
@@ -94,13 +114,36 @@ fn open_protected_vault_session(
     let decrypted = cipher::decrypt_vault_blob(profile_id, &key, &encrypted)
         .map_err(|_| ErrorCodeString::new("VAULT_DECRYPT_FAILED"))?;
 
-    let mut conn = rusqlite::Connection::open_in_memory()
-        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+    let mut conn = rusqlite::Connection::open_in_memory().map_err(|e| {
+        log::error!(
+            "[SECURITY][login] profile_id={} step=open_in_memory err={}",
+            profile_id,
+            format_rusqlite_error(&e)
+        );
+        ErrorCodeString::new("DB_OPEN_FAILED")
+    })?;
+    // Set pragmas BEFORE deserialize to avoid temp file writes during the first statements.
+    apply_in_memory_pragmas(&conn, profile_id, "open_in_memory_before_deserialize")?;
     let owned = owned_data_from_bytes(decrypted)?;
-    conn.deserialize(DatabaseName::Main, owned, false)
-        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+    conn.deserialize(DatabaseName::Main, owned, false).map_err(|e| {
+        log::error!(
+            "[SECURITY][login] profile_id={} step=deserialize err={}",
+            profile_id,
+            format_rusqlite_error(&e)
+        );
+        ErrorCodeString::new("VAULT_CORRUPTED")
+    })?;
+    // Re-apply pragmas AFTER deserialize, in case the serialized image was created from a WAL database.
+    apply_in_memory_pragmas(&conn, profile_id, "after_deserialize")?;
 
-    migrations::migrate_to_latest(&conn)?;
+    if let Err(e) = migrations::migrate_to_latest(&conn) {
+        log::error!(
+            "[SECURITY][login] profile_id={} step=migrate_to_latest failed code={}",
+            profile_id,
+            e.code
+        );
+        return Err(e);
+    }
     migrations::validate_core_schema(&conn)
         .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
 
@@ -363,6 +406,8 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
                     ErrorCodeString::new("DB_OPEN_FAILED")
                 })?;
 
+            apply_in_memory_pragmas(&mem, id, "mem_before_backup")?;
+
             {
                 let backup = Backup::new(&src, &mut mem).map_err(|e| {
                     log::error!(
@@ -388,16 +433,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
             // Ensure the in-memory copy never tries to use WAL (no -wal/-shm files).
             // This also makes the serialized image safe to deserialize later into :memory:.
-            let _: String = mem
-                .query_row("PRAGMA journal_mode=MEMORY;", [], |row| row.get(0))
-                .map_err(|e| {
-                    log::error!(
-                        "[SECURITY][set_profile_password] profile_id={} step=set_journal_mode_memory err={}",
-                        id,
-                        format_rusqlite_error(&e)
-                    );
-                    classify_db_error(&e)
-                })?;
+            apply_in_memory_pragmas(&mem, id, "mem_after_backup")?;
 
             migrations::migrate_to_latest(&mem)?;
             migrations::validate_core_schema(&mem)
