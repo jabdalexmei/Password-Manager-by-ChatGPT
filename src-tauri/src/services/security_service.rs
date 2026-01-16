@@ -345,7 +345,7 @@ fn recover_set_password_transition(
                         Duration::from_millis(50),
                     );
                 }
-                warn!(
+                log::warn!(
                     "[SECURITY][recover_set_password_transition] profile_id={} action=attachments_swap_failed err={}",
                     profile_id,
                     e
@@ -563,7 +563,7 @@ fn recover_remove_password_transition(
                         Duration::from_millis(50),
                     );
                 }
-                warn!(
+                log::warn!(
                     "[SECURITY][recover_remove_password_transition] profile_id={} action=attachments_swap_failed err={}",
                     profile_id,
                     e
