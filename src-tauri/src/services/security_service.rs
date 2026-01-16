@@ -745,10 +745,15 @@ fn recover_remove_password_transition(
             }
 
             // If attachments dir exists, ensure no encrypted blobs remain.
+            // If encrypted blobs remain even though the commit marker exists, we cannot
+            // safely finish the transition (we would lose the key material). In that case,
+            // fall through to rollback-to-protected below.
+            let mut attachments_ok = true;
             if attachments_dir.exists() {
                 let contains_enc = dir_contains_encrypted_attachments(&attachments_dir)
                     .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
                 if contains_enc {
+                    attachments_ok = false;
                     log::error!(
                         "[SECURITY][recover_remove_password_transition] profile_id={} action=commit_marker_but_attachments_encrypted",
                         profile_id
@@ -756,6 +761,7 @@ fn recover_remove_password_transition(
                 }
             }
 
+            if attachments_ok {
             // Remove key material last (move into backup then drop backup_root).
             if salt_path.exists() {
                 if salt_backup_path.exists() {
@@ -779,6 +785,8 @@ fn recover_remove_password_transition(
             clear_pool(profile_id);
             let _ = std::fs::remove_dir_all(backup_root);
             return Ok(());
+            }
+            }
         }
         // If the marker is present but we can't safely finish, rollback to protected below.
     }
