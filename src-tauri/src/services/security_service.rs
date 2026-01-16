@@ -362,13 +362,22 @@ fn recover_set_password_transition(
 
     // Otherwise, rollback to passwordless.
     if vault_backup_path.exists() {
+        if vault_path.exists() {
+            std::fs::remove_file(&vault_path)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
         rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     } else if vault_path.exists() {
-        std::fs::remove_file(&vault_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        std::fs::remove_file(&vault_path)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if salt_backup_path.exists() {
+        if salt_path.exists() {
+            std::fs::remove_file(&salt_path)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
         rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     } else if salt_path.exists() {
@@ -376,6 +385,10 @@ fn recover_set_password_transition(
     }
 
     if key_backup_path.exists() {
+        if key_path.exists() {
+            std::fs::remove_file(&key_path)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
         rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     } else if key_path.exists() {
@@ -497,16 +510,28 @@ fn recover_change_password_transition(
 
     // Rollback to old password (restore backups).
     if vault_backup_path.exists() {
+        if vault_path.exists() {
+            std::fs::remove_file(&vault_path)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
         rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if salt_backup_path.exists() {
+        if salt_path.exists() {
+            std::fs::remove_file(&salt_path)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
         rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if key_backup_path.exists() {
+        if key_path.exists() {
+            std::fs::remove_file(&key_path)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
         rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
@@ -623,16 +648,28 @@ fn recover_remove_password_transition(
 
     // Otherwise, rollback back to protected.
     if vault_backup_path.exists() {
+        if vault_path.exists() {
+            std::fs::remove_file(&vault_path)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
         rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if salt_backup_path.exists() {
+        if salt_path.exists() {
+            std::fs::remove_file(&salt_path)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
         rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if key_backup_path.exists() {
+        if key_path.exists() {
+            std::fs::remove_file(&key_path)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
         rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
