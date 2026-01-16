@@ -1,29 +1,53 @@
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -274,7 +274,7 @@ fn encrypt_attachments_plain_to_staging(
-         let blob = std::fs::read(&file).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -20,6 +20,8 @@ import {
+   loadBankCardCoreHiddenFields,
+   onBankCardCoreHiddenFieldsChanged,
+   type BankCardCoreField,
+ } from '../../lib/bankcardCoreHiddenFields';
++import { getBankCard } from '../../api/vaultApi';
++import { mapBankCardFromBackend } from '../../types/mappers';
  
-         // If we see encrypted magic in a passwordless profile, we can't safely recover it (no old key).
--        if blob.starts_with(crate::data::crypto::cipher::PM_ENC_MAGIC) {
-+        if blob.starts_with(&cipher::PM_ENC_MAGIC) {
-             return Err(ErrorCodeString::new("ATTACHMENT_CORRUPTED"));
-         }
+ export type BankCardsProps = {
+   profileId: string;
+@@ -372,12 +374,8 @@ export function BankCards({
+                       const id = cardMenu.id;
+                       setCardMenu(null);
+                       try {
+-                        const backend = await import('../../api/vaultApi').then((module) =>
+-                          module.getBankCard(id)
+-                        );
+-                        const mapped = await import('../../types/mappers').then((module) =>
+-                          module.mapBankCardFromBackend(backend)
+-                        );
++                        const backend = await getBankCard(id);
++                        const mapped = mapBankCardFromBackend(backend);
+                         viewModel.openEditModal(mapped);
+                       } catch (err) {
+                         console.error(err);
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -29,6 +29,8 @@ import {
+   loadCoreHiddenFields,
+   onCoreHiddenFieldsChanged,
+   type DataCardCoreField,
+ } from '../../lib/datacardCoreHiddenFields';
+ import { clipboardClearAll } from '../../../../shared/lib/tauri';
++import { getDataCard } from '../../api/vaultApi';
++import { mapCardFromBackend } from '../../types/mappers';
  
-@@ -302,7 +302,7 @@ fn reencrypt_attachments_to_staging(
-         let attachment_id = attachment_id_from_path(&file)?;
-         let blob = std::fs::read(&file).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
- 
--        let plain = if blob.starts_with(crate::data::crypto::cipher::PM_ENC_MAGIC) {
-+        let plain = if blob.starts_with(&cipher::PM_ENC_MAGIC) {
-             cipher::decrypt_attachment_blob(profile_id, &attachment_id, old_key, &blob)?
-         } else {
-             // Tolerate plaintext leftovers (legacy/edge cases) and bring them into the new key.
-@@ -846,7 +846,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>)
-         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
- 
-     // Must be unlocked (session exists and matches profile).
--    let (mut bytes, old_key) = {
-+    let (bytes, old_key) = {
-         let session = state
-             .vault_session
-             .lock()
+ const LazyPasswordGeneratorModal = React.lazy(async () => {
+   const m = await import('../modals/PasswordGeneratorModal');
+@@ -876,8 +878,8 @@ export function DataCards({
+                       const id = cardMenu.id;
+                       setCardMenu(null);
+                       try {
+-                        const backend = await import('../../api/vaultApi').then((m) => m.getDataCard(id));
+-                        const mapped = await import('../../types/mappers').then((m) => m.mapCardFromBackend(backend));
++                        const backend = await getDataCard(id);
++                        const mapped = mapCardFromBackend(backend);
+                         viewModel.openEditModal(mapped);
+                       } catch (err) {
+                         console.error(err);
