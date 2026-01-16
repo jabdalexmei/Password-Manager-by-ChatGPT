@@ -1,31 +1,95 @@
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -1728,8 +1728,18 @@
-         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+@@ -362,13 +362,22 @@
+ 
+     // Otherwise, rollback to passwordless.
+     if vault_backup_path.exists() {
++        if vault_path.exists() {
++            std::fs::remove_file(&vault_path)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+         rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     } else if vault_path.exists() {
+-        std::fs::remove_file(&vault_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        std::fs::remove_file(&vault_path)
++            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
      }
  
--    if let Ok(entries) = std::fs::read_dir(&attachments_dir) {
--        for entry in entries.flatten() {
-+    if attachments_dir.exists() {
-+        let entries = std::fs::read_dir(&attachments_dir).map_err(|_| {
-+            rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
-+            ErrorCodeString::new("ATTACHMENT_READ")
-+        })?;
-+
-+        for entry in entries {
-+            let entry = entry.map_err(|_| {
-+                rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
-+                ErrorCodeString::new("ATTACHMENT_READ")
-+            })?;
-+
-             let path = entry.path();
-             if !path.is_file() {
-                 continue;
-@@ -1766,7 +1776,6 @@
-             }
-         }
+     if salt_backup_path.exists() {
++        if salt_path.exists() {
++            std::fs::remove_file(&salt_path)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+         rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     } else if salt_path.exists() {
+@@ -376,6 +385,10 @@
      }
--
-     if attachments_backup_dir.exists() {
-         let _ = std::fs::remove_dir_all(&attachments_backup_dir);
+ 
+     if key_backup_path.exists() {
++        if key_path.exists() {
++            std::fs::remove_file(&key_path)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+         rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     } else if key_path.exists() {
+@@ -497,16 +510,28 @@
+ 
+     // Rollback to old password (restore backups).
+     if vault_backup_path.exists() {
++        if vault_path.exists() {
++            std::fs::remove_file(&vault_path)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+         rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     }
+ 
+     if salt_backup_path.exists() {
++        if salt_path.exists() {
++            std::fs::remove_file(&salt_path)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+         rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     }
+ 
+     if key_backup_path.exists() {
++        if key_path.exists() {
++            std::fs::remove_file(&key_path)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+         rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     }
+@@ -623,16 +648,28 @@
+ 
+     // Otherwise, rollback back to protected.
+     if vault_backup_path.exists() {
++        if vault_path.exists() {
++            std::fs::remove_file(&vault_path)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+         rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     }
+ 
+     if salt_backup_path.exists() {
++        if salt_path.exists() {
++            std::fs::remove_file(&salt_path)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+         rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+     }
+ 
+     if key_backup_path.exists() {
++        if key_path.exists() {
++            std::fs::remove_file(&key_path)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+         rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
      }
