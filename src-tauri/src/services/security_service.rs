@@ -1728,8 +1728,18 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
     }
 
-    if let Ok(entries) = std::fs::read_dir(&attachments_dir) {
-        for entry in entries.flatten() {
+    if attachments_dir.exists() {
+        let entries = std::fs::read_dir(&attachments_dir).map_err(|_| {
+            rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
+            ErrorCodeString::new("ATTACHMENT_READ")
+        })?;
+
+        for entry in entries {
+            let entry = entry.map_err(|_| {
+                rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
+                ErrorCodeString::new("ATTACHMENT_READ")
+            })?;
+
             let path = entry.path();
             if !path.is_file() {
                 continue;
@@ -1766,7 +1776,6 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
             }
         }
     }
-
     if attachments_backup_dir.exists() {
         let _ = std::fs::remove_dir_all(&attachments_backup_dir);
     }
