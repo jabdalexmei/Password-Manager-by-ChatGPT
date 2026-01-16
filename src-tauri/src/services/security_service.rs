@@ -521,7 +521,7 @@ fn recover_remove_password_transition(
     let attachments_encrypted_backup_dir = backup_root.join("attachments_encrypted");
     let attachments_plain_staging_dir = backup_root.join("attachments_plain_staging");
 
-    let vault_is_plain = vault_path.exists() && !file_has_prefix(&vault_path, &cipher::PM_ENC_MAGIC);
+    let vault_is_plain = vault_path.exists() && file_has_sqlite_magic(&vault_path);
     let has_salt = salt_path.exists();
     let has_key = key_path.exists();
 
