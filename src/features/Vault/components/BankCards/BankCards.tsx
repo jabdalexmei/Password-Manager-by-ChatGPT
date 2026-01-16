@@ -23,6 +23,8 @@ import {
   onBankCardCoreHiddenFieldsChanged,
   type BankCardCoreField,
 } from '../../lib/bankcardCoreHiddenFields';
+import { getBankCard } from '../../api/vaultApi';
+import { mapBankCardFromBackend } from '../../types/mappers';
 
 export type BankCardsProps = {
   profileId: string;
@@ -375,12 +377,8 @@ export function BankCards({
                       const id = cardMenu.id;
                       setCardMenu(null);
                       try {
-                        const backend = await import('../../api/vaultApi').then((module) =>
-                          module.getBankCard(id)
-                        );
-                        const mapped = await import('../../types/mappers').then((module) =>
-                          module.mapBankCardFromBackend(backend)
-                        );
+                        const backend = await getBankCard(id);
+                        const mapped = mapBankCardFromBackend(backend);
                         viewModel.openEditModal(mapped);
                       } catch (err) {
                         console.error(err);

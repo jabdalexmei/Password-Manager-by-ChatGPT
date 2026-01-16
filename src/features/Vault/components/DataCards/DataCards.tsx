@@ -32,6 +32,8 @@ import {
   type DataCardCoreField,
 } from '../../lib/datacardCoreHiddenFields';
 import { clipboardClearAll } from '../../../../shared/lib/tauri';
+import { getDataCard } from '../../api/vaultApi';
+import { mapCardFromBackend } from '../../types/mappers';
 
 const LazyPasswordGeneratorModal = React.lazy(async () => {
   const m = await import('../modals/PasswordGeneratorModal');
@@ -879,8 +881,8 @@ export function DataCards({
                       const id = cardMenu.id;
                       setCardMenu(null);
                       try {
-                        const backend = await import('../../api/vaultApi').then((m) => m.getDataCard(id));
-                        const mapped = await import('../../types/mappers').then((m) => m.mapCardFromBackend(backend));
+                        const backend = await getDataCard(id);
+                        const mapped = mapCardFromBackend(backend);
                         viewModel.openEditModal(mapped);
                       } catch (err) {
                         console.error(err);
