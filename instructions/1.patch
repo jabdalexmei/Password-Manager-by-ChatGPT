@@ -1,53 +1,623 @@
-diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
---- a/src/features/Vault/components/BankCards/BankCards.tsx
-+++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -20,6 +20,8 @@ import {
-   loadBankCardCoreHiddenFields,
-   onBankCardCoreHiddenFieldsChanged,
-   type BankCardCoreField,
- } from '../../lib/bankcardCoreHiddenFields';
-+import { getBankCard } from '../../api/vaultApi';
-+import { mapBankCardFromBackend } from '../../types/mappers';
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -1,4 +1,4 @@
+-use std::io;
++use std::io::{self, Read};
+ use std::path::{Path, PathBuf};
+ use std::ptr::NonNull;
+ use std::sync::atomic::Ordering;
+@@ -91,6 +91,21 @@
+     })
+ }
  
- export type BankCardsProps = {
-   profileId: string;
-@@ -372,12 +374,8 @@ export function BankCards({
-                       const id = cardMenu.id;
-                       setCardMenu(null);
-                       try {
--                        const backend = await import('../../api/vaultApi').then((module) =>
--                          module.getBankCard(id)
--                        );
--                        const mapped = await import('../../types/mappers').then((module) =>
--                          module.mapBankCardFromBackend(backend)
--                        );
-+                        const backend = await getBankCard(id);
-+                        const mapped = mapBankCardFromBackend(backend);
-                         viewModel.openEditModal(mapped);
-                       } catch (err) {
-                         console.error(err);
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -29,6 +29,8 @@ import {
-   loadCoreHiddenFields,
-   onCoreHiddenFieldsChanged,
-   type DataCardCoreField,
- } from '../../lib/datacardCoreHiddenFields';
- import { clipboardClearAll } from '../../../../shared/lib/tauri';
-+import { getDataCard } from '../../api/vaultApi';
-+import { mapCardFromBackend } from '../../types/mappers';
++fn best_effort_force_journal_mode_memory(conn: &rusqlite::Connection, profile_id: &str, ctx: &str) {
++    // Best-effort: we do not fail the whole flow if this pragma fails.
++    // The goal is to ensure serialized in-memory images are not WAL-marked.
++    let res: rusqlite::Result<String> = conn.query_row("PRAGMA journal_mode=MEMORY;", [], |row| row.get(0));
++    if let Err(e) = res {
++        log::warn!(
++            "[SECURITY][pragmas] profile_id={} ctx={} action=journal_mode_memory_failed err={}",
++            profile_id,
++            ctx,
++            format_rusqlite_error(&e)
++        );
++    }
++}
++
++
+ fn normalize_sqlite_header_disable_wal(bytes: &mut [u8], profile_id: &str, ctx: &str) {
+     // SQLite header magic: "SQLite format 3\0"
+     const MAGIC: &[u8; 16] = b"SQLite format 3\0";
+@@ -115,7 +130,7 @@
+         changed = true;
+     }
+     if changed {
+-        log::warn!(
++        log::info!(
+             "[SECURITY][sqlite_header] profile_id={} ctx={} action=disable_wal_header_bytes",
+             profile_id,
+             ctx
+@@ -184,6 +199,8 @@
+     migrations::validate_core_schema(&conn)
+         .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
  
- const LazyPasswordGeneratorModal = React.lazy(async () => {
-   const m = await import('../modals/PasswordGeneratorModal');
-@@ -876,8 +878,8 @@ export function DataCards({
-                       const id = cardMenu.id;
-                       setCardMenu(null);
-                       try {
--                        const backend = await import('../../api/vaultApi').then((m) => m.getDataCard(id));
--                        const mapped = await import('../../types/mappers').then((m) => m.mapCardFromBackend(backend));
-+                        const backend = await getDataCard(id);
-+                        const mapped = mapCardFromBackend(backend);
-                         viewModel.openEditModal(mapped);
-                       } catch (err) {
-                         console.error(err);
++    best_effort_force_journal_mode_memory(&conn, profile_id, "unlock_after_deserialize");
++
+     {
+         let mut session = state
+             .vault_session
+@@ -229,6 +246,380 @@
+     }
+ }
+ 
++fn is_dir_nonempty(dir: &Path) -> io::Result<bool> {
++    if !dir.exists() {
++        return Ok(false);
++    }
++    let mut it = std::fs::read_dir(dir)?;
++    Ok(it.next().is_some())
++}
++
++fn read_file_prefix(path: &Path, len: usize) -> io::Result<Vec<u8>> {
++    let mut f = std::fs::File::open(path)?;
++    let mut buf = vec![0u8; len];
++    let mut read = 0usize;
++    while read < len {
++        let n = f.read(&mut buf[read..])?;
++        if n == 0 {
++            break;
++        }
++        read += n;
++    }
++    buf.truncate(read);
++    Ok(buf)
++}
++
++fn file_has_prefix(path: &Path, prefix: &[u8]) -> bool {
++    match read_file_prefix(path, prefix.len()) {
++        Ok(buf) => buf.as_slice() == prefix,
++        Err(_) => false,
++    }
++}
++
++fn file_has_sqlite_magic(path: &Path) -> bool {
++    const MAGIC: &[u8; 16] = b"SQLite format 3\0";
++    file_has_prefix(path, MAGIC)
++}
++
++fn prepare_transition_backup_root(
++    backup_root: &Path,
++    storage_paths: &crate::data::storage_paths::StoragePaths,
++    profile_id: &str,
++    profile_name: &str,
++) -> Result<()> {
++    if backup_root.exists() {
++        // If it contains data, treat it as an incomplete prior transaction and recover first.
++        if is_dir_nonempty(backup_root).unwrap_or(false) {
++            recover_incomplete_profile_transitions(storage_paths, profile_id, profile_name)?;
++        }
++        let _ = std::fs::remove_dir_all(backup_root);
++    }
++
++    std::fs::create_dir_all(backup_root).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
++}
++
++fn recover_set_password_transition(
++    storage_paths: &crate::data::storage_paths::StoragePaths,
++    profile_id: &str,
++    profile_name: &str,
++    backup_root: &Path,
++) -> Result<()> {
++    if !is_dir_nonempty(backup_root).unwrap_or(false) {
++        return Ok(());
++    }
++
++    let profile_root = profile_dir(storage_paths, profile_id)?;
++    let vault_path = vault_db_path(storage_paths, profile_id)?;
++    let vault_backup_path = backup_root.join("vault.db.bak");
++
++    let salt_path = kdf_salt_path(storage_paths, profile_id)?;
++    let salt_backup_path = backup_root.join("kdf_salt.bin.bak");
++
++    let key_path = key_check_path(storage_paths, profile_id)?;
++    let key_backup_path = backup_root.join("key_check.bin.bak");
++
++    let attachments_dir = profile_root.join("attachments");
++    let attachments_plain_backup_dir = backup_root.join("attachments_plain");
++    let attachments_staging_dir = backup_root.join("attachments_encrypted_staging");
++
++    let vault_is_encrypted = vault_path.exists() && file_has_prefix(&vault_path, &cipher::PM_ENC_MAGIC);
++    let has_salt = salt_path.exists();
++    let has_key = key_path.exists();
++
++    // If core protected materials exist, prefer completing the transition.
++    if vault_is_encrypted && has_salt && has_key {
++        if attachments_staging_dir.exists() {
++            // Complete attachments swap if needed.
++            if attachments_dir.exists() {
++                if attachments_plain_backup_dir.exists() {
++                    let _ = std::fs::remove_dir_all(&attachments_plain_backup_dir);
++                }
++                let _ = rename_retry(
++                    &attachments_dir,
++                    &attachments_plain_backup_dir,
++                    20,
++                    Duration::from_millis(50),
++                );
++            }
++            if attachments_dir.exists() {
++                let _ = std::fs::remove_dir_all(&attachments_dir);
++            }
++            let _ = rename_retry(
++                &attachments_staging_dir,
++                &attachments_dir,
++                20,
++                Duration::from_millis(50),
++            );
++        }
++
++        let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
++        let _ = std::fs::remove_dir_all(backup_root);
++        return Ok(());
++    }
++
++    // Otherwise rollback to passwordless.
++    if vault_backup_path.exists() {
++        let _ = std::fs::remove_file(&vault_path);
++        let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
++    }
++
++    if key_backup_path.exists() {
++        let _ = std::fs::remove_file(&key_path);
++        let _ = rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50));
++    } else {
++        let _ = std::fs::remove_file(&key_path);
++    }
++
++    if salt_backup_path.exists() {
++        let _ = std::fs::remove_file(&salt_path);
++        let _ = rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50));
++    } else {
++        let _ = std::fs::remove_file(&salt_path);
++    }
++
++    if attachments_plain_backup_dir.exists() {
++        if attachments_dir.exists() {
++            let _ = std::fs::remove_dir_all(&attachments_dir);
++        }
++        let _ = rename_retry(
++            &attachments_plain_backup_dir,
++            &attachments_dir,
++            20,
++            Duration::from_millis(50),
++        );
++    }
++
++    // Remove leftover staging on rollback.
++    if attachments_staging_dir.exists() {
++        let _ = std::fs::remove_dir_all(&attachments_staging_dir);
++    }
++
++    let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false);
++    let _ = std::fs::remove_dir_all(backup_root);
++    Ok(())
++}
++
++fn recover_change_password_transition(
++    storage_paths: &crate::data::storage_paths::StoragePaths,
++    profile_id: &str,
++    profile_name: &str,
++    backup_root: &Path,
++) -> Result<()> {
++    if !is_dir_nonempty(backup_root).unwrap_or(false) {
++        return Ok(());
++    }
++
++    let profile_root = profile_dir(storage_paths, profile_id)?;
++
++    let vault_path = vault_db_path(storage_paths, profile_id)?;
++    let vault_backup_path = backup_root.join("vault.db.bak");
++
++    let salt_path = kdf_salt_path(storage_paths, profile_id)?;
++    let salt_backup_path = backup_root.join("kdf_salt.bin.bak");
++
++    let key_path = key_check_path(storage_paths, profile_id)?;
++    let key_backup_path = backup_root.join("key_check.bin.bak");
++
++    let attachments_dir = profile_root.join("attachments");
++    let attachments_backup_dir = backup_root.join("attachments_old");
++    let attachments_staging_dir = backup_root.join("attachments_reencrypted_staging");
++
++    let vault_ok = vault_path.exists() && file_has_prefix(&vault_path, &cipher::PM_ENC_MAGIC);
++    let salt_ok = salt_path.exists();
++    let key_ok = key_path.exists();
++
++    // If new vault + new key material exist, prefer completing attachments swap.
++    if vault_ok && salt_ok && key_ok {
++        if attachments_staging_dir.exists() {
++            if attachments_backup_dir.exists() {
++                // swap was started
++                if attachments_dir.exists() {
++                    let _ = std::fs::remove_dir_all(&attachments_dir);
++                }
++            } else if attachments_dir.exists() {
++                let _ = rename_retry(
++                    &attachments_dir,
++                    &attachments_backup_dir,
++                    20,
++                    Duration::from_millis(50),
++                );
++            }
++
++            if attachments_dir.exists() {
++                let _ = std::fs::remove_dir_all(&attachments_dir);
++            }
++
++            let _ = rename_retry(
++                &attachments_staging_dir,
++                &attachments_dir,
++                20,
++                Duration::from_millis(50),
++            );
++        }
++
++        let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
++        let _ = std::fs::remove_dir_all(backup_root);
++        return Ok(());
++    }
++
++    // Rollback to old password/material.
++    if vault_backup_path.exists() {
++        let _ = std::fs::remove_file(&vault_path);
++        let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
++    }
++
++    if salt_backup_path.exists() {
++        let _ = std::fs::remove_file(&salt_path);
++        let _ = rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50));
++    }
++
++    if key_backup_path.exists() {
++        let _ = std::fs::remove_file(&key_path);
++        let _ = rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50));
++    }
++
++    if attachments_backup_dir.exists() {
++        if attachments_dir.exists() {
++            let _ = std::fs::remove_dir_all(&attachments_dir);
++        }
++        let _ = rename_retry(
++            &attachments_backup_dir,
++            &attachments_dir,
++            20,
++            Duration::from_millis(50),
++        );
++    }
++
++    if attachments_staging_dir.exists() {
++        let _ = std::fs::remove_dir_all(&attachments_staging_dir);
++    }
++
++    let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
++    let _ = std::fs::remove_dir_all(backup_root);
++    Ok(())
++}
++
++fn recover_remove_password_transition(
++    storage_paths: &crate::data::storage_paths::StoragePaths,
++    profile_id: &str,
++    profile_name: &str,
++    backup_root: &Path,
++) -> Result<()> {
++    if !is_dir_nonempty(backup_root).unwrap_or(false) {
++        return Ok(());
++    }
++
++    let profile_root = profile_dir(storage_paths, profile_id)?;
++
++    let vault_path = vault_db_path(storage_paths, profile_id)?;
++    let vault_backup_path = backup_root.join("vault.db.bak");
++
++    let salt_path = kdf_salt_path(storage_paths, profile_id)?;
++    let salt_backup_path = backup_root.join("kdf_salt.bin.bak");
++
++    let key_path = key_check_path(storage_paths, profile_id)?;
++    let key_backup_path = backup_root.join("key_check.bin.bak");
++
++    let attachments_dir = profile_root.join("attachments");
++    let attachments_backup_dir = backup_root.join("attachments_encrypted");
++    let attachments_staging_dir = backup_root.join("attachments_plain_staging");
++
++    let vault_is_plain = vault_path.exists() && file_has_sqlite_magic(&vault_path);
++
++    // If the vault is already plain sqlite, prefer completing to passwordless.
++    if vault_is_plain {
++        if attachments_staging_dir.exists() {
++            if !attachments_backup_dir.exists() && attachments_dir.exists() {
++                let _ = rename_retry(
++                    &attachments_dir,
++                    &attachments_backup_dir,
++                    20,
++                    Duration::from_millis(50),
++                );
++            }
++            if attachments_dir.exists() {
++                let _ = std::fs::remove_dir_all(&attachments_dir);
++            }
++            let _ = rename_retry(
++                &attachments_staging_dir,
++                &attachments_dir,
++                20,
++                Duration::from_millis(50),
++            );
++        }
++
++        let _ = std::fs::remove_file(&salt_path);
++        let _ = std::fs::remove_file(&key_path);
++
++        let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false);
++        let _ = std::fs::remove_dir_all(backup_root);
++        return Ok(());
++    }
++
++    // Otherwise rollback to protected.
++    if vault_backup_path.exists() {
++        let _ = std::fs::remove_file(&vault_path);
++        let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
++    }
++
++    if salt_backup_path.exists() {
++        let _ = std::fs::remove_file(&salt_path);
++        let _ = rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50));
++    }
++
++    if key_backup_path.exists() {
++        let _ = std::fs::remove_file(&key_path);
++        let _ = rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50));
++    }
++
++    if attachments_backup_dir.exists() {
++        if attachments_dir.exists() {
++            let _ = std::fs::remove_dir_all(&attachments_dir);
++        }
++        let _ = rename_retry(
++            &attachments_backup_dir,
++            &attachments_dir,
++            20,
++            Duration::from_millis(50),
++        );
++    }
++
++    if attachments_staging_dir.exists() {
++        let _ = std::fs::remove_dir_all(&attachments_staging_dir);
++    }
++
++    let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
++    let _ = std::fs::remove_dir_all(backup_root);
++    Ok(())
++}
++
++fn recover_incomplete_profile_transitions(
++    storage_paths: &crate::data::storage_paths::StoragePaths,
++    profile_id: &str,
++    profile_name: &str,
++) -> Result<()> {
++    let profile_root = profile_dir(storage_paths, profile_id)?;
++    let tmp_root = profile_root.join("tmp");
++
++    let set_root = tmp_root.join("set_password_backup");
++    if set_root.exists() {
++        recover_set_password_transition(storage_paths, profile_id, profile_name, &set_root)?;
++    }
++
++    let change_root = tmp_root.join("change_password_backup");
++    if change_root.exists() {
++        recover_change_password_transition(storage_paths, profile_id, profile_name, &change_root)?;
++    }
++
++    let remove_root = tmp_root.join("remove_password_backup");
++    if remove_root.exists() {
++        recover_remove_password_transition(storage_paths, profile_id, profile_name, &remove_root)?;
++    }
++
++    Ok(())
++}
++
++
+ fn prepare_empty_dir(path: &Path) -> Result<()> {
+     if path.exists() {
+         std::fs::remove_dir_all(path)
+@@ -323,8 +714,15 @@
+ 
+ pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) -> Result<bool> {
+     let storage_paths = state.get_storage_paths()?;
+-    let profile = registry::get_profile(&storage_paths, id)?
++    let mut profile = registry::get_profile(&storage_paths, id)?
++        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++
++    // If a previous set/change/remove password operation crashed mid-flight,
++    // recover the on-disk profile state before attempting to open the vault.
++    recover_incomplete_profile_transitions(&storage_paths, id, &profile.name)?;
++    profile = registry::get_profile(&storage_paths, id)?
+         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++
+     let pwd = password.unwrap_or_default();
+     let is_passwordless = !profile.has_password;
+ 
+@@ -503,6 +901,8 @@
+         drain_and_drop_profile_pools(id, Duration::from_secs(5));
+         clear_pool(id);
+ 
++        recover_incomplete_profile_transitions(&storage_paths, id, &profile.name)?;
++
+         let vault_path = vault_db_path(&storage_paths, id)?;
+         if !vault_path.exists() {
+             return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
+@@ -590,6 +990,7 @@
+             // Materialize bytes inside a narrower scope so the borrow ends
+             // before we move `mem` out.
+             let bytes = {
++                best_effort_force_journal_mode_memory(&mem, id, "set_password_before_serialize");
+                 let serialized = mem.serialize(DatabaseName::Main).map_err(|e| {
+                     log::error!(
+                         "[SECURITY][set_profile_password] profile_id={} step=serialize_mem err={}",
+@@ -612,11 +1013,7 @@
+         // This prevents leaving the profile in a half-protected state (e.g. vault encrypted but attachments still plaintext).
+         let profile_root = profile_dir(&storage_paths, id)?;
+         let backup_root = profile_root.join("tmp").join("set_password_backup");
+-        if backup_root.exists() {
+-            let _ = std::fs::remove_dir_all(&backup_root);
+-        }
+-        std::fs::create_dir_all(&backup_root)
+-            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        prepare_transition_backup_root(&backup_root, &storage_paths, id, &profile.name)?;
+ 
+         let vault_backup_path = backup_root.join("vault.db.bak");
+ 
+@@ -672,26 +1069,26 @@
+ 
+             if rb.attachments_swapped {
+                 let _ = std::fs::remove_dir_all(&rb.attachments_dir);
+-                let _ = std::fs::rename(&rb.attachments_backup_dir, &rb.attachments_dir);
++                let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
+             }
+ 
+             if rb.key_check_backed_up {
+                 let _ = std::fs::remove_file(&rb.key_check_path);
+-                let _ = std::fs::rename(&rb.key_check_backup_path, &rb.key_check_path);
++                let _ = rename_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
+             } else if !rb.key_check_present_before {
+                 let _ = std::fs::remove_file(&rb.key_check_path);
+             }
+ 
+             if rb.salt_backed_up {
+                 let _ = std::fs::remove_file(&rb.salt_path);
+-                let _ = std::fs::rename(&rb.salt_backup_path, &rb.salt_path);
++                let _ = rename_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
+             } else if !rb.salt_present_before {
+                 let _ = std::fs::remove_file(&rb.salt_path);
+             }
+ 
+             if rb.vault_backed_up {
+                 let _ = std::fs::remove_file(&rb.vault_path);
+-                let _ = std::fs::rename(&rb.vault_backup_path, &rb.vault_path);
++                let _ = rename_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
+             }
+ 
+             let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false);
+@@ -855,6 +1252,7 @@
+         if s.profile_id != id {
+             return Err(ErrorCodeString::new("VAULT_LOCKED"));
+         }
++        best_effort_force_journal_mode_memory(&s.conn, id, "change_password_before_serialize");
+         let serialized = s
+             .conn
+             .serialize(DatabaseName::Main)
+@@ -869,16 +1267,14 @@
+     drain_and_drop_profile_pools(id, Duration::from_secs(5));
+     clear_pool(id);
+ 
++    recover_incomplete_profile_transitions(&storage_paths, id, &profile.name)?;
++
+     ensure_profile_dirs(&storage_paths, id)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
+     let profile_root = profile_dir(&storage_paths, id)?;
+     let backup_root = profile_root.join("tmp").join("change_password_backup");
+-    if backup_root.exists() {
+-        let _ = std::fs::remove_dir_all(&backup_root);
+-    }
+-    std::fs::create_dir_all(&backup_root)
+-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    prepare_transition_backup_root(&backup_root, &storage_paths, id, &profile.name)?;
+ 
+     let vault_path = vault_db_path(&storage_paths, id)?;
+     let vault_backup_path = backup_root.join("vault.db.bak");
+@@ -931,22 +1327,22 @@
+ 
+         if rb.attachments_swapped {
+             let _ = std::fs::remove_dir_all(&rb.attachments_dir);
+-            let _ = std::fs::rename(&rb.attachments_backup_dir, &rb.attachments_dir);
++            let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
+         }
+ 
+         if rb.vault_backed_up {
+             let _ = std::fs::remove_file(&rb.vault_path);
+-            let _ = std::fs::rename(&rb.vault_backup_path, &rb.vault_path);
++            let _ = rename_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
+         }
+ 
+         if rb.salt_backed_up {
+             let _ = std::fs::remove_file(&rb.salt_path);
+-            let _ = std::fs::rename(&rb.salt_backup_path, &rb.salt_path);
++            let _ = rename_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
+         }
+ 
+         if rb.key_check_backed_up {
+             let _ = std::fs::remove_file(&rb.key_check_path);
+-            let _ = std::fs::rename(&rb.key_check_backup_path, &rb.key_check_path);
++            let _ = rename_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
+         }
+ 
+         let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
+@@ -1082,18 +1478,18 @@
+ 
+     if rb.attachments_swapped {
+         let _ = std::fs::remove_dir_all(&rb.attachments_dir);
+-        let _ = std::fs::rename(&rb.attachments_backup_dir, &rb.attachments_dir);
++        let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
+     }
+ 
+     let _ = std::fs::remove_file(&rb.vault_path);
+-    let _ = std::fs::rename(&rb.vault_backup_path, &rb.vault_path);
++    let _ = rename_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
+ 
+     if rb.salt_moved {
+-        let _ = std::fs::rename(&rb.salt_backup_path, &rb.salt_path);
++        let _ = rename_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
+     }
+ 
+     if rb.key_check_moved {
+-        let _ = std::fs::rename(&rb.key_check_backup_path, &rb.key_check_path);
++        let _ = rename_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
+     }
+ 
+     let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
+@@ -1136,13 +1532,11 @@
+     drain_and_drop_profile_pools(id, Duration::from_secs(5));
+     clear_pool(id);
+ 
++    recover_incomplete_profile_transitions(&storage_paths, id, &profile.name)?;
++
+     let profile_root = profile_dir(&storage_paths, id)?;
+     let backup_root = profile_root.join("tmp").join("remove_password_backup");
+-    if backup_root.exists() {
+-        let _ = std::fs::remove_dir_all(&backup_root);
+-    }
+-    std::fs::create_dir_all(&backup_root)
+-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    prepare_transition_backup_root(&backup_root, &storage_paths, id, &profile.name)?;
+ 
+     let vault_path = vault_db_path(&storage_paths, id)?;
+     let vault_backup_path = backup_root.join("vault.db.bak");
+@@ -1179,7 +1573,7 @@
+ 
+     if salt_path.exists() {
+         if rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50)).is_err() {
+-            let _ = std::fs::rename(&vault_backup_path, &vault_path);
++            let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
+             return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+         }
+         rb.salt_moved = true;
+@@ -1187,9 +1581,9 @@
+ 
+     if key_path.exists() {
+         if rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50)).is_err() {
+-            let _ = std::fs::rename(&vault_backup_path, &vault_path);
++            let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
+             if rb.salt_moved {
+-                let _ = std::fs::rename(&salt_backup_path, &salt_path);
++                let _ = rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50));
+             }
+             return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+         }
