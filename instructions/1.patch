@@ -1,35 +1,50 @@
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -745,10 +745,15 @@
+@@ -762,30 +762,29 @@
              }
  
-             // If attachments dir exists, ensure no encrypted blobs remain.
-+            // If encrypted blobs remain even though the commit marker exists, we cannot
-+            // safely finish the transition (we would lose the key material). In that case,
-+            // fall through to rollback-to-protected below.
-+            let mut attachments_ok = true;
-             if attachments_dir.exists() {
-                 let contains_enc = dir_contains_encrypted_attachments(&attachments_dir)
-                     .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-                 if contains_enc {
-+                    attachments_ok = false;
-                     log::error!(
-                         "[SECURITY][recover_remove_password_transition] profile_id={} action=commit_marker_but_attachments_encrypted",
-                         profile_id
-@@ -756,6 +761,7 @@
+             if attachments_ok {
+-            // Remove key material last (move into backup then drop backup_root).
+-            if salt_path.exists() {
+-                if salt_backup_path.exists() {
+-                    remove_file_retry(&salt_backup_path, 20, Duration::from_millis(50))
++                // Remove key material last (move into backup then drop backup_root).
++                if salt_path.exists() {
++                    if salt_backup_path.exists() {
++                        remove_file_retry(&salt_backup_path, 20, Duration::from_millis(50))
++                            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++                    }
++                    rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50))
+                         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
                  }
-             }
+-                rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50))
+-                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+-            }
  
-+            if attachments_ok {
-             // Remove key material last (move into backup then drop backup_root).
-             if salt_path.exists() {
-                 if salt_backup_path.exists() {
-@@ -779,6 +785,8 @@
-             clear_pool(profile_id);
-             let _ = std::fs::remove_dir_all(backup_root);
-             return Ok(());
-+            }
-+            }
+-            if key_path.exists() {
+-                if key_backup_path.exists() {
+-                    remove_file_retry(&key_backup_path, 20, Duration::from_millis(50))
++                if key_path.exists() {
++                    if key_backup_path.exists() {
++                        remove_file_retry(&key_backup_path, 20, Duration::from_millis(50))
++                            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++                    }
++                    rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50))
+                         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+                 }
+-                rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50))
+-                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+-            }
+ 
+-            registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
+-            clear_pool(profile_id);
+-            let _ = std::fs::remove_dir_all(backup_root);
+-            return Ok(());
+-            }
++                registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
++                clear_pool(profile_id);
++                let _ = std::fs::remove_dir_all(backup_root);
++                return Ok(());
+             }
          }
          // If the marker is present but we can't safely finish, rollback to protected below.
-     }
