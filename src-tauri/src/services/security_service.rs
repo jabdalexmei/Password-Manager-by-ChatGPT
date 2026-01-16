@@ -675,14 +675,11 @@ fn recover_remove_password_transition(
     let attachments_plain_staging_dir = backup_root.join("attachments_plain_staging");
 
     let vault_is_plain = vault_path.exists() && file_has_sqlite_magic(&vault_path);
-    let has_salt = salt_path.exists();
-    let has_key = key_path.exists();
-
-    // If vault is plaintext and no protected materials exist, prefer completing the transition,
+    // If vault is plaintext, prefer completing the transition,
     // BUT only if attachments are already plaintext OR we have staging/backup evidence.
     // remove_profile_password writes the plaintext vault before migrating attachments; a crash in-between
     // must roll back to protected (otherwise encrypted attachments would remain under a passwordless profile).
-    if vault_is_plain && !has_salt && !has_key {
+    if vault_is_plain {
         let attachments_already_plain = if attachments_dir.exists() {
             !dir_contains_encrypted_attachments(&attachments_dir)
                 .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?
@@ -739,6 +736,26 @@ fn recover_remove_password_transition(
                     );
                     return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
                 }
+            }
+
+            // Ensure key material is removed. A crash can leave salt/key_check behind even though
+            // vault and attachments are plaintext.
+            if salt_path.exists() {
+                if salt_backup_path.exists() {
+                    std::fs::remove_file(&salt_backup_path)
+                        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+                }
+                rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50))
+                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+            }
+
+            if key_path.exists() {
+                if key_backup_path.exists() {
+                    std::fs::remove_file(&key_backup_path)
+                        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+                }
+                rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50))
+                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
             }
 
             registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
@@ -1782,10 +1799,12 @@ fn rollback_remove_profile_password(
     let _ = rename_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
 
     if rb.salt_moved {
+        let _ = std::fs::remove_file(&rb.salt_path);
         let _ = rename_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
     }
 
     if rb.key_check_moved {
+        let _ = std::fs::remove_file(&rb.key_check_path);
         let _ = rename_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
     }
 
@@ -1866,25 +1885,6 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     }
     if rename_retry(&vault_path, &vault_backup_path, 20, Duration::from_millis(50)).is_err() {
         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
-    }
-
-    if salt_path.exists() {
-        if rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50)).is_err() {
-            let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
-            return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
-        }
-        rb.salt_moved = true;
-    }
-
-    if key_path.exists() {
-        if rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50)).is_err() {
-            let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
-            if rb.salt_moved {
-                let _ = rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50));
-            }
-            return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
-        }
-        rb.key_check_moved = true;
     }
 
     let db_bytes = session
@@ -1996,6 +1996,23 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     if rename_retry(&staging_dir, &attachments_dir, 20, Duration::from_millis(50)).is_err() {
         rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+    }
+
+    // Now that vault and attachments are plaintext, remove key material last.
+    if salt_path.exists() {
+        if rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50)).is_err() {
+            rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
+            return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+        }
+        rb.salt_moved = true;
+    }
+
+    if key_path.exists() {
+        if rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50)).is_err() {
+            rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
+            return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+        }
+        rb.key_check_moved = true;
     }
 
     let updated = match registry::upsert_profile_with_id(&storage_paths, id, &profile.name, false) {
