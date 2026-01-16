@@ -762,29 +762,29 @@ fn recover_remove_password_transition(
             }
 
             if attachments_ok {
-            // Remove key material last (move into backup then drop backup_root).
-            if salt_path.exists() {
-                if salt_backup_path.exists() {
-                    remove_file_retry(&salt_backup_path, 20, Duration::from_millis(50))
+                // Remove key material last (move into backup then drop backup_root).
+                if salt_path.exists() {
+                    if salt_backup_path.exists() {
+                        remove_file_retry(&salt_backup_path, 20, Duration::from_millis(50))
+                            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+                    }
+                    rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50))
                         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
                 }
-                rename_retry(&salt_path, &salt_backup_path, 20, Duration::from_millis(50))
-                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-            }
 
-            if key_path.exists() {
-                if key_backup_path.exists() {
-                    remove_file_retry(&key_backup_path, 20, Duration::from_millis(50))
+                if key_path.exists() {
+                    if key_backup_path.exists() {
+                        remove_file_retry(&key_backup_path, 20, Duration::from_millis(50))
+                            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+                    }
+                    rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50))
                         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
                 }
-                rename_retry(&key_path, &key_backup_path, 20, Duration::from_millis(50))
-                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-            }
 
-            registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
-            clear_pool(profile_id);
-            let _ = std::fs::remove_dir_all(backup_root);
-            return Ok(());
+                registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
+                clear_pool(profile_id);
+                let _ = std::fs::remove_dir_all(backup_root);
+                return Ok(());
             }
             }
         }
