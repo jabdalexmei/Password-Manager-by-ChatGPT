@@ -295,9 +295,11 @@ fn recover_set_password_transition(
 
     let salt_path = kdf_salt_path(storage_paths, profile_id)?;
     let salt_backup_path = backup_root.join("kdf_salt.bin.bak");
+    let salt_new_path = backup_root.join("kdf_salt.bin.new");
 
     let key_path = key_check_path(storage_paths, profile_id)?;
     let key_backup_path = backup_root.join("key_check.bin.bak");
+    let key_new_path = backup_root.join("key_check.bin.new");
 
     let attachments_dir = profile_root.join("attachments");
     let attachments_plain_backup_dir = backup_root.join("attachments_plain");
@@ -306,9 +308,11 @@ fn recover_set_password_transition(
     let vault_is_encrypted = vault_path.exists() && file_has_prefix(&vault_path, &cipher::PM_ENC_MAGIC);
     let has_salt = salt_path.exists();
     let has_key = key_path.exists();
+    let salt_ready = has_salt || salt_new_path.exists();
+    let key_ready = has_key || key_new_path.exists();
 
     // If core protected materials exist, prefer completing the transition.
-    if vault_is_encrypted && has_salt && has_key {
+    if vault_is_encrypted && salt_ready && key_ready {
         if attachments_staging_dir.exists() {
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
@@ -354,6 +358,26 @@ fn recover_set_password_transition(
             }
         }
 
+        // Commit staged key material if it was prepared but not moved into place.
+        if !has_salt && salt_new_path.exists() {
+            replace_file_retry(
+                &salt_new_path,
+                &salt_path,
+                20,
+                Duration::from_millis(50),
+            )
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
+        if !has_key && key_new_path.exists() {
+            replace_file_retry(
+                &key_new_path,
+                &key_path,
+                20,
+                Duration::from_millis(50),
+            )
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
+
         registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
         clear_pool(profile_id);
         let _ = std::fs::remove_dir_all(backup_root);
@@ -384,6 +408,10 @@ fn recover_set_password_transition(
         let _ = std::fs::remove_file(&salt_path);
     }
 
+    if salt_new_path.exists() {
+        let _ = std::fs::remove_file(&salt_new_path);
+    }
+
     if key_backup_path.exists() {
         if key_path.exists() {
             std::fs::remove_file(&key_path)
@@ -393,6 +421,10 @@ fn recover_set_password_transition(
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     } else if key_path.exists() {
         let _ = std::fs::remove_file(&key_path);
+    }
+
+    if key_new_path.exists() {
+        let _ = std::fs::remove_file(&key_new_path);
     }
 
     if attachments_plain_backup_dir.exists() {
@@ -439,9 +471,11 @@ fn recover_change_password_transition(
 
     let salt_path = kdf_salt_path(storage_paths, profile_id)?;
     let salt_backup_path = backup_root.join("kdf_salt.bin.bak");
+    let salt_new_path = backup_root.join("kdf_salt.bin.new");
 
     let key_path = key_check_path(storage_paths, profile_id)?;
     let key_backup_path = backup_root.join("key_check.bin.bak");
+    let key_new_path = backup_root.join("key_check.bin.new");
 
     let attachments_dir = profile_root.join("attachments");
     let attachments_backup_dir = backup_root.join("attachments_old");
@@ -450,11 +484,13 @@ fn recover_change_password_transition(
     let vault_ok = vault_path.exists() && file_has_prefix(&vault_path, &cipher::PM_ENC_MAGIC);
     let salt_ok = salt_path.exists();
     let key_ok = key_path.exists();
+    let salt_ready = salt_ok || salt_new_path.exists();
+    let key_ready = key_ok || key_new_path.exists();
 
     // If protected materials exist, prefer completing the transition.
     // change_profile_password writes new vault/key material first, then swaps attachments.
     // After a crash, we might have a new vault but attachments still old-key.
-    if vault_ok && salt_ok && key_ok {
+    if vault_ok && salt_ready && key_ready {
         if attachments_staging_dir.exists() {
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
@@ -502,6 +538,26 @@ fn recover_change_password_transition(
             }
         }
 
+        // Commit staged key material if it was prepared but not moved into place.
+        if !salt_ok && salt_new_path.exists() {
+            replace_file_retry(
+                &salt_new_path,
+                &salt_path,
+                20,
+                Duration::from_millis(50),
+            )
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
+        if !key_ok && key_new_path.exists() {
+            replace_file_retry(
+                &key_new_path,
+                &key_path,
+                20,
+                Duration::from_millis(50),
+            )
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
+
         registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
         clear_pool(profile_id);
         let _ = std::fs::remove_dir_all(backup_root);
@@ -527,6 +583,10 @@ fn recover_change_password_transition(
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
+    if salt_new_path.exists() {
+        let _ = std::fs::remove_file(&salt_new_path);
+    }
+
     if key_backup_path.exists() {
         if key_path.exists() {
             std::fs::remove_file(&key_path)
@@ -534,6 +594,10 @@ fn recover_change_password_transition(
         }
         rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    }
+
+    if key_new_path.exists() {
+        let _ = std::fs::remove_file(&key_new_path);
     }
 
     if attachments_backup_dir.exists() {
@@ -744,6 +808,31 @@ fn rename_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> 
             }
         }
     }
+}
+
+fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
+    let mut i = 0;
+    loop {
+        match std::fs::remove_file(path) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                i += 1;
+                if i >= attempts {
+                    return Err(e);
+                }
+                let backoff_ms = base_delay.as_millis() as u64 * i as u64;
+                std::thread::sleep(Duration::from_millis(backoff_ms.max(25).min(1500)));
+            }
+        }
+    }
+}
+
+fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
+    if to.exists() {
+        remove_file_retry(to, attempts, base_delay)?;
+    }
+    rename_retry(from, to, attempts, base_delay)
 }
 
 fn prepare_empty_dir(path: &Path) -> Result<()> {
@@ -1145,9 +1234,11 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
         let salt_path = kdf_salt_path(&storage_paths, id)?;
         let salt_backup_path = backup_root.join("kdf_salt.bin.bak");
+        let salt_new_path = backup_root.join("kdf_salt.bin.new");
 
         let key_path = key_check_path(&storage_paths, id)?;
         let key_backup_path = backup_root.join("key_check.bin.bak");
+        let key_new_path = backup_root.join("key_check.bin.new");
 
         let attachments_dir = profile_root.join("attachments");
         let attachments_backup_dir = backup_root.join("attachments_plain");
@@ -1169,11 +1260,13 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
             salt_path: PathBuf,
             salt_backup_path: PathBuf,
+            salt_new_path: PathBuf,
             salt_present_before: bool,
             salt_backed_up: bool,
 
             key_check_path: PathBuf,
             key_check_backup_path: PathBuf,
+            key_check_new_path: PathBuf,
             key_check_present_before: bool,
             key_check_backed_up: bool,
 
@@ -1192,6 +1285,9 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
                 "[SECURITY][set_profile_password] rolling back failed operation for profile_id={}",
                 profile_id
             );
+
+            let _ = std::fs::remove_file(&rb.salt_new_path);
+            let _ = std::fs::remove_file(&rb.key_check_new_path);
 
             if rb.attachments_swapped {
                 let _ = std::fs::remove_dir_all(&rb.attachments_dir);
@@ -1228,11 +1324,13 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
             salt_path: salt_path.clone(),
             salt_backup_path: salt_backup_path.clone(),
+            salt_new_path: salt_new_path.clone(),
             salt_present_before: salt_path.exists(),
             salt_backed_up: false,
 
             key_check_path: key_path.clone(),
             key_check_backup_path: key_backup_path.clone(),
+            key_check_new_path: key_new_path.clone(),
             key_check_present_before: key_path.exists(),
             key_check_backed_up: false,
 
@@ -1275,16 +1373,6 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             return Err(e);
         }
 
-        // Persist salt + key_check (must both exist for unlocking).
-        if write_atomic(&salt_path, &salt).is_err() {
-            rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
-            return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
-        }
-        if let Err(e) = key_check::create_key_check_file(&storage_paths, id, &*key) {
-            rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
-            return Err(e);
-        }
-
         // Swap attachments dir to encrypted form.
         if attachments_backup_dir.exists() {
             let _ = std::fs::remove_dir_all(&attachments_backup_dir);
@@ -1297,6 +1385,29 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         rb.attachments_swapped = true;
 
         rename_retry(&attachments_staging_dir, &attachments_dir, 20, Duration::from_millis(50))
+            .map_err(|_| {
+                rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
+                ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+            })?;
+
+        // Two-phase commit for key material:
+        // 1) write to *.new under backup_root
+        // 2) atomically move into place after vault+attachments are committed
+        if write_atomic(&salt_new_path, &salt).is_err() {
+            rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
+            return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+        }
+        let key_blob = key_check::create_key_check_blob(id, &*key)?;
+        if let Err(e) = key_check::write_key_check_blob(&key_new_path, &key_blob) {
+            rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
+            return Err(e);
+        }
+        replace_file_retry(&salt_new_path, &salt_path, 20, Duration::from_millis(50))
+            .map_err(|_| {
+                rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
+                ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+            })?;
+        replace_file_retry(&key_new_path, &key_path, 20, Duration::from_millis(50))
             .map_err(|_| {
                 rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
                 ErrorCodeString::new("PROFILE_STORAGE_WRITE")
@@ -1407,9 +1518,11 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
 
     let salt_path = kdf_salt_path(&storage_paths, id)?;
     let salt_backup_path = backup_root.join("kdf_salt.bin.bak");
+    let salt_new_path = backup_root.join("kdf_salt.bin.new");
 
     let key_path = key_check_path(&storage_paths, id)?;
     let key_backup_path = backup_root.join("key_check.bin.bak");
+    let key_new_path = backup_root.join("key_check.bin.new");
 
     let attachments_dir = profile_root.join("attachments");
     let attachments_backup_dir = backup_root.join("attachments_old");
@@ -1429,10 +1542,12 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
 
         salt_path: PathBuf,
         salt_backup_path: PathBuf,
+        salt_new_path: PathBuf,
         salt_backed_up: bool,
 
         key_check_path: PathBuf,
         key_check_backup_path: PathBuf,
+        key_check_new_path: PathBuf,
         key_check_backed_up: bool,
 
         attachments_dir: PathBuf,
@@ -1450,6 +1565,9 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
             "[SECURITY][change_profile_password] rolling back failed operation for profile_id={}",
             profile_id
         );
+
+        let _ = std::fs::remove_file(&rb.salt_new_path);
+        let _ = std::fs::remove_file(&rb.key_check_new_path);
 
         if rb.attachments_swapped {
             let _ = std::fs::remove_dir_all(&rb.attachments_dir);
@@ -1482,10 +1600,12 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
 
         salt_path: salt_path.clone(),
         salt_backup_path: salt_backup_path.clone(),
+        salt_new_path: salt_new_path.clone(),
         salt_backed_up: false,
 
         key_check_path: key_path.clone(),
         key_check_backup_path: key_backup_path.clone(),
+        key_check_new_path: key_new_path.clone(),
         key_check_backed_up: false,
 
         attachments_dir: attachments_dir.clone(),
@@ -1520,16 +1640,6 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
         rb.key_check_backed_up = true;
     }
 
-    // Write new salt + key_check.
-    if write_atomic(&salt_path, &salt).is_err() {
-        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
-        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
-    }
-    if let Err(e) = key_check::create_key_check_file(&storage_paths, id, &*new_key) {
-        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
-        return Err(e);
-    }
-
     // Write new encrypted vault file.
     let encrypted = cipher::encrypt_vault_blob(id, &*new_key, &bytes)?;
     if let Err(e) = cipher::write_encrypted_file(&vault_path, &encrypted) {
@@ -1549,6 +1659,29 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
     rb.attachments_swapped = true;
 
     rename_retry(&attachments_staging_dir, &attachments_dir, 20, Duration::from_millis(50))
+        .map_err(|_| {
+            rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+            ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+        })?;
+
+    // Two-phase commit for key material:
+    // 1) write to *.new under backup_root
+    // 2) atomically move into place after vault+attachments are committed
+    if write_atomic(&salt_new_path, &salt).is_err() {
+        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+    }
+    let key_blob = key_check::create_key_check_blob(id, &*new_key)?;
+    if let Err(e) = key_check::write_key_check_blob(&key_new_path, &key_blob) {
+        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+        return Err(e);
+    }
+    replace_file_retry(&salt_new_path, &salt_path, 20, Duration::from_millis(50))
+        .map_err(|_| {
+            rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+            ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+        })?;
+    replace_file_retry(&key_new_path, &key_path, 20, Duration::from_millis(50))
         .map_err(|_| {
             rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
             ErrorCodeString::new("PROFILE_STORAGE_WRITE")
