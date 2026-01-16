@@ -313,72 +313,102 @@ fn recover_set_password_transition(
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
                 if attachments_plain_backup_dir.exists() {
-                    let _ = std::fs::remove_dir_all(&attachments_plain_backup_dir);
+                    std::fs::remove_dir_all(&attachments_plain_backup_dir)
+                        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
                 }
-                let _ = rename_retry(
+                rename_retry(
                     &attachments_dir,
                     &attachments_plain_backup_dir,
                     20,
                     Duration::from_millis(50),
-                );
+                )
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
             }
+
             if attachments_dir.exists() {
-                let _ = std::fs::remove_dir_all(&attachments_dir);
+                std::fs::remove_dir_all(&attachments_dir)
+                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
             }
-            let _ = rename_retry(
+
+            if let Err(e) = rename_retry(
                 &attachments_staging_dir,
                 &attachments_dir,
                 20,
                 Duration::from_millis(50),
-            );
+            ) {
+                // Best-effort rollback: restore original attachments dir if we moved it.
+                if attachments_plain_backup_dir.exists() && !attachments_dir.exists() {
+                    let _ = rename_retry(
+                        &attachments_plain_backup_dir,
+                        &attachments_dir,
+                        20,
+                        Duration::from_millis(50),
+                    );
+                }
+                log::warn!(
+                    "[SECURITY][recover_set_password_transition] profile_id={} action=attachments_swap_failed err={}",
+                    profile_id,
+                    e
+                );
+                return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+            }
         }
 
-        let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
+        registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
+        clear_pool(profile_id);
         let _ = std::fs::remove_dir_all(backup_root);
         return Ok(());
     }
 
-    // Otherwise rollback to passwordless.
+    // Otherwise, rollback to passwordless.
     if vault_backup_path.exists() {
-        let _ = std::fs::remove_file(&vault_path);
-        let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
-    }
-
-    if key_backup_path.exists() {
-        let _ = std::fs::remove_file(&key_path);
-        let _ = rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50));
-    } else {
-        let _ = std::fs::remove_file(&key_path);
+        rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    } else if vault_path.exists() {
+        std::fs::remove_file(&vault_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if salt_backup_path.exists() {
+        rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    } else if salt_path.exists() {
         let _ = std::fs::remove_file(&salt_path);
-        let _ = rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50));
-    } else {
-        let _ = std::fs::remove_file(&salt_path);
+    }
+
+    if key_backup_path.exists() {
+        rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    } else if key_path.exists() {
+        let _ = std::fs::remove_file(&key_path);
     }
 
     if attachments_plain_backup_dir.exists() {
         if attachments_dir.exists() {
-            let _ = std::fs::remove_dir_all(&attachments_dir);
+            std::fs::remove_dir_all(&attachments_dir)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
         }
-        let _ = rename_retry(
+        rename_retry(
             &attachments_plain_backup_dir,
             &attachments_dir,
             20,
             Duration::from_millis(50),
-        );
+        )
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
-    // Remove leftover staging on rollback.
+    // Ensure staging dir does not survive a rollback.
     if attachments_staging_dir.exists() {
-        let _ = std::fs::remove_dir_all(&attachments_staging_dir);
+        std::fs::remove_dir_all(&attachments_staging_dir)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
-    let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false);
+    registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
+    clear_pool(profile_id);
     let _ = std::fs::remove_dir_all(backup_root);
     Ok(())
 }
+
+
 
 fn recover_change_password_transition(
     storage_paths: &crate::data::storage_paths::StoragePaths,
@@ -391,7 +421,6 @@ fn recover_change_password_transition(
     }
 
     let profile_root = profile_dir(storage_paths, profile_id)?;
-
     let vault_path = vault_db_path(storage_paths, profile_id)?;
     let vault_backup_path = backup_root.join("vault.db.bak");
 
@@ -402,83 +431,71 @@ fn recover_change_password_transition(
     let key_backup_path = backup_root.join("key_check.bin.bak");
 
     let attachments_dir = profile_root.join("attachments");
-    let attachments_backup_dir = backup_root.join("attachments_old");
-    let attachments_staging_dir = backup_root.join("attachments_reencrypted_staging");
+    let attachments_backup_dir = backup_root.join("attachments_plain");
+    let attachments_staging_dir = backup_root.join("attachments_encrypted_staging");
 
     let vault_ok = vault_path.exists() && file_has_prefix(&vault_path, &cipher::PM_ENC_MAGIC);
     let salt_ok = salt_path.exists();
     let key_ok = key_path.exists();
 
-    // If new vault + new key material exist, prefer completing attachments swap.
-    if vault_ok && salt_ok && key_ok {
-        if attachments_staging_dir.exists() {
-            if attachments_backup_dir.exists() {
-                // swap was started
-                if attachments_dir.exists() {
-                    let _ = std::fs::remove_dir_all(&attachments_dir);
-                }
-            } else if attachments_dir.exists() {
-                let _ = rename_retry(
-                    &attachments_dir,
-                    &attachments_backup_dir,
-                    20,
-                    Duration::from_millis(50),
-                );
-            }
-
-            if attachments_dir.exists() {
-                let _ = std::fs::remove_dir_all(&attachments_dir);
-            }
-
-            let _ = rename_retry(
-                &attachments_staging_dir,
-                &attachments_dir,
-                20,
-                Duration::from_millis(50),
-            );
-        }
-
-        let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
+    // If all protected materials exist and no backups remain, treat as committed.
+    if vault_ok
+        && salt_ok
+        && key_ok
+        && !vault_backup_path.exists()
+        && !salt_backup_path.exists()
+        && !key_backup_path.exists()
+        && !attachments_backup_dir.exists()
+        && !attachments_staging_dir.exists()
+    {
         let _ = std::fs::remove_dir_all(backup_root);
         return Ok(());
     }
 
-    // Rollback to old password/material.
+    // Rollback to old password (restore backups).
     if vault_backup_path.exists() {
-        let _ = std::fs::remove_file(&vault_path);
-        let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
+        rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if salt_backup_path.exists() {
-        let _ = std::fs::remove_file(&salt_path);
-        let _ = rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50));
+        rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if key_backup_path.exists() {
-        let _ = std::fs::remove_file(&key_path);
-        let _ = rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50));
+        rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if attachments_backup_dir.exists() {
         if attachments_dir.exists() {
-            let _ = std::fs::remove_dir_all(&attachments_dir);
+            std::fs::remove_dir_all(&attachments_dir)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
         }
-        let _ = rename_retry(
+        rename_retry(
             &attachments_backup_dir,
             &attachments_dir,
             20,
             Duration::from_millis(50),
-        );
+        )
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
+    // Remove any staging dir left from a partially completed swap.
     if attachments_staging_dir.exists() {
-        let _ = std::fs::remove_dir_all(&attachments_staging_dir);
+        std::fs::remove_dir_all(&attachments_staging_dir)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
-    let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
+    // After rollback, the profile is still protected.
+    registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
+    clear_pool(profile_id);
     let _ = std::fs::remove_dir_all(backup_root);
     Ok(())
 }
+
+
 
 fn recover_remove_password_transition(
     storage_paths: &crate::data::storage_paths::StoragePaths,
@@ -491,7 +508,6 @@ fn recover_remove_password_transition(
     }
 
     let profile_root = profile_dir(storage_paths, profile_id)?;
-
     let vault_path = vault_db_path(storage_paths, profile_id)?;
     let vault_backup_path = backup_root.join("vault.db.bak");
 
@@ -502,77 +518,109 @@ fn recover_remove_password_transition(
     let key_backup_path = backup_root.join("key_check.bin.bak");
 
     let attachments_dir = profile_root.join("attachments");
-    let attachments_backup_dir = backup_root.join("attachments_encrypted");
-    let attachments_staging_dir = backup_root.join("attachments_plain_staging");
+    let attachments_encrypted_backup_dir = backup_root.join("attachments_encrypted");
+    let attachments_plain_staging_dir = backup_root.join("attachments_plain_staging");
 
     let vault_is_plain = vault_path.exists() && file_has_sqlite_magic(&vault_path);
+    let has_salt = salt_path.exists();
+    let has_key = key_path.exists();
 
-    // If the vault is already plain sqlite, prefer completing to passwordless.
-    if vault_is_plain {
-        if attachments_staging_dir.exists() {
-            if !attachments_backup_dir.exists() && attachments_dir.exists() {
-                let _ = rename_retry(
+    // If vault is plaintext and no protected materials exist, prefer completing the transition.
+    if vault_is_plain && !has_salt && !has_key {
+        if attachments_plain_staging_dir.exists() {
+            // Complete attachments swap if needed.
+            if attachments_dir.exists() {
+                if attachments_encrypted_backup_dir.exists() {
+                    std::fs::remove_dir_all(&attachments_encrypted_backup_dir)
+                        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+                }
+                rename_retry(
                     &attachments_dir,
-                    &attachments_backup_dir,
+                    &attachments_encrypted_backup_dir,
                     20,
                     Duration::from_millis(50),
-                );
+                )
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
             }
+
             if attachments_dir.exists() {
-                let _ = std::fs::remove_dir_all(&attachments_dir);
+                std::fs::remove_dir_all(&attachments_dir)
+                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
             }
-            let _ = rename_retry(
-                &attachments_staging_dir,
+
+            if let Err(e) = rename_retry(
+                &attachments_plain_staging_dir,
                 &attachments_dir,
                 20,
                 Duration::from_millis(50),
-            );
+            ) {
+                // Best-effort rollback: restore encrypted attachments dir if we moved it.
+                if attachments_encrypted_backup_dir.exists() && !attachments_dir.exists() {
+                    let _ = rename_retry(
+                        &attachments_encrypted_backup_dir,
+                        &attachments_dir,
+                        20,
+                        Duration::from_millis(50),
+                    );
+                }
+                log::warn!(
+                    "[SECURITY][recover_remove_password_transition] profile_id={} action=attachments_swap_failed err={}",
+                    profile_id,
+                    e
+                );
+                return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+            }
         }
 
-        let _ = std::fs::remove_file(&salt_path);
-        let _ = std::fs::remove_file(&key_path);
-
-        let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false);
+        registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
+        clear_pool(profile_id);
         let _ = std::fs::remove_dir_all(backup_root);
         return Ok(());
     }
 
-    // Otherwise rollback to protected.
+    // Otherwise, rollback back to protected.
     if vault_backup_path.exists() {
-        let _ = std::fs::remove_file(&vault_path);
-        let _ = rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50));
+        rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if salt_backup_path.exists() {
-        let _ = std::fs::remove_file(&salt_path);
-        let _ = rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50));
+        rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if key_backup_path.exists() {
-        let _ = std::fs::remove_file(&key_path);
-        let _ = rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50));
+        rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
-    if attachments_backup_dir.exists() {
+    if attachments_encrypted_backup_dir.exists() {
         if attachments_dir.exists() {
-            let _ = std::fs::remove_dir_all(&attachments_dir);
+            std::fs::remove_dir_all(&attachments_dir)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
         }
-        let _ = rename_retry(
-            &attachments_backup_dir,
+        rename_retry(
+            &attachments_encrypted_backup_dir,
             &attachments_dir,
             20,
             Duration::from_millis(50),
-        );
+        )
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
-    if attachments_staging_dir.exists() {
-        let _ = std::fs::remove_dir_all(&attachments_staging_dir);
+    // Remove any leftover plain staging dir.
+    if attachments_plain_staging_dir.exists() {
+        std::fs::remove_dir_all(&attachments_plain_staging_dir)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
-    let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
+    registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
+    clear_pool(profile_id);
     let _ = std::fs::remove_dir_all(backup_root);
     Ok(())
 }
+
+
 
 fn recover_incomplete_profile_transitions(
     storage_paths: &crate::data::storage_paths::StoragePaths,
