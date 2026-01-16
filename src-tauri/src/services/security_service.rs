@@ -786,7 +786,6 @@ fn recover_remove_password_transition(
                 let _ = std::fs::remove_dir_all(backup_root);
                 return Ok(());
             }
-            }
         }
         // If the marker is present but we can't safely finish, rollback to protected below.
     }
