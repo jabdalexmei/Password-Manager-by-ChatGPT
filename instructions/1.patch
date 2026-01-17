@@ -1,21 +1,20 @@
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -421,8 +421,16 @@
-         rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
-             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-     } else if vault_path.exists() {
--        std::fs::remove_file(&vault_path)
--            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+        // If we don't have a vault backup, we must not delete the current vault file.
-+        // This situation can happen if the password-setting flow failed *before* backing up the vault
-+        // (e.g. rename failed due to a transient file lock), or if the primary flow already rolled back
-+        // successfully but left backup_root non-empty. In both cases, deleting vault.db would cause
-+        // irreversible data loss.
-+        log::warn!(
-+            "[SECURITY][recover_set_password_transition] profile_id={} action=skip_vault_rollback reason=no_vault_backup vault={:?}",
-+            profile_id,
-+            vault_path
-+        );
-     }
+@@ -523,10 +523,13 @@
+     let salt_ready = salt_ok || salt_new_path.exists();
+     let key_ready = key_ok || key_new_path.exists();
  
-     if salt_backup_path.exists() {
+-    // If protected materials exist, prefer completing the transition.
+-    // change_profile_password writes new vault/key material first, then swaps attachments.
+-    // After a crash, we might have a new vault but attachments still old-key.
+-    if vault_ok && salt_ready && key_ready {
++    // Crash-recovery for change_profile_password must be conservative:
++    // - change_profile_password stages attachments re-encryption early (old_key -> new_key).
++    // - If we crash before rotating the vault/key material, the staging dir may exist while
++    //   vault/salt/key_check still refer to the old key.
++    // Therefore, only complete the transition (especially attachments swap) once we have
++    // evidence that the vault rotation actually started (vault.db.bak exists).
++    if vault_ok && salt_ready && key_ready && vault_backup_path.exists() {
+         if attachments_staging_dir.exists() {
+             // Complete attachments swap if needed.
+             if attachments_dir.exists() {
