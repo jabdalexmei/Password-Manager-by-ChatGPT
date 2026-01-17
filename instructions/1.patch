@@ -1,20 +1,42 @@
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -523,10 +523,13 @@
-     let salt_ready = salt_ok || salt_new_path.exists();
-     let key_ready = key_ok || key_new_path.exists();
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -215,6 +215,17 @@
+         .position(|p| p.id == id)
+         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
  
--    // If protected materials exist, prefer completing the transition.
--    // change_profile_password writes new vault/key material first, then swaps attachments.
--    // After a crash, we might have a new vault but attachments still old-key.
--    if vault_ok && salt_ready && key_ready {
-+    // Crash-recovery for change_profile_password must be conservative:
-+    // - change_profile_password stages attachments re-encryption early (old_key -> new_key).
-+    // - If we crash before rotating the vault/key material, the staging dir may exist while
-+    //   vault/salt/key_check still refer to the old key.
-+    // Therefore, only complete the transition (especially attachments swap) once we have
-+    // evidence that the vault rotation actually started (vault.db.bak exists).
-+    if vault_ok && salt_ready && key_ready && vault_backup_path.exists() {
-         if attachments_staging_dir.exists() {
-             // Complete attachments swap if needed.
-             if attachments_dir.exists() {
++    let old_name = registry.profiles[idx].name.clone();
++
++    // Write profile config first so we never persist a registry change without a matching config.
++    let config_path: PathBuf = profile_config_path(sp, id)?;
++    let config = serde_json::json!({ "name": name });
++    let serialized_config = serde_json::to_string_pretty(&config)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    write_atomic(&config_path, serialized_config.as_bytes())
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
++    // Now update registry and persist. If this fails, best-effort rollback config.
+     registry.profiles[idx].name = name.to_string();
+ 
+     let meta = ProfileMeta {
+@@ -227,14 +238,13 @@
+         ),
+     };
+ 
+-    save_registry(sp, &registry)?;
+-
+-    let config_path: PathBuf = profile_config_path(sp, id)?;
+-    let config = serde_json::json!({ "name": name });
+-    let serialized_config = serde_json::to_string_pretty(&config)
+-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+-    write_atomic(&config_path, serialized_config.as_bytes())
+-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    if let Err(err) = save_registry(sp, &registry) {
++        let rollback_config = serde_json::json!({ "name": old_name });
++        if let Ok(rollback_serialized) = serde_json::to_string_pretty(&rollback_config) {
++            let _ = write_atomic(&config_path, rollback_serialized.as_bytes());
++        }
++        return Err(err);
++    }
+ 
+     Ok(meta)
+ }
