@@ -215,6 +215,17 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
         .position(|p| p.id == id)
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
+    let old_name = registry.profiles[idx].name.clone();
+
+    // Write profile config first so we never persist a registry change without a matching config.
+    let config_path: PathBuf = profile_config_path(sp, id)?;
+    let config = serde_json::json!({ "name": name });
+    let serialized_config = serde_json::to_string_pretty(&config)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    write_atomic(&config_path, serialized_config.as_bytes())
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+    // Now update registry and persist. If this fails, best-effort rollback config.
     registry.profiles[idx].name = name.to_string();
 
     let meta = ProfileMeta {
@@ -227,14 +238,13 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
         ),
     };
 
-    save_registry(sp, &registry)?;
-
-    let config_path: PathBuf = profile_config_path(sp, id)?;
-    let config = serde_json::json!({ "name": name });
-    let serialized_config = serde_json::to_string_pretty(&config)
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    write_atomic(&config_path, serialized_config.as_bytes())
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    if let Err(err) = save_registry(sp, &registry) {
+        let rollback_config = serde_json::json!({ "name": old_name });
+        if let Ok(rollback_serialized) = serde_json::to_string_pretty(&rollback_config) {
+            let _ = write_atomic(&config_path, rollback_serialized.as_bytes());
+        }
+        return Err(err);
+    }
 
     Ok(meta)
 }
