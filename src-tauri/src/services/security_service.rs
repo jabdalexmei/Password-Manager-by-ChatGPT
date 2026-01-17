@@ -1194,8 +1194,8 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
         }
 
-        let pwd = password.trim();
-        if pwd.is_empty() {
+        let pwd = password;
+        if pwd.chars().all(|c| c.is_whitespace()) {
             return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
         }
 
@@ -1558,8 +1558,8 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
         return Err(ErrorCodeString::new("PROFILE_NOT_PROTECTED"));
     }
 
-    let pwd = password.trim();
-    if pwd.is_empty() {
+    let pwd = password;
+    if pwd.chars().all(|c| c.is_whitespace()) {
         return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
     }
 
