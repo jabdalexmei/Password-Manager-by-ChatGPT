@@ -1,42 +1,99 @@
---- /mnt/data/pm_after/Password-Manager-by-ChatGPT-codex-github-mention-ignore-patch-merge-leftovers-in-.gitignore/src-tauri/src/services/backup_service.rs.orig	2026-01-17 22:29:23.816396495 +0000
-+++ /mnt/data/pm_after/Password-Manager-by-ChatGPT-codex-github-mention-ignore-patch-merge-leftovers-in-.gitignore/src-tauri/src/services/backup_service.rs	2026-01-17 22:29:23.933593634 +0000
-@@ -838,6 +838,8 @@
-     let vault_backup_path = vault_path.with_extension(format!("old.{}", Uuid::new_v4()));
-     let attachments_backup_path = profile_root.join(format!("attachments.old.{}", Uuid::new_v4()));
-     let mut moved_vault = false;
-+    let mut vault_replaced = false;
-+    let mut vault_tmp_path: Option<PathBuf> = None;
-     let mut moved_attachments = false;
-     let mut restored_attachments_created = false;
-     let restore_result: Result<()> = (|| {
-@@ -847,11 +849,13 @@
-             moved_vault = true;
-         }
+diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
+index 2749f7d..c4467ec 100644
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -74,10 +74,39 @@ fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
+     buf == PM_ENC_MAGIC
+ }
  
--        let vault_tmp_path = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
--        fs::copy(&extracted_vault, &vault_tmp_path)
-+        let tmp = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
-+        vault_tmp_path = Some(tmp.clone());
-+        fs::copy(&extracted_vault, &tmp)
-             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
--        rename_with_retry(&vault_tmp_path, &vault_path)
-+        rename_with_retry(&tmp, &vault_path)
-             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-+        vault_replaced = true;
- 
-         if attachments_path.exists() {
-             rename_with_retry(&attachments_path, &attachments_backup_path)
-@@ -887,7 +891,12 @@
-     })();
- 
-     if restore_result.is_err() {
--        if vault_path.exists() {
-+        if let Some(tmp) = vault_tmp_path.as_ref() {
-+            if tmp.exists() {
-+                let _ = fs::remove_file(tmp);
-+            }
++const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
++
++fn vault_looks_plain(sp: &StoragePaths, id: &str) -> bool {
++    let path = match vault_db_path(sp, id) {
++        Ok(p) => p,
++        Err(_) => return false,
++    };
++    if !path.exists() {
++        return false;
++    }
++    let mut f = match fs::File::open(path) {
++        Ok(f) => f,
++        Err(_) => return false,
++    };
++    let mut buf = [0u8; 16];
++    if f.read_exact(&mut buf).is_err() {
++        return false;
++    }
++    &buf == SQLITE_MAGIC
++}
++
+ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
++    // If the vault is clearly a plaintext SQLite DB, the profile is passwordless.
++    // This allows self-healing when registry.json is stale (e.g. after restore or a partial transition).
++    if vault_looks_plain(sp, id) {
++        return false;
++    }
++
++    // If the registry says protected, keep it protected unless we have positive evidence of passwordless.
+     if record_has_password {
+         return true;
+     }
++
+     let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
+     let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
+     if salt_ok && key_ok {
+@@ -113,6 +142,12 @@ pub fn create_profile(
+ ) -> Result<ProfileMeta> {
+     ensure_profiles_dir(sp)?;
+     let id = Uuid::new_v4().to_string();
++
++    if let Some(pwd) = password.as_ref() {
++        if pwd.chars().all(|c| c.is_whitespace()) {
++            return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
 +        }
-+        if vault_replaced && vault_path.exists() {
-             let _ = fs::remove_file(&vault_path);
-         }
-         if moved_vault && vault_backup_path.exists() {
++    }
+     let has_password = password.as_ref().map(|p| !p.is_empty()).unwrap_or(false);
+ 
+     let record = ProfileRecord {
+diff --git a/src-tauri/src/services/backup_service.rs b/src-tauri/src/services/backup_service.rs
+index c3c8b23..7582bb8 100644
+--- a/src-tauri/src/services/backup_service.rs
++++ b/src-tauri/src/services/backup_service.rs
+@@ -960,8 +960,18 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
+         let has_password = manifest.vault_mode == "protected";
+         registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password)?;
+     }
+-
+-    restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)
++    let ok = restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)?;
++    if ok {
++        let has_password = manifest.vault_mode == "protected";
++        if let Err(e) = registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password) {
++            log::warn!(
++                "[BACKUP][restore] profile_id={} action=post_restore_registry_update_failed code={}",
++                manifest.profile_id,
++                e.code
++            );
++        }
++    }
++    Ok(ok)
+ }
+ 
+ pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {
+diff --git a/src-tauri/src/services/profiles_service.rs b/src-tauri/src/services/profiles_service.rs
+index 6291f61..57d1345 100644
+--- a/src-tauri/src/services/profiles_service.rs
++++ b/src-tauri/src/services/profiles_service.rs
+@@ -25,6 +25,12 @@ pub fn create_profile(
+     if name.trim().is_empty() {
+         return Err(ErrorCodeString::new("PROFILE_NAME_REQUIRED"));
+     }
++
++    if let Some(pwd) = password.as_ref() {
++        if pwd.chars().all(|c| c.is_whitespace()) {
++            return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
++        }
++    }
+     let profile = registry::create_profile(sp, name, password.clone())?;
+ 
+     let init_result: Result<()> = (|| {
