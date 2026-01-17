@@ -523,10 +523,13 @@ fn recover_change_password_transition(
     let salt_ready = salt_ok || salt_new_path.exists();
     let key_ready = key_ok || key_new_path.exists();
 
-    // If protected materials exist, prefer completing the transition.
-    // change_profile_password writes new vault/key material first, then swaps attachments.
-    // After a crash, we might have a new vault but attachments still old-key.
-    if vault_ok && salt_ready && key_ready {
+    // Crash-recovery for change_profile_password must be conservative:
+    // - change_profile_password stages attachments re-encryption early (old_key -> new_key).
+    // - If we crash before rotating the vault/key material, the staging dir may exist while
+    //   vault/salt/key_check still refer to the old key.
+    // Therefore, only complete the transition (especially attachments swap) once we have
+    // evidence that the vault rotation actually started (vault.db.bak exists).
+    if vault_ok && salt_ready && key_ready && vault_backup_path.exists() {
         if attachments_staging_dir.exists() {
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
