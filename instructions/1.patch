@@ -1,81 +1,13 @@
---- a/src-tauri/src/data/fs/atomic_write.rs
-+++ b/src-tauri/src/data/fs/atomic_write.rs
-@@ -1,4 +1,6 @@
- use std::fs::{self, OpenOptions};
-+#[cfg(unix)]
-+use std::os::unix::fs::OpenOptionsExt;
- use std::io::{self, Write};
- use std::path::Path;
- use std::time::Duration;
-@@ -46,10 +48,14 @@
- 
-     let result: io::Result<()> = (|| {
-         // 1) write temp
--        let mut f = OpenOptions::new()
--            .write(true)
--            .create_new(true)
--            .open(&tmp_path)?;
-+        let mut opts = OpenOptions::new();
-+        opts.write(true).create_new(true);
-+        #[cfg(unix)]
-+        {
-+            // Secrets should not be readable by other users.
-+            opts.mode(0o600);
-+        }
-+        let mut f = opts.open(&tmp_path)?;
-         f.write_all(bytes)?;
-         f.sync_all()?;
-         drop(f);
---- a/src-tauri/src/data/profiles/paths.rs
-+++ b/src-tauri/src/data/profiles/paths.rs
-@@ -19,6 +19,17 @@
-         _ => Err(ErrorCodeString::new("PROFILE_ID_INVALID")),
-     }
- }
-+#[cfg(unix)]
-+fn set_dir_private(path: &Path) -> std::io::Result<()> {
-+    use std::os::unix::fs::PermissionsExt;
-+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-+}
+diff --git a/.gitignore b/.gitignore
+index b65bf1b..b6c99a7 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -3,3 +3,7 @@ node_modules
+ /dist
+ /src-tauri/target
+ /.turbo
+ /.tauri-lock
 +
-+#[cfg(not(unix))]
-+fn set_dir_private(_path: &Path) -> std::io::Result<()> {
-+    Ok(())
-+}
-+
- 
- 
- pub fn profiles_root(sp: &StoragePaths) -> Result<PathBuf> {
-@@ -29,6 +40,8 @@
-     let dir = profiles_root(sp)?;
-     std::fs::create_dir_all(&dir)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
-+    set_dir_private(&dir)
-+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
-     Ok(dir)
- }
- 
-@@ -81,11 +94,19 @@
- 
- pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str) -> Result<()> {
-     let root = profile_dir(sp, profile_id)?;
--    fs::create_dir_all(root.join("attachments"))
--        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--    fs::create_dir_all(root.join("backups"))
-+
-+    fs::create_dir_all(&root)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--    fs::create_dir_all(root.join("tmp"))
-+    set_dir_private(&root)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+
-+    for sub in ["attachments", "backups", "tmp"] {
-+        let dir = root.join(sub);
-+        fs::create_dir_all(&dir)
-+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+        set_dir_private(&dir)
-+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+    }
-+
-     Ok(())
- }
++# patch/merge leftovers
++*.orig
++*.rej
