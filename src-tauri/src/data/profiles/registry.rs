@@ -74,7 +74,35 @@ fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
     buf == PM_ENC_MAGIC
 }
 
+const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
+
+fn vault_looks_plain(sp: &StoragePaths, id: &str) -> bool {
+    let path = match vault_db_path(sp, id) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    if !path.exists() {
+        return false;
+    }
+    let mut f = match fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    let mut buf = [0u8; 16];
+    if f.read_exact(&mut buf).is_err() {
+        return false;
+    }
+    &buf == SQLITE_MAGIC
+}
+
 fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
+    // If the vault is clearly a plaintext SQLite DB, the profile is passwordless.
+    // This allows self-healing when registry.json is stale (e.g. after restore or a partial transition).
+    if vault_looks_plain(sp, id) {
+        return false;
+    }
+
+    // If the registry says protected, keep it protected unless we have positive evidence of passwordless.
     if record_has_password {
         return true;
     }
@@ -113,6 +141,12 @@ pub fn create_profile(
 ) -> Result<ProfileMeta> {
     ensure_profiles_dir(sp)?;
     let id = Uuid::new_v4().to_string();
+
+    if let Some(pwd) = password.as_ref() {
+        if pwd.chars().all(|c| c.is_whitespace()) {
+            return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
+        }
+    }
     let has_password = password.as_ref().map(|p| !p.is_empty()).unwrap_or(false);
 
     let record = ProfileRecord {

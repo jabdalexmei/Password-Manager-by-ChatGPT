@@ -25,6 +25,12 @@ pub fn create_profile(
     if name.trim().is_empty() {
         return Err(ErrorCodeString::new("PROFILE_NAME_REQUIRED"));
     }
+
+    if let Some(pwd) = password.as_ref() {
+        if pwd.chars().all(|c| c.is_whitespace()) {
+            return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
+        }
+    }
     let profile = registry::create_profile(sp, name, password.clone())?;
 
     let init_result: Result<()> = (|| {

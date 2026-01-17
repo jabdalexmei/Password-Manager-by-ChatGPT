@@ -961,7 +961,20 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
         registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password)?;
     }
 
-    restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)
+    let ok = restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)?;
+    if ok {
+        let has_password = manifest.vault_mode == "protected";
+        if let Err(e) =
+            registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password)
+        {
+            log::warn!(
+                "[BACKUP][restore] profile_id={} action=post_restore_registry_update_failed code={}",
+                manifest.profile_id,
+                e.code
+            );
+        }
+    }
+    Ok(ok)
 }
 
 pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {
