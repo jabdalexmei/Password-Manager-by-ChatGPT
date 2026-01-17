@@ -421,8 +421,16 @@ fn recover_set_password_transition(
         rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     } else if vault_path.exists() {
-        std::fs::remove_file(&vault_path)
-            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        // If we don't have a vault backup, we must not delete the current vault file.
+        // This situation can happen if the password-setting flow failed *before* backing up the vault
+        // (e.g. rename failed due to a transient file lock), or if the primary flow already rolled back
+        // successfully but left backup_root non-empty. In both cases, deleting vault.db would cause
+        // irreversible data loss.
+        log::warn!(
+            "[SECURITY][recover_set_password_transition] profile_id={} action=skip_vault_rollback reason=no_vault_backup vault={:?}",
+            profile_id,
+            vault_path
+        );
     }
 
     if salt_backup_path.exists() {
