@@ -1,24 +1,42 @@
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -1194,8 +1194,8 @@
-             return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
+--- /mnt/data/pm_after/Password-Manager-by-ChatGPT-codex-github-mention-ignore-patch-merge-leftovers-in-.gitignore/src-tauri/src/services/backup_service.rs.orig	2026-01-17 22:29:23.816396495 +0000
++++ /mnt/data/pm_after/Password-Manager-by-ChatGPT-codex-github-mention-ignore-patch-merge-leftovers-in-.gitignore/src-tauri/src/services/backup_service.rs	2026-01-17 22:29:23.933593634 +0000
+@@ -838,6 +838,8 @@
+     let vault_backup_path = vault_path.with_extension(format!("old.{}", Uuid::new_v4()));
+     let attachments_backup_path = profile_root.join(format!("attachments.old.{}", Uuid::new_v4()));
+     let mut moved_vault = false;
++    let mut vault_replaced = false;
++    let mut vault_tmp_path: Option<PathBuf> = None;
+     let mut moved_attachments = false;
+     let mut restored_attachments_created = false;
+     let restore_result: Result<()> = (|| {
+@@ -847,11 +849,13 @@
+             moved_vault = true;
          }
  
--        let pwd = password.trim();
--        if pwd.is_empty() {
-+        let pwd = password;
-+        if pwd.chars().all(|c| c.is_whitespace()) {
-             return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
+-        let vault_tmp_path = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
+-        fs::copy(&extracted_vault, &vault_tmp_path)
++        let tmp = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
++        vault_tmp_path = Some(tmp.clone());
++        fs::copy(&extracted_vault, &tmp)
+             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+-        rename_with_retry(&vault_tmp_path, &vault_path)
++        rename_with_retry(&tmp, &vault_path)
+             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
++        vault_replaced = true;
+ 
+         if attachments_path.exists() {
+             rename_with_retry(&attachments_path, &attachments_backup_path)
+@@ -887,7 +891,12 @@
+     })();
+ 
+     if restore_result.is_err() {
+-        if vault_path.exists() {
++        if let Some(tmp) = vault_tmp_path.as_ref() {
++            if tmp.exists() {
++                let _ = fs::remove_file(tmp);
++            }
++        }
++        if vault_replaced && vault_path.exists() {
+             let _ = fs::remove_file(&vault_path);
          }
- 
-@@ -1558,8 +1558,8 @@
-         return Err(ErrorCodeString::new("PROFILE_NOT_PROTECTED"));
-     }
- 
--    let pwd = password.trim();
--    if pwd.is_empty() {
-+    let pwd = password;
-+    if pwd.chars().all(|c| c.is_whitespace()) {
-         return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
-     }
- 
+         if moved_vault && vault_backup_path.exists() {
