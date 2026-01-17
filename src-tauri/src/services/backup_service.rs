@@ -838,6 +838,8 @@ fn restore_archive_to_profile(
     let vault_backup_path = vault_path.with_extension(format!("old.{}", Uuid::new_v4()));
     let attachments_backup_path = profile_root.join(format!("attachments.old.{}", Uuid::new_v4()));
     let mut moved_vault = false;
+    let mut vault_replaced = false;
+    let mut vault_tmp_path: Option<PathBuf> = None;
     let mut moved_attachments = false;
     let mut restored_attachments_created = false;
     let restore_result: Result<()> = (|| {
@@ -847,11 +849,13 @@ fn restore_archive_to_profile(
             moved_vault = true;
         }
 
-        let vault_tmp_path = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
-        fs::copy(&extracted_vault, &vault_tmp_path)
+        let tmp = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
+        vault_tmp_path = Some(tmp.clone());
+        fs::copy(&extracted_vault, &tmp)
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-        rename_with_retry(&vault_tmp_path, &vault_path)
+        rename_with_retry(&tmp, &vault_path)
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+        vault_replaced = true;
 
         if attachments_path.exists() {
             rename_with_retry(&attachments_path, &attachments_backup_path)
@@ -887,7 +891,12 @@ fn restore_archive_to_profile(
     })();
 
     if restore_result.is_err() {
-        if vault_path.exists() {
+        if let Some(tmp) = vault_tmp_path.as_ref() {
+            if tmp.exists() {
+                let _ = fs::remove_file(tmp);
+            }
+        }
+        if vault_replaced && vault_path.exists() {
             let _ = fs::remove_file(&vault_path);
         }
         if moved_vault && vault_backup_path.exists() {
