@@ -1,4 +1,6 @@
 use std::fs::{self, OpenOptions};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::Duration;
@@ -46,10 +48,14 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 
     let result: io::Result<()> = (|| {
         // 1) write temp
-        let mut f = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp_path)?;
+        let mut opts = OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            // Secrets should not be readable by other users.
+            opts.mode(0o600);
+        }
+        let mut f = opts.open(&tmp_path)?;
         f.write_all(bytes)?;
         f.sync_all()?;
         drop(f);

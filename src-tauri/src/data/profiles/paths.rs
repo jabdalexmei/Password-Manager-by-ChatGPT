@@ -20,6 +20,17 @@ fn validate_profile_id(id: &str) -> Result<()> {
     }
 }
 
+#[cfg(unix)]
+fn set_dir_private(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+fn set_dir_private(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
 
 pub fn profiles_root(sp: &StoragePaths) -> Result<PathBuf> {
     Ok(sp.profiles_root()?.to_path_buf())
@@ -28,6 +39,8 @@ pub fn profiles_root(sp: &StoragePaths) -> Result<PathBuf> {
 pub fn ensure_profiles_dir(sp: &StoragePaths) -> Result<PathBuf> {
     let dir = profiles_root(sp)?;
     std::fs::create_dir_all(&dir)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
+    set_dir_private(&dir)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
     Ok(dir)
 }
@@ -81,11 +94,17 @@ pub fn profile_config_path(sp: &StoragePaths, id: &str) -> Result<PathBuf> {
 
 pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str) -> Result<()> {
     let root = profile_dir(sp, profile_id)?;
-    fs::create_dir_all(root.join("attachments"))
+
+    fs::create_dir_all(&root)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    fs::create_dir_all(root.join("backups"))
+    set_dir_private(&root)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    fs::create_dir_all(root.join("tmp"))
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    for sub in ["attachments", "backups", "tmp"] {
+        let dir = root.join(sub);
+        fs::create_dir_all(&dir)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        set_dir_private(&dir)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    }
     Ok(())
 }
