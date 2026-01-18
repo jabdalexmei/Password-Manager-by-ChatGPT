@@ -1,13 +1,28 @@
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 38eac6e..964136f 100644
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -332,7 +332,7 @@ fn recover_set_password_transition(
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -103,21 +103,21 @@
  
-     // Commit marker makes crash-recovery deterministic: either we complete the transition
-     // (marker present) or we rollback to the old password (marker absent).
--    let commit_marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
-+    let commit_marker_path = backup_root.join(SET_PASSWORD_COMMIT_MARKER);
-     let commit_ready = commit_marker_path.exists();
+         // Ensure config.json reflects the desired rename.
+         let config_path = profile_root.join("config.json");
+-        let config = serde_json::json!({ "name": desired_name });
++        let config = serde_json::json!({ "name": desired_name.clone() });
+         if let Ok(serialized) = serde_json::to_string_pretty(&config) {
+             let _ = write_atomic(&config_path, serialized.as_bytes());
+         }
  
-     let profile_root = profile_dir(storage_paths, profile_id)?;
+         // Ensure registry.json reflects the desired rename.
+         if let Some(existing) = registry.profiles.iter_mut().find(|r| r.id == id) {
+-            if existing.name != pending.new_name {
+-                existing.name = pending.new_name.clone();
++            if existing.name != desired_name {
++                existing.name = desired_name.clone();
+                 dirty = true;
+             }
+         } else {
+             registry.profiles.push(ProfileRecord {
+                 id: id.to_string(),
+-                name: pending.new_name.clone(),
++                name: desired_name.clone(),
+                 has_password: infer_has_password(sp, id, false),
+             });
+             dirty = true;
