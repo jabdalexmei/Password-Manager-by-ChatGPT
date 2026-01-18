@@ -17,16 +17,17 @@ pub fn init_database_passwordless(sp: &StoragePaths, profile_id: &str) -> Result
 
     migrations::migrate_to_latest(&conn)?;
 
-    // Set WAL ONCE (DB-file persistent) and avoid doing it in pool connections.
-    // WAL persistence is documented by SQLite.
+    // Passwordless profiles are stored as plaintext SQLite files.
+    // Avoid WAL-mode for passwordless to prevent extra plaintext copies in *-wal/*-shm sidecar files.
+    // (Protected profiles are stored as encrypted blobs and do not use SQLite-on-disk.)
     let current: String = conn
         .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-    if current.to_uppercase() != "WAL" {
+    if current.to_uppercase() != "DELETE" {
         // This PRAGMA changes the DB file state; run it only from init, not from r2d2 on_acquire.
         let _: String = conn
-            .query_row("PRAGMA journal_mode=WAL;", [], |row| row.get(0))
+            .query_row("PRAGMA journal_mode=DELETE;", [], |row| row.get(0))
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
     }
 
