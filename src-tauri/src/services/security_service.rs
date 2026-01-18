@@ -332,7 +332,7 @@ fn recover_set_password_transition(
 
     // Commit marker makes crash-recovery deterministic: either we complete the transition
     // (marker present) or we rollback to the old password (marker absent).
-    let commit_marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
+    let commit_marker_path = backup_root.join(SET_PASSWORD_COMMIT_MARKER);
     let commit_ready = commit_marker_path.exists();
 
     let profile_root = profile_dir(storage_paths, profile_id)?;
