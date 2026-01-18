@@ -1499,22 +1499,37 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             }
 
             if rb.key_check_backed_up {
-                let _ = std::fs::remove_file(&rb.key_check_path);
-                let _ = rename_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
+                // Avoid delete-then-rename gap: atomically swap backup back into place.
+                let _ = replace_file_retry(
+                    &rb.key_check_backup_path,
+                    &rb.key_check_path,
+                    20,
+                    Duration::from_millis(50),
+                );
             } else if !rb.key_check_present_before {
                 let _ = std::fs::remove_file(&rb.key_check_path);
             }
 
             if rb.salt_backed_up {
-                let _ = std::fs::remove_file(&rb.salt_path);
-                let _ = rename_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
+                // Avoid delete-then-rename gap: atomically swap backup back into place.
+                let _ = replace_file_retry(
+                    &rb.salt_backup_path,
+                    &rb.salt_path,
+                    20,
+                    Duration::from_millis(50),
+                );
             } else if !rb.salt_present_before {
                 let _ = std::fs::remove_file(&rb.salt_path);
             }
 
             if rb.vault_backed_up {
-                let _ = std::fs::remove_file(&rb.vault_path);
-                let _ = rename_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
+                // Avoid delete-then-rename gap: atomically swap backup back into place.
+                let _ = replace_file_retry(
+                    &rb.vault_backup_path,
+                    &rb.vault_path,
+                    20,
+                    Duration::from_millis(50),
+                );
             }
 
             let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false);
@@ -1964,8 +1979,13 @@ fn rollback_remove_profile_password(
         let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
     }
 
-    let _ = std::fs::remove_file(&rb.vault_path);
-    let _ = rename_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
+    // Avoid delete-then-rename gap: atomically swap backup back into place.
+    let _ = replace_file_retry(
+        &rb.vault_backup_path,
+        &rb.vault_path,
+        20,
+        Duration::from_millis(50),
+    );
 
     if rb.salt_moved {
         let _ = replace_file_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
