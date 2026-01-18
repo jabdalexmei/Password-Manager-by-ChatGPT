@@ -7,7 +7,12 @@ use uuid::Uuid;
 use crate::data::crypto::cipher::PM_ENC_MAGIC;
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
-    ensure_profiles_dir, key_check_path, kdf_salt_path, profile_config_path, registry_path,
+    ensure_profiles_dir,
+    key_check_path,
+    kdf_salt_path,
+    profile_config_path,
+    profile_dir,
+    registry_path,
     vault_db_path,
 };
 use crate::data::storage_paths::StoragePaths;
@@ -36,15 +41,126 @@ pub struct ProfileRegistry {
     pub profiles: Vec<ProfileRecord>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct PendingProfileRename {
+    // For debugging/introspection; recovery primarily trusts the directory name.
+    profile_id: String,
+    old_name: String,
+    new_name: String,
+}
+
+const PENDING_RENAME_FILENAME: &str = "rename_profile.pending.json";
+
+fn pending_rename_path(profile_root: &std::path::Path) -> PathBuf {
+    profile_root.join("tmp").join(PENDING_RENAME_FILENAME)
+}
+
+fn recover_pending_profile_renames(
+    sp: &StoragePaths,
+    registry: &mut ProfileRegistry,
+) -> Result<bool> {
+    let root = ensure_profiles_dir(sp)?;
+    let mut dirty = false;
+
+    let entries = match fs::read_dir(&root) {
+        Ok(e) => e,
+        Err(_) => return Ok(false),
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let p = entry.path();
+        if !p.is_dir() {
+            continue;
+        }
+        let id = match p.file_name().and_then(|s| s.to_str()) {
+            Some(s) => s,
+            None => continue,
+        };
+        let profile_root = match profile_dir(sp, id) {
+            Ok(dir) => dir,
+            Err(_) => continue,
+        };
+
+        let pending_path = pending_rename_path(&profile_root);
+        if !pending_path.exists() {
+            continue;
+        }
+
+        let content = match fs::read_to_string(&pending_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let pending: PendingProfileRename = match serde_json::from_str(&content) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let desired_name = pending.new_name;
+
+        // Ensure config.json reflects the desired rename.
+        let config_path = profile_root.join("config.json");
+        let config = serde_json::json!({ "name": desired_name.clone() });
+        if let Ok(serialized) = serde_json::to_string_pretty(&config) {
+            let _ = write_atomic(&config_path, serialized.as_bytes());
+        }
+
+        // Ensure registry.json reflects the desired rename.
+        if let Some(existing) = registry.profiles.iter_mut().find(|r| r.id == id) {
+            if existing.name != desired_name {
+                existing.name = desired_name.clone();
+                dirty = true;
+            }
+        } else {
+            registry.profiles.push(ProfileRecord {
+                id: id.to_string(),
+                name: desired_name.clone(),
+                has_password: infer_has_password(sp, id, false),
+            });
+            dirty = true;
+        }
+
+        let _ = fs::remove_file(&pending_path);
+    }
+
+    Ok(dirty)
+}
+
 fn load_registry(sp: &StoragePaths) -> Result<ProfileRegistry> {
     ensure_profiles_dir(sp)?;
     let path = registry_path(sp)?;
-    if !path.exists() {
-        return Ok(ProfileRegistry::default());
+
+    let mut registry: ProfileRegistry = if path.exists() {
+        let content =
+            fs::read_to_string(&path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+        serde_json::from_str(&content).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_PARSE"))?
+    } else {
+        ProfileRegistry::default()
+    };
+
+    let mut dirty = false;
+
+    // Crash-safe completion for rename_profile.
+    dirty |= recover_pending_profile_renames(sp, &mut registry)?;
+
+    // Self-heal has_password based on on-disk evidence.
+    for rec in registry.profiles.iter_mut() {
+        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
+        if inferred != rec.has_password {
+            rec.has_password = inferred;
+            dirty = true;
+        }
     }
-    let content =
-        fs::read_to_string(path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
-    serde_json::from_str(&content).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_PARSE"))
+
+    if dirty {
+        // Best-effort self-heal; even if it fails, we still return inferred values.
+        let _ = save_registry(sp, &registry);
+    }
+
+    Ok(registry)
 }
 
 fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
@@ -74,10 +190,39 @@ fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
     buf == PM_ENC_MAGIC
 }
 
+const SQLITE_HEADER_MAGIC: [u8; 16] = *b"SQLite format 3\0";
+
+fn vault_looks_plaintext(sp: &StoragePaths, id: &str) -> bool {
+    let path = match vault_db_path(sp, id) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    if !path.exists() {
+        return false;
+    }
+    let mut f = match fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    let mut buf = [0u8; 16];
+    if f.read_exact(&mut buf).is_err() {
+        return false;
+    }
+    buf == SQLITE_HEADER_MAGIC
+}
+
 fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
+    // If the vault is clearly a plaintext SQLite database, treat the profile as passwordless even
+    // if registry/config got out of sync (e.g. interrupted remove password / restore / bug).
+    if vault_looks_plaintext(sp, id) {
+        return false;
+    }
+
+    // If the registry says protected, keep it protected unless we have positive evidence of passwordless.
     if record_has_password {
         return true;
     }
+
     let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
     let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
     if salt_ok && key_ok {
@@ -87,22 +232,7 @@ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) ->
 }
 
 pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
-    let mut registry = load_registry(sp)?;
-    let mut dirty = false;
-
-    for rec in registry.profiles.iter_mut() {
-        let inferred = infer_has_password(sp, &rec.id, rec.has_password);
-        if inferred != rec.has_password {
-            rec.has_password = inferred;
-            dirty = true;
-        }
-    }
-
-    if dirty {
-        // Best-effort self-heal; even if it fails, we still return inferred values.
-        let _ = save_registry(sp, &registry);
-    }
-
+    let registry = load_registry(sp)?;
     Ok(registry.profiles.into_iter().map(ProfileMeta::from).collect())
 }
 
@@ -113,7 +243,10 @@ pub fn create_profile(
 ) -> Result<ProfileMeta> {
     ensure_profiles_dir(sp)?;
     let id = Uuid::new_v4().to_string();
-    let has_password = password.as_ref().map(|p| !p.is_empty()).unwrap_or(false);
+    let has_password = password
+        .as_ref()
+        .map(|p| !p.chars().all(|c| c.is_whitespace()))
+        .unwrap_or(false);
 
     let record = ProfileRecord {
         id: id.clone(),
@@ -215,6 +348,38 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
         .position(|p| p.id == id)
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
+    let old_name = registry.profiles[idx].name.clone();
+
+    // Crash-safe rename:
+    // - create a pending marker under profile/tmp
+    // - write config.json
+    // - write registry.json
+    // - remove pending marker
+    // If we crash mid-way, load_registry will complete the rename on the next start.
+    let profile_root = profile_dir(sp, id)?;
+    let tmp_dir = profile_root.join("tmp");
+    fs::create_dir_all(&tmp_dir).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+    let pending_path = pending_rename_path(&profile_root);
+    let pending = PendingProfileRename {
+        profile_id: id.to_string(),
+        old_name: old_name.clone(),
+        new_name: name.to_string(),
+    };
+    let pending_serialized = serde_json::to_string_pretty(&pending)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    write_atomic(&pending_path, pending_serialized.as_bytes())
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+    // Write profile config first so we never persist a registry change without a matching config.
+    let config_path: PathBuf = profile_config_path(sp, id)?;
+    let config = serde_json::json!({ "name": name });
+    let serialized_config = serde_json::to_string_pretty(&config)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    write_atomic(&config_path, serialized_config.as_bytes())
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+
+    // Now update registry and persist.
     registry.profiles[idx].name = name.to_string();
 
     let meta = ProfileMeta {
@@ -229,12 +394,7 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
 
     save_registry(sp, &registry)?;
 
-    let config_path: PathBuf = profile_config_path(sp, id)?;
-    let config = serde_json::json!({ "name": name });
-    let serialized_config = serde_json::to_string_pretty(&config)
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    write_atomic(&config_path, serialized_config.as_bytes())
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    let _ = fs::remove_file(&pending_path);
 
     Ok(meta)
 }
@@ -256,28 +416,10 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
 }
 
 pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>> {
-    let mut registry = load_registry(sp)?;
+    let registry = load_registry(sp)?;
     let idx = match registry.profiles.iter().position(|p| p.id == id) {
         Some(i) => i,
         None => return Ok(None),
     };
-
-    let mut dirty = false;
-    let inferred = infer_has_password(
-        sp,
-        &registry.profiles[idx].id,
-        registry.profiles[idx].has_password,
-    );
-    if inferred != registry.profiles[idx].has_password {
-        registry.profiles[idx].has_password = inferred;
-        dirty = true;
-    }
-
-    let out = registry.profiles[idx].clone();
-
-    if dirty {
-        let _ = save_registry(sp, &registry);
-    }
-
-    Ok(Some(out))
+    Ok(Some(registry.profiles[idx].clone()))
 }

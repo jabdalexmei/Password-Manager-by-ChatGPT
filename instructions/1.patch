@@ -1,21 +1,421 @@
+diff --git a/src-tauri/src/commands/clipboard.rs b/src-tauri/src/commands/clipboard.rs
+index 498ca58..a6dd35e 100644
+--- a/src-tauri/src/commands/clipboard.rs
++++ b/src-tauri/src/commands/clipboard.rs
+@@ -1,15 +1,6 @@
+-#[cfg(target_os = "windows")]
+ use crate::services::clipboard_service;
+ 
+ #[tauri::command]
+ pub fn clipboard_clear_all() -> Result<(), String> {
+-    #[cfg(target_os = "windows")]
+-    {
+-        clipboard_service::clear_clipboard_all()
+-    }
+-
+-    #[cfg(not(target_os = "windows"))]
+-    {
+-        Err("NOT_SUPPORTED".to_string())
+-    }
++    clipboard_service::clear_clipboard_all()
+ }
+diff --git a/src-tauri/src/commands/workspace.rs b/src-tauri/src/commands/workspace.rs
+index 18dfc1d..fafb505 100644
+--- a/src-tauri/src/commands/workspace.rs
++++ b/src-tauri/src/commands/workspace.rs
+@@ -285,32 +285,14 @@ pub async fn workspace_open_in_explorer(
+             return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
+         }
+ 
+-        #[cfg(target_os = "windows")]
+-        {
+-            std::process::Command::new("explorer")
+-                .arg(&root)
+-                .spawn()
+-                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
+-        }
+-
+-        #[cfg(target_os = "macos")]
+-        {
+-            std::process::Command::new("open")
+-                .arg(&root)
+-                .spawn()
+-                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
+-        }
+-
+-        #[cfg(all(unix, not(target_os = "macos")))]
+-        {
+-            std::process::Command::new("xdg-open")
+-                .arg(&root)
+-                .spawn()
+-                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
+-        }
++        std::process::Command::new("explorer")
++            .arg(&root)
++            .spawn()
++            .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
+ 
+         Ok(true)
+     })
+     .await
+     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+ }
++
+diff --git a/src-tauri/src/data/fs/atomic_write.rs b/src-tauri/src/data/fs/atomic_write.rs
+index cd2c589..f13ac06 100644
+--- a/src-tauri/src/data/fs/atomic_write.rs
++++ b/src-tauri/src/data/fs/atomic_write.rs
+@@ -1,12 +1,9 @@
+ use std::fs::{self, OpenOptions};
+-#[cfg(unix)]
+-use std::os::unix::fs::OpenOptionsExt;
+ use std::io::{self, Write};
+ use std::path::Path;
+ use std::time::Duration;
+ use uuid::Uuid;
+ 
+-#[cfg(windows)]
+ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+     use std::iter;
+     use std::os::windows::ffi::OsStrExt;
+@@ -34,38 +31,17 @@ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+     }
+ }
+ 
+-#[cfg(not(windows))]
+-fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+-    // On POSIX, rename() overwrites atomically.
+-    fs::rename(from, to)
+-}
+-
+-#[cfg(unix)]
+-fn best_effort_fsync_dir(dir: &Path) {
+-    if let Ok(f) = fs::File::open(dir) {
+-        let _ = f.sync_all();
+-    }
+-}
+-
+-fn best_effort_fsync_parent_dir(_path: &Path) {
+-    #[cfg(unix)]
+-    {
+-        if let Some(parent) = _path.parent() {
+-            best_effort_fsync_dir(parent);
+-        }
+-    }
+-}
++fn best_effort_fsync_parent_dir(_path: &Path) {}
+ 
+ /// Atomic file write:
+ /// - write to temp in same directory
+ /// - fsync temp
+ /// - atomically replace target with temp
+-/// - fsync parent dir (best-effort on unix)
+ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+     fn replace_with_retry(from: &Path, to: &Path) -> io::Result<()> {
+         let mut last: Option<io::Error> = None;
+-        // Windows часто даёт PermissionDenied если файл ещё открыт (SQLite/AV/indexer).
+-        // Делаем короткие ретраи.
++        // Windows often gives PermissionDenied if the file is still open (SQLite/AV/indexer).
++        // Do short retries.
+         for _ in 0..25 {
+             match replace_platform(from, to) {
+                 Ok(()) => return Ok(()),
+@@ -87,10 +63,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+     })?;
+     fs::create_dir_all(parent)?;
+ 
+-    let file_name = path
+-        .file_name()
+-        .and_then(|s| s.to_str())
+-        .unwrap_or("file");
++    let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
+ 
+     let tmp_path = parent.join(format!(".{}.tmp.{}", file_name, Uuid::new_v4()));
+ 
+@@ -98,11 +71,6 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+         // 1) write temp
+         let mut opts = OpenOptions::new();
+         opts.write(true).create_new(true);
+-        #[cfg(unix)]
+-        {
+-            // Secrets should not be readable by other users.
+-            opts.mode(0o600);
+-        }
+         let mut f = opts.open(&tmp_path)?;
+         f.write_all(bytes)?;
+         f.sync_all()?;
+diff --git a/src-tauri/src/data/profiles/paths.rs b/src-tauri/src/data/profiles/paths.rs
+index 851bb4d..94a4650 100644
+--- a/src-tauri/src/data/profiles/paths.rs
++++ b/src-tauri/src/data/profiles/paths.rs
+@@ -20,13 +20,6 @@ fn validate_profile_id(id: &str) -> Result<()> {
+     }
+ }
+ 
+-#[cfg(unix)]
+-fn set_dir_private(path: &Path) -> std::io::Result<()> {
+-    use std::os::unix::fs::PermissionsExt;
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+-}
+-
+-#[cfg(not(unix))]
+ fn set_dir_private(_path: &Path) -> std::io::Result<()> {
+     Ok(())
+ }
+diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
+index c1cb657..6c8d983 100644
+--- a/src-tauri/src/main.rs
++++ b/src-tauri/src/main.rs
+@@ -1,5 +1,9 @@
+ #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+ 
++#[cfg(not(windows))]
++compile_error!("This application is Windows-only.");
++
++
+ mod app_state;
+ mod commands;
+ mod data {
+@@ -58,9 +62,7 @@ use services::security_service;
+ use tauri::{Manager, WindowEvent};
+ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+ 
+-#[cfg(windows)]
+ use windows::core::Interface;
+-#[cfg(windows)]
+ use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings4;
+ 
+ fn main() {
+@@ -98,7 +100,6 @@ fn main() {
+             // Windows/WebView2: disable Chromium "Saved info" (form autofill suggestions)
+             // because it breaks dark theme and can expose sensitive suggestions.
+             // NOTE: HTML autocomplete="off" is not reliably respected by Chromium/WebView2.
+-            #[cfg(windows)]
+             {
+                 if let Some(main_webview) = app.get_webview_window("main") {
+                     let _ = main_webview.with_webview(|webview| unsafe {
+diff --git a/src-tauri/src/services/backup_service.rs b/src-tauri/src/services/backup_service.rs
+index f608840..d13537a 100644
+--- a/src-tauri/src/services/backup_service.rs
++++ b/src-tauri/src/services/backup_service.rs
+@@ -29,7 +29,6 @@ use crate::error::{ErrorCodeString, Result};
+ use crate::services::{security_service, settings_service};
+ use crate::types::UserSettings;
+ 
+-#[cfg(windows)]
+ fn replace_file_windows(src: &Path, dst: &Path) -> std::io::Result<()> {
+     use std::iter;
+     use std::os::windows::ffi::OsStrExt;
+@@ -172,31 +171,10 @@ fn validate_profile_id_component(profile_id: &str) -> bool {
+ 
+ 
+ 
+-#[cfg(unix)]
+-fn best_effort_fsync_dir(dir: &Path) {
+-    #[cfg(unix)]
+-    {
+-        if let Ok(f) = std::fs::File::open(dir) {
+-            let _ = f.sync_all();
+-        }
+-    }
+-}
+-
+ fn best_effort_fsync_rename_dirs(_src: &Path, _dst: &Path) {
+-    #[cfg(unix)]
+-    {
+-        let sp = _src.parent();
+-        let dp = _dst.parent();
+-        if let Some(p) = sp {
+-            best_effort_fsync_dir(p);
+-        }
+-        if dp.is_some() && dp != sp {
+-            best_effort_fsync_dir(dp.unwrap());
+-        }
+-    }
++    // No-op on Windows.
+ }
+ 
+-#[cfg(windows)]
+ fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
+     use std::iter;
+     use std::os::windows::ffi::OsStrExt;
+@@ -208,10 +186,6 @@ fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
+     if ok == 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
+ }
+ 
+-#[cfg(not(windows))]
+-fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
+-    fs::rename(src, dst)
+-}
+ 
+ fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
+     use std::time::Duration;
+@@ -479,16 +453,7 @@ fn create_archive(
+         .finish()
+         .map_err(|_| ErrorCodeString::new("BACKUP_ZIP_WRITE_FAILED"))?;
+ 
+-    let replace_result = {
+-        #[cfg(windows)]
+-        {
+-            replace_file_windows(&tmp_dest, destination)
+-        }
+-        #[cfg(not(windows))]
+-        {
+-            fs::rename(&tmp_dest, destination)
+-        }
+-    };
++    let replace_result = replace_file_windows(&tmp_dest, destination);
+ 
+     if replace_result.is_err() {
+         if tmp_dest.exists() {
+@@ -956,19 +921,10 @@ fn restore_archive_to_profile(
+                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+ 
+                 let replaced = (|| {
+-                    #[cfg(windows)]
+-                    {
+-                        replace_file_windows(&tmp, &target)
+-                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+-                        best_effort_fsync_rename_dirs(&tmp, &target);
+-                        return Ok(());
+-                    }
+-                    #[cfg(not(windows))]
+-                    {
+-                        rename_with_retry(&tmp, &target)
+-                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+-                        return Ok(());
+-                    }
++                    replace_file_windows(&tmp, &target)
++                        .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
++                    best_effort_fsync_rename_dirs(&tmp, &target);
++                    Ok(())
+                 })();
+ 
+                 if replaced.is_err() {
+@@ -988,15 +944,8 @@ fn restore_archive_to_profile(
+             }
+         }
+         if moved_vault && vault_backup_path.exists() {
+-            #[cfg(windows)]
+-            {
+-                let _ = replace_file_windows(&vault_backup_path, &vault_path);
+-                best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
+-            }
+-            #[cfg(not(windows))]
+-            {
+-                let _ = rename_with_retry(&vault_backup_path, &vault_path);
+-            }
++            let _ = replace_file_windows(&vault_backup_path, &vault_path);
++            best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
+         } else if !moved_vault && vault_replaced && vault_path.exists() {
+             let _ = fs::remove_file(&vault_path);
+         }
+diff --git a/src-tauri/src/services/clipboard_service.rs b/src-tauri/src/services/clipboard_service.rs
+index 446c2d1..8da58f9 100644
+--- a/src-tauri/src/services/clipboard_service.rs
++++ b/src-tauri/src/services/clipboard_service.rs
+@@ -1,18 +1,11 @@
+-#[cfg(target_os = "windows")]
+ use std::ptr;
+-
+-#[cfg(target_os = "windows")]
+ use std::time::Duration;
+ 
+-#[cfg(target_os = "windows")]
+ use windows_sys::Win32::Foundation::GetLastError;
+-#[cfg(target_os = "windows")]
+ use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard};
+ 
+-#[cfg(target_os = "windows")]
+ struct ClipboardGuard;
+ 
+-#[cfg(target_os = "windows")]
+ impl Drop for ClipboardGuard {
+     fn drop(&mut self) {
+         unsafe {
+@@ -24,7 +17,6 @@ impl Drop for ClipboardGuard {
+ /// Clears the entire Windows clipboard (all formats).
+ /// Uses OpenClipboard -> EmptyClipboard -> CloseClipboard.
+ /// Retries because clipboard may be temporarily locked by other processes.
+-#[cfg(target_os = "windows")]
+ pub fn clear_clipboard_all() -> Result<(), String> {
+     const ATTEMPTS: usize = 60;
+     const SLEEP_MS: u64 = 25;
+diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
+index 76483fa..1590bbb 100644
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -421,8 +421,16 @@
-         rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
-             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-     } else if vault_path.exists() {
--        std::fs::remove_file(&vault_path)
--            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+        // If we don't have a vault backup, we must not delete the current vault file.
-+        // This situation can happen if the password-setting flow failed *before* backing up the vault
-+        // (e.g. rename failed due to a transient file lock), or if the primary flow already rolled back
-+        // successfully but left backup_root non-empty. In both cases, deleting vault.db would cause
-+        // irreversible data loss.
-+        log::warn!(
-+            "[SECURITY][recover_set_password_transition] profile_id={} action=skip_vault_rollback reason=no_vault_backup vault={:?}",
-+            profile_id,
-+            vault_path
-+        );
-     }
+@@ -891,39 +891,15 @@ fn recover_incomplete_profile_transitions(
+     Ok(())
+ }
  
-     if salt_backup_path.exists() {
+-
+-
+-#[cfg(unix)]
+-fn best_effort_fsync_dir(dir: &Path) {
+-    if let Ok(f) = std::fs::File::open(dir) {
+-        let _ = f.sync_all();
+-    }
+-}
+-
+ fn best_effort_fsync_parent_dir(_path: &Path) {
+-    #[cfg(unix)]
+-    {
+-        if let Some(parent) = _path.parent() {
+-            best_effort_fsync_dir(parent);
+-        }
+-    }
++    // No-op on Windows.
+ }
+ 
+ fn best_effort_fsync_rename_dirs(_from: &Path, _to: &Path) {
+-    #[cfg(unix)]
+-    {
+-        if let Some(p) = _from.parent() {
+-            best_effort_fsync_dir(p);
+-        }
+-        let from_parent = _from.parent();
+-        let to_parent = _to.parent();
+-        if to_parent.is_some() && to_parent != from_parent {
+-            best_effort_fsync_dir(to_parent.unwrap());
+-        }
+-    }
++    // No-op on Windows.
+ }
+ 
+-#[cfg(windows)]
++
+ fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+     use std::iter;
+     use std::os::windows::ffi::OsStrExt;
+@@ -940,10 +916,6 @@ fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+     }
+ }
+ 
+-#[cfg(not(windows))]
+-fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+-    std::fs::rename(from, to)
+-}
+ 
+ fn rename_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
+     let mut i = 0;
+@@ -987,7 +959,6 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
+     }
+ }
+ 
+-#[cfg(windows)]
+ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+     use std::iter;
+     use std::os::windows::ffi::OsStrExt;
+@@ -1012,11 +983,6 @@ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+     }
+ }
+ 
+-#[cfg(not(windows))]
+-fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+-    // On POSIX, rename() overwrites atomically.
+-    std::fs::rename(from, to)
+-}
+ 
+ fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
+     let mut i = 0;

@@ -170,6 +170,49 @@ fn validate_profile_id_component(profile_id: &str) -> bool {
 }
 
 
+
+
+#[cfg(unix)]
+fn best_effort_fsync_dir(dir: &Path) {
+    #[cfg(unix)]
+    {
+        if let Ok(f) = std::fs::File::open(dir) {
+            let _ = f.sync_all();
+        }
+    }
+}
+
+fn best_effort_fsync_rename_dirs(_src: &Path, _dst: &Path) {
+    #[cfg(unix)]
+    {
+        let sp = _src.parent();
+        let dp = _dst.parent();
+        if let Some(p) = sp {
+            best_effort_fsync_dir(p);
+        }
+        if dp.is_some() && dp != sp {
+            best_effort_fsync_dir(dp.unwrap());
+        }
+    }
+}
+
+#[cfg(windows)]
+fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
+    use std::iter;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+
+    let src_w: Vec<u16> = src.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let dst_w: Vec<u16> = dst.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let ok = unsafe { MoveFileExW(src_w.as_ptr(), dst_w.as_ptr(), MOVEFILE_WRITE_THROUGH) };
+    if ok == 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
+}
+
+#[cfg(not(windows))]
+fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::rename(src, dst)
+}
+
 fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::time::Duration;
 
@@ -178,8 +221,11 @@ fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
 
     let mut last_err: Option<std::io::Error> = None;
     for _ in 0..ATTEMPTS {
-        match fs::rename(src, dst) {
-            Ok(()) => return Ok(()),
+        match rename_platform(src, dst) {
+            Ok(()) => {
+                best_effort_fsync_rename_dirs(src, dst);
+                return Ok(());
+            }
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
                     last_err = Some(e);
@@ -781,20 +827,24 @@ fn restore_archive_to_profile(
         if !validate_zip_entry_rel_path_windows(rel_path) {
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
+
         let mut zipped_file = archive
             .by_name(&entry.path)
             .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
+
         let target_path = temp_dir.path().join(rel_path);
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent)
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
         }
+
         let file = fs::File::create(&target_path)
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
         let mut writer = BufWriter::new(file);
         let mut buffer = [0u8; 64 * 1024];
         let mut hasher = Sha256::new();
         let mut bytes_written = 0i64;
+
         loop {
             let read = zipped_file
                 .read(&mut buffer)
@@ -811,14 +861,22 @@ fn restore_archive_to_profile(
             total_written = total_written
                 .checked_add(read as i64)
                 .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
+
             if bytes_written > MAX_RESTORE_ENTRY_BYTES || total_written > MAX_RESTORE_TOTAL_BYTES {
                 return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"));
             }
+
             hasher.update(&buffer[..read]);
         }
+
         writer
             .flush()
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+        writer
+            .get_ref()
+            .sync_all()
+            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+
         let sha256 = hex::encode(hasher.finalize());
         if sha256 != entry.sha256 || bytes_written != entry.bytes {
             return Err(ErrorCodeString::new("BACKUP_INTEGRITY_FAILED"));
@@ -837,9 +895,14 @@ fn restore_archive_to_profile(
 
     let vault_backup_path = vault_path.with_extension(format!("old.{}", Uuid::new_v4()));
     let attachments_backup_path = profile_root.join(format!("attachments.old.{}", Uuid::new_v4()));
+
     let mut moved_vault = false;
+    let mut vault_replaced = false;
+    let mut vault_tmp_path: Option<PathBuf> = None;
+
     let mut moved_attachments = false;
     let mut restored_attachments_created = false;
+
     let restore_result: Result<()> = (|| {
         if vault_path.exists() {
             rename_with_retry(&vault_path, &vault_backup_path)
@@ -847,11 +910,18 @@ fn restore_archive_to_profile(
             moved_vault = true;
         }
 
-        let vault_tmp_path = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
-        fs::copy(&extracted_vault, &vault_tmp_path)
+        let tmp = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
+        vault_tmp_path = Some(tmp.clone());
+        fs::copy(&extracted_vault, &tmp)
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-        rename_with_retry(&vault_tmp_path, &vault_path)
+        fs::File::open(&tmp)
+            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?
+            .sync_all()
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+
+        rename_with_retry(&tmp, &vault_path)
+            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+        vault_replaced = true;
 
         if attachments_path.exists() {
             rename_with_retry(&attachments_path, &attachments_backup_path)
@@ -863,6 +933,7 @@ fn restore_archive_to_profile(
             rename_with_retry(&extracted_attachments, &attachments_path)
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
             restored_attachments_created = true;
+
         } else {
             if !attachments_path.exists() {
                 fs::create_dir_all(&attachments_path)
@@ -875,11 +946,35 @@ fn restore_archive_to_profile(
             let extracted_file = temp_dir.path().join(file_name);
             if extracted_file.exists() {
                 let target = profile_root.join(file_name);
-                if target.exists() {
-                    let _ = fs::remove_file(&target);
-                }
-                rename_with_retry(&extracted_file, &target)
+
+                let tmp = profile_root.join(format!("{}.restore.{}", file_name, Uuid::new_v4()));
+                fs::copy(&extracted_file, &tmp)
                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                fs::File::open(&tmp)
+                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?
+                    .sync_all()
+                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+
+                let replaced = (|| {
+                    #[cfg(windows)]
+                    {
+                        replace_file_windows(&tmp, &target)
+                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                        best_effort_fsync_rename_dirs(&tmp, &target);
+                        return Ok(());
+                    }
+                    #[cfg(not(windows))]
+                    {
+                        rename_with_retry(&tmp, &target)
+                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                        return Ok(());
+                    }
+                })();
+
+                if replaced.is_err() {
+                    let _ = fs::remove_file(&tmp);
+                    return Err(ErrorCodeString::new("BACKUP_RESTORE_FAILED"));
+                }
             }
         }
 
@@ -887,23 +982,34 @@ fn restore_archive_to_profile(
     })();
 
     if restore_result.is_err() {
-        if vault_path.exists() {
-            let _ = fs::remove_file(&vault_path);
+        if let Some(tmp) = vault_tmp_path.as_ref() {
+            if tmp.exists() {
+                let _ = fs::remove_file(tmp);
+            }
         }
         if moved_vault && vault_backup_path.exists() {
-            let _ = fs::rename(&vault_backup_path, &vault_path);
+            #[cfg(windows)]
+            {
+                let _ = replace_file_windows(&vault_backup_path, &vault_path);
+                best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = rename_with_retry(&vault_backup_path, &vault_path);
+            }
+        } else if !moved_vault && vault_replaced && vault_path.exists() {
+            let _ = fs::remove_file(&vault_path);
         }
+
         if moved_attachments && attachments_backup_path.exists() {
             if attachments_path.exists() {
                 let _ = fs::remove_dir_all(&attachments_path);
             }
-            let _ = fs::rename(&attachments_backup_path, &attachments_path);
-        } else if !attachments_existed_before
-            && restored_attachments_created
-            && attachments_path.exists()
-        {
+            let _ = rename_with_retry(&attachments_backup_path, &attachments_path);
+        } else if !attachments_existed_before && restored_attachments_created && attachments_path.exists() {
             let _ = fs::remove_dir_all(&attachments_path);
         }
+
         return Err(ErrorCodeString::new("BACKUP_RESTORE_FAILED"));
     }
 
@@ -924,7 +1030,8 @@ fn restore_archive_to_profile(
 
 pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
     let _guard = ensure_backup_guard(state)?;
-    security_service::drop_active_session_without_persist(state)?;
+    // Persist any in-memory changes before restore to avoid data loss on rollback.
+    security_service::lock_vault(state)?;
     let sp = state.get_storage_paths()?;
 
     let backup_path = PathBuf::from(&backup_path);
@@ -952,7 +1059,13 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
         registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password)?;
     }
 
-    restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)
+    let restored = restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)?;
+
+    // Keep profiles registry in sync with restored state (name + vault mode).
+    let has_password = manifest.vault_mode == "protected";
+    let _ = registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password);
+
+    Ok(restored)
 }
 
 pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {

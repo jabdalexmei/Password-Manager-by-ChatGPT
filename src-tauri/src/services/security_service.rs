@@ -307,6 +307,19 @@ fn write_remove_password_commit_marker(backup_root: &Path) -> Result<()> {
     write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
 }
 
+const SET_PASSWORD_COMMIT_MARKER: &str = "set_password.commit";
+const CHANGE_PASSWORD_COMMIT_MARKER: &str = "change_password.commit";
+
+fn write_set_password_commit_marker(backup_root: &Path) -> Result<()> {
+    let marker_path = backup_root.join(SET_PASSWORD_COMMIT_MARKER);
+    write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+}
+
+fn write_change_password_commit_marker(backup_root: &Path) -> Result<()> {
+    let marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
+    write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+}
+
 fn recover_set_password_transition(
     storage_paths: &crate::data::storage_paths::StoragePaths,
     profile_id: &str,
@@ -316,6 +329,11 @@ fn recover_set_password_transition(
     if !is_dir_nonempty(backup_root).unwrap_or(false) {
         return Ok(());
     }
+
+    // Commit marker makes crash-recovery deterministic: either we complete the transition
+    // (marker present) or we rollback to the old password (marker absent).
+    let commit_marker_path = backup_root.join(SET_PASSWORD_COMMIT_MARKER);
+    let commit_ready = commit_marker_path.exists();
 
     let profile_root = profile_dir(storage_paths, profile_id)?;
     let vault_path = vault_db_path(storage_paths, profile_id)?;
@@ -339,8 +357,20 @@ fn recover_set_password_transition(
     let salt_ready = has_salt || salt_new_path.exists();
     let key_ready = has_key || key_new_path.exists();
 
-    // If core protected materials exist, prefer completing the transition.
-    if vault_is_encrypted && salt_ready && key_ready {
+
+    if commit_ready && !(vault_is_encrypted && salt_ready && key_ready) {
+        log::error!(
+            "[SECURITY][recover_set_password_transition] profile_id={} action=commit_marker_but_materials_incomplete vault_encrypted={} salt_ready={} key_ready={}",
+            profile_id,
+            vault_is_encrypted,
+            salt_ready,
+            key_ready
+        );
+    }
+
+    // Deterministic crash-recovery: if commit marker exists, finish the protected transition.
+    // Otherwise we rollback to passwordless.
+    if commit_ready {
         if attachments_staging_dir.exists() {
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
@@ -413,24 +443,25 @@ fn recover_set_password_transition(
     }
 
     // Otherwise, rollback to passwordless.
+    let _ = std::fs::remove_file(&commit_marker_path);
     if vault_backup_path.exists() {
-        if vault_path.exists() {
-            std::fs::remove_file(&vault_path)
-                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        }
-        rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
+        replace_file_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     } else if vault_path.exists() {
-        std::fs::remove_file(&vault_path)
-            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        // If we don't have a vault backup, we must not delete the current vault file.
+        // This situation can happen if the password-setting flow failed *before* backing up the vault
+        // (e.g. rename failed due to a transient file lock), or if the primary flow already rolled back
+        // successfully but left backup_root non-empty. In both cases, deleting vault.db would cause
+        // irreversible data loss.
+        log::warn!(
+            "[SECURITY][recover_set_password_transition] profile_id={} action=skip_vault_rollback reason=no_vault_backup vault={:?}",
+            profile_id,
+            vault_path
+        );
     }
 
     if salt_backup_path.exists() {
-        if salt_path.exists() {
-            std::fs::remove_file(&salt_path)
-                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        }
-        rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
+        replace_file_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     } else if salt_path.exists() {
         let _ = std::fs::remove_file(&salt_path);
@@ -441,11 +472,7 @@ fn recover_set_password_transition(
     }
 
     if key_backup_path.exists() {
-        if key_path.exists() {
-            std::fs::remove_file(&key_path)
-                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        }
-        rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
+        replace_file_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     } else if key_path.exists() {
         let _ = std::fs::remove_file(&key_path);
@@ -493,6 +520,11 @@ fn recover_change_password_transition(
         return Ok(());
     }
 
+    // Commit marker makes crash-recovery deterministic: either we complete the transition
+    // (marker present) or we rollback to old password (marker absent).
+    let commit_marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
+    let commit_ready = commit_marker_path.exists();
+
     let profile_root = profile_dir(storage_paths, profile_id)?;
     let vault_path = vault_db_path(storage_paths, profile_id)?;
     let vault_backup_path = backup_root.join("vault.db.bak");
@@ -515,10 +547,20 @@ fn recover_change_password_transition(
     let salt_ready = salt_ok || salt_new_path.exists();
     let key_ready = key_ok || key_new_path.exists();
 
-    // If protected materials exist, prefer completing the transition.
-    // change_profile_password writes new vault/key material first, then swaps attachments.
-    // After a crash, we might have a new vault but attachments still old-key.
-    if vault_ok && salt_ready && key_ready {
+
+    if commit_ready && !(vault_ok && salt_ready && key_ready) {
+        log::error!(
+            "[SECURITY][recover_change_password_transition] profile_id={} action=commit_marker_but_materials_incomplete vault_ok={} salt_ready={} key_ready={}",
+            profile_id,
+            vault_ok,
+            salt_ready,
+            key_ready
+        );
+    }
+
+    // Deterministic crash-recovery: only finish the transition if we have evidence of the
+    // vault rotation starting (commit marker or vault backup) and all key material is ready.
+    if vault_ok && salt_ready && key_ready && (commit_ready || vault_backup_path.exists()) {
         if attachments_staging_dir.exists() {
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
@@ -593,21 +635,14 @@ fn recover_change_password_transition(
     }
 
     // Rollback to old password (restore backups).
+    let _ = std::fs::remove_file(&commit_marker_path);
     if vault_backup_path.exists() {
-        if vault_path.exists() {
-            std::fs::remove_file(&vault_path)
-                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        }
-        rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
+        replace_file_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if salt_backup_path.exists() {
-        if salt_path.exists() {
-            std::fs::remove_file(&salt_path)
-                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        }
-        rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
+        replace_file_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
@@ -616,11 +651,7 @@ fn recover_change_password_transition(
     }
 
     if key_backup_path.exists() {
-        if key_path.exists() {
-            std::fs::remove_file(&key_path)
-                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        }
-        rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
+        replace_file_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
@@ -792,29 +823,17 @@ fn recover_remove_password_transition(
 
     // Otherwise, rollback back to protected.
     if vault_backup_path.exists() {
-        if vault_path.exists() {
-            std::fs::remove_file(&vault_path)
-                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        }
-        rename_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
+        replace_file_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if salt_backup_path.exists() {
-        if salt_path.exists() {
-            std::fs::remove_file(&salt_path)
-                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        }
-        rename_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
+        replace_file_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     if key_backup_path.exists() {
-        if key_path.exists() {
-            std::fs::remove_file(&key_path)
-                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        }
-        rename_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
+        replace_file_retry(&key_backup_path, &key_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
@@ -872,11 +891,68 @@ fn recover_incomplete_profile_transitions(
     Ok(())
 }
 
+
+
+#[cfg(unix)]
+fn best_effort_fsync_dir(dir: &Path) {
+    if let Ok(f) = std::fs::File::open(dir) {
+        let _ = f.sync_all();
+    }
+}
+
+fn best_effort_fsync_parent_dir(_path: &Path) {
+    #[cfg(unix)]
+    {
+        if let Some(parent) = _path.parent() {
+            best_effort_fsync_dir(parent);
+        }
+    }
+}
+
+fn best_effort_fsync_rename_dirs(_from: &Path, _to: &Path) {
+    #[cfg(unix)]
+    {
+        if let Some(p) = _from.parent() {
+            best_effort_fsync_dir(p);
+        }
+        let from_parent = _from.parent();
+        let to_parent = _to.parent();
+        if to_parent.is_some() && to_parent != from_parent {
+            best_effort_fsync_dir(to_parent.unwrap());
+        }
+    }
+}
+
+#[cfg(windows)]
+fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+    use std::iter;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+
+    let from_w: Vec<u16> = from.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let to_w: Vec<u16> = to.as_os_str().encode_wide().chain(iter::once(0)).collect();
+
+    let ok = unsafe { MoveFileExW(from_w.as_ptr(), to_w.as_ptr(), MOVEFILE_WRITE_THROUGH) };
+    if ok == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+    std::fs::rename(from, to)
+}
+
 fn rename_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
     let mut i = 0;
     loop {
-        match std::fs::rename(from, to) {
-            Ok(()) => return Ok(()),
+        match rename_platform(from, to) {
+            Ok(()) => {
+                best_effort_fsync_rename_dirs(from, to);
+                return Ok(());
+            }
             Err(e) => {
                 i += 1;
                 if i >= attempts {
@@ -894,7 +970,10 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
     let mut i = 0;
     loop {
         match std::fs::remove_file(path) {
-            Ok(()) => return Ok(()),
+            Ok(()) => {
+                best_effort_fsync_parent_dir(path);
+                return Ok(());
+            }
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
             Err(e) => {
                 i += 1;
@@ -908,11 +987,56 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
     }
 }
 
-fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
-    if to.exists() {
-        remove_file_retry(to, attempts, base_delay)?;
+#[cfg(windows)]
+fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+    use std::iter;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let from_w: Vec<u16> = from.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let to_w: Vec<u16> = to.as_os_str().encode_wide().chain(iter::once(0)).collect();
+
+    let ok = unsafe {
+        MoveFileExW(
+            from_w.as_ptr(),
+            to_w.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if ok == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
     }
-    rename_retry(from, to, attempts, base_delay)
+}
+
+#[cfg(not(windows))]
+fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+    // On POSIX, rename() overwrites atomically.
+    std::fs::rename(from, to)
+}
+
+fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
+    let mut i = 0;
+    loop {
+        match replace_platform(from, to) {
+            Ok(()) => {
+                best_effort_fsync_rename_dirs(from, to);
+                return Ok(());
+            }
+            Err(e) => {
+                i += 1;
+                if i >= attempts {
+                    return Err(e);
+                }
+                // Windows can temporarily lock files (AV/indexer), so retry with backoff.
+                let backoff_ms = base_delay.as_millis() as u64 * i as u64;
+                std::thread::sleep(Duration::from_millis(backoff_ms.max(25).min(1500)));
+            }
+        }
+    }
 }
 
 fn prepare_empty_dir(path: &Path) -> Result<()> {
@@ -1183,8 +1307,8 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
         }
 
-        let pwd = password.trim();
-        if pwd.is_empty() {
+        let pwd = password;
+        if pwd.chars().all(|c| c.is_whitespace()) {
             return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
         }
 
@@ -1375,22 +1499,37 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             }
 
             if rb.key_check_backed_up {
-                let _ = std::fs::remove_file(&rb.key_check_path);
-                let _ = rename_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
+                // Avoid delete-then-rename gap: atomically swap backup back into place.
+                let _ = replace_file_retry(
+                    &rb.key_check_backup_path,
+                    &rb.key_check_path,
+                    20,
+                    Duration::from_millis(50),
+                );
             } else if !rb.key_check_present_before {
                 let _ = std::fs::remove_file(&rb.key_check_path);
             }
 
             if rb.salt_backed_up {
-                let _ = std::fs::remove_file(&rb.salt_path);
-                let _ = rename_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
+                // Avoid delete-then-rename gap: atomically swap backup back into place.
+                let _ = replace_file_retry(
+                    &rb.salt_backup_path,
+                    &rb.salt_path,
+                    20,
+                    Duration::from_millis(50),
+                );
             } else if !rb.salt_present_before {
                 let _ = std::fs::remove_file(&rb.salt_path);
             }
 
             if rb.vault_backed_up {
-                let _ = std::fs::remove_file(&rb.vault_path);
-                let _ = rename_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
+                // Avoid delete-then-rename gap: atomically swap backup back into place.
+                let _ = replace_file_retry(
+                    &rb.vault_backup_path,
+                    &rb.vault_path,
+                    20,
+                    Duration::from_millis(50),
+                );
             }
 
             let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false);
@@ -1493,6 +1632,19 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
                 ErrorCodeString::new("PROFILE_STORAGE_WRITE")
             })?;
 
+
+        // Disk commit point reached (vault + attachments + key material).
+        // Write a commit marker so crash-recovery is deterministic.
+        if let Err(err) = write_set_password_commit_marker(&backup_root) {
+            log::error!(
+                "[SECURITY][set_profile_password] profile_id={} step=write_commit_marker_failed action=rollback code={}",
+                id,
+                err.code
+            );
+            rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
+            return Err(err);
+        }
+
         // Switch runtime session to protected in-memory session so app stays unlocked.
         // (mem_conn already validated above)
 
@@ -1500,10 +1652,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             let mut session = state
                 .vault_session
                 .lock()
-                .map_err(|_| {
-                    rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
-                    ErrorCodeString::new("STATE_LOCK_POISONED")
-                })?;
+                .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
             *session = Some(VaultSession {
                 profile_id: id.to_string(),
                 conn: mem_conn,
@@ -1547,8 +1696,8 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
         return Err(ErrorCodeString::new("PROFILE_NOT_PROTECTED"));
     }
 
-    let pwd = password.trim();
-    if pwd.is_empty() {
+    let pwd = password;
+    if pwd.chars().all(|c| c.is_whitespace()) {
         return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
     }
 
@@ -1655,18 +1804,15 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
         }
 
         if rb.vault_backed_up {
-            let _ = std::fs::remove_file(&rb.vault_path);
-            let _ = rename_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
+            let _ = replace_file_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
         }
 
         if rb.salt_backed_up {
-            let _ = std::fs::remove_file(&rb.salt_path);
-            let _ = rename_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
+            let _ = replace_file_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
         }
 
         if rb.key_check_backed_up {
-            let _ = std::fs::remove_file(&rb.key_check_path);
-            let _ = rename_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
+            let _ = replace_file_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
         }
 
         let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);
@@ -1767,6 +1913,19 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
             ErrorCodeString::new("PROFILE_STORAGE_WRITE")
         })?;
 
+
+    // Disk commit point reached (vault + attachments + key material).
+    // Write a commit marker so crash-recovery is deterministic.
+    if let Err(err) = write_change_password_commit_marker(&backup_root) {
+        log::error!(
+            "[SECURITY][change_profile_password] profile_id={} step=write_commit_marker_failed action=rollback code={}",
+            id,
+            err.code
+        );
+        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+        return Err(err);
+    }
+
     // Update in-memory session key to keep vault unlocked (only after commit).
     {
         let mut session = state
@@ -1775,7 +1934,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
         let s = session.as_mut().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
         if s.profile_id != id {
-            rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+            // Disk state is already committed; do not attempt rollback here.
             return Err(ErrorCodeString::new("VAULT_LOCKED"));
         }
         s.key = new_key;
@@ -1820,17 +1979,20 @@ fn rollback_remove_profile_password(
         let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
     }
 
-    let _ = std::fs::remove_file(&rb.vault_path);
-    let _ = rename_retry(&rb.vault_backup_path, &rb.vault_path, 20, Duration::from_millis(50));
+    // Avoid delete-then-rename gap: atomically swap backup back into place.
+    let _ = replace_file_retry(
+        &rb.vault_backup_path,
+        &rb.vault_path,
+        20,
+        Duration::from_millis(50),
+    );
 
     if rb.salt_moved {
-        let _ = std::fs::remove_file(&rb.salt_path);
-        let _ = rename_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
+        let _ = replace_file_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
     }
 
     if rb.key_check_moved {
-        let _ = std::fs::remove_file(&rb.key_check_path);
-        let _ = rename_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
+        let _ = replace_file_retry(&rb.key_check_backup_path, &rb.key_check_path, 20, Duration::from_millis(50));
     }
 
     let _ = registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true);

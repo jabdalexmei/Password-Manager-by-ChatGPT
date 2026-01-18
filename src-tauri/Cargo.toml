@@ -39,6 +39,7 @@ windows = "0.61"
 chacha20poly1305 = "0.10.1"
 zeroize = "1.8"
 base64 = "0.22"
+fs2 = "0.4"
 
 [build-dependencies]
 tauri-build = { version = "2.4.0", features = [] }
