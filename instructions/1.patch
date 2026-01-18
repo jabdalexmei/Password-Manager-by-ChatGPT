@@ -1,110 +1,37 @@
-diff --git a/src-tauri/src/services/backup_service.rs b/src-tauri/src/services/backup_service.rs
-index 31d93bd..f8a7304 100644
 --- a/src-tauri/src/services/backup_service.rs
 +++ b/src-tauri/src/services/backup_service.rs
-@@ -934,11 +934,37 @@ fn restore_archive_to_profile(
-             let extracted_file = temp_dir.path().join(file_name);
-             if extracted_file.exists() {
-                 let target = profile_root.join(file_name);
--                if target.exists() {
--                    let _ = fs::remove_file(&target);
--                }
--                rename_with_retry(&extracted_file, &target)
-+
-+                // Copy into the profile directory first, so we can swap atomically even if temp_dir
-+                // lives on a different filesystem/mount.
-+                let tmp = profile_root.join(format!("{}.restore.{}", file_name, Uuid::new_v4()));
-+                fs::copy(&extracted_file, &tmp)
-+                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-+                fs::File::open(&tmp)
-+                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?
-+                    .sync_all()
-                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-+
-+                let replaced = (|| {
-+                    #[cfg(windows)]
-+                    {
-+                        replace_file_windows(&tmp, &target)
-+                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-+                        best_effort_fsync_rename_dirs(&tmp, &target);
-+                        return Ok(());
-+                    }
-+                    #[cfg(not(windows))]
-+                    {
-+                        rename_with_retry(&tmp, &target)
-+                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-+                        return Ok(());
-+                    }
-+                })();
-+
-+                if replaced.is_err() {
-+                    let _ = fs::remove_file(&tmp);
-+                    return Err(ErrorCodeString::new("BACKUP_RESTORE_FAILED"));
-+                }
+@@ -977,17 +977,29 @@
+                 let _ = fs::remove_file(tmp);
              }
          }
- 
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 56776d4..d5e77f8 100644
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -1023,11 +1023,56 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
-     }
- }
- 
-+#[cfg(windows)]
-+fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
-+    use std::iter;
-+    use std::os::windows::ffi::OsStrExt;
-+    use windows_sys::Win32::Storage::FileSystem::{
-+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-+    };
+-        if vault_replaced && vault_path.exists() {
+-            let _ = fs::remove_file(&vault_path);
+-        }
 +
-+    let from_w: Vec<u16> = from.as_os_str().encode_wide().chain(iter::once(0)).collect();
-+    let to_w: Vec<u16> = to.as_os_str().encode_wide().chain(iter::once(0)).collect();
-+
-+    let ok = unsafe {
-+        MoveFileExW(
-+            from_w.as_ptr(),
-+            to_w.as_ptr(),
-+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-+        )
-+    };
-+    if ok == 0 {
-+        Err(io::Error::last_os_error())
-+    } else {
-+        Ok(())
-+    }
-+}
-+
-+#[cfg(not(windows))]
-+fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
-+    // On POSIX, rename() overwrites atomically.
-+    std::fs::rename(from, to)
-+}
-+
- fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
--    if to.exists() {
--        remove_file_retry(to, attempts, base_delay)?;
-+    let mut i = 0;
-+    loop {
-+        match replace_platform(from, to) {
-+            Ok(()) => {
-+                best_effort_fsync_rename_dirs(from, to);
-+                return Ok(());
++        // Roll back to the pre-restore state as safely as we can.
++        // IMPORTANT: never delete the last known-good vault before we have restored it.
+         if moved_vault && vault_backup_path.exists() {
+-            let _ = fs::rename(&vault_backup_path, &vault_path);
++            #[cfg(windows)]
++            {
++                let _ = replace_file_windows(&vault_backup_path, &vault_path);
++                best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
 +            }
-+            Err(e) => {
-+                i += 1;
-+                if i >= attempts {
-+                    return Err(e);
-+                }
-+                // Windows can temporarily lock files (AV/indexer), so retry with backoff.
-+                let backoff_ms = base_delay.as_millis() as u64 * i as u64;
-+                std::thread::sleep(Duration::from_millis(backoff_ms.max(25).min(1500)));
++            #[cfg(not(windows))]
++            {
++                let _ = fs::rename(&vault_backup_path, &vault_path);
 +            }
-+        }
-     }
--    rename_retry(from, to, attempts, base_delay)
- }
- 
- fn prepare_empty_dir(path: &Path) -> Result<()> {
++        } else if !moved_vault && vault_replaced && vault_path.exists() {
++            // No prior vault existed; remove the partially restored file.
++            let _ = fs::remove_file(&vault_path);
+         }
++
+         if moved_attachments && attachments_backup_path.exists() {
+             if attachments_path.exists() {
+                 let _ = fs::remove_dir_all(&attachments_path);
+             }
+-            let _ = fs::rename(&attachments_backup_path, &attachments_path);
++            let _ = rename_with_retry(&attachments_backup_path, &attachments_path);
+         } else if !attachments_existed_before
+             && restored_attachments_created
+             && attachments_path.exists()
