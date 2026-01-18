@@ -172,7 +172,8 @@ fn validate_profile_id_component(profile_id: &str) -> bool {
 
 
 
-fn sync_dir_best_effort(dir: &Path) {
+#[cfg(unix)]
+fn best_effort_fsync_dir(dir: &Path) {
     #[cfg(unix)]
     {
         if let Ok(f) = std::fs::File::open(dir) {
@@ -181,18 +182,17 @@ fn sync_dir_best_effort(dir: &Path) {
     }
 }
 
-fn sync_rename_parents_best_effort(from: &Path, to: &Path) {
-    let from_dir = from.parent();
-    let to_dir = to.parent();
-
-    if let Some(d) = from_dir {
-        sync_dir_best_effort(d);
-    }
-
-    match (from_dir, to_dir) {
-        (Some(fd), Some(td)) if fd == td => {}
-        (_, Some(td)) => sync_dir_best_effort(td),
-        _ => {}
+fn best_effort_fsync_rename_dirs(src: &Path, dst: &Path) {
+    #[cfg(unix)]
+    {
+        let sp = src.parent();
+        let dp = dst.parent();
+        if let Some(p) = sp {
+            best_effort_fsync_dir(p);
+        }
+        if dp.is_some() && dp != sp {
+            best_effort_fsync_dir(dp.unwrap());
+        }
     }
 }
 
@@ -206,7 +206,7 @@ fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     for _ in 0..ATTEMPTS {
         match fs::rename(src, dst) {
             Ok(()) => {
-                sync_rename_parents_best_effort(src, dst);
+                best_effort_fsync_rename_dirs(src, dst);
                 return Ok(());
             }
             Err(e) => {
@@ -990,20 +990,13 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
         registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password)?;
     }
 
-    let ok = restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)?;
-    if ok {
-        let has_password = manifest.vault_mode == "protected";
-        if let Err(e) =
-            registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password)
-        {
-            log::warn!(
-                "[BACKUP][restore] profile_id={} action=post_restore_registry_update_failed code={}",
-                manifest.profile_id,
-                e.code
-            );
-        }
-    }
-    Ok(ok)
+    let restored = restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)?;
+
+    // Keep profiles registry in sync with restored state (name + vault mode).
+    let has_password = manifest.vault_mode == "protected";
+    let _ = registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password);
+
+    Ok(restored)
 }
 
 pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {

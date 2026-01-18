@@ -1,10 +1,26 @@
-use std::fs::{self, OpenOptions, File};
+use std::fs::{self, OpenOptions};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::Duration;
 use uuid::Uuid;
+
+#[cfg(unix)]
+fn best_effort_fsync_dir(dir: &Path) {
+    if let Ok(f) = fs::File::open(dir) {
+        let _ = f.sync_all();
+    }
+}
+
+fn best_effort_fsync_parent_dir(path: &Path) {
+    #[cfg(unix)]
+    {
+        if let Some(parent) = path.parent() {
+            best_effort_fsync_dir(parent);
+        }
+    }
+}
 
 /// Atomic file write:
 /// - write to temp in same directory
@@ -31,18 +47,6 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
             }
         }
         Err(last.unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, "rename failed")))
-    }
-
-    fn sync_dir_best_effort(dir: &Path) {
-        #[cfg(unix)]
-        {
-            // Best-effort: ignore errors (some FS/OS might not support syncing dirs).
-            // fsync() on a file does not necessarily persist directory entry updates
-            // (rename/unlink) across crash/power-loss; syncing the directory helps.
-            if let Ok(f) = File::open(dir) {
-                let _ = f.sync_all();
-            }
-        }
     }
 
     let parent = path.parent().ok_or_else(|| {
@@ -75,16 +79,17 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
         // 2) move current to backup (if exists)
         if path.exists() {
             rename_with_retry(path, &bak_path)?;
+            best_effort_fsync_parent_dir(path);
         }
 
         // 3) move temp into place
         rename_with_retry(&tmp_path, path)?;
-        sync_dir_best_effort(parent);
+        best_effort_fsync_parent_dir(path);
 
         // 4) remove backup
         if bak_path.exists() {
             let _ = fs::remove_file(&bak_path);
-            sync_dir_best_effort(parent);
+            best_effort_fsync_parent_dir(path);
         }
 
         Ok(())
@@ -95,7 +100,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
         let _ = fs::remove_file(&tmp_path);
         if bak_path.exists() && !path.exists() {
             if fs::rename(&bak_path, path).is_ok() {
-                sync_dir_best_effort(parent);
+                best_effort_fsync_parent_dir(path);
             }
         }
     }

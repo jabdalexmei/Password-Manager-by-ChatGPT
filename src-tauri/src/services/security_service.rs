@@ -570,9 +570,9 @@ fn recover_change_password_transition(
         );
     }
 
-    // Deterministic crash-recovery: only finish the transition if a commit marker exists.
-    // Without the marker we always rollback, because attachments staging may exist before key rotation.
-    if commit_ready {
+    // Deterministic crash-recovery: only finish the transition if we have evidence of the
+    // vault rotation starting (commit marker or vault backup) and all key material is ready.
+    if vault_ok && salt_ready && key_ready && (commit_ready || vault_backup_path.exists()) {
         if attachments_staging_dir.exists() {
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
@@ -929,33 +929,33 @@ fn recover_incomplete_profile_transitions(
 
 
 
-fn sync_dir_best_effort(dir: &Path) {
+#[cfg(unix)]
+fn best_effort_fsync_dir(dir: &Path) {
+    if let Ok(f) = std::fs::File::open(dir) {
+        let _ = f.sync_all();
+    }
+}
+
+fn best_effort_fsync_parent_dir(path: &Path) {
     #[cfg(unix)]
     {
-        if let Ok(f) = std::fs::File::open(dir) {
-            let _ = f.sync_all();
+        if let Some(parent) = path.parent() {
+            best_effort_fsync_dir(parent);
         }
     }
 }
 
-fn sync_rename_parents_best_effort(from: &Path, to: &Path) {
-    let from_dir = from.parent();
-    let to_dir = to.parent();
-
-    if let Some(d) = from_dir {
-        sync_dir_best_effort(d);
-    }
-
-    match (from_dir, to_dir) {
-        (Some(fd), Some(td)) if fd == td => {}
-        (_, Some(td)) => sync_dir_best_effort(td),
-        _ => {}
-    }
-}
-
-fn sync_unlink_parent_best_effort(path: &Path) {
-    if let Some(dir) = path.parent() {
-        sync_dir_best_effort(dir);
+fn best_effort_fsync_rename_dirs(from: &Path, to: &Path) {
+    #[cfg(unix)]
+    {
+        if let Some(p) = from.parent() {
+            best_effort_fsync_dir(p);
+        }
+        let from_parent = from.parent();
+        let to_parent = to.parent();
+        if to_parent.is_some() && to_parent != from_parent {
+            best_effort_fsync_dir(to_parent.unwrap());
+        }
     }
 }
 
@@ -964,7 +964,7 @@ fn rename_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> 
     loop {
         match std::fs::rename(from, to) {
             Ok(()) => {
-                sync_rename_parents_best_effort(from, to);
+                best_effort_fsync_rename_dirs(from, to);
                 return Ok(());
             }
             Err(e) => {
@@ -985,11 +985,9 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
     loop {
         match std::fs::remove_file(path) {
             Ok(()) => {
-                if let Some(parent) = path.parent() {
-                    sync_dir_best_effort(parent);
-                }
+                best_effort_fsync_parent_dir(path);
                 return Ok(());
-            },
+            }
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
             Err(e) => {
                 i += 1;
@@ -1591,11 +1589,11 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
         // Disk commit point reached (vault + attachments + key material).
         // Write a commit marker so crash-recovery is deterministic.
-        if let Err(e) = write_set_password_commit_marker(&backup_root) {
+        if let Err(err) = write_set_password_commit_marker(&backup_root) {
             log::warn!(
-                "[SECURITY][set_profile_password] profile_id={} action=write_commit_marker_failed err_code={}",
+                "[SECURITY][set_profile_password] profile_id={} step=write_commit_marker_failed code={}",
                 id,
-                e.code
+                err.code
             );
         }
 
@@ -1873,11 +1871,11 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
 
     // Disk commit point reached (vault + attachments + key material).
     // Write a commit marker so crash-recovery is deterministic.
-    if let Err(e) = write_change_password_commit_marker(&backup_root) {
+    if let Err(err) = write_change_password_commit_marker(&backup_root) {
         log::warn!(
-            "[SECURITY][change_profile_password] profile_id={} action=write_commit_marker_failed err_code={}",
+            "[SECURITY][change_profile_password] profile_id={} step=write_commit_marker_failed code={}",
             id,
-            e.code
+            err.code
         );
     }
 
