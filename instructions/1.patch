@@ -1,99 +1,379 @@
 diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
-index 2749f7d..c4467ec 100644
+index 3144abb..d28dff8 100644
 --- a/src-tauri/src/data/profiles/registry.rs
 +++ b/src-tauri/src/data/profiles/registry.rs
-@@ -74,10 +74,39 @@ fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
-     buf == PM_ENC_MAGIC
+@@ -36,6 +36,82 @@ pub struct ProfileRegistry {
+     pub profiles: Vec<ProfileRecord>,
  }
  
-+const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
-+
-+fn vault_looks_plain(sp: &StoragePaths, id: &str) -> bool {
-+    let path = match vault_db_path(sp, id) {
-+        Ok(p) => p,
-+        Err(_) => return false,
-+    };
-+    if !path.exists() {
-+        return false;
-+    }
-+    let mut f = match fs::File::open(path) {
-+        Ok(f) => f,
-+        Err(_) => return false,
-+    };
-+    let mut buf = [0u8; 16];
-+    if f.read_exact(&mut buf).is_err() {
-+        return false;
-+    }
-+    &buf == SQLITE_MAGIC
++#[derive(Debug, Serialize, Deserialize, Clone)]
++struct RenamePending {
++    old_name: String,
++    new_name: String,
 +}
 +
- fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
-+    // If the vault is clearly a plaintext SQLite DB, the profile is passwordless.
-+    // This allows self-healing when registry.json is stale (e.g. after restore or a partial transition).
-+    if vault_looks_plain(sp, id) {
-+        return false;
-+    }
++const RENAME_PROFILE_PENDING_FILE: &str = "rename_profile.pending.json";
 +
-+    // If the registry says protected, keep it protected unless we have positive evidence of passwordless.
-     if record_has_password {
-         return true;
-     }
++fn rename_pending_path(sp: &StoragePaths, id: &str) -> Result<PathBuf> {
++    let dir = crate::data::profiles::paths::profile_dir(sp, id)?;
++    Ok(dir.join("tmp").join(RENAME_PROFILE_PENDING_FILE))
++}
 +
-     let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
-     let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
-     if salt_ok && key_ok {
-@@ -113,6 +142,12 @@ pub fn create_profile(
- ) -> Result<ProfileMeta> {
-     ensure_profiles_dir(sp)?;
-     let id = Uuid::new_v4().to_string();
++fn recover_pending_profile_renames(sp: &StoragePaths, registry: &mut ProfileRegistry) -> bool {
++    let mut dirty = false;
 +
-+    if let Some(pwd) = password.as_ref() {
-+        if pwd.chars().all(|c| c.is_whitespace()) {
-+            return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
++    for rec in registry.profiles.iter_mut() {
++        let marker_path = match rename_pending_path(sp, &rec.id) {
++            Ok(p) => p,
++            Err(_) => continue,
++        };
++        if !marker_path.exists() {
++            continue;
 +        }
-+    }
-     let has_password = password.as_ref().map(|p| !p.is_empty()).unwrap_or(false);
- 
-     let record = ProfileRecord {
-diff --git a/src-tauri/src/services/backup_service.rs b/src-tauri/src/services/backup_service.rs
-index c3c8b23..7582bb8 100644
---- a/src-tauri/src/services/backup_service.rs
-+++ b/src-tauri/src/services/backup_service.rs
-@@ -960,8 +960,18 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
-         let has_password = manifest.vault_mode == "protected";
-         registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password)?;
-     }
--
--    restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)
-+    let ok = restore_archive_to_profile(state, &sp, &manifest.profile_id, &backup_path)?;
-+    if ok {
-+        let has_password = manifest.vault_mode == "protected";
-+        if let Err(e) = registry::upsert_profile_with_id(&sp, &manifest.profile_id, &profile_name, has_password) {
++
++        let raw = match fs::read_to_string(&marker_path) {
++            Ok(s) => s,
++            Err(_) => {
++                let _ = fs::remove_file(&marker_path);
++                continue;
++            }
++        };
++
++        let pending: RenamePending = match serde_json::from_str(&raw) {
++            Ok(p) => p,
++            Err(e) => {
++                log::warn!(
++                    "[PROFILE][rename_recover] invalid pending marker for profile_id={} err={}",
++                    rec.id,
++                    e
++                );
++                let _ = fs::remove_file(&marker_path);
++                continue;
++            }
++        };
++
++        // Best-effort: bring config.json and registry.json into the target name.
++        // If config write fails, keep marker so we can retry next time.
++        let cfg_path = match profile_config_path(sp, &rec.id) {
++            Ok(p) => p,
++            Err(_) => continue,
++        };
++        let target = pending.new_name.clone();
++        let cfg = serde_json::json!({ "name": &target });
++        let serialized = match serde_json::to_string_pretty(&cfg) {
++            Ok(s) => s,
++            Err(_) => continue,
++        };
++
++        if write_atomic(&cfg_path, serialized.as_bytes()).is_ok() {
++            if rec.name != target {
++                rec.name = target;
++                dirty = true;
++            }
++            let _ = fs::remove_file(&marker_path);
++        } else {
 +            log::warn!(
-+                "[BACKUP][restore] profile_id={} action=post_restore_registry_update_failed code={}",
-+                manifest.profile_id,
-+                e.code
++                "[PROFILE][rename_recover] failed to write config.json for profile_id={}",
++                rec.id
 +            );
 +        }
 +    }
-+    Ok(ok)
- }
- 
- pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {
-diff --git a/src-tauri/src/services/profiles_service.rs b/src-tauri/src/services/profiles_service.rs
-index 6291f61..57d1345 100644
---- a/src-tauri/src/services/profiles_service.rs
-+++ b/src-tauri/src/services/profiles_service.rs
-@@ -25,6 +25,12 @@ pub fn create_profile(
-     if name.trim().is_empty() {
-         return Err(ErrorCodeString::new("PROFILE_NAME_REQUIRED"));
-     }
 +
-+    if let Some(pwd) = password.as_ref() {
-+        if pwd.chars().all(|c| c.is_whitespace()) {
-+            return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
++    dirty
++}
++
+ fn load_registry(sp: &StoragePaths) -> Result<ProfileRegistry> {
+     ensure_profiles_dir(sp)?;
+     let path = registry_path(sp)?;
+@@ -116,8 +192,18 @@ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) ->
+ 
+ pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
+     let mut registry = load_registry(sp)?;
++
++    // Crash-safe rename recovery for this profile (best-effort).
++    if recover_pending_profile_renames(sp, &mut registry) {
++        let _ = save_registry(sp, &registry);
++    }
+     let mut dirty = false;
+ 
++    // Crash-safe rename recovery: if a prior rename left a marker, finish it now.
++    if recover_pending_profile_renames(sp, &mut registry) {
++        dirty = true;
++    }
++
+     for rec in registry.profiles.iter_mut() {
+         let inferred = infer_has_password(sp, &rec.id, rec.has_password);
+         if inferred != rec.has_password {
+@@ -215,6 +301,11 @@ pub fn upsert_profile_with_id(
+     }
+ 
+     let mut registry = load_registry(sp)?;
++
++    // Crash-safe rename recovery for this profile (best-effort).
++    if recover_pending_profile_renames(sp, &mut registry) {
++        let _ = save_registry(sp, &registry);
++    }
+     if let Some(existing) = registry.profiles.iter_mut().find(|p| p.id == id) {
+         existing.name = name.to_string();
+         existing.has_password = has_password;
+@@ -242,7 +333,20 @@ pub fn upsert_profile_with_id(
+ 
+ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
+     ensure_profiles_dir(sp)?;
++
++    // If a previous rename crashed mid-flight, recover it first so we don't pile up inconsistent state.
++    {
++        let mut reg = load_registry(sp)?;
++        if recover_pending_profile_renames(sp, &mut reg) {
++            let _ = save_registry(sp, &reg);
 +        }
 +    }
-     let profile = registry::create_profile(sp, name, password.clone())?;
+     let mut registry = load_registry(sp)?;
++
++    // Crash-safe rename recovery for this profile (best-effort).
++    if recover_pending_profile_renames(sp, &mut registry) {
++        let _ = save_registry(sp, &registry);
++    }
+     let idx = registry
+         .profiles
+         .iter()
+@@ -251,13 +355,28 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
  
-     let init_result: Result<()> = (|| {
+     let old_name = registry.profiles[idx].name.clone();
+ 
++    // Write a crash-recovery marker before we touch any state.
++    // If we crash between config.json and registry.json updates, list/get will finish the rename.
++    let marker_path = rename_pending_path(sp, id)?;
++    let pending = RenamePending {
++        old_name: old_name.clone(),
++        new_name: name.to_string(),
++    };
++    let pending_bytes = serde_json::to_string_pretty(&pending)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    if write_atomic(&marker_path, pending_bytes.as_bytes()).is_err() {
++        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
++    }
++
+     // Write profile config first so we never persist a registry change without a matching config.
+     let config_path: PathBuf = profile_config_path(sp, id)?;
+     let config = serde_json::json!({ "name": name });
+     let serialized_config = serde_json::to_string_pretty(&config)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+-    write_atomic(&config_path, serialized_config.as_bytes())
+-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    if write_atomic(&config_path, serialized_config.as_bytes()).is_err() {
++        let _ = fs::remove_file(&marker_path);
++        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
++    }
+ 
+     // Now update registry and persist. If this fails, best-effort rollback config.
+     registry.profiles[idx].name = name.to_string();
+@@ -277,15 +396,24 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
+         if let Ok(rollback_serialized) = serde_json::to_string_pretty(&rollback_config) {
+             let _ = write_atomic(&config_path, rollback_serialized.as_bytes());
+         }
++        let _ = fs::remove_file(&marker_path);
+         return Err(err);
+     }
+ 
++    // Rename completed successfully; clear marker.
++    let _ = fs::remove_file(&marker_path);
++
+     Ok(meta)
+ }
+ 
+ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
+     ensure_profiles_dir(sp)?;
+     let mut registry = load_registry(sp)?;
++
++    // Crash-safe rename recovery for this profile (best-effort).
++    if recover_pending_profile_renames(sp, &mut registry) {
++        let _ = save_registry(sp, &registry);
++    }
+     let original_len = registry.profiles.len();
+     registry.profiles.retain(|p| p.id != id);
+     if registry.profiles.len() == original_len {
+@@ -301,6 +429,11 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
+ 
+ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>> {
+     let mut registry = load_registry(sp)?;
++
++    // Crash-safe rename recovery for this profile (best-effort).
++    if recover_pending_profile_renames(sp, &mut registry) {
++        let _ = save_registry(sp, &registry);
++    }
+     let idx = match registry.profiles.iter().position(|p| p.id == id) {
+         Some(i) => i,
+         None => return Ok(None),
+diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
+index 781c3b0..e04317d 100644
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -307,6 +307,19 @@ fn write_remove_password_commit_marker(backup_root: &Path) -> Result<()> {
+     write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+ }
+ 
++const SET_PASSWORD_COMMIT_MARKER: &str = "set_password.commit";
++const CHANGE_PASSWORD_COMMIT_MARKER: &str = "change_password.commit";
++
++fn write_set_password_commit_marker(backup_root: &Path) -> Result<()> {
++    let marker_path = backup_root.join(SET_PASSWORD_COMMIT_MARKER);
++    write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
++}
++
++fn write_change_password_commit_marker(backup_root: &Path) -> Result<()> {
++    let marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
++    write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
++}
++
+ fn recover_set_password_transition(
+     storage_paths: &crate::data::storage_paths::StoragePaths,
+     profile_id: &str,
+@@ -317,6 +330,11 @@ fn recover_set_password_transition(
+         return Ok(());
+     }
+ 
++    // Commit marker makes crash-recovery deterministic: either we complete the transition
++    // (marker present) or we rollback to the old password (marker absent).
++    let commit_marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
++    let commit_ready = commit_marker_path.exists();
++
+     let profile_root = profile_dir(storage_paths, profile_id)?;
+     let vault_path = vault_db_path(storage_paths, profile_id)?;
+     let vault_backup_path = backup_root.join("vault.db.bak");
+@@ -339,8 +357,20 @@ fn recover_set_password_transition(
+     let salt_ready = has_salt || salt_new_path.exists();
+     let key_ready = has_key || key_new_path.exists();
+ 
+-    // If core protected materials exist, prefer completing the transition.
+-    if vault_is_encrypted && salt_ready && key_ready {
++
++    if commit_ready && !(vault_is_encrypted && salt_ready && key_ready) {
++        log::error!(
++            "[SECURITY][recover_set_password_transition] profile_id={} action=commit_marker_but_materials_incomplete vault_encrypted={} salt_ready={} key_ready={}",
++            profile_id,
++            vault_is_encrypted,
++            salt_ready,
++            key_ready
++        );
++    }
++
++    // Deterministic crash-recovery: if commit marker exists, finish the protected transition.
++    // Otherwise we rollback to passwordless.
++    if commit_ready {
+         if attachments_staging_dir.exists() {
+             // Complete attachments swap if needed.
+             if attachments_dir.exists() {
+@@ -413,6 +443,7 @@ fn recover_set_password_transition(
+     }
+ 
+     // Otherwise, rollback to passwordless.
++    let _ = std::fs::remove_file(&commit_marker_path);
+     if vault_backup_path.exists() {
+         if vault_path.exists() {
+             std::fs::remove_file(&vault_path)
+@@ -501,6 +532,11 @@ fn recover_change_password_transition(
+         return Ok(());
+     }
+ 
++    // Commit marker makes crash-recovery deterministic: either we complete the transition
++    // (marker present) or we rollback to old password (marker absent).
++    let commit_marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
++    let commit_ready = commit_marker_path.exists();
++
+     let profile_root = profile_dir(storage_paths, profile_id)?;
+     let vault_path = vault_db_path(storage_paths, profile_id)?;
+     let vault_backup_path = backup_root.join("vault.db.bak");
+@@ -523,13 +559,20 @@ fn recover_change_password_transition(
+     let salt_ready = salt_ok || salt_new_path.exists();
+     let key_ready = key_ok || key_new_path.exists();
+ 
+-    // Crash-recovery for change_profile_password must be conservative:
+-    // - change_profile_password stages attachments re-encryption early (old_key -> new_key).
+-    // - If we crash before rotating the vault/key material, the staging dir may exist while
+-    //   vault/salt/key_check still refer to the old key.
+-    // Therefore, only complete the transition (especially attachments swap) once we have
+-    // evidence that the vault rotation actually started (vault.db.bak exists).
+-    if vault_ok && salt_ready && key_ready && vault_backup_path.exists() {
++
++    if commit_ready && !(vault_ok && salt_ready && key_ready) {
++        log::error!(
++            "[SECURITY][recover_change_password_transition] profile_id={} action=commit_marker_but_materials_incomplete vault_ok={} salt_ready={} key_ready={}",
++            profile_id,
++            vault_ok,
++            salt_ready,
++            key_ready
++        );
++    }
++
++    // Deterministic crash-recovery: only finish the transition if a commit marker exists.
++    // Without the marker we always rollback, because attachments staging may exist before key rotation.
++    if commit_ready {
+         if attachments_staging_dir.exists() {
+             // Complete attachments swap if needed.
+             if attachments_dir.exists() {
+@@ -604,6 +647,7 @@ fn recover_change_password_transition(
+     }
+ 
+     // Rollback to old password (restore backups).
++    let _ = std::fs::remove_file(&commit_marker_path);
+     if vault_backup_path.exists() {
+         if vault_path.exists() {
+             std::fs::remove_file(&vault_path)
+@@ -1504,6 +1548,17 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) ->
+                 ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+             })?;
+ 
++
++        // Disk commit point reached (vault + attachments + key material).
++        // Write a commit marker so crash-recovery is deterministic.
++        if let Err(e) = write_set_password_commit_marker(&backup_root) {
++            log::warn!(
++                "[SECURITY][set_profile_password] profile_id={} action=write_commit_marker_failed err_code={}",
++                id,
++                e.code
++            );
++        }
++
+         // Switch runtime session to protected in-memory session so app stays unlocked.
+         // (mem_conn already validated above)
+ 
+@@ -1511,10 +1566,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) ->
+             let mut session = state
+                 .vault_session
+                 .lock()
+-                .map_err(|_| {
+-                    rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
+-                    ErrorCodeString::new("STATE_LOCK_POISONED")
+-                })?;
++                .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
+             *session = Some(VaultSession {
+                 profile_id: id.to_string(),
+                 conn: mem_conn,
+@@ -1778,6 +1830,17 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>)
+             ErrorCodeString::new("PROFILE_STORAGE_WRITE")
+         })?;
+ 
++
++    // Disk commit point reached (vault + attachments + key material).
++    // Write a commit marker so crash-recovery is deterministic.
++    if let Err(e) = write_change_password_commit_marker(&backup_root) {
++        log::warn!(
++            "[SECURITY][change_profile_password] profile_id={} action=write_commit_marker_failed err_code={}",
++            id,
++            e.code
++        );
++    }
++
+     // Update in-memory session key to keep vault unlocked (only after commit).
+     {
+         let mut session = state
+@@ -1786,7 +1849,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>)
+             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+         let s = session.as_mut().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
+         if s.profile_id != id {
+-            rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
++            // Disk state is already committed; do not attempt rollback here.
+             return Err(ErrorCodeString::new("VAULT_LOCKED"));
+         }
+         s.key = new_key;
