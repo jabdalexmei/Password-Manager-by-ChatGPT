@@ -29,7 +29,6 @@ use crate::error::{ErrorCodeString, Result};
 use crate::services::{security_service, settings_service};
 use crate::types::UserSettings;
 
-#[cfg(windows)]
 fn replace_file_windows(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::iter;
     use std::os::windows::ffi::OsStrExt;
@@ -172,31 +171,10 @@ fn validate_profile_id_component(profile_id: &str) -> bool {
 
 
 
-#[cfg(unix)]
-fn best_effort_fsync_dir(dir: &Path) {
-    #[cfg(unix)]
-    {
-        if let Ok(f) = std::fs::File::open(dir) {
-            let _ = f.sync_all();
-        }
-    }
-}
-
 fn best_effort_fsync_rename_dirs(_src: &Path, _dst: &Path) {
-    #[cfg(unix)]
-    {
-        let sp = _src.parent();
-        let dp = _dst.parent();
-        if let Some(p) = sp {
-            best_effort_fsync_dir(p);
-        }
-        if dp.is_some() && dp != sp {
-            best_effort_fsync_dir(dp.unwrap());
-        }
-    }
+    // No-op on Windows.
 }
 
-#[cfg(windows)]
 fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::iter;
     use std::os::windows::ffi::OsStrExt;
@@ -208,10 +186,6 @@ fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
     if ok == 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
 }
 
-#[cfg(not(windows))]
-fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::rename(src, dst)
-}
 
 fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::time::Duration;
@@ -479,16 +453,7 @@ fn create_archive(
         .finish()
         .map_err(|_| ErrorCodeString::new("BACKUP_ZIP_WRITE_FAILED"))?;
 
-    let replace_result = {
-        #[cfg(windows)]
-        {
-            replace_file_windows(&tmp_dest, destination)
-        }
-        #[cfg(not(windows))]
-        {
-            fs::rename(&tmp_dest, destination)
-        }
-    };
+    let replace_result = replace_file_windows(&tmp_dest, destination);
 
     if replace_result.is_err() {
         if tmp_dest.exists() {
@@ -956,19 +921,10 @@ fn restore_archive_to_profile(
                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
 
                 let replaced = (|| {
-                    #[cfg(windows)]
-                    {
-                        replace_file_windows(&tmp, &target)
-                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-                        best_effort_fsync_rename_dirs(&tmp, &target);
-                        return Ok(());
-                    }
-                    #[cfg(not(windows))]
-                    {
-                        rename_with_retry(&tmp, &target)
-                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-                        return Ok(());
-                    }
+                    replace_file_windows(&tmp, &target)
+                        .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                    best_effort_fsync_rename_dirs(&tmp, &target);
+                    Ok(())
                 })();
 
                 if replaced.is_err() {
@@ -988,15 +944,8 @@ fn restore_archive_to_profile(
             }
         }
         if moved_vault && vault_backup_path.exists() {
-            #[cfg(windows)]
-            {
-                let _ = replace_file_windows(&vault_backup_path, &vault_path);
-                best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
-            }
-            #[cfg(not(windows))]
-            {
-                let _ = rename_with_retry(&vault_backup_path, &vault_path);
-            }
+            let _ = replace_file_windows(&vault_backup_path, &vault_path);
+            best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
         } else if !moved_vault && vault_replaced && vault_path.exists() {
             let _ = fs::remove_file(&vault_path);
         }

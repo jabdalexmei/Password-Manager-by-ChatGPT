@@ -1,18 +1,11 @@
-#[cfg(target_os = "windows")]
 use std::ptr;
-
-#[cfg(target_os = "windows")]
 use std::time::Duration;
 
-#[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::GetLastError;
-#[cfg(target_os = "windows")]
 use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard};
 
-#[cfg(target_os = "windows")]
 struct ClipboardGuard;
 
-#[cfg(target_os = "windows")]
 impl Drop for ClipboardGuard {
     fn drop(&mut self) {
         unsafe {
@@ -24,7 +17,6 @@ impl Drop for ClipboardGuard {
 /// Clears the entire Windows clipboard (all formats).
 /// Uses OpenClipboard -> EmptyClipboard -> CloseClipboard.
 /// Retries because clipboard may be temporarily locked by other processes.
-#[cfg(target_os = "windows")]
 pub fn clear_clipboard_all() -> Result<(), String> {
     const ATTEMPTS: usize = 60;
     const SLEEP_MS: u64 = 25;

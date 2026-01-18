@@ -891,39 +891,15 @@ fn recover_incomplete_profile_transitions(
     Ok(())
 }
 
-
-
-#[cfg(unix)]
-fn best_effort_fsync_dir(dir: &Path) {
-    if let Ok(f) = std::fs::File::open(dir) {
-        let _ = f.sync_all();
-    }
-}
-
 fn best_effort_fsync_parent_dir(_path: &Path) {
-    #[cfg(unix)]
-    {
-        if let Some(parent) = _path.parent() {
-            best_effort_fsync_dir(parent);
-        }
-    }
+    // No-op on Windows.
 }
 
 fn best_effort_fsync_rename_dirs(_from: &Path, _to: &Path) {
-    #[cfg(unix)]
-    {
-        if let Some(p) = _from.parent() {
-            best_effort_fsync_dir(p);
-        }
-        let from_parent = _from.parent();
-        let to_parent = _to.parent();
-        if to_parent.is_some() && to_parent != from_parent {
-            best_effort_fsync_dir(to_parent.unwrap());
-        }
-    }
+    // No-op on Windows.
 }
 
-#[cfg(windows)]
+
 fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
     use std::iter;
     use std::os::windows::ffi::OsStrExt;
@@ -940,10 +916,6 @@ fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
     }
 }
 
-#[cfg(not(windows))]
-fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
-    std::fs::rename(from, to)
-}
 
 fn rename_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
     let mut i = 0;
@@ -987,7 +959,6 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
     }
 }
 
-#[cfg(windows)]
 fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
     use std::iter;
     use std::os::windows::ffi::OsStrExt;
@@ -1012,11 +983,6 @@ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
     }
 }
 
-#[cfg(not(windows))]
-fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
-    // On POSIX, rename() overwrites atomically.
-    std::fs::rename(from, to)
-}
 
 fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
     let mut i = 0;

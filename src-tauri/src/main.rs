@@ -1,5 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(not(windows))]
+compile_error!("This application is Windows-only.");
+
+
 mod app_state;
 mod commands;
 mod data {
@@ -58,9 +62,7 @@ use services::security_service;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
-#[cfg(windows)]
 use windows::core::Interface;
-#[cfg(windows)]
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings4;
 
 fn main() {
@@ -98,7 +100,6 @@ fn main() {
             // Windows/WebView2: disable Chromium "Saved info" (form autofill suggestions)
             // because it breaks dark theme and can expose sensitive suggestions.
             // NOTE: HTML autocomplete="off" is not reliably respected by Chromium/WebView2.
-            #[cfg(windows)]
             {
                 if let Some(main_webview) = app.get_webview_window("main") {
                     let _ = main_webview.with_webview(|webview| unsafe {

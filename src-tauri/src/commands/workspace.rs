@@ -285,32 +285,14 @@ pub async fn workspace_open_in_explorer(
             return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
         }
 
-        #[cfg(target_os = "windows")]
-        {
-            std::process::Command::new("explorer")
-                .arg(&root)
-                .spawn()
-                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            std::process::Command::new("open")
-                .arg(&root)
-                .spawn()
-                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
-        }
-
-        #[cfg(all(unix, not(target_os = "macos")))]
-        {
-            std::process::Command::new("xdg-open")
-                .arg(&root)
-                .spawn()
-                .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
-        }
+        std::process::Command::new("explorer")
+            .arg(&root)
+            .spawn()
+            .map_err(|_| ErrorCodeString::new("WORKSPACE_OPEN_FAILED"))?;
 
         Ok(true)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
+

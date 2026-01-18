@@ -20,13 +20,6 @@ fn validate_profile_id(id: &str) -> Result<()> {
     }
 }
 
-#[cfg(unix)]
-fn set_dir_private(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-}
-
-#[cfg(not(unix))]
 fn set_dir_private(_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
