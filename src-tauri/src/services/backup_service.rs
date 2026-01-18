@@ -977,17 +977,27 @@ fn restore_archive_to_profile(
                 let _ = fs::remove_file(tmp);
             }
         }
-        if vault_replaced && vault_path.exists() {
-            let _ = fs::remove_file(&vault_path);
-        }
+        // Roll back to the pre-restore state as safely as we can.
+        // IMPORTANT: never delete the last known-good vault before we have restored it.
         if moved_vault && vault_backup_path.exists() {
-            let _ = fs::rename(&vault_backup_path, &vault_path);
+            #[cfg(windows)]
+            {
+                let _ = replace_file_windows(&vault_backup_path, &vault_path);
+                best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = fs::rename(&vault_backup_path, &vault_path);
+            }
+        } else if !moved_vault && vault_replaced && vault_path.exists() {
+            // No prior vault existed; remove the partially restored file.
+            let _ = fs::remove_file(&vault_path);
         }
         if moved_attachments && attachments_backup_path.exists() {
             if attachments_path.exists() {
                 let _ = fs::remove_dir_all(&attachments_path);
             }
-            let _ = fs::rename(&attachments_backup_path, &attachments_path);
+            let _ = rename_with_retry(&attachments_backup_path, &attachments_path);
         } else if !attachments_existed_before
             && restored_attachments_created
             && attachments_path.exists()
