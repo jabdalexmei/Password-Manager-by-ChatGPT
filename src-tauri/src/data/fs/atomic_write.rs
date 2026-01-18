@@ -6,6 +6,36 @@ use std::path::Path;
 use std::time::Duration;
 use uuid::Uuid;
 
+#[cfg(windows)]
+fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+    use std::iter;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+
+    let from_w: Vec<u16> = from
+        .as_os_str()
+        .encode_wide()
+        .chain(iter::once(0))
+        .collect();
+    let to_w: Vec<u16> = to
+        .as_os_str()
+        .encode_wide()
+        .chain(iter::once(0))
+        .collect();
+
+    let ok = unsafe { MoveFileExW(from_w.as_ptr(), to_w.as_ptr(), MOVEFILE_WRITE_THROUGH) };
+    if ok == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+    fs::rename(from, to)
+}
+
 #[cfg(unix)]
 fn best_effort_fsync_dir(dir: &Path) {
     if let Ok(f) = fs::File::open(dir) {
@@ -34,7 +64,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
         // Windows часто даёт PermissionDenied если файл ещё открыт (SQLite/AV/indexer).
         // Делаем короткие ретраи.
         for _ in 0..25 {
-            match fs::rename(from, to) {
+            match rename_platform(from, to) {
                 Ok(()) => return Ok(()),
                 Err(e) => {
                     last = Some(e);

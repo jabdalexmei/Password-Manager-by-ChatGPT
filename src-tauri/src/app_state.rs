@@ -1,10 +1,13 @@
 use std::collections::HashMap;
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
+
+use fs2::FileExt;
 
 use zeroize::Zeroizing;
 
@@ -37,6 +40,8 @@ pub struct AppState {
     pub active_profile: Mutex<Option<String>>,
     pub storage_paths: Mutex<StoragePaths>,
 
+    pub workspace_lock: Mutex<Option<std::fs::File>>,
+
     pub vault_session: Mutex<Option<VaultSession>>,
     pub vault_persist_guard: Mutex<()>,
     pub vault_persist_requested: AtomicBool,
@@ -57,6 +62,8 @@ impl AppState {
             active_profile: Mutex::new(None),
             storage_paths: Mutex::new(storage_paths),
 
+            workspace_lock: Mutex::new(None),
+
             vault_session: Mutex::new(None),
             vault_persist_guard: Mutex::new(()),
             vault_persist_requested: AtomicBool::new(false),
@@ -68,7 +75,31 @@ impl AppState {
         }
     }
 
+    fn acquire_workspace_lock(workspace_root: &PathBuf) -> Result<std::fs::File> {
+        let lock_path = workspace_root.join(".pm-workspace.lock");
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&lock_path)
+            .map_err(|_| ErrorCodeString::new("WORKSPACE_LOCK_FAILED"))?;
+
+        file.try_lock_exclusive()
+            .map_err(|_| ErrorCodeString::new("WORKSPACE_ALREADY_IN_USE"))?;
+
+        Ok(file)
+    }
+
     pub fn set_workspace_root(&self, workspace_root: std::path::PathBuf) -> Result<()> {
+        // Preflight create to ensure workspace_root exists before we attempt to lock.
+        // This is safe even if locking fails (no user data is modified here).
+        let profiles_dir = workspace_root.join("Profiles");
+        std::fs::create_dir_all(&profiles_dir)
+            .map_err(|_| ErrorCodeString::new("WORKSPACE_PROFILES_CREATE_FAILED"))?;
+
+        // Acquire a cross-process lock to prevent multi-instance corruption.
+        let lock_file = Self::acquire_workspace_lock(&workspace_root)?;
+
         {
             let mut storage_paths = self
                 .storage_paths
@@ -76,11 +107,27 @@ impl AppState {
                 .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
             storage_paths.configure_workspace(workspace_root)?;
         }
+
+        {
+            let mut ws_lock = self
+                .workspace_lock
+                .lock()
+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+            *ws_lock = Some(lock_file);
+        }
+
         self.clear_security_state()?;
         Ok(())
     }
 
     pub fn clear_workspace_root(&self) -> Result<()> {
+        {
+            let mut ws_lock = self
+                .workspace_lock
+                .lock()
+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+            *ws_lock = None;
+        }
         {
             let mut storage_paths = self
                 .storage_paths

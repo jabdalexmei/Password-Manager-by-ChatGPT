@@ -196,6 +196,23 @@ fn best_effort_fsync_rename_dirs(_src: &Path, _dst: &Path) {
     }
 }
 
+#[cfg(windows)]
+fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
+    use std::iter;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+
+    let src_w: Vec<u16> = src.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let dst_w: Vec<u16> = dst.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let ok = unsafe { MoveFileExW(src_w.as_ptr(), dst_w.as_ptr(), MOVEFILE_WRITE_THROUGH) };
+    if ok == 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
+}
+
+#[cfg(not(windows))]
+fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::rename(src, dst)
+}
+
 fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::time::Duration;
 
@@ -204,7 +221,7 @@ fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
 
     let mut last_err: Option<std::io::Error> = None;
     for _ in 0..ATTEMPTS {
-        match fs::rename(src, dst) {
+        match rename_platform(src, dst) {
             Ok(()) => {
                 best_effort_fsync_rename_dirs(src, dst);
                 return Ok(());
@@ -848,6 +865,10 @@ fn restore_archive_to_profile(
         writer
             .flush()
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+        writer
+            .get_ref()
+            .sync_all()
+            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
         let sha256 = hex::encode(hasher.finalize());
         if sha256 != entry.sha256 || bytes_written != entry.bytes {
             return Err(ErrorCodeString::new("BACKUP_INTEGRITY_FAILED"));
@@ -881,6 +902,11 @@ fn restore_archive_to_profile(
         let tmp = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
         vault_tmp_path = Some(tmp.clone());
         fs::copy(&extracted_vault, &tmp)
+            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+        // Ensure the copied vault bytes reach disk before we swap it into place.
+        fs::File::open(&tmp)
+            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?
+            .sync_all()
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
         rename_with_retry(&tmp, &vault_path)
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;

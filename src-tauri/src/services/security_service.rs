@@ -959,10 +959,32 @@ fn best_effort_fsync_rename_dirs(_from: &Path, _to: &Path) {
     }
 }
 
+#[cfg(windows)]
+fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+    use std::iter;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+
+    let from_w: Vec<u16> = from.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let to_w: Vec<u16> = to.as_os_str().encode_wide().chain(iter::once(0)).collect();
+
+    let ok = unsafe { MoveFileExW(from_w.as_ptr(), to_w.as_ptr(), MOVEFILE_WRITE_THROUGH) };
+    if ok == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+    std::fs::rename(from, to)
+}
+
 fn rename_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
     let mut i = 0;
     loop {
-        match std::fs::rename(from, to) {
+        match rename_platform(from, to) {
             Ok(()) => {
                 best_effort_fsync_rename_dirs(from, to);
                 return Ok(());
