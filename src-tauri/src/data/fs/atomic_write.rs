@@ -31,12 +31,16 @@ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
     }
 }
 
-fn best_effort_fsync_parent_dir(_path: &Path) {}
+fn best_effort_fsync_parent_dir(_path: &Path) {
+    // Windows-only build: directory fsync semantics differ; file sync_all + MoveFileExW(WRITE_THROUGH) is best-effort.
+    let _ = _path;
+}
 
 /// Atomic file write:
 /// - write to temp in same directory
 /// - fsync temp
 /// - atomically replace target with temp
+/// - best-effort fsync parent dir (no-op on Windows-only build)
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     fn replace_with_retry(from: &Path, to: &Path) -> io::Result<()> {
         let mut last: Option<io::Error> = None;

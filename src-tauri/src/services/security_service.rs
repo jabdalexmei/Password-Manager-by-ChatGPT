@@ -892,11 +892,12 @@ fn recover_incomplete_profile_transitions(
 }
 
 fn best_effort_fsync_parent_dir(_path: &Path) {
-    // No-op on Windows.
+    // Windows-only build: directory fsync not portable; keep hook as no-op.
+    let _ = _path;
 }
 
 fn best_effort_fsync_rename_dirs(_from: &Path, _to: &Path) {
-    // No-op on Windows.
+    let _ = (_from, _to);
 }
 
 

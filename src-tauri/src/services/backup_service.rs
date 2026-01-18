@@ -172,7 +172,8 @@ fn validate_profile_id_component(profile_id: &str) -> bool {
 
 
 fn best_effort_fsync_rename_dirs(_src: &Path, _dst: &Path) {
-    // No-op on Windows.
+    // Windows-only build: directory fsync is not portable; keep best-effort hook as no-op.
+    let _ = (_src, _dst);
 }
 
 fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
