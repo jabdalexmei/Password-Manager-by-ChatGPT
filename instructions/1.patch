@@ -1,167 +1,110 @@
---- a/src-tauri/src/data/fs/atomic_write.rs
-+++ b/src-tauri/src/data/fs/atomic_write.rs
-@@ -7,10 +7,12 @@
- use uuid::Uuid;
+diff --git a/src-tauri/src/services/backup_service.rs b/src-tauri/src/services/backup_service.rs
+index 31d93bd..f8a7304 100644
+--- a/src-tauri/src/services/backup_service.rs
++++ b/src-tauri/src/services/backup_service.rs
+@@ -934,11 +934,37 @@ fn restore_archive_to_profile(
+             let extracted_file = temp_dir.path().join(file_name);
+             if extracted_file.exists() {
+                 let target = profile_root.join(file_name);
+-                if target.exists() {
+-                    let _ = fs::remove_file(&target);
+-                }
+-                rename_with_retry(&extracted_file, &target)
++
++                // Copy into the profile directory first, so we can swap atomically even if temp_dir
++                // lives on a different filesystem/mount.
++                let tmp = profile_root.join(format!("{}.restore.{}", file_name, Uuid::new_v4()));
++                fs::copy(&extracted_file, &tmp)
++                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
++                fs::File::open(&tmp)
++                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?
++                    .sync_all()
+                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
++
++                let replaced = (|| {
++                    #[cfg(windows)]
++                    {
++                        replace_file_windows(&tmp, &target)
++                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
++                        best_effort_fsync_rename_dirs(&tmp, &target);
++                        return Ok(());
++                    }
++                    #[cfg(not(windows))]
++                    {
++                        rename_with_retry(&tmp, &target)
++                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
++                        return Ok(());
++                    }
++                })();
++
++                if replaced.is_err() {
++                    let _ = fs::remove_file(&tmp);
++                    return Err(ErrorCodeString::new("BACKUP_RESTORE_FAILED"));
++                }
+             }
+         }
  
- #[cfg(windows)]
--fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
+index 56776d4..d5e77f8 100644
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -1023,11 +1023,56 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
+     }
+ }
+ 
++#[cfg(windows)]
 +fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
-     use std::iter;
-     use std::os::windows::ffi::OsStrExt;
--    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
++    use std::iter;
++    use std::os::windows::ffi::OsStrExt;
 +    use windows_sys::Win32::Storage::FileSystem::{
 +        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
 +    };
- 
-     let from_w: Vec<u16> = from
-         .as_os_str()
-@@ -23,7 +25,8 @@
-         .chain(iter::once(0))
-         .collect();
- 
--    let ok = unsafe { MoveFileExW(from_w.as_ptr(), to_w.as_ptr(), MOVEFILE_WRITE_THROUGH) };
-+    let flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
-+    let ok = unsafe { MoveFileExW(from_w.as_ptr(), to_w.as_ptr(), flags) };
-     if ok == 0 {
-         Err(io::Error::last_os_error())
-     } else {
-@@ -32,7 +35,8 @@
- }
- 
- #[cfg(not(windows))]
--fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
++
++    let from_w: Vec<u16> = from.as_os_str().encode_wide().chain(iter::once(0)).collect();
++    let to_w: Vec<u16> = to.as_os_str().encode_wide().chain(iter::once(0)).collect();
++
++    let ok = unsafe {
++        MoveFileExW(
++            from_w.as_ptr(),
++            to_w.as_ptr(),
++            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
++        )
++    };
++    if ok == 0 {
++        Err(io::Error::last_os_error())
++    } else {
++        Ok(())
++    }
++}
++
++#[cfg(not(windows))]
 +fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
 +    // On POSIX, rename() overwrites atomically.
-     fs::rename(from, to)
- }
- 
-@@ -55,16 +59,15 @@
- /// Atomic file write:
- /// - write to temp in same directory
- /// - fsync temp
--/// - rename current -> backup (if exists)
--/// - rename temp -> target
--/// - cleanup backup
-+/// - atomically replace target with temp
-+/// - fsync parent dir (best-effort on unix)
- pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
--    fn rename_with_retry(from: &Path, to: &Path) -> io::Result<()> {
-+    fn replace_with_retry(from: &Path, to: &Path) -> io::Result<()> {
-         let mut last: Option<io::Error> = None;
-         // Windows часто даёт PermissionDenied если файл ещё открыт (SQLite/AV/indexer).
-         // Делаем короткие ретраи.
-         for _ in 0..25 {
--            match rename_platform(from, to) {
-+            match replace_platform(from, to) {
-                 Ok(()) => return Ok(()),
-                 Err(e) => {
-                     last = Some(e);
-@@ -76,7 +79,7 @@
-                 }
-             }
-         }
--        Err(last.unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, "rename failed")))
-+        Err(last.unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, "replace failed")))
-     }
- 
-     let parent = path.parent().ok_or_else(|| {
-@@ -90,7 +93,6 @@
-         .unwrap_or("file");
- 
-     let tmp_path = parent.join(format!(".{}.tmp.{}", file_name, Uuid::new_v4()));
--    let bak_path = parent.join(format!(".{}.bak.{}", file_name, Uuid::new_v4()));
- 
-     let result: io::Result<()> = (|| {
-         // 1) write temp
-@@ -106,33 +108,16 @@
-         f.sync_all()?;
-         drop(f);
- 
--        // 2) move current to backup (if exists)
--        if path.exists() {
--            rename_with_retry(path, &bak_path)?;
--            best_effort_fsync_parent_dir(path);
--        }
--
--        // 3) move temp into place
--        rename_with_retry(&tmp_path, path)?;
-+        // 2) atomically replace target
-+        replace_with_retry(&tmp_path, path)?;
-         best_effort_fsync_parent_dir(path);
- 
--        // 4) remove backup
--        if bak_path.exists() {
--            let _ = fs::remove_file(&bak_path);
--            best_effort_fsync_parent_dir(path);
--        }
--
-         Ok(())
-     })();
- 
--    // Best-effort cleanup/rollback
-+    // Best-effort cleanup
-     if result.is_err() {
-         let _ = fs::remove_file(&tmp_path);
--        if bak_path.exists() && !path.exists() {
--            if fs::rename(&bak_path, path).is_ok() {
--                best_effort_fsync_parent_dir(path);
--            }
--        }
-     }
- 
-     result
-
---- a/src-tauri/src/data/workspaces/registry.rs
-+++ b/src-tauri/src/data/workspaces/registry.rs
-@@ -1,6 +1,7 @@
- use serde::{Deserialize, Serialize};
- use std::path::{Path, PathBuf};
--use uuid::Uuid;
++    std::fs::rename(from, to)
++}
 +
-+use crate::data::fs::atomic_write::write_atomic;
- 
- use crate::error::{ErrorCodeString, Result};
- 
-@@ -93,32 +94,6 @@
-     Ok(fallback)
+ fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
+-    if to.exists() {
+-        remove_file_retry(to, attempts, base_delay)?;
++    let mut i = 0;
++    loop {
++        match replace_platform(from, to) {
++            Ok(()) => {
++                best_effort_fsync_rename_dirs(from, to);
++                return Ok(());
++            }
++            Err(e) => {
++                i += 1;
++                if i >= attempts {
++                    return Err(e);
++                }
++                // Windows can temporarily lock files (AV/indexer), so retry with backoff.
++                let backoff_ms = base_delay.as_millis() as u64 * i as u64;
++                std::thread::sleep(Duration::from_millis(backoff_ms.max(25).min(1500)));
++            }
++        }
+     }
+-    rename_retry(from, to, attempts, base_delay)
  }
  
--fn write_atomic(path: &PathBuf, contents: &str) -> Result<()> {
--    let parent = path
--        .parent()
--        .ok_or_else(|| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))?;
--    let file_name = path
--        .file_name()
--        .and_then(|name| name.to_str())
--        .ok_or_else(|| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))?;
--    let temp_path = parent.join(format!("{file_name}.{}.tmp", Uuid::new_v4()));
--
--    std::fs::write(&temp_path, contents)
--        .map_err(|_| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))?;
--
--    if std::fs::rename(&temp_path, path).is_err() {
--        if path.exists() {
--            let _ = std::fs::remove_file(path);
--        }
--        if std::fs::rename(&temp_path, path).is_err() {
--            let _ = std::fs::remove_file(&temp_path);
--            return Err(ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"));
--        }
--    }
--
--    Ok(())
--}
--
- pub fn load_registry(app_dir: &Path) -> Result<WorkspaceRegistry> {
-     let path = registry_path_for_load(app_dir);
-     if !path.exists() {
-@@ -134,7 +109,8 @@
-     let path = registry_path_for_write(app_dir)?;
-     let serialized = serde_json::to_string_pretty(registry)
-         .map_err(|_| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))?;
--    write_atomic(&path, &serialized)
-+    write_atomic(&path, serialized.as_bytes())
-+        .map_err(|_| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))
- }
- 
- pub fn resolve_workspace_path(app_dir: &Path, record: &WorkspaceRecord) -> PathBuf {
+ fn prepare_empty_dir(path: &Path) -> Result<()> {
