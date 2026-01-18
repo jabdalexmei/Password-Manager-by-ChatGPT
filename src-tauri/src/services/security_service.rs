@@ -218,12 +218,31 @@ fn open_protected_vault_session(
 
 fn cleanup_sqlite_sidecars(vault_path: &Path) {
     // After converting passwordless (sqlite file) -> protected (encrypted blob),
-    // old WAL/SHM sidecars may remain. Remove best-effort.
-    if let Some(p) = vault_path.to_str() {
-        let wal = format!("{p}-wal");
-        let shm = format!("{p}-shm");
-        let _ = std::fs::remove_file(wal);
-        let _ = std::fs::remove_file(shm);
+    // old SQLite sidecar files may remain. On Windows these can be transiently locked
+    // by AV/indexers, so do short retries.
+    //
+    // NOTE: We intentionally do NOT try to "secure delete" here; we only remove paths.
+    // The security boundary is: protected profiles must not leave plaintext DB artifacts
+    // reachable by filename.
+
+    use std::ffi::OsString;
+
+    fn with_suffix(path: &Path, suffix: &str) -> std::path::PathBuf {
+        let mut os: OsString = path.as_os_str().to_os_string();
+        os.push(suffix);
+        os.into()
+    }
+
+    // -wal/-shm for WAL mode; -journal for rollback journal mode.
+    for sidecar in ["-wal", "-shm", "-journal"] {
+        let p = with_suffix(vault_path, sidecar);
+        if let Err(e) = remove_file_retry(&p, 20, Duration::from_millis(50)) {
+            log::warn!(
+                "[SECURITY][cleanup_sqlite_sidecars] path={:?} action=remove_failed err={}",
+                p,
+                e
+            );
+        }
     }
 }
 
@@ -438,6 +457,10 @@ fn recover_set_password_transition(
 
         registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
         clear_pool(profile_id);
+
+        // Remove any stale SQLite sidecars (WAL/SHM/journal) that could have been left from a prior plaintext vault.
+        cleanup_sqlite_sidecars(&vault_path);
+
         let _ = std::fs::remove_dir_all(backup_root);
         return Ok(());
     }
@@ -630,6 +653,10 @@ fn recover_change_password_transition(
 
         registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
         clear_pool(profile_id);
+
+        // Remove any stale SQLite sidecars (WAL/SHM/journal) that could have been left from a prior plaintext vault.
+        cleanup_sqlite_sidecars(&vault_path);
+
         let _ = std::fs::remove_dir_all(backup_root);
         return Ok(());
     }
@@ -640,6 +667,9 @@ fn recover_change_password_transition(
         replace_file_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
+
+    // If we rolled back to a protected vault, ensure no plaintext SQLite sidecars survive.
+    cleanup_sqlite_sidecars(&vault_path);
 
     if salt_backup_path.exists() {
         replace_file_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
@@ -826,6 +856,9 @@ fn recover_remove_password_transition(
         replace_file_retry(&vault_backup_path, &vault_path, 20, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
+
+    // If we rolled back to a protected vault, ensure no plaintext SQLite sidecars survive.
+    cleanup_sqlite_sidecars(&vault_path);
 
     if salt_backup_path.exists() {
         replace_file_retry(&salt_backup_path, &salt_path, 20, Duration::from_millis(50))
@@ -1954,6 +1987,9 @@ fn rollback_remove_profile_password(
         Duration::from_millis(50),
     );
 
+    // If we created any plaintext SQLite sidecars during the failed transition, remove them now.
+    cleanup_sqlite_sidecars(&rb.vault_path);
+
     if rb.salt_moved {
         let _ = replace_file_retry(&rb.salt_backup_path, &rb.salt_path, 20, Duration::from_millis(50));
     }
@@ -2057,27 +2093,27 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     }
 
     // Ensure WAL (persistent) like init_database_passwordless.
-    {
-        let conn = Connection::open(&vault_path).map_err(|_| {
-            rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
-            ErrorCodeString::new("DB_OPEN_FAILED")
-        })?;
+    // IMPORTANT: avoid calling rollback while a SQLite connection to vault.db is still alive,
+    // otherwise Windows can keep -wal/-shm locked and leave plaintext artifacts behind.
+    let wal_res: Result<()> = (|| {
+        let conn = Connection::open(&vault_path)
+            .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
 
         let current: String = conn
             .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
-            .map_err(|_| {
-                rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
-                ErrorCodeString::new("DB_QUERY_FAILED")
-            })?;
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         if current.to_uppercase() != "WAL" {
             let _: String = conn
                 .query_row("PRAGMA journal_mode=WAL;", [], |row| row.get(0))
-                .map_err(|_| {
-                    rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
-                    ErrorCodeString::new("DB_QUERY_FAILED")
-                })?;
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         }
+        Ok(())
+    })();
+
+    if let Err(e) = wal_res {
+        rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
+        return Err(e);
     }
 
     // Attachments migration to plaintext.
