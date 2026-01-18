@@ -934,11 +934,37 @@ fn restore_archive_to_profile(
             let extracted_file = temp_dir.path().join(file_name);
             if extracted_file.exists() {
                 let target = profile_root.join(file_name);
-                if target.exists() {
-                    let _ = fs::remove_file(&target);
-                }
-                rename_with_retry(&extracted_file, &target)
+
+                // Copy into the profile directory first, so we can swap atomically even if temp_dir
+                // lives on a different filesystem/mount.
+                let tmp = profile_root.join(format!("{}.restore.{}", file_name, Uuid::new_v4()));
+                fs::copy(&extracted_file, &tmp)
                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                fs::File::open(&tmp)
+                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?
+                    .sync_all()
+                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+
+                let replaced = (|| {
+                    #[cfg(windows)]
+                    {
+                        replace_file_windows(&tmp, &target)
+                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                        best_effort_fsync_rename_dirs(&tmp, &target);
+                        return Ok(());
+                    }
+                    #[cfg(not(windows))]
+                    {
+                        rename_with_retry(&tmp, &target)
+                            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                        return Ok(());
+                    }
+                })();
+
+                if replaced.is_err() {
+                    let _ = fs::remove_file(&tmp);
+                    return Err(ErrorCodeString::new("BACKUP_RESTORE_FAILED"));
+                }
             }
         }
 

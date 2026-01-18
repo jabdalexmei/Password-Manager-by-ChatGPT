@@ -1023,11 +1023,56 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
     }
 }
 
-fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
-    if to.exists() {
-        remove_file_retry(to, attempts, base_delay)?;
+#[cfg(windows)]
+fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+    use std::iter;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let from_w: Vec<u16> = from.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let to_w: Vec<u16> = to.as_os_str().encode_wide().chain(iter::once(0)).collect();
+
+    let ok = unsafe {
+        MoveFileExW(
+            from_w.as_ptr(),
+            to_w.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if ok == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
     }
-    rename_retry(from, to, attempts, base_delay)
+}
+
+#[cfg(not(windows))]
+fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+    // On POSIX, rename() overwrites atomically.
+    std::fs::rename(from, to)
+}
+
+fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
+    let mut i = 0;
+    loop {
+        match replace_platform(from, to) {
+            Ok(()) => {
+                best_effort_fsync_rename_dirs(from, to);
+                return Ok(());
+            }
+            Err(e) => {
+                i += 1;
+                if i >= attempts {
+                    return Err(e);
+                }
+                // Windows can temporarily lock files (AV/indexer), so retry with backoff.
+                let backoff_ms = base_delay.as_millis() as u64 * i as u64;
+                std::thread::sleep(Duration::from_millis(backoff_ms.max(25).min(1500)));
+            }
+        }
+    }
 }
 
 fn prepare_empty_dir(path: &Path) -> Result<()> {
