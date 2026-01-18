@@ -1,34 +1,66 @@
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -1590,11 +1590,13 @@
-         // Disk commit point reached (vault + attachments + key material).
-         // Write a commit marker so crash-recovery is deterministic.
-         if let Err(err) = write_set_password_commit_marker(&backup_root) {
--            log::warn!(
--                "[SECURITY][set_profile_password] profile_id={} step=write_commit_marker_failed code={}",
-+            log::error!(
-+                "[SECURITY][set_profile_password] profile_id={} step=write_commit_marker_failed action=rollback code={}",
-                 id,
-                 err.code
-             );
-+            rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
-+            return Err(err);
-         }
- 
-         // Switch runtime session to protected in-memory session so app stays unlocked.
-@@ -1872,11 +1874,13 @@
-     // Disk commit point reached (vault + attachments + key material).
-     // Write a commit marker so crash-recovery is deterministic.
-     if let Err(err) = write_change_password_commit_marker(&backup_root) {
--        log::warn!(
--            "[SECURITY][change_profile_password] profile_id={} step=write_commit_marker_failed code={}",
-+        log::error!(
-+            "[SECURITY][change_profile_password] profile_id={} step=write_commit_marker_failed action=rollback code={}",
-             id,
-             err.code
-         );
-+        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
-+        return Err(err);
+--- a/src-tauri/src/data/fs/atomic_write.rs	2026-01-18 04:32:28.362358662 +0000
++++ b/src-tauri/src/data/fs/atomic_write.rs	2026-01-18 04:32:28.418010138 +0000
+@@ -13,10 +13,10 @@
      }
+ }
  
-     // Update in-memory session key to keep vault unlocked (only after commit).
+-fn best_effort_fsync_parent_dir(path: &Path) {
++fn best_effort_fsync_parent_dir(_path: &Path) {
+     #[cfg(unix)]
+     {
+-        if let Some(parent) = path.parent() {
++        if let Some(parent) = _path.parent() {
+             best_effort_fsync_dir(parent);
+         }
+     }
+
+--- a/src-tauri/src/services/security_service.rs	2026-01-18 04:32:28.370835144 +0000
++++ b/src-tauri/src/services/security_service.rs	2026-01-18 04:32:28.443505611 +0000
+@@ -936,23 +936,23 @@
+     }
+ }
+ 
+-fn best_effort_fsync_parent_dir(path: &Path) {
++fn best_effort_fsync_parent_dir(_path: &Path) {
+     #[cfg(unix)]
+     {
+-        if let Some(parent) = path.parent() {
++        if let Some(parent) = _path.parent() {
+             best_effort_fsync_dir(parent);
+         }
+     }
+ }
+ 
+-fn best_effort_fsync_rename_dirs(from: &Path, to: &Path) {
++fn best_effort_fsync_rename_dirs(_from: &Path, _to: &Path) {
+     #[cfg(unix)]
+     {
+-        if let Some(p) = from.parent() {
++        if let Some(p) = _from.parent() {
+             best_effort_fsync_dir(p);
+         }
+-        let from_parent = from.parent();
+-        let to_parent = to.parent();
++        let from_parent = _from.parent();
++        let to_parent = _to.parent();
+         if to_parent.is_some() && to_parent != from_parent {
+             best_effort_fsync_dir(to_parent.unwrap());
+         }
+
+--- a/src-tauri/src/services/backup_service.rs	2026-01-18 04:32:28.381764224 +0000
++++ b/src-tauri/src/services/backup_service.rs	2026-01-18 04:32:28.454589906 +0000
+@@ -182,11 +182,11 @@
+     }
+ }
+ 
+-fn best_effort_fsync_rename_dirs(src: &Path, dst: &Path) {
++fn best_effort_fsync_rename_dirs(_src: &Path, _dst: &Path) {
+     #[cfg(unix)]
+     {
+-        let sp = src.parent();
+-        let dp = dst.parent();
++        let sp = _src.parent();
++        let dp = _dst.parent();
+         if let Some(p) = sp {
+             best_effort_fsync_dir(p);
+         }
