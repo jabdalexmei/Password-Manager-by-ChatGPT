@@ -193,10 +193,6 @@ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) ->
 pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
     let mut registry = load_registry(sp)?;
 
-    // Crash-safe rename recovery for this profile (best-effort).
-    if recover_pending_profile_renames(sp, &mut registry) {
-        let _ = save_registry(sp, &registry);
-    }
     let mut dirty = false;
 
     // Crash-safe rename recovery: if a prior rename left a marker, finish it now.
@@ -301,11 +297,6 @@ pub fn upsert_profile_with_id(
     }
 
     let mut registry = load_registry(sp)?;
-
-    // Crash-safe rename recovery for this profile (best-effort).
-    if recover_pending_profile_renames(sp, &mut registry) {
-        let _ = save_registry(sp, &registry);
-    }
     if let Some(existing) = registry.profiles.iter_mut().find(|p| p.id == id) {
         existing.name = name.to_string();
         existing.has_password = has_password;

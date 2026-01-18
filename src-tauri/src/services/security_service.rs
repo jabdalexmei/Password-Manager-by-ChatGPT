@@ -927,11 +927,46 @@ fn recover_incomplete_profile_transitions(
     Ok(())
 }
 
+
+
+fn sync_dir_best_effort(dir: &Path) {
+    #[cfg(unix)]
+    {
+        if let Ok(f) = std::fs::File::open(dir) {
+            let _ = f.sync_all();
+        }
+    }
+}
+
+fn sync_rename_parents_best_effort(from: &Path, to: &Path) {
+    let from_dir = from.parent();
+    let to_dir = to.parent();
+
+    if let Some(d) = from_dir {
+        sync_dir_best_effort(d);
+    }
+
+    match (from_dir, to_dir) {
+        (Some(fd), Some(td)) if fd == td => {}
+        (_, Some(td)) => sync_dir_best_effort(td),
+        _ => {}
+    }
+}
+
+fn sync_unlink_parent_best_effort(path: &Path) {
+    if let Some(dir) = path.parent() {
+        sync_dir_best_effort(dir);
+    }
+}
+
 fn rename_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
     let mut i = 0;
     loop {
         match std::fs::rename(from, to) {
-            Ok(()) => return Ok(()),
+            Ok(()) => {
+                sync_rename_parents_best_effort(from, to);
+                return Ok(());
+            }
             Err(e) => {
                 i += 1;
                 if i >= attempts {
@@ -949,7 +984,12 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
     let mut i = 0;
     loop {
         match std::fs::remove_file(path) {
-            Ok(()) => return Ok(()),
+            Ok(()) => {
+                if let Some(parent) = path.parent() {
+                    sync_dir_best_effort(parent);
+                }
+                return Ok(());
+            },
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
             Err(e) => {
                 i += 1;

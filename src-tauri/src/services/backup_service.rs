@@ -170,6 +170,32 @@ fn validate_profile_id_component(profile_id: &str) -> bool {
 }
 
 
+
+
+fn sync_dir_best_effort(dir: &Path) {
+    #[cfg(unix)]
+    {
+        if let Ok(f) = std::fs::File::open(dir) {
+            let _ = f.sync_all();
+        }
+    }
+}
+
+fn sync_rename_parents_best_effort(from: &Path, to: &Path) {
+    let from_dir = from.parent();
+    let to_dir = to.parent();
+
+    if let Some(d) = from_dir {
+        sync_dir_best_effort(d);
+    }
+
+    match (from_dir, to_dir) {
+        (Some(fd), Some(td)) if fd == td => {}
+        (_, Some(td)) => sync_dir_best_effort(td),
+        _ => {}
+    }
+}
+
 fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::time::Duration;
 
@@ -179,7 +205,10 @@ fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     let mut last_err: Option<std::io::Error> = None;
     for _ in 0..ATTEMPTS {
         match fs::rename(src, dst) {
-            Ok(()) => return Ok(()),
+            Ok(()) => {
+                sync_rename_parents_best_effort(src, dst);
+                return Ok(());
+            }
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
                     last_err = Some(e);
