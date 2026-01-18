@@ -1024,7 +1024,8 @@ fn restore_archive_to_profile(
 
 pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Result<bool> {
     let _guard = ensure_backup_guard(state)?;
-    security_service::drop_active_session_without_persist(state)?;
+    // Persist any in-memory changes before restore to avoid data loss on rollback.
+    security_service::lock_vault(state)?;
     let sp = state.get_storage_paths()?;
 
     let backup_path = PathBuf::from(&backup_path);
