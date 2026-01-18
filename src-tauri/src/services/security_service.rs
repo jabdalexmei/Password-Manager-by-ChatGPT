@@ -307,6 +307,19 @@ fn write_remove_password_commit_marker(backup_root: &Path) -> Result<()> {
     write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
 }
 
+const SET_PASSWORD_COMMIT_MARKER: &str = "set_password.commit";
+const CHANGE_PASSWORD_COMMIT_MARKER: &str = "change_password.commit";
+
+fn write_set_password_commit_marker(backup_root: &Path) -> Result<()> {
+    let marker_path = backup_root.join(SET_PASSWORD_COMMIT_MARKER);
+    write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+}
+
+fn write_change_password_commit_marker(backup_root: &Path) -> Result<()> {
+    let marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
+    write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+}
+
 fn recover_set_password_transition(
     storage_paths: &crate::data::storage_paths::StoragePaths,
     profile_id: &str,
@@ -316,6 +329,11 @@ fn recover_set_password_transition(
     if !is_dir_nonempty(backup_root).unwrap_or(false) {
         return Ok(());
     }
+
+    // Commit marker makes crash-recovery deterministic: either we complete the transition
+    // (marker present) or we rollback to the old password (marker absent).
+    let commit_marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
+    let commit_ready = commit_marker_path.exists();
 
     let profile_root = profile_dir(storage_paths, profile_id)?;
     let vault_path = vault_db_path(storage_paths, profile_id)?;
@@ -339,8 +357,20 @@ fn recover_set_password_transition(
     let salt_ready = has_salt || salt_new_path.exists();
     let key_ready = has_key || key_new_path.exists();
 
-    // If core protected materials exist, prefer completing the transition.
-    if vault_is_encrypted && salt_ready && key_ready {
+
+    if commit_ready && !(vault_is_encrypted && salt_ready && key_ready) {
+        log::error!(
+            "[SECURITY][recover_set_password_transition] profile_id={} action=commit_marker_but_materials_incomplete vault_encrypted={} salt_ready={} key_ready={}",
+            profile_id,
+            vault_is_encrypted,
+            salt_ready,
+            key_ready
+        );
+    }
+
+    // Deterministic crash-recovery: if commit marker exists, finish the protected transition.
+    // Otherwise we rollback to passwordless.
+    if commit_ready {
         if attachments_staging_dir.exists() {
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
@@ -413,6 +443,7 @@ fn recover_set_password_transition(
     }
 
     // Otherwise, rollback to passwordless.
+    let _ = std::fs::remove_file(&commit_marker_path);
     if vault_backup_path.exists() {
         if vault_path.exists() {
             std::fs::remove_file(&vault_path)
@@ -501,6 +532,11 @@ fn recover_change_password_transition(
         return Ok(());
     }
 
+    // Commit marker makes crash-recovery deterministic: either we complete the transition
+    // (marker present) or we rollback to old password (marker absent).
+    let commit_marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
+    let commit_ready = commit_marker_path.exists();
+
     let profile_root = profile_dir(storage_paths, profile_id)?;
     let vault_path = vault_db_path(storage_paths, profile_id)?;
     let vault_backup_path = backup_root.join("vault.db.bak");
@@ -523,13 +559,20 @@ fn recover_change_password_transition(
     let salt_ready = salt_ok || salt_new_path.exists();
     let key_ready = key_ok || key_new_path.exists();
 
-    // Crash-recovery for change_profile_password must be conservative:
-    // - change_profile_password stages attachments re-encryption early (old_key -> new_key).
-    // - If we crash before rotating the vault/key material, the staging dir may exist while
-    //   vault/salt/key_check still refer to the old key.
-    // Therefore, only complete the transition (especially attachments swap) once we have
-    // evidence that the vault rotation actually started (vault.db.bak exists).
-    if vault_ok && salt_ready && key_ready && vault_backup_path.exists() {
+
+    if commit_ready && !(vault_ok && salt_ready && key_ready) {
+        log::error!(
+            "[SECURITY][recover_change_password_transition] profile_id={} action=commit_marker_but_materials_incomplete vault_ok={} salt_ready={} key_ready={}",
+            profile_id,
+            vault_ok,
+            salt_ready,
+            key_ready
+        );
+    }
+
+    // Deterministic crash-recovery: only finish the transition if a commit marker exists.
+    // Without the marker we always rollback, because attachments staging may exist before key rotation.
+    if commit_ready {
         if attachments_staging_dir.exists() {
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
@@ -604,6 +647,7 @@ fn recover_change_password_transition(
     }
 
     // Rollback to old password (restore backups).
+    let _ = std::fs::remove_file(&commit_marker_path);
     if vault_backup_path.exists() {
         if vault_path.exists() {
             std::fs::remove_file(&vault_path)
@@ -1504,6 +1548,17 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
                 ErrorCodeString::new("PROFILE_STORAGE_WRITE")
             })?;
 
+
+        // Disk commit point reached (vault + attachments + key material).
+        // Write a commit marker so crash-recovery is deterministic.
+        if let Err(e) = write_set_password_commit_marker(&backup_root) {
+            log::warn!(
+                "[SECURITY][set_profile_password] profile_id={} action=write_commit_marker_failed err_code={}",
+                id,
+                e.code
+            );
+        }
+
         // Switch runtime session to protected in-memory session so app stays unlocked.
         // (mem_conn already validated above)
 
@@ -1511,10 +1566,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             let mut session = state
                 .vault_session
                 .lock()
-                .map_err(|_| {
-                    rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
-                    ErrorCodeString::new("STATE_LOCK_POISONED")
-                })?;
+                .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
             *session = Some(VaultSession {
                 profile_id: id.to_string(),
                 conn: mem_conn,
@@ -1778,6 +1830,17 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
             ErrorCodeString::new("PROFILE_STORAGE_WRITE")
         })?;
 
+
+    // Disk commit point reached (vault + attachments + key material).
+    // Write a commit marker so crash-recovery is deterministic.
+    if let Err(e) = write_change_password_commit_marker(&backup_root) {
+        log::warn!(
+            "[SECURITY][change_profile_password] profile_id={} action=write_commit_marker_failed err_code={}",
+            id,
+            e.code
+        );
+    }
+
     // Update in-memory session key to keep vault unlocked (only after commit).
     {
         let mut session = state
@@ -1786,7 +1849,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
         let s = session.as_mut().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
         if s.profile_id != id {
-            rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+            // Disk state is already committed; do not attempt rollback here.
             return Err(ErrorCodeString::new("VAULT_LOCKED"));
         }
         s.key = new_key;

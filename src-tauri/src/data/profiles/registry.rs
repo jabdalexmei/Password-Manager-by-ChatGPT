@@ -36,6 +36,82 @@ pub struct ProfileRegistry {
     pub profiles: Vec<ProfileRecord>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct RenamePending {
+    old_name: String,
+    new_name: String,
+}
+
+const RENAME_PROFILE_PENDING_FILE: &str = "rename_profile.pending.json";
+
+fn rename_pending_path(sp: &StoragePaths, id: &str) -> Result<PathBuf> {
+    let dir = crate::data::profiles::paths::profile_dir(sp, id)?;
+    Ok(dir.join("tmp").join(RENAME_PROFILE_PENDING_FILE))
+}
+
+fn recover_pending_profile_renames(sp: &StoragePaths, registry: &mut ProfileRegistry) -> bool {
+    let mut dirty = false;
+
+    for rec in registry.profiles.iter_mut() {
+        let marker_path = match rename_pending_path(sp, &rec.id) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        if !marker_path.exists() {
+            continue;
+        }
+
+        let raw = match fs::read_to_string(&marker_path) {
+            Ok(s) => s,
+            Err(_) => {
+                let _ = fs::remove_file(&marker_path);
+                continue;
+            }
+        };
+
+        let pending: RenamePending = match serde_json::from_str(&raw) {
+            Ok(p) => p,
+            Err(e) => {
+                log::warn!(
+                    "[PROFILE][rename_recover] invalid pending marker for profile_id={} err={}",
+                    rec.id,
+                    e
+                );
+                let _ = fs::remove_file(&marker_path);
+                continue;
+            }
+        };
+
+        // Best-effort: bring config.json and registry.json into the target name.
+        // If config write fails, keep marker so we can retry next time.
+        let cfg_path = match profile_config_path(sp, &rec.id) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let target = pending.new_name.clone();
+        let cfg = serde_json::json!({ "name": &target });
+        let serialized = match serde_json::to_string_pretty(&cfg) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+
+        if write_atomic(&cfg_path, serialized.as_bytes()).is_ok() {
+            if rec.name != target {
+                rec.name = target;
+                dirty = true;
+            }
+            let _ = fs::remove_file(&marker_path);
+        } else {
+            log::warn!(
+                "[PROFILE][rename_recover] failed to write config.json for profile_id={}",
+                rec.id
+            );
+        }
+    }
+
+    dirty
+}
+
 fn load_registry(sp: &StoragePaths) -> Result<ProfileRegistry> {
     ensure_profiles_dir(sp)?;
     let path = registry_path(sp)?;
@@ -116,7 +192,17 @@ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) ->
 
 pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
     let mut registry = load_registry(sp)?;
+
+    // Crash-safe rename recovery for this profile (best-effort).
+    if recover_pending_profile_renames(sp, &mut registry) {
+        let _ = save_registry(sp, &registry);
+    }
     let mut dirty = false;
+
+    // Crash-safe rename recovery: if a prior rename left a marker, finish it now.
+    if recover_pending_profile_renames(sp, &mut registry) {
+        dirty = true;
+    }
 
     for rec in registry.profiles.iter_mut() {
         let inferred = infer_has_password(sp, &rec.id, rec.has_password);
@@ -215,6 +301,11 @@ pub fn upsert_profile_with_id(
     }
 
     let mut registry = load_registry(sp)?;
+
+    // Crash-safe rename recovery for this profile (best-effort).
+    if recover_pending_profile_renames(sp, &mut registry) {
+        let _ = save_registry(sp, &registry);
+    }
     if let Some(existing) = registry.profiles.iter_mut().find(|p| p.id == id) {
         existing.name = name.to_string();
         existing.has_password = has_password;
@@ -242,7 +333,20 @@ pub fn upsert_profile_with_id(
 
 pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
     ensure_profiles_dir(sp)?;
+
+    // If a previous rename crashed mid-flight, recover it first so we don't pile up inconsistent state.
+    {
+        let mut reg = load_registry(sp)?;
+        if recover_pending_profile_renames(sp, &mut reg) {
+            let _ = save_registry(sp, &reg);
+        }
+    }
     let mut registry = load_registry(sp)?;
+
+    // Crash-safe rename recovery for this profile (best-effort).
+    if recover_pending_profile_renames(sp, &mut registry) {
+        let _ = save_registry(sp, &registry);
+    }
     let idx = registry
         .profiles
         .iter()
@@ -251,13 +355,28 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
 
     let old_name = registry.profiles[idx].name.clone();
 
+    // Write a crash-recovery marker before we touch any state.
+    // If we crash between config.json and registry.json updates, list/get will finish the rename.
+    let marker_path = rename_pending_path(sp, id)?;
+    let pending = RenamePending {
+        old_name: old_name.clone(),
+        new_name: name.to_string(),
+    };
+    let pending_bytes = serde_json::to_string_pretty(&pending)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    if write_atomic(&marker_path, pending_bytes.as_bytes()).is_err() {
+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+    }
+
     // Write profile config first so we never persist a registry change without a matching config.
     let config_path: PathBuf = profile_config_path(sp, id)?;
     let config = serde_json::json!({ "name": name });
     let serialized_config = serde_json::to_string_pretty(&config)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    write_atomic(&config_path, serialized_config.as_bytes())
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    if write_atomic(&config_path, serialized_config.as_bytes()).is_err() {
+        let _ = fs::remove_file(&marker_path);
+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+    }
 
     // Now update registry and persist. If this fails, best-effort rollback config.
     registry.profiles[idx].name = name.to_string();
@@ -277,8 +396,12 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
         if let Ok(rollback_serialized) = serde_json::to_string_pretty(&rollback_config) {
             let _ = write_atomic(&config_path, rollback_serialized.as_bytes());
         }
+        let _ = fs::remove_file(&marker_path);
         return Err(err);
     }
+
+    // Rename completed successfully; clear marker.
+    let _ = fs::remove_file(&marker_path);
 
     Ok(meta)
 }
@@ -286,6 +409,11 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
 pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
     ensure_profiles_dir(sp)?;
     let mut registry = load_registry(sp)?;
+
+    // Crash-safe rename recovery for this profile (best-effort).
+    if recover_pending_profile_renames(sp, &mut registry) {
+        let _ = save_registry(sp, &registry);
+    }
     let original_len = registry.profiles.len();
     registry.profiles.retain(|p| p.id != id);
     if registry.profiles.len() == original_len {
@@ -301,6 +429,11 @@ pub fn delete_profile(sp: &StoragePaths, id: &str) -> Result<bool> {
 
 pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>> {
     let mut registry = load_registry(sp)?;
+
+    // Crash-safe rename recovery for this profile (best-effort).
+    if recover_pending_profile_renames(sp, &mut registry) {
+        let _ = save_registry(sp, &registry);
+    }
     let idx = match registry.profiles.iter().position(|p| p.id == id) {
         Some(i) => i,
         None => return Ok(None),
