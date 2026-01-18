@@ -1590,11 +1590,13 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         // Disk commit point reached (vault + attachments + key material).
         // Write a commit marker so crash-recovery is deterministic.
         if let Err(err) = write_set_password_commit_marker(&backup_root) {
-            log::warn!(
-                "[SECURITY][set_profile_password] profile_id={} step=write_commit_marker_failed code={}",
+            log::error!(
+                "[SECURITY][set_profile_password] profile_id={} step=write_commit_marker_failed action=rollback code={}",
                 id,
                 err.code
             );
+            rollback_set_profile_password(&storage_paths, id, &profile.name, &rb);
+            return Err(err);
         }
 
         // Switch runtime session to protected in-memory session so app stays unlocked.
@@ -1872,11 +1874,13 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
     // Disk commit point reached (vault + attachments + key material).
     // Write a commit marker so crash-recovery is deterministic.
     if let Err(err) = write_change_password_commit_marker(&backup_root) {
-        log::warn!(
-            "[SECURITY][change_profile_password] profile_id={} step=write_commit_marker_failed code={}",
+        log::error!(
+            "[SECURITY][change_profile_password] profile_id={} step=write_commit_marker_failed action=rollback code={}",
             id,
             err.code
         );
+        rollback_change_profile_password(&storage_paths, id, &profile.name, &rb);
+        return Err(err);
     }
 
     // Update in-memory session key to keep vault unlocked (only after commit).
