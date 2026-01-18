@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use uuid::Uuid;
+
+use crate::data::fs::atomic_write::write_atomic;
 
 use crate::error::{ErrorCodeString, Result};
 
@@ -93,32 +94,6 @@ fn registry_path_for_write(app_dir: &Path) -> Result<PathBuf> {
     Ok(fallback)
 }
 
-fn write_atomic(path: &PathBuf, contents: &str) -> Result<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))?;
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))?;
-    let temp_path = parent.join(format!("{file_name}.{}.tmp", Uuid::new_v4()));
-
-    std::fs::write(&temp_path, contents)
-        .map_err(|_| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))?;
-
-    if std::fs::rename(&temp_path, path).is_err() {
-        if path.exists() {
-            let _ = std::fs::remove_file(path);
-        }
-        if std::fs::rename(&temp_path, path).is_err() {
-            let _ = std::fs::remove_file(&temp_path);
-            return Err(ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"));
-        }
-    }
-
-    Ok(())
-}
-
 pub fn load_registry(app_dir: &Path) -> Result<WorkspaceRegistry> {
     let path = registry_path_for_load(app_dir);
     if !path.exists() {
@@ -134,7 +109,8 @@ pub fn save_registry(app_dir: &Path, registry: &WorkspaceRegistry) -> Result<()>
     let path = registry_path_for_write(app_dir)?;
     let serialized = serde_json::to_string_pretty(registry)
         .map_err(|_| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))?;
-    write_atomic(&path, &serialized)
+    write_atomic(&path, serialized.as_bytes())
+        .map_err(|_| ErrorCodeString::new("WORKSPACE_REGISTRY_WRITE_FAILED"))
 }
 
 pub fn resolve_workspace_path(app_dir: &Path, record: &WorkspaceRecord) -> PathBuf {
