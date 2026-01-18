@@ -241,6 +241,46 @@ fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     }))
 }
 
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    // We can't rely on rename() between temp_dir and profile_root: temp_dir may live on another
+    // filesystem/mount (EXDEV). Copy into a staging dir under profile_root, then swap in place.
+    fs::create_dir_all(dst)?;
+
+    for entry in WalkDir::new(src) {
+        let entry = entry?;
+        let p = entry.path();
+        let rel = match p.strip_prefix(src) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+
+        // Skip the root itself.
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
+
+        let target = dst.join(rel);
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&target)?;
+            continue;
+        }
+
+        if entry.file_type().is_file() {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(p, &target)?;
+            // Best-effort: ensure bytes reach disk before we swap directories.
+            if let Ok(f) = fs::File::open(&target) {
+                let _ = f.sync_all();
+            }
+        }
+    }
+
+    best_effort_fsync_dir(dst);
+    Ok(())
+}
+
 fn ensure_backup_guard(state: &Arc<AppState>) -> Result<std::sync::MutexGuard<'_, ()>> {
     state
         .backup_guard
@@ -890,6 +930,7 @@ fn restore_archive_to_profile(
     let mut moved_vault = false;
     let mut vault_replaced = false;
     let mut vault_tmp_path: Option<PathBuf> = None;
+    let mut attachments_tmp_path: Option<PathBuf> = None;
     let mut moved_attachments = false;
     let mut restored_attachments_created = false;
     let restore_result: Result<()> = (|| {
@@ -919,9 +960,25 @@ fn restore_archive_to_profile(
         }
 
         if extracted_attachments.exists() {
-            rename_with_retry(&extracted_attachments, &attachments_path)
-                .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-            restored_attachments_created = true;
+            // Prefer rename (fast) when temp_dir is on the same filesystem. Fall back to copy when it isn't.
+            match rename_with_retry(&extracted_attachments, &attachments_path) {
+                Ok(()) => {
+                    restored_attachments_created = true;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::CrossDeviceLink => {
+                    let staging =
+                        profile_root.join(format!("attachments.restore.{}", Uuid::new_v4()));
+                    attachments_tmp_path = Some(staging.clone());
+                    copy_dir_recursive(&extracted_attachments, &staging)
+                        .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                    rename_with_retry(&staging, &attachments_path)
+                        .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                    restored_attachments_created = true;
+                }
+                Err(_) => {
+                    return Err(ErrorCodeString::new("BACKUP_RESTORE_FAILED"));
+                }
+            }
         } else {
             if !attachments_path.exists() {
                 fs::create_dir_all(&attachments_path)
@@ -977,6 +1034,11 @@ fn restore_archive_to_profile(
                 let _ = fs::remove_file(tmp);
             }
         }
+        if let Some(tmp) = attachments_tmp_path.as_ref() {
+            if tmp.exists() {
+                let _ = fs::remove_dir_all(tmp);
+            }
+        }
         // Roll back to the pre-restore state as safely as we can.
         // IMPORTANT: never delete the last known-good vault before we have restored it.
         if moved_vault && vault_backup_path.exists() {
@@ -987,7 +1049,7 @@ fn restore_archive_to_profile(
             }
             #[cfg(not(windows))]
             {
-                let _ = fs::rename(&vault_backup_path, &vault_path);
+                let _ = rename_with_retry(&vault_backup_path, &vault_path);
             }
         } else if !moved_vault && vault_replaced && vault_path.exists() {
             // No prior vault existed; remove the partially restored file.
