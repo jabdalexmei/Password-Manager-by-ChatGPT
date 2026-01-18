@@ -182,11 +182,11 @@ fn best_effort_fsync_dir(dir: &Path) {
     }
 }
 
-fn best_effort_fsync_rename_dirs(src: &Path, dst: &Path) {
+fn best_effort_fsync_rename_dirs(_src: &Path, _dst: &Path) {
     #[cfg(unix)]
     {
-        let sp = src.parent();
-        let dp = dst.parent();
+        let sp = _src.parent();
+        let dp = _dst.parent();
         if let Some(p) = sp {
             best_effort_fsync_dir(p);
         }

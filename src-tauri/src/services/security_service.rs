@@ -936,23 +936,23 @@ fn best_effort_fsync_dir(dir: &Path) {
     }
 }
 
-fn best_effort_fsync_parent_dir(path: &Path) {
+fn best_effort_fsync_parent_dir(_path: &Path) {
     #[cfg(unix)]
     {
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = _path.parent() {
             best_effort_fsync_dir(parent);
         }
     }
 }
 
-fn best_effort_fsync_rename_dirs(from: &Path, to: &Path) {
+fn best_effort_fsync_rename_dirs(_from: &Path, _to: &Path) {
     #[cfg(unix)]
     {
-        if let Some(p) = from.parent() {
+        if let Some(p) = _from.parent() {
             best_effort_fsync_dir(p);
         }
-        let from_parent = from.parent();
-        let to_parent = to.parent();
+        let from_parent = _from.parent();
+        let to_parent = _to.parent();
         if to_parent.is_some() && to_parent != from_parent {
             best_effort_fsync_dir(to_parent.unwrap());
         }

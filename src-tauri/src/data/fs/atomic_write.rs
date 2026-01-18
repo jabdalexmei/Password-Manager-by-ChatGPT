@@ -13,10 +13,10 @@ fn best_effort_fsync_dir(dir: &Path) {
     }
 }
 
-fn best_effort_fsync_parent_dir(path: &Path) {
+fn best_effort_fsync_parent_dir(_path: &Path) {
     #[cfg(unix)]
     {
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = _path.parent() {
             best_effort_fsync_dir(parent);
         }
     }
