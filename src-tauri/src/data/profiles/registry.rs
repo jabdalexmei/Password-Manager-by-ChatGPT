@@ -103,21 +103,21 @@ fn recover_pending_profile_renames(
 
         // Ensure config.json reflects the desired rename.
         let config_path = profile_root.join("config.json");
-        let config = serde_json::json!({ "name": desired_name });
+        let config = serde_json::json!({ "name": desired_name.clone() });
         if let Ok(serialized) = serde_json::to_string_pretty(&config) {
             let _ = write_atomic(&config_path, serialized.as_bytes());
         }
 
         // Ensure registry.json reflects the desired rename.
         if let Some(existing) = registry.profiles.iter_mut().find(|r| r.id == id) {
-            if existing.name != pending.new_name {
-                existing.name = pending.new_name.clone();
+            if existing.name != desired_name {
+                existing.name = desired_name.clone();
                 dirty = true;
             }
         } else {
             registry.profiles.push(ProfileRecord {
                 id: id.to_string(),
-                name: pending.new_name.clone(),
+                name: desired_name.clone(),
                 has_password: infer_has_password(sp, id, false),
             });
             dirty = true;
