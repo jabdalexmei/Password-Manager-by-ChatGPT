@@ -281,6 +281,46 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    // We can't rely on rename() between temp_dir and profile_root: temp_dir may live on another
+    // filesystem/mount (EXDEV). Copy into a staging dir under profile_root, then swap in place.
+    fs::create_dir_all(dst)?;
+
+    for entry in WalkDir::new(src) {
+        let entry = entry?;
+        let p = entry.path();
+        let rel = match p.strip_prefix(src) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+
+        // Skip the root itself.
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
+
+        let target = dst.join(rel);
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&target)?;
+            continue;
+        }
+
+        if entry.file_type().is_file() {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(p, &target)?;
+            // Best-effort: ensure bytes reach disk before we swap directories.
+            if let Ok(f) = fs::File::open(&target) {
+                let _ = f.sync_all();
+            }
+        }
+    }
+
+    best_effort_fsync_dir(dst);
+    Ok(())
+}
+
 fn ensure_backup_guard(state: &Arc<AppState>) -> Result<std::sync::MutexGuard<'_, ()>> {
     state
         .backup_guard
@@ -865,9 +905,26 @@ fn restore_archive_to_profile(
     for entry in &manifest.files {
         let rel_path = Path::new(&entry.path);
         if !validate_zip_entry_rel_path_windows(rel_path) {
-            return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
-        }
-        let mut zipped_file = archive
+    let mut attachments_tmp_path: Option<PathBuf> = None;
+            // Prefer rename (fast) when temp_dir is on the same filesystem. Fall back to copy when it isn't.
+            match rename_with_retry(&extracted_attachments, &attachments_path) {
+                Ok(()) => {
+                    restored_attachments_created = true;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::CrossDeviceLink => {
+                    let staging =
+                        profile_root.join(format!("attachments.restore.{}", Uuid::new_v4()));
+                    attachments_tmp_path = Some(staging.clone());
+                    copy_dir_recursive(&extracted_attachments, &staging)
+                        .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                    rename_with_retry(&staging, &attachments_path)
+                        .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                    restored_attachments_created = true;
+                }
+                Err(_) => {
+                    return Err(ErrorCodeString::new("BACKUP_RESTORE_FAILED"));
+                }
+            }
             .by_name(&entry.path)
             .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
         let target_path = temp_dir.path().join(rel_path);
@@ -953,7 +1010,12 @@ fn restore_archive_to_profile(
             .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
         vault_replaced = true;
 
-        if attachments_path.exists() {
+        if let Some(tmp) = attachments_tmp_path.as_ref() {
+            if tmp.exists() {
+                let _ = fs::remove_dir_all(tmp);
+            }
+        }
+                let _ = rename_with_retry(&vault_backup_path, &vault_path);
             rename_with_retry(&attachments_path, &attachments_backup_path)
                 .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
             moved_attachments = true;
