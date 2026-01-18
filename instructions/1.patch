@@ -1,39 +1,36 @@
 diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
-index de9dfd2..07c97fb 100644
+index de9dfd2..d2eb506 100644
 --- a/src-tauri/Cargo.toml
 +++ b/src-tauri/Cargo.toml
-@@ -24,22 +24,25 @@ sha2 = "0.10"
+@@ -24,22 +24,22 @@ sha2 = "0.10"
  hex = "0.4"
  walkdir = "2.5"
  tempfile = "3.10"
--windows-sys = { version = "0.61", features = [
--  "Win32_Foundation",
--  "Win32_Storage_FileSystem",
--  "Win32_System_DataExchange",
--  "Win32_UI_WindowsAndMessaging"
--] }
- 
- mime_guess = "2.0"
- 
--webview2-com = "0.38.0"
--windows = "0.61"
- 
- chacha20poly1305 = "0.10.1"
- zeroize = "1.8"
- base64 = "0.22"
- fs2 = "0.4"
- 
++mime_guess = "2.0"
++
++chacha20poly1305 = "0.10.1"
++zeroize = "1.8"
++base64 = "0.22"
++fs2 = "0.4"
 +
 +[target.'cfg(windows)'.dependencies]
-+windows-sys = { version = "0.61", features = [
-+  "Win32_Foundation",
-+  "Win32_Storage_FileSystem",
-+  "Win32_System_DataExchange",
-+  "Win32_UI_WindowsAndMessaging"
-+] }
-+webview2-com = "0.38.0"
-+windows = "0.61"
-+
+ windows-sys = { version = "0.61", features = [
+   "Win32_Foundation",
+   "Win32_Storage_FileSystem",
+   "Win32_System_DataExchange",
+   "Win32_UI_WindowsAndMessaging"
+ ] }
+-
+-mime_guess = "2.0"
+-
+ webview2-com = "0.38.0"
+ windows = "0.61"
+ 
+-chacha20poly1305 = "0.10.1"
+-zeroize = "1.8"
+-base64 = "0.22"
+-fs2 = "0.4"
+-
  [build-dependencies]
  tauri-build = { version = "2.4.0", features = [] }
 diff --git a/src-tauri/src/commands/clipboard.rs b/src-tauri/src/commands/clipboard.rs
@@ -58,14 +55,13 @@ index 498ca58..a6dd35e 100644
 +    clipboard_service::clear_clipboard_all()
  }
 diff --git a/src-tauri/src/commands/workspace.rs b/src-tauri/src/commands/workspace.rs
-index 18dfc1d..a478b7a 100644
+index 18dfc1d..fafb505 100644
 --- a/src-tauri/src/commands/workspace.rs
 +++ b/src-tauri/src/commands/workspace.rs
-@@ -284,30 +284,10 @@ pub async fn workspace_open_in_explorer(
-         if !root.exists() {
+@@ -285,32 +285,14 @@ pub async fn workspace_open_in_explorer(
              return Err(ErrorCodeString::new("WORKSPACE_FOLDER_MISSING"));
          }
--
+ 
 -        #[cfg(target_os = "windows")]
 -        {
 -            std::process::Command::new("explorer")
@@ -96,8 +92,12 @@ index 18dfc1d..a478b7a 100644
  
          Ok(true)
      })
+     .await
+     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+ }
++
 diff --git a/src-tauri/src/data/fs/atomic_write.rs b/src-tauri/src/data/fs/atomic_write.rs
-index cd2c589..c20034b 100644
+index cd2c589..ac42ba0 100644
 --- a/src-tauri/src/data/fs/atomic_write.rs
 +++ b/src-tauri/src/data/fs/atomic_write.rs
 @@ -1,12 +1,9 @@
@@ -113,7 +113,7 @@ index cd2c589..c20034b 100644
  fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
      use std::iter;
      use std::os::windows::ffi::OsStrExt;
-@@ -34,33 +31,19 @@ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+@@ -34,38 +31,21 @@ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
      }
  }
  
@@ -122,14 +122,14 @@ index cd2c589..c20034b 100644
 -    // On POSIX, rename() overwrites atomically.
 -    fs::rename(from, to)
 -}
- 
+-
 -#[cfg(unix)]
 -fn best_effort_fsync_dir(dir: &Path) {
 -    if let Ok(f) = fs::File::open(dir) {
 -        let _ = f.sync_all();
 -    }
 -}
- 
+-
  fn best_effort_fsync_parent_dir(_path: &Path) {
 -    #[cfg(unix)]
 -    {
@@ -141,7 +141,6 @@ index cd2c589..c20034b 100644
 +    let _ = _path;
  }
  
-+
  /// Atomic file write:
  /// - write to temp in same directory
  /// - fsync temp
@@ -151,7 +150,26 @@ index cd2c589..c20034b 100644
  pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
      fn replace_with_retry(from: &Path, to: &Path) -> io::Result<()> {
          let mut last: Option<io::Error> = None;
-@@ -98,11 +81,6 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+-        // Windows часто даёт PermissionDenied если файл ещё открыт (SQLite/AV/indexer).
+-        // Делаем короткие ретраи.
++        // Windows often gives PermissionDenied if the file is still open (SQLite/AV/indexer).
++        // Do short retries.
+         for _ in 0..25 {
+             match replace_platform(from, to) {
+                 Ok(()) => return Ok(()),
+@@ -87,10 +67,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+     })?;
+     fs::create_dir_all(parent)?;
+ 
+-    let file_name = path
+-        .file_name()
+-        .and_then(|s| s.to_str())
+-        .unwrap_or("file");
++    let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
+ 
+     let tmp_path = parent.join(format!(".{}.tmp.{}", file_name, Uuid::new_v4()));
+ 
+@@ -98,11 +75,6 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
          // 1) write temp
          let mut opts = OpenOptions::new();
          opts.write(true).create_new(true);
@@ -214,7 +232,7 @@ index c1cb657..6c8d983 100644
                  if let Some(main_webview) = app.get_webview_window("main") {
                      let _ = main_webview.with_webview(|webview| unsafe {
 diff --git a/src-tauri/src/services/backup_service.rs b/src-tauri/src/services/backup_service.rs
-index f608840..5010235 100644
+index f608840..0d438ec 100644
 --- a/src-tauri/src/services/backup_service.rs
 +++ b/src-tauri/src/services/backup_service.rs
 @@ -29,7 +29,6 @@ use crate::error::{ErrorCodeString, Result};
@@ -225,11 +243,10 @@ index f608840..5010235 100644
  fn replace_file_windows(src: &Path, dst: &Path) -> std::io::Result<()> {
      use std::iter;
      use std::os::windows::ffi::OsStrExt;
-@@ -171,32 +170,12 @@ fn validate_profile_id_component(profile_id: &str) -> bool {
+@@ -172,31 +171,11 @@ fn validate_profile_id_component(profile_id: &str) -> bool {
  
  
  
--
 -#[cfg(unix)]
 -fn best_effort_fsync_dir(dir: &Path) {
 -    #[cfg(unix)]
@@ -257,7 +274,6 @@ index f608840..5010235 100644
  }
  
 -#[cfg(windows)]
-+
  fn rename_platform(src: &Path, dst: &Path) -> std::io::Result<()> {
      use std::iter;
      use std::os::windows::ffi::OsStrExt;
@@ -272,11 +288,10 @@ index f608840..5010235 100644
  
  fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
      use std::time::Duration;
-@@ -478,17 +453,7 @@ fn create_archive(
-     writer
+@@ -479,16 +454,7 @@ fn create_archive(
          .finish()
          .map_err(|_| ErrorCodeString::new("BACKUP_ZIP_WRITE_FAILED"))?;
--
+ 
 -    let replace_result = {
 -        #[cfg(windows)]
 -        {
@@ -291,11 +306,9 @@ index f608840..5010235 100644
  
      if replace_result.is_err() {
          if tmp_dest.exists() {
-@@ -954,21 +919,11 @@ fn restore_archive_to_profile(
-                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?
-                     .sync_all()
+@@ -956,19 +922,10 @@ fn restore_archive_to_profile(
                      .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
--
+ 
                  let replaced = (|| {
 -                    #[cfg(windows)]
 -                    {
@@ -317,30 +330,32 @@ index f608840..5010235 100644
                  })();
  
                  if replaced.is_err() {
-@@ -988,15 +943,10 @@ fn restore_archive_to_profile(
+@@ -988,15 +945,8 @@ fn restore_archive_to_profile(
              }
          }
          if moved_vault && vault_backup_path.exists() {
 -            #[cfg(windows)]
-             {
-                 let _ = replace_file_windows(&vault_backup_path, &vault_path);
-                 best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
-             }
+-            {
+-                let _ = replace_file_windows(&vault_backup_path, &vault_path);
+-                best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
+-            }
 -            #[cfg(not(windows))]
 -            {
 -                let _ = rename_with_retry(&vault_backup_path, &vault_path);
 -            }
++            let _ = replace_file_windows(&vault_backup_path, &vault_path);
++            best_effort_fsync_rename_dirs(&vault_backup_path, &vault_path);
          } else if !moved_vault && vault_replaced && vault_path.exists() {
              let _ = fs::remove_file(&vault_path);
          }
 diff --git a/src-tauri/src/services/clipboard_service.rs b/src-tauri/src/services/clipboard_service.rs
-index 446c2d1..358723a 100644
+index 446c2d1..8da58f9 100644
 --- a/src-tauri/src/services/clipboard_service.rs
 +++ b/src-tauri/src/services/clipboard_service.rs
-@@ -1,18 +1,12 @@
+@@ -1,18 +1,11 @@
 -#[cfg(target_os = "windows")]
  use std::ptr;
- 
+-
 -#[cfg(target_os = "windows")]
  use std::time::Duration;
  
@@ -356,7 +371,7 @@ index 446c2d1..358723a 100644
  impl Drop for ClipboardGuard {
      fn drop(&mut self) {
          unsafe {
-@@ -24,7 +18,6 @@ impl Drop for ClipboardGuard {
+@@ -24,7 +17,6 @@ impl Drop for ClipboardGuard {
  /// Clears the entire Windows clipboard (all formats).
  /// Uses OpenClipboard -> EmptyClipboard -> CloseClipboard.
  /// Retries because clipboard may be temporarily locked by other processes.
@@ -365,13 +380,14 @@ index 446c2d1..358723a 100644
      const ATTEMPTS: usize = 60;
      const SLEEP_MS: u64 = 25;
 diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 76483fa..6a9bd5f 100644
+index 76483fa..afbc26a 100644
 --- a/src-tauri/src/services/security_service.rs
 +++ b/src-tauri/src/services/security_service.rs
-@@ -892,38 +892,16 @@ fn recover_incomplete_profile_transitions(
+@@ -891,39 +891,16 @@ fn recover_incomplete_profile_transitions(
+     Ok(())
  }
  
- 
+-
 -
 -#[cfg(unix)]
 -fn best_effort_fsync_dir(dir: &Path) {
@@ -411,7 +427,7 @@ index 76483fa..6a9bd5f 100644
  fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
      use std::iter;
      use std::os::windows::ffi::OsStrExt;
-@@ -940,10 +918,6 @@ fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
+@@ -940,10 +917,6 @@ fn rename_platform(from: &Path, to: &Path) -> io::Result<()> {
      }
  }
  
@@ -422,7 +438,7 @@ index 76483fa..6a9bd5f 100644
  
  fn rename_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
      let mut i = 0;
-@@ -987,7 +961,6 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
+@@ -987,7 +960,6 @@ fn remove_file_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Re
      }
  }
  
@@ -430,7 +446,7 @@ index 76483fa..6a9bd5f 100644
  fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
      use std::iter;
      use std::os::windows::ffi::OsStrExt;
-@@ -1012,11 +985,6 @@ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
+@@ -1012,11 +984,6 @@ fn replace_platform(from: &Path, to: &Path) -> io::Result<()> {
      }
  }
  
