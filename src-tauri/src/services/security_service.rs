@@ -2255,6 +2255,13 @@ fn rollback_remove_profile_password(
         let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
     }
 
+    // Best-effort: remove plaintext staging dir if it was created.
+    // It can contain decrypted attachment files if the transition failed mid-flight.
+    if let Some(backup_root) = rb.attachments_backup_dir.parent() {
+        let staging_dir = backup_root.join("attachments_plain_staging");
+        best_effort_remove_dir_all_retry(&staging_dir, 40, Duration::from_millis(50));
+    }
+
     // Avoid delete-then-rename gap: atomically swap backup back into place.
     let _ = replace_file_retry(
         &rb.vault_backup_path,
@@ -2314,7 +2321,7 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     drain_and_drop_profile_pools(id, Duration::from_secs(5));
     clear_pool(id);
 
-    recover_incomplete_profile_transitions_with_password(&storage_paths, id, &profile.name, password)?;
+    recover_incomplete_profile_transitions_with_password(&storage_paths, id, &profile.name, None)?;
 
     let profile_root = profile_dir(&storage_paths, id)?;
     let backup_root = profile_root.join("tmp").join("remove_password_backup");
