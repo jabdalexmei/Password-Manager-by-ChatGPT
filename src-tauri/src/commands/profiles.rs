@@ -3,8 +3,10 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::app_state::AppState;
+use crate::data::profiles::registry;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::profiles_service;
+use crate::services::security_service;
 use crate::types::{ProfileMeta, ProfilesList};
 
 #[tauri::command]
@@ -120,13 +122,28 @@ pub async fn set_active_profile(id: String, state: State<'_, Arc<AppState>>) -> 
             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
             .clone();
 
+        // If we are switching profiles, persist and clear any currently-unlocked vault session.
+        if old_active_profile_id.as_deref() != Some(id.as_str()) {
+            security_service::persist_active_vault(&app_state)?;
+            if let Ok(mut session) = app_state.vault_session.lock() {
+                *session = None;
+            }
+
+            if let Some(old_id) = &old_active_profile_id {
+                crate::data::sqlite::pool::clear_pool(old_id);
+            }
+        }
+
         if let Ok(mut active) = app_state.active_profile.lock() {
             *active = Some(id.clone());
         }
         profiles_service::set_active_profile(&storage_paths, &id)?;
 
-        if let Some(old_id) = old_active_profile_id {
-            crate::data::sqlite::pool::clear_pool(&old_id);
+        // Preserve legacy behavior: passwordless profiles auto-unlock on selection.
+        let profile = registry::get_profile(&storage_paths, &id)?
+            .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+        if !profile.has_password {
+            security_service::login_vault(&id, None, &app_state)?;
         }
 
         Ok(true)

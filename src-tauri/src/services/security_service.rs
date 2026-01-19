@@ -15,13 +15,12 @@ use zeroize::{Zeroize, Zeroizing};
 use walkdir::WalkDir;
 
 use crate::app_state::{AppState, VaultSession};
-use crate::data::crypto::{cipher, kdf, key_check};
+use crate::data::crypto::{cipher, kdf, key_check, master_key};
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
     ensure_profile_dirs, kdf_salt_path, key_check_path, profile_dir, vault_db_path,
 };
 use crate::data::profiles::registry;
-use crate::data::sqlite::init::init_database_passwordless;
 use crate::data::sqlite::migrations;
 use crate::data::sqlite::pool::{clear_pool, drain_and_drop_profile_pools, MaintenanceGuard};
 use crate::error::{ErrorCodeString, Result};
@@ -190,24 +189,34 @@ fn open_protected_vault_session(
     }
     let salt =
         std::fs::read(&salt_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
-    let key = Zeroizing::new(kdf::derive_master_key(password, &salt)?);
+    // Password is used ONLY to unwrap the master key (vault_key.bin). Vault data is always
+    // encrypted with the master key.
+    let wrapping_key = Zeroizing::new(kdf::derive_master_key(password, &salt)?);
 
-    if !key_check::verify_key_check_file(storage_paths, profile_id, &key)? {
+    if !key_check::verify_key_check_file(storage_paths, profile_id, &wrapping_key)? {
         return Err(ErrorCodeString::new("INVALID_PASSWORD"));
     }
+
+    let master = Zeroizing::new(
+        master_key::read_master_key_wrapped_with_password(storage_paths, profile_id, &wrapping_key)?,
+    );
 
     let vault_path = vault_db_path(storage_paths, profile_id)?;
     if !vault_path.exists() {
         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
     }
     let encrypted = cipher::read_encrypted_file(&vault_path)?;
-    let decrypted = cipher::decrypt_vault_blob(profile_id, &key, &encrypted)
+    let decrypted = cipher::decrypt_vault_blob(profile_id, &master, &encrypted)
         .map_err(|_| ErrorCodeString::new("VAULT_DECRYPT_FAILED"))?;
 
     // If the stored DB image is marked WAL, SQLite may try to open -wal/-shm even for :memory:
     // deserialization and fail with SQLITE_CANTOPEN (14). Normalize header before deserialize.
     let mut decrypted = decrypted;
-    normalize_sqlite_header_disable_wal(decrypted.as_mut_slice(), profile_id, "unlock_before_deserialize");
+    normalize_sqlite_header_disable_wal(
+        decrypted.as_mut_slice(),
+        profile_id,
+        "unlock_before_deserialize",
+    );
 
     let mut conn = rusqlite::Connection::open_in_memory().map_err(|e| {
         log::error!(
@@ -217,6 +226,7 @@ fn open_protected_vault_session(
         );
         ErrorCodeString::new("DB_OPEN_FAILED")
     })?;
+
     // Set pragmas BEFORE deserialize to avoid temp file writes during the first statements.
     apply_in_memory_pragmas(&conn, profile_id, "open_in_memory_before_deserialize")?;
     let owned = owned_data_from_bytes(decrypted)?;
@@ -228,6 +238,7 @@ fn open_protected_vault_session(
         );
         ErrorCodeString::new("VAULT_CORRUPTED")
     })?;
+
     if let Err(e) = migrations::migrate_to_latest(&conn) {
         log::error!(
             "[SECURITY][login] profile_id={} step=migrate_to_latest failed code={}",
@@ -250,7 +261,80 @@ fn open_protected_vault_session(
         *session = Some(VaultSession {
             profile_id: profile_id.to_string(),
             conn,
-            key,
+            key: master,
+        });
+    }
+
+    Ok(())
+}
+
+fn open_passwordless_vault_session(
+    profile_id: &str,
+    storage_paths: &crate::data::storage_paths::StoragePaths,
+    state: &Arc<AppState>,
+) -> Result<()> {
+    // Passwordless mode: unwrap master key using Windows DPAPI (dpapi_key.bin).
+    let master =
+        Zeroizing::new(master_key::read_master_key_wrapped_with_dpapi(storage_paths, profile_id)?);
+
+    let vault_path = vault_db_path(storage_paths, profile_id)?;
+    if !vault_path.exists() {
+        return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
+    }
+    let encrypted = cipher::read_encrypted_file(&vault_path)?;
+    let decrypted = cipher::decrypt_vault_blob(profile_id, &master, &encrypted)
+        .map_err(|_| ErrorCodeString::new("VAULT_DECRYPT_FAILED"))?;
+
+    let mut decrypted = decrypted;
+    normalize_sqlite_header_disable_wal(
+        decrypted.as_mut_slice(),
+        profile_id,
+        "unlock_before_deserialize",
+    );
+
+    let mut conn = rusqlite::Connection::open_in_memory().map_err(|e| {
+        log::error!(
+            "[SECURITY][login] profile_id={} step=open_in_memory err={}",
+            profile_id,
+            format_rusqlite_error(&e)
+        );
+        ErrorCodeString::new("DB_OPEN_FAILED")
+    })?;
+
+    apply_in_memory_pragmas(&conn, profile_id, "open_in_memory_before_deserialize")?;
+    let owned = owned_data_from_bytes(decrypted)?;
+    conn.deserialize(DatabaseName::Main, owned, false).map_err(|e| {
+        log::error!(
+            "[SECURITY][login] profile_id={} step=deserialize err={}",
+            profile_id,
+            format_rusqlite_error(&e)
+        );
+        ErrorCodeString::new("VAULT_CORRUPTED")
+    })?;
+
+    if let Err(e) = migrations::migrate_to_latest(&conn) {
+        log::error!(
+            "[SECURITY][login] profile_id={} step=migrate_to_latest failed code={}",
+            profile_id,
+            e.code
+        );
+        return Err(e);
+    }
+    migrations::validate_core_schema(&conn)
+        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
+
+    best_effort_force_journal_mode_memory(&conn, profile_id, "unlock_after_deserialize");
+
+    {
+        let mut session = state
+            .vault_session
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
+
+        *session = Some(VaultSession {
+            profile_id: profile_id.to_string(),
+            conn,
+            key: master,
         });
     }
 
@@ -1400,7 +1484,7 @@ pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> R
     let is_passwordless = !profile.has_password;
 
     if is_passwordless {
-        init_database_passwordless(&storage_paths, id)?;
+        open_passwordless_vault_session(id, &storage_paths, state)?;
     } else {
         open_protected_vault_session(id, pwd, &storage_paths, state)?;
     }
@@ -2523,8 +2607,6 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
 }
 
 pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
-    let storage_paths = state.get_storage_paths()?;
-
     let active_id = state
         .active_profile
         .lock()
@@ -2534,13 +2616,6 @@ pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
     let Some(id) = active_id else {
         return Ok(false);
     };
-
-    let profile = crate::data::profiles::registry::get_profile(&storage_paths, &id)?
-        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
-
-    if !profile.has_password {
-        return Ok(true);
-    }
 
     let session = state
         .vault_session
@@ -2555,28 +2630,16 @@ pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
 
 pub struct ActiveSessionInfo {
     pub profile_id: String,
-    pub vault_key: Option<[u8; 32]>,
+    pub vault_key: [u8; 32],
 }
 
 pub fn require_unlocked_active_profile(state: &Arc<AppState>) -> Result<ActiveSessionInfo> {
-    let storage_paths = state.get_storage_paths()?;
-
     let active_id = state
         .active_profile
         .lock()
         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
         .clone()
         .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
-
-    let profile = crate::data::profiles::registry::get_profile(&storage_paths, &active_id)?
-        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
-
-    if !profile.has_password {
-        return Ok(ActiveSessionInfo {
-            profile_id: active_id,
-            vault_key: None,
-        });
-    }
 
     let session = state
         .vault_session
@@ -2587,7 +2650,7 @@ pub fn require_unlocked_active_profile(state: &Arc<AppState>) -> Result<ActiveSe
         if s.profile_id == active_id {
             return Ok(ActiveSessionInfo {
                 profile_id: active_id,
-                vault_key: Some(*s.key),
+                vault_key: *s.key,
             });
         }
     }

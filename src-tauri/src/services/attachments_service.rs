@@ -26,7 +26,7 @@ struct ActiveSession {
     state: Arc<AppState>,
     storage_paths: crate::data::storage_paths::StoragePaths,
     profile_id: String,
-    vault_key: Option<[u8; 32]>,
+    vault_key: [u8; 32],
 }
 
 fn require_logged_in(app: &AppHandle) -> Result<ActiveSession> {
@@ -102,15 +102,10 @@ pub fn add_attachment_from_fs_path(
     let file_path = attachment_file_path(&session.storage_paths, &session.profile_id, &meta.id)?;
     ensure_target_dir(&file_path)?;
 
-    if let Some(key) = session.vault_key {
-        let encrypted =
-            cipher::encrypt_attachment_blob(&session.profile_id, &meta.id, &key, &bytes)?;
-        write_atomic(&file_path, &encrypted)
-            .map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
-    } else {
-        write_atomic(&file_path, &bytes)
-            .map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
-    }
+    let encrypted =
+        cipher::encrypt_attachment_blob(&session.profile_id, &meta.id, &session.vault_key, &bytes)?;
+    write_atomic(&file_path, &encrypted)
+        .map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
 
     repo_impl::insert_attachment(&session.state, &session.profile_id, &meta)?;
 
@@ -160,8 +155,8 @@ pub fn save_attachment_to_path(
         attachment_file_path(&session.storage_paths, &session.profile_id, &meta.id)?;
     let bytes =
         fs::read(&stored_path).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
-    let output_bytes = if let Some(key) = session.vault_key {
-        cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &key, &bytes)?
+    let output_bytes = if bytes.starts_with(&cipher::PM_ENC_MAGIC) {
+        cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &session.vault_key, &bytes)?
     } else {
         bytes
     };
@@ -191,8 +186,8 @@ pub fn get_attachment_preview(
     let bytes =
         fs::read(&stored_path).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
 
-    let output_bytes = if let Some(key) = session.vault_key {
-        cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &key, &bytes)?
+    let output_bytes = if bytes.starts_with(&cipher::PM_ENC_MAGIC) {
+        cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &session.vault_key, &bytes)?
     } else {
         bytes
     };

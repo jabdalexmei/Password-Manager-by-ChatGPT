@@ -6,9 +6,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 use super::diagnostics::log_sqlite_err;
-use super::pool::{self, DbTarget};
 use crate::app_state::AppState;
-use crate::data::profiles::paths::vault_db_path;
 use crate::error::{ErrorCodeString, Result};
 use crate::types::{
     AttachmentMeta, BankCardItem, BankCardSummary, CreateBankCardInput, CreateDataCardInput,
@@ -37,10 +35,7 @@ fn with_connection<T>(
         }
     }
 
-    let storage_paths = state.get_storage_paths()?;
-    let target = DbTarget::File(vault_db_path(&storage_paths, profile_id)?);
-    let pooled = pool::get_conn(profile_id, target)?;
-    f(&pooled)
+    Err(ErrorCodeString::new("VAULT_LOCKED"))
 }
 
 fn deserialize_json<T: serde::de::DeserializeOwned>(value: String) -> rusqlite::Result<T> {
