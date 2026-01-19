@@ -1,162 +1,116 @@
-diff -ruN base/Password-Manager-by-ChatGPT-2222222222/src-tauri/Cargo.toml mod/Password-Manager-by-ChatGPT-2222222222/src-tauri/Cargo.toml
---- base/Password-Manager-by-ChatGPT-2222222222/src-tauri/Cargo.toml	2026-01-19 06:37:46.000000000 +0000
-+++ mod/Password-Manager-by-ChatGPT-2222222222/src-tauri/Cargo.toml	2026-01-19 11:18:12.978627982 +0000
-@@ -36,6 +36,8 @@
-   "Win32_Foundation",
-   "Win32_Storage_FileSystem",
-   "Win32_System_DataExchange",
-+  "Win32_System_Memory",
-+  "Win32_Security_Cryptography",
-   "Win32_UI_WindowsAndMessaging"
- ] }
- webview2-com = "0.38.0"
-diff -ruN base/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/crypto/dpapi.rs mod/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/crypto/dpapi.rs
---- base/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/crypto/dpapi.rs	1970-01-01 00:00:00.000000000 +0000
-+++ mod/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/crypto/dpapi.rs	2026-01-19 11:35:00.346701293 +0000
-@@ -0,0 +1,115 @@
-+use crate::error::{ErrorCodeString, Result};
-+
-+#[cfg(windows)]
-+pub fn protect(plaintext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
-+    use std::ptr;
-+    use windows_sys::Win32::Security::Cryptography::{
-+        CryptProtectData, DATA_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
-+    };
-+    use windows_sys::Win32::System::Memory::LocalFree;
-+
-+    unsafe {
-+        let mut in_blob = DATA_BLOB {
-+            cbData: plaintext.len() as u32,
-+            pbData: plaintext.as_ptr() as *mut u8,
-+        };
-+        let mut out_blob = DATA_BLOB {
-+            cbData: 0,
-+            pbData: ptr::null_mut(),
-+        };
-+
-+        let mut ent_blob = DATA_BLOB {
-+            cbData: 0,
-+            pbData: ptr::null_mut(),
-+        };
-+        let ent_ptr: *mut DATA_BLOB = match entropy {
-+            Some(e) if !e.is_empty() => {
-+                ent_blob.cbData = e.len() as u32;
-+                ent_blob.pbData = e.as_ptr() as *mut u8;
-+                &mut ent_blob as *mut DATA_BLOB
-+            }
-+            _ => ptr::null_mut(),
-+        };
-+
-+        let ok = CryptProtectData(
-+            &mut in_blob as *mut DATA_BLOB,
-+            ptr::null(),
-+            ent_ptr,
-+            ptr::null_mut(),
-+            ptr::null_mut(),
-+            CRYPTPROTECT_UI_FORBIDDEN,
-+            &mut out_blob as *mut DATA_BLOB,
-+        );
-+
-+        if ok == 0 {
-+            return Err(ErrorCodeString::new("DPAPI_PROTECT_FAILED"));
-+        }
-+
-+        let out = std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize)
-+            .to_vec();
-+        let _ = LocalFree(out_blob.pbData as isize);
-+        Ok(out)
-+    }
-+}
-+
-+#[cfg(windows)]
-+pub fn unprotect(ciphertext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
-+    use std::ptr;
-+    use windows_sys::Win32::Security::Cryptography::{
-+        CryptUnprotectData, DATA_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
-+    };
-+    use windows_sys::Win32::System::Memory::LocalFree;
-+
-+    unsafe {
-+        let mut in_blob = DATA_BLOB {
-+            cbData: ciphertext.len() as u32,
-+            pbData: ciphertext.as_ptr() as *mut u8,
-+        };
-+        let mut out_blob = DATA_BLOB {
-+            cbData: 0,
-+            pbData: ptr::null_mut(),
-+        };
-+
-+        let mut ent_blob = DATA_BLOB {
-+            cbData: 0,
-+            pbData: ptr::null_mut(),
-+        };
-+        let ent_ptr: *mut DATA_BLOB = match entropy {
-+            Some(e) if !e.is_empty() => {
-+                ent_blob.cbData = e.len() as u32;
-+                ent_blob.pbData = e.as_ptr() as *mut u8;
-+                &mut ent_blob as *mut DATA_BLOB
-+            }
-+            _ => ptr::null_mut(),
-+        };
-+
-+        let ok = CryptUnprotectData(
-+            &mut in_blob as *mut DATA_BLOB,
-+            ptr::null_mut(),
-+            ent_ptr,
-+            ptr::null_mut(),
-+            ptr::null_mut(),
-+            CRYPTPROTECT_UI_FORBIDDEN,
-+            &mut out_blob as *mut DATA_BLOB,
-+        );
-+
-+        if ok == 0 {
-+            return Err(ErrorCodeString::new("DPAPI_UNPROTECT_FAILED"));
-+        }
-+
-+        let out = std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize)
-+            .to_vec();
-+        let _ = LocalFree(out_blob.pbData as isize);
-+        Ok(out)
-+    }
-+}
-+
-+#[cfg(not(windows))]
-+pub fn protect(_plaintext: &[u8], _entropy: Option<&[u8]>) -> Result<Vec<u8>> {
-+    Err(ErrorCodeString::new("WINDOWS_ONLY"))
-+}
-+
-+#[cfg(not(windows))]
-+pub fn unprotect(_ciphertext: &[u8], _entropy: Option<&[u8]>) -> Result<Vec<u8>> {
-+    Err(ErrorCodeString::new("WINDOWS_ONLY"))
-+}
-Binary files base/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/crypto/master_key.rs and mod/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/crypto/master_key.rs differ
-diff -ruN base/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/profiles/paths.rs mod/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/profiles/paths.rs
---- base/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/profiles/paths.rs	2026-01-19 06:37:46.000000000 +0000
-+++ mod/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/data/profiles/paths.rs	2026-01-19 11:19:40.158639514 +0000
-@@ -127,6 +127,14 @@
-     Ok(profile_dir(sp, profile_id)?.join("key_check.bin"))
+diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
+index 9b60d00..0600249 100644
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -7,6 +7,7 @@ use uuid::Uuid;
+ use crate::data::crypto::cipher::PM_ENC_MAGIC;
+ use crate::data::fs::atomic_write::write_atomic;
+ use crate::data::profiles::paths::{
++    dpapi_key_path,
+     ensure_profiles_dir,
+     key_check_path,
+     kdf_salt_path,
+@@ -14,6 +15,7 @@ use crate::data::profiles::paths::{
+     profile_dir,
+     registry_path,
+     vault_db_path,
++    vault_key_path,
+ };
+ use crate::data::storage_paths::StoragePaths;
+ use crate::error::{ErrorCodeString, Result};
+@@ -212,23 +214,35 @@ fn vault_looks_plaintext(sp: &StoragePaths, id: &str) -> bool {
  }
  
-+pub fn vault_key_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
-+    Ok(profile_dir(sp, profile_id)?.join("vault_key.bin"))
-+}
-+
-+pub fn dpapi_key_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
-+    Ok(profile_dir(sp, profile_id)?.join("dpapi_key.bin"))
-+}
-+
- pub fn attachment_file_path(
-     sp: &StoragePaths,
-     profile_id: &str,
-diff -ruN base/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/main.rs mod/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/main.rs
---- base/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/main.rs	2026-01-19 06:37:46.000000000 +0000
-+++ mod/Password-Manager-by-ChatGPT-2222222222/src-tauri/src/main.rs	2026-01-19 11:18:58.822916261 +0000
-@@ -16,6 +16,8 @@
+ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
+-    // If the vault is clearly a plaintext SQLite database, treat the profile as passwordless even
++    // Legacy: if the vault is clearly a plaintext SQLite database, treat the profile as passwordless even
+     // if registry/config got out of sync (e.g. interrupted remove password / restore / bug).
+     if vault_looks_plaintext(sp, id) {
+         return false;
      }
-     pub mod crypto {
-         pub mod cipher;
-+        pub mod dpapi;
-+        pub mod master_key;
-         pub mod kdf;
-         pub mod key_check;
+ 
+-    // If the registry says protected, keep it protected unless we have positive evidence of passwordless.
+-    if record_has_password {
++    // New security model: vault.db is ALWAYS encrypted on disk.
++    // The password requirement is determined by which master-key wrapper exists:
++    //   - dpapi_key.bin  -> passwordless (DPAPI unlock)
++    //   - vault_key.bin  -> password required (KDF unlock)
++    let dpapi_ok = dpapi_key_path(sp, id).ok().is_some_and(|p| p.exists());
++    if dpapi_ok {
++        return false;
++    }
++
++    let vault_key_ok = vault_key_path(sp, id).ok().is_some_and(|p| p.exists());
++    if vault_key_ok {
+         return true;
      }
+ 
++    // Backwards-compatibility / partial upgrades: if we see salt+key_check, treat as password-protected.
+     let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
+     let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
+     if salt_ok && key_ok {
+         return true;
+     }
+-    vault_looks_encrypted(sp, id)
++
++    // Fall back to the registry value.
++    record_has_password
+ }
+ 
+ pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
+@@ -422,4 +436,4 @@ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>>
+         None => return Ok(None),
+     };
+     Ok(Some(registry.profiles[idx].clone()))
+-}
++}
+\ No newline at end of file
+diff --git a/src-tauri/src/services/profiles_service.rs b/src-tauri/src/services/profiles_service.rs
+index 57d1345..35f2f76 100644
+--- a/src-tauri/src/services/profiles_service.rs
++++ b/src-tauri/src/services/profiles_service.rs
+@@ -1,10 +1,11 @@
+ use crate::data::crypto::kdf::{derive_master_key, generate_kdf_salt};
++use crate::data::crypto::master_key;
+ use crate::data::crypto::key_check;
+ use crate::data::fs::atomic_write::write_atomic;
+ use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path};
+ use crate::data::profiles::registry;
+ use crate::data::settings::config;
+-use crate::data::sqlite::init::{init_database_passwordless, init_database_protected_encrypted};
++use crate::data::sqlite::init::init_database_protected_encrypted;
+ use crate::data::storage_paths::StoragePaths;
+ use crate::error::{ErrorCodeString, Result};
+ use crate::services::settings_service::get_settings;
+@@ -37,18 +38,27 @@ pub fn create_profile(
+         ensure_profile_dirs(sp, &profile.id)
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
++        // New security model: vault.db is ALWAYS an encrypted blob on disk.
++        // Password vs passwordless only changes how the master key is wrapped:
++        //   - password mode: master key is wrapped by a KDF-derived wrapping key (vault_key.bin + salt + key_check)
++        //   - passwordless: master key is wrapped by Windows DPAPI (dpapi_key.bin)
++
++        let mk = master_key::generate_master_key();
++        init_database_protected_encrypted(sp, &profile.id, &mk)?;
++
+         let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
+         if is_passwordless {
+-            init_database_passwordless(sp, &profile.id)?;
++            master_key::write_master_key_wrapped_with_dpapi(sp, &profile.id, &mk)?;
+         } else {
+             let salt = generate_kdf_salt();
+             let salt_path = kdf_salt_path(sp, &profile.id)?;
+             write_atomic(&salt_path, &salt)
+                 .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
+             let pwd = password.unwrap_or_default();
+-            let key = Zeroizing::new(derive_master_key(&pwd, &salt)?);
+-            key_check::create_key_check_file(sp, &profile.id, &key)?;
+-            init_database_protected_encrypted(sp, &profile.id, &key)?;
++            let wrapping = Zeroizing::new(derive_master_key(&pwd, &salt)?);
++            key_check::create_key_check_file(sp, &profile.id, &wrapping)?;
++            master_key::write_master_key_wrapped_with_password(sp, &profile.id, &wrapping, &mk)?;
+         }
+ 
+         let _ = get_settings(sp, &profile.id)?;
