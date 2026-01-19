@@ -237,6 +237,15 @@ fn ensure_backup_guard(state: &Arc<AppState>) -> Result<std::sync::MutexGuard<'_
         .map_err(|_| ErrorCodeString::new("BACKUP_ALREADY_RUNNING"))
 }
 
+fn require_active_profile_id(state: &Arc<AppState>) -> Result<String> {
+    state
+        .active_profile
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+        .clone()
+        .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))
+}
+
 fn add_file_to_zip(
     writer: &mut ZipWriter<fs::File>,
     source_path: &Path,
@@ -584,7 +593,7 @@ fn create_backup_internal(
     use_default_path: bool,
 ) -> Result<BackupResult> {
     let _guard = ensure_backup_guard(state)?;
-    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let profile_id = require_active_profile_id(state)?;
     let sp = state.get_storage_paths()?;
 
     let (backup_id, destination) = resolve_destination_path(&sp, &profile_id, destination_path, use_default_path)?;
@@ -619,7 +628,7 @@ pub fn backup_create(
     destination_path: Option<String>,
     use_default_path: bool,
 ) -> Result<String> {
-    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let profile_id = require_active_profile_id(state)?;
     let sp = state.get_storage_paths()?;
     let settings = settings_service::get_settings(&sp, &profile_id)?;
     let managed_root = backups_dir(&sp, &profile_id)?;
@@ -641,7 +650,7 @@ pub fn backup_create(
 }
 
 pub fn backup_list(state: &Arc<AppState>) -> Result<Vec<BackupListItem>> {
-    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let profile_id = require_active_profile_id(state)?;
     let sp = state.get_storage_paths()?;
     let mut registry = load_registry(&sp, &profile_id)?;
     prune_registry(&mut registry);
@@ -1081,7 +1090,15 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
 }
 
 pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {
-    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let profile_id = match state
+        .active_profile
+        .lock()
+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+        .clone()
+    {
+        Some(id) => id,
+        None => return Ok(None),
+    };
     let sp = state.get_storage_paths()?;
     let settings = settings_service::get_settings(&sp, &profile_id)?;
     if !settings.backups_enabled {
