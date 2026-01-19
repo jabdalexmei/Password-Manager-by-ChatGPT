@@ -6,6 +6,7 @@ use crate::app_state::AppState;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::security_service;
 use crate::types::ProfileMeta;
+use zeroize::Zeroizing;
 
 #[tauri::command]
 pub async fn login_vault(
@@ -16,7 +17,8 @@ pub async fn login_vault(
     let app_state = state.inner().clone();
 
     tauri::async_runtime::spawn_blocking(move || {
-        security_service::login_vault(&id, password, &app_state)
+        let password = password.map(Zeroizing::new);
+        security_service::login_vault(&id, password.as_ref().map(|p| p.as_str()), &app_state)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
@@ -48,7 +50,8 @@ pub async fn profile_set_password(
 ) -> Result<ProfileMeta> {
     let app_state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        security_service::set_profile_password(&id, &password, &app_state)
+        let password = Zeroizing::new(password);
+        security_service::set_profile_password(&id, password.as_str(), &app_state)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
@@ -62,7 +65,8 @@ pub async fn profile_change_password(
 ) -> Result<bool> {
     let app_state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        security_service::change_profile_password(&id, &password, &app_state)
+        let password = Zeroizing::new(password);
+        security_service::change_profile_password(&id, password.as_str(), &app_state)
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?

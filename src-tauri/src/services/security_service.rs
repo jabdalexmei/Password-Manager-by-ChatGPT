@@ -12,6 +12,7 @@ use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
 use rusqlite::DatabaseName;
 use zeroize::{Zeroize, Zeroizing};
+use walkdir::WalkDir;
 
 use crate::app_state::{AppState, VaultSession};
 use crate::data::crypto::{cipher, kdf, key_check};
@@ -353,7 +354,8 @@ fn prepare_transition_backup_root(
         if is_dir_nonempty(backup_root).unwrap_or(false) {
             recover_incomplete_profile_transitions(storage_paths, profile_id, profile_name)?;
         }
-        let _ = std::fs::remove_dir_all(backup_root);
+        remove_dir_all_retry(backup_root, 40, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     std::fs::create_dir_all(backup_root).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
@@ -379,11 +381,154 @@ fn write_change_password_commit_marker(backup_root: &Path) -> Result<()> {
     write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
 }
 
+fn best_effort_encrypt_set_password_backups(
+    profile_id: &str,
+    key: &[u8; cipher::KEY_LEN],
+    backup_root: &Path,
+) {
+    // If cleanup fails after a successful set-password transition, backup_root may still contain
+    // plaintext copies of the old vault/attachments. We cannot guarantee secure deletion on modern
+    // filesystems/SSDs, so we best-effort *cryptographically* protect any leftover plaintext by
+    // encrypting it in place.
+
+    // Encrypt plaintext vault backup if present.
+    let vault_backup_path = backup_root.join("vault.db.bak");
+    if vault_backup_path.exists()
+        && !file_has_prefix(&vault_backup_path, &cipher::PM_ENC_MAGIC)
+        && file_has_sqlite_magic(&vault_backup_path)
+    {
+        match std::fs::read(&vault_backup_path) {
+            Ok(plain) => match cipher::encrypt_vault_blob(profile_id, key, &plain) {
+                Ok(blob) => {
+                    if let Err(e) = write_atomic(&vault_backup_path, &blob) {
+                        log::warn!(
+                            "[SECURITY][best_effort_encrypt_set_password_backups] profile_id={} action=encrypt_vault_backup_failed path={:?} err={}",
+                            profile_id,
+                            vault_backup_path,
+                            e
+                        );
+                    }
+                }
+                Err(e) => {
+                    log::warn!(
+                        "[SECURITY][best_effort_encrypt_set_password_backups] profile_id={} action=encrypt_vault_backup_failed path={:?} err={:?}",
+                        profile_id,
+                        vault_backup_path,
+                        e
+                    );
+                }
+            },
+            Err(e) => {
+                log::warn!(
+                    "[SECURITY][best_effort_encrypt_set_password_backups] profile_id={} action=read_vault_backup_failed path={:?} err={}",
+                    profile_id,
+                    vault_backup_path,
+                    e
+                );
+            }
+        }
+    }
+
+    // Encrypt any plaintext attachment backups in place (if present).
+    let attachments_plain_backup_dir = backup_root.join("attachments_plain");
+    if attachments_plain_backup_dir.exists() {
+        for entry in WalkDir::new(&attachments_plain_backup_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let path = entry.path();
+            let file_name = match path.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+            if !file_name.ends_with(".bin") {
+                continue;
+            }
+            if file_has_prefix(path, &cipher::PM_ENC_MAGIC) {
+                continue;
+            }
+            let attachment_id = match attachment_id_from_path(path) {
+                Some(id) => id,
+                None => continue,
+            };
+
+            match std::fs::read(path) {
+                Ok(plain) => match cipher::encrypt_attachment_blob(profile_id, &attachment_id, key, &plain) {
+                    Ok(blob) => {
+                        if let Err(e) = write_atomic(path, &blob) {
+                            log::warn!(
+                                "[SECURITY][best_effort_encrypt_set_password_backups] profile_id={} action=encrypt_attachment_backup_failed attachment_id={} path={:?} err={}",
+                                profile_id,
+                                attachment_id,
+                                path,
+                                e
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "[SECURITY][best_effort_encrypt_set_password_backups] profile_id={} action=encrypt_attachment_backup_failed attachment_id={} path={:?} err={:?}",
+                            profile_id,
+                            attachment_id,
+                            path,
+                            e
+                        );
+                    }
+                },
+                Err(e) => {
+                    log::warn!(
+                        "[SECURITY][best_effort_encrypt_set_password_backups] profile_id={} action=read_attachment_backup_failed attachment_id={} path={:?} err={}",
+                        profile_id,
+                        attachment_id,
+                        path,
+                        e
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn best_effort_encrypt_set_password_backups_with_password(
+    storage_paths: &crate::data::storage_paths::StoragePaths,
+    profile_id: &str,
+    password: &str,
+    backup_root: &Path,
+) {
+    let salt_path = match kdf_salt_path(storage_paths, profile_id) {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    let salt = match std::fs::read(&salt_path) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    if salt.len() != 16 {
+        return;
+    }
+
+    let key = match kdf::derive_master_key(password, &salt) {
+        Ok(k) => Zeroizing::new(k),
+        Err(_) => return,
+    };
+
+    let ok = key_check::verify_key_check_file(storage_paths, profile_id, &*key).unwrap_or(false);
+    if !ok {
+        return;
+    }
+
+    best_effort_encrypt_set_password_backups(profile_id, &*key, backup_root);
+}
+
 fn recover_set_password_transition(
     storage_paths: &crate::data::storage_paths::StoragePaths,
     profile_id: &str,
     profile_name: &str,
     backup_root: &Path,
+    maybe_password: Option<&str>,
 ) -> Result<()> {
     if !is_dir_nonempty(backup_root).unwrap_or(false) {
         return Ok(());
@@ -434,7 +579,7 @@ fn recover_set_password_transition(
             // Complete attachments swap if needed.
             if attachments_dir.exists() {
                 if attachments_plain_backup_dir.exists() {
-                    std::fs::remove_dir_all(&attachments_plain_backup_dir)
+                    remove_dir_all_retry(&attachments_plain_backup_dir, 40, Duration::from_millis(50))
                         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
                 }
                 rename_retry(
@@ -447,7 +592,7 @@ fn recover_set_password_transition(
             }
 
             if attachments_dir.exists() {
-                std::fs::remove_dir_all(&attachments_dir)
+                remove_dir_all_retry(&attachments_dir, 40, Duration::from_millis(50))
                     .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
             }
 
@@ -501,7 +646,25 @@ fn recover_set_password_transition(
         // Remove any stale SQLite sidecars (WAL/SHM/journal) that could have been left from a prior plaintext vault.
         cleanup_sqlite_sidecars(&vault_path);
 
-        let _ = std::fs::remove_dir_all(backup_root);
+        // Cleanup backup root. If deletion fails and we have the user's password,
+        // best-effort encrypt any leftover plaintext backups to avoid data-at-rest leakage.
+        if let Err(e) = remove_dir_all_retry(backup_root, 40, Duration::from_millis(50)) {
+            log::warn!(
+                "[SECURITY][recover_set_password_transition] profile_id={} action=cleanup_failed backup_root={:?} err={}",
+                profile_id,
+                backup_root,
+                e
+            );
+            if let Some(pwd) = maybe_password {
+                best_effort_encrypt_set_password_backups_with_password(
+                    storage_paths,
+                    profile_id,
+                    pwd,
+                    backup_root,
+                );
+                let _ = remove_dir_all_retry(backup_root, 40, Duration::from_millis(50));
+            }
+        }
         return Ok(());
     }
 
@@ -547,7 +710,7 @@ fn recover_set_password_transition(
 
     if attachments_plain_backup_dir.exists() {
         if attachments_dir.exists() {
-            std::fs::remove_dir_all(&attachments_dir)
+            remove_dir_all_retry(&attachments_dir, 40, Duration::from_millis(50))
                 .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
         }
         rename_retry(
@@ -561,13 +724,13 @@ fn recover_set_password_transition(
 
     // Ensure staging dir does not survive a rollback.
     if attachments_staging_dir.exists() {
-        std::fs::remove_dir_all(&attachments_staging_dir)
+        remove_dir_all_retry(&attachments_staging_dir, 40, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
     clear_pool(profile_id);
-    let _ = std::fs::remove_dir_all(backup_root);
+    best_effort_remove_dir_all_retry(backup_root, 40, Duration::from_millis(50));
     Ok(())
 }
 
@@ -637,13 +800,13 @@ fn recover_change_password_transition(
                     .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
                 } else {
                     // Backup already exists; clear current dir to make room for staging swap.
-                    std::fs::remove_dir_all(&attachments_dir)
+                    remove_dir_all_retry(&attachments_dir, 40, Duration::from_millis(50))
                         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
                 }
             }
 
             if attachments_dir.exists() {
-                std::fs::remove_dir_all(&attachments_dir)
+                remove_dir_all_retry(&attachments_dir, 40, Duration::from_millis(50))
                     .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
             }
 
@@ -697,7 +860,8 @@ fn recover_change_password_transition(
         // Remove any stale SQLite sidecars (WAL/SHM/journal) that could have been left from a prior plaintext vault.
         cleanup_sqlite_sidecars(&vault_path);
 
-        let _ = std::fs::remove_dir_all(backup_root);
+        // Cleanup backup root (best-effort).
+        best_effort_remove_dir_all_retry(backup_root, 40, Duration::from_millis(50));
         return Ok(());
     }
 
@@ -731,7 +895,7 @@ fn recover_change_password_transition(
 
     if attachments_backup_dir.exists() {
         if attachments_dir.exists() {
-            std::fs::remove_dir_all(&attachments_dir)
+            remove_dir_all_retry(&attachments_dir, 40, Duration::from_millis(50))
                 .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
         }
         rename_retry(
@@ -745,14 +909,14 @@ fn recover_change_password_transition(
 
     // Remove any staging dir left from a partially completed swap.
     if attachments_staging_dir.exists() {
-        std::fs::remove_dir_all(&attachments_staging_dir)
+        remove_dir_all_retry(&attachments_staging_dir, 40, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     // After rollback, the profile is still protected.
     registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
     clear_pool(profile_id);
-    let _ = std::fs::remove_dir_all(backup_root);
+    best_effort_remove_dir_all_retry(backup_root, 40, Duration::from_millis(50));
     Ok(())
 }
 
@@ -801,15 +965,19 @@ fn recover_remove_password_transition(
         } else {
             // Ensure attachments are plaintext (they should already be swapped before marker is written).
             // If there is leftover staging dir, attempt to complete the swap.
-            if attachments_plain_staging_dir.exists() {
-                if attachments_dir.exists() {
-                    if attachments_encrypted_backup_dir.exists() {
-                        std::fs::remove_dir_all(&attachments_encrypted_backup_dir)
+                if attachments_plain_staging_dir.exists() {
+                    if attachments_dir.exists() {
+                        if attachments_encrypted_backup_dir.exists() {
+                            remove_dir_all_retry(
+                                &attachments_encrypted_backup_dir,
+                                40,
+                                Duration::from_millis(50),
+                            )
                             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-                    }
-                    rename_retry(
-                        &attachments_dir,
-                        &attachments_encrypted_backup_dir,
+                        }
+                        rename_retry(
+                            &attachments_dir,
+                            &attachments_encrypted_backup_dir,
                         20,
                         Duration::from_millis(50),
                     )
@@ -817,7 +985,7 @@ fn recover_remove_password_transition(
                 }
 
                 if attachments_dir.exists() {
-                    std::fs::remove_dir_all(&attachments_dir)
+                    remove_dir_all_retry(&attachments_dir, 40, Duration::from_millis(50))
                         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
                 }
 
@@ -884,7 +1052,7 @@ fn recover_remove_password_transition(
 
                 registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
                 clear_pool(profile_id);
-                let _ = std::fs::remove_dir_all(backup_root);
+                best_effort_remove_dir_all_retry(backup_root, 40, Duration::from_millis(50));
                 return Ok(());
             }
         }
@@ -912,7 +1080,7 @@ fn recover_remove_password_transition(
 
     if attachments_encrypted_backup_dir.exists() {
         if attachments_dir.exists() {
-            std::fs::remove_dir_all(&attachments_dir)
+            remove_dir_all_retry(&attachments_dir, 40, Duration::from_millis(50))
                 .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
         }
         rename_retry(
@@ -926,29 +1094,36 @@ fn recover_remove_password_transition(
 
     // Remove any leftover plain staging dir.
     if attachments_plain_staging_dir.exists() {
-        std::fs::remove_dir_all(&attachments_plain_staging_dir)
+        remove_dir_all_retry(&attachments_plain_staging_dir, 40, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
 
     registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
     clear_pool(profile_id);
-    let _ = std::fs::remove_dir_all(backup_root);
+    best_effort_remove_dir_all_retry(backup_root, 40, Duration::from_millis(50));
     Ok(())
 }
 
 
 
-fn recover_incomplete_profile_transitions(
+fn recover_incomplete_profile_transitions_with_password(
     storage_paths: &crate::data::storage_paths::StoragePaths,
     profile_id: &str,
     profile_name: &str,
+    maybe_password: Option<&str>,
 ) -> Result<()> {
     let profile_root = profile_dir(storage_paths, profile_id)?;
     let tmp_root = profile_root.join("tmp");
 
     let set_root = tmp_root.join("set_password_backup");
     if set_root.exists() {
-        recover_set_password_transition(storage_paths, profile_id, profile_name, &set_root)?;
+        recover_set_password_transition(
+            storage_paths,
+            profile_id,
+            profile_name,
+            &set_root,
+            maybe_password,
+        )?;
     }
 
     let change_root = tmp_root.join("change_password_backup");
@@ -964,9 +1139,48 @@ fn recover_incomplete_profile_transitions(
     Ok(())
 }
 
+fn recover_incomplete_profile_transitions(
+    storage_paths: &crate::data::storage_paths::StoragePaths,
+    profile_id: &str,
+    profile_name: &str,
+) -> Result<()> {
+    recover_incomplete_profile_transitions_with_password(storage_paths, profile_id, profile_name, None)
+}
+
 fn best_effort_fsync_parent_dir(_path: &Path) {
     // Windows-only build: directory fsync not portable; keep hook as no-op.
     let _ = _path;
+}
+
+fn remove_dir_all_retry(path: &Path, attempts: u32, base_delay: Duration) -> io::Result<()> {
+    let mut i = 0;
+    loop {
+        match std::fs::remove_dir_all(path) {
+            Ok(()) => {
+                best_effort_fsync_parent_dir(path);
+                return Ok(());
+            }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                i += 1;
+                if i >= attempts {
+                    return Err(e);
+                }
+                let backoff_ms = base_delay.as_millis() as u64 * i as u64;
+                std::thread::sleep(Duration::from_millis(backoff_ms.max(25).min(1500)));
+            }
+        }
+    }
+}
+
+fn best_effort_remove_dir_all_retry(path: &Path, attempts: u32, base_delay: Duration) {
+    if let Err(e) = remove_dir_all_retry(path, attempts, base_delay) {
+        log::warn!(
+            "[SECURITY][best_effort_remove_dir_all_retry] path={:?} err={}",
+            path,
+            e
+        );
+    }
 }
 
 fn best_effort_fsync_rename_dirs(_from: &Path, _to: &Path) {
@@ -1081,7 +1295,7 @@ fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duratio
 
 fn prepare_empty_dir(path: &Path) -> Result<()> {
     if path.exists() {
-        std::fs::remove_dir_all(path)
+        remove_dir_all_retry(path, 40, Duration::from_millis(50))
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
     std::fs::create_dir_all(path)
@@ -1171,24 +1385,24 @@ fn reencrypt_attachments_to_staging(
     Ok(())
 }
 
-pub fn login_vault(id: &str, password: Option<String>, state: &Arc<AppState>) -> Result<bool> {
+pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> Result<bool> {
     let storage_paths = state.get_storage_paths()?;
     let mut profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
     // If a previous set/change/remove password operation crashed mid-flight,
     // recover the on-disk profile state before attempting to open the vault.
-    recover_incomplete_profile_transitions(&storage_paths, id, &profile.name)?;
+    recover_incomplete_profile_transitions_with_password(&storage_paths, id, &profile.name, password)?;
     profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
-    let pwd = password.unwrap_or_default();
+    let pwd = password.unwrap_or("");
     let is_passwordless = !profile.has_password;
 
     if is_passwordless {
         init_database_passwordless(&storage_paths, id)?;
     } else {
-        open_protected_vault_session(id, &pwd, &storage_paths, state)?;
+        open_protected_vault_session(id, pwd, &storage_paths, state)?;
     }
 
     if let Ok(mut active) = state.active_profile.lock() {
@@ -1360,7 +1574,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         drain_and_drop_profile_pools(id, Duration::from_secs(5));
         clear_pool(id);
 
-        recover_incomplete_profile_transitions(&storage_paths, id, &profile.name)?;
+        recover_incomplete_profile_transitions_with_password(&storage_paths, id, &profile.name, password)?;
 
         let vault_path = vault_db_path(&storage_paths, id)?;
         if !vault_path.exists() {
@@ -1542,7 +1756,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             let _ = std::fs::remove_file(&rb.key_check_new_path);
 
             if rb.attachments_swapped {
-                let _ = std::fs::remove_dir_all(&rb.attachments_dir);
+                best_effort_remove_dir_all_retry(&rb.attachments_dir, 40, Duration::from_millis(50));
                 let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
             }
 
@@ -1642,7 +1856,8 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
 
         // Swap attachments dir to encrypted form.
         if attachments_backup_dir.exists() {
-            let _ = std::fs::remove_dir_all(&attachments_backup_dir);
+            remove_dir_all_retry(&attachments_backup_dir, 40, Duration::from_millis(50))
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
         }
         rename_retry(&attachments_dir, &attachments_backup_dir, 20, Duration::from_millis(50))
             .map_err(|_| {
@@ -1723,7 +1938,19 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         // Now that the vault file has been replaced by an encrypted blob, old WAL/SHM sidecars are stale.
         cleanup_sqlite_sidecars(&vault_path);
 
-        let _ = std::fs::remove_dir_all(&backup_root);
+        // Delete the transition backup root. If it cannot be deleted (e.g. transient AV lock),
+        // best-effort encrypt the leftover plaintext backups (vault.db.bak / attachments_plain)
+        // so a stuck backup directory does not become a plaintext data-at-rest leak.
+        if let Err(e) = remove_dir_all_retry(&backup_root, 40, Duration::from_millis(50)) {
+            log::warn!(
+                "[SECURITY][set_profile_password] profile_id={} action=cleanup_failed backup_root={:?} err={}",
+                id,
+                backup_root,
+                e
+            );
+            best_effort_encrypt_set_password_backups(id, &*key, &backup_root);
+            best_effort_remove_dir_all_retry(&backup_root, 40, Duration::from_millis(50));
+        }
 
         Ok(meta)
     })();
@@ -1781,7 +2008,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
     drain_and_drop_profile_pools(id, Duration::from_secs(5));
     clear_pool(id);
 
-    recover_incomplete_profile_transitions(&storage_paths, id, &profile.name)?;
+    recover_incomplete_profile_transitions_with_password(&storage_paths, id, &profile.name, password)?;
 
     ensure_profile_dirs(&storage_paths, id)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
@@ -1847,7 +2074,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
         let _ = std::fs::remove_file(&rb.key_check_new_path);
 
         if rb.attachments_swapped {
-            let _ = std::fs::remove_dir_all(&rb.attachments_dir);
+            best_effort_remove_dir_all_retry(&rb.attachments_dir, 40, Duration::from_millis(50));
             let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
         }
 
@@ -1923,7 +2150,8 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
 
     // Swap attachments dir.
     if attachments_backup_dir.exists() {
-        let _ = std::fs::remove_dir_all(&attachments_backup_dir);
+        remove_dir_all_retry(&attachments_backup_dir, 40, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
     rename_retry(&attachments_dir, &attachments_backup_dir, 20, Duration::from_millis(50))
         .map_err(|_| {
@@ -1988,7 +2216,7 @@ pub fn change_profile_password(id: &str, password: &str, state: &Arc<AppState>) 
         s.key = new_key;
     }
 
-    let _ = std::fs::remove_dir_all(&backup_root);
+    best_effort_remove_dir_all_retry(&backup_root, 40, Duration::from_millis(50));
     Ok(true)
 }
 
@@ -2023,7 +2251,7 @@ fn rollback_remove_profile_password(
     );
 
     if rb.attachments_swapped {
-        let _ = std::fs::remove_dir_all(&rb.attachments_dir);
+        best_effort_remove_dir_all_retry(&rb.attachments_dir, 40, Duration::from_millis(50));
         let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
     }
 
@@ -2086,7 +2314,7 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     drain_and_drop_profile_pools(id, Duration::from_secs(5));
     clear_pool(id);
 
-    recover_incomplete_profile_transitions(&storage_paths, id, &profile.name)?;
+    recover_incomplete_profile_transitions_with_password(&storage_paths, id, &profile.name, password)?;
 
     let profile_root = profile_dir(&storage_paths, id)?;
     let backup_root = profile_root.join("tmp").join("remove_password_backup");
@@ -2178,7 +2406,7 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     // Attachments migration to plaintext.
     let staging_dir = backup_root.join("attachments_plain_staging");
     if staging_dir.exists() {
-        let _ = std::fs::remove_dir_all(&staging_dir);
+        best_effort_remove_dir_all_retry(&staging_dir, 40, Duration::from_millis(50));
     }
     if std::fs::create_dir_all(&staging_dir).is_err() {
         rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
@@ -2234,7 +2462,8 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
         }
     }
     if attachments_backup_dir.exists() {
-        let _ = std::fs::remove_dir_all(&attachments_backup_dir);
+        remove_dir_all_retry(&attachments_backup_dir, 40, Duration::from_millis(50))
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     }
     if rename_retry(&attachments_dir, &attachments_backup_dir, 20, Duration::from_millis(50)).is_err() {
         rollback_remove_profile_password(state, &storage_paths, id, &profile.name, &rb);
@@ -2282,7 +2511,7 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     *session_guard = None;
     clear_pool(id);
 
-    let _ = std::fs::remove_dir_all(&backup_root);
+    best_effort_remove_dir_all_retry(&backup_root, 40, Duration::from_millis(50));
     Ok(updated.into())
 }
 
