@@ -20,8 +20,16 @@ const MAX_RESTORE_TOTAL_BYTES: i64 = 512 * 1024 * 1024;
 
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
-    backup_registry_path, backups_dir, kdf_salt_path, key_check_path, profile_config_path,
-    profile_dir, user_settings_path, vault_db_path,
+    backup_registry_path,
+    backups_dir,
+    dpapi_key_path,
+    kdf_salt_path,
+    key_check_path,
+    profile_config_path,
+    profile_dir,
+    user_settings_path,
+    vault_db_path,
+    vault_key_path,
 };
 use crate::data::profiles::registry;
 use crate::data::storage_paths::StoragePaths;
@@ -101,8 +109,14 @@ struct BackupSource {
     attachments_path: PathBuf,
     config_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
+    // Protected-mode files
     kdf_salt_path: Option<PathBuf>,
     key_check_path: Option<PathBuf>,
+    vault_key_path: Option<PathBuf>,
+
+    // Passwordless-mode file
+    dpapi_key_path: Option<PathBuf>,
+
     _temp_dir: Option<tempfile::TempDir>,
 }
 
@@ -282,8 +296,11 @@ fn build_backup_source(
     let profile = registry::get_profile(sp, profile_id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
     let profile_name = profile.name.clone();
+
+    // Vault is always in-memory when unlocked; persist before backup for both modes.
+    security_service::persist_active_vault(state)?;
+
     let vault_mode = if profile.has_password {
-        security_service::persist_active_vault(state)?;
         "protected".to_string()
     } else {
         "passwordless".to_string()
@@ -293,6 +310,7 @@ fn build_backup_source(
     let attachments_path = profile_root.join("attachments");
     let config_path = profile_config_path(sp, profile_id).ok();
     let settings_path = user_settings_path(sp, profile_id).ok();
+
     let (salt_path, key_check) = if profile.has_password {
         let salt = kdf_salt_path(sp, profile_id)?;
         if !salt.exists() {
@@ -310,54 +328,43 @@ fn build_backup_source(
         )
     };
 
-    if !profile.has_password {
-        fs::create_dir_all(profile_root.join("tmp"))
-            .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
-        let temp_dir = tempfile::Builder::new()
-            .prefix("backup_vault_snapshot")
-            .tempdir_in(profile_root.join("tmp"))
-            .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
-        let vault_path = temp_dir.path().join("vault.db");
-        let source_path = vault_db_path(sp, profile_id)?;
-        let src_conn = rusqlite::Connection::open(&source_path)
-            .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
-        let mut dest_conn = rusqlite::Connection::open(&vault_path)
-            .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
-        let backup = rusqlite::backup::Backup::new(&src_conn, &mut dest_conn)
-            .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
-        backup
-            .run_to_completion(5, std::time::Duration::from_millis(250), None)
-            .map_err(|_| ErrorCodeString::new("BACKUP_CREATE_FAILED"))?;
-
-        Ok((
-            BackupSource {
-                vault_path,
-                attachments_path,
-                config_path,
-                settings_path,
-                kdf_salt_path: salt_path,
-                key_check_path: key_check,
-                _temp_dir: Some(temp_dir),
-            },
-            vault_mode,
-            profile_name,
-        ))
+    let vault_key = if profile.has_password {
+        let p = vault_key_path(sp, profile_id)?;
+        if !p.exists() {
+            return Err(ErrorCodeString::new("VAULT_KEY_MISSING"));
+        }
+        Some(p)
     } else {
-        let vault_path = vault_db_path(sp, profile_id)?;
-        Ok((
-            BackupSource {
-                vault_path,
-                attachments_path,
-                config_path,
-                settings_path,
-                kdf_salt_path: salt_path,
-                key_check_path: key_check,
-                _temp_dir: None,
-            },
-            vault_mode,
-            profile_name,
-        ))
-    }
+        None
+    };
+
+    let dpapi_key = if !profile.has_password {
+        let p = dpapi_key_path(sp, profile_id)?;
+        if !p.exists() {
+            return Err(ErrorCodeString::new("DPAPI_KEY_MISSING"));
+        }
+        Some(p)
+    } else {
+        None
+    };
+
+    let vault_path = vault_db_path(sp, profile_id)?;
+
+    Ok((
+        BackupSource {
+            vault_path,
+            attachments_path,
+            config_path,
+            settings_path,
+            kdf_salt_path: salt_path,
+            key_check_path: key_check,
+            vault_key_path: vault_key,
+            dpapi_key_path: dpapi_key,
+            _temp_dir: None,
+        },
+        vault_mode,
+        profile_name,
+    ))
 }
 
 fn create_archive(
@@ -400,6 +407,15 @@ fn create_archive(
         &mut manifest_entries,
     )?;
     if vault_mode == "protected" {
+        let vault_key_path = source
+            .vault_key_path
+            .as_ref()
+            .ok_or_else(|| ErrorCodeString::new("VAULT_KEY_MISSING"))?;
+        if !vault_key_path.exists() {
+            return Err(ErrorCodeString::new("VAULT_KEY_MISSING"));
+        }
+        add_file_to_zip(&mut writer, vault_key_path, "vault_key.bin", &mut manifest_entries)?;
+
         let salt_path = source
             .kdf_salt_path
             .as_ref()
@@ -417,7 +433,16 @@ fn create_archive(
             return Err(ErrorCodeString::new("KEY_CHECK_MISSING"));
         }
         add_file_to_zip(&mut writer, key_check_path, "key_check.bin", &mut manifest_entries)?;
-    } else {
+    } else if vault_mode == "passwordless" {
+        let dpapi_key_path = source
+            .dpapi_key_path
+            .as_ref()
+            .ok_or_else(|| ErrorCodeString::new("DPAPI_KEY_MISSING"))?;
+        if !dpapi_key_path.exists() {
+            return Err(ErrorCodeString::new("DPAPI_KEY_MISSING"));
+        }
+        add_file_to_zip(&mut writer, dpapi_key_path, "dpapi_key.bin", &mut manifest_entries)?;
+
         add_optional_file(
             &mut writer,
             source.kdf_salt_path.take(),
@@ -430,6 +455,8 @@ fn create_archive(
             "key_check.bin",
             &mut manifest_entries,
         )?;
+    } else {
+        return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
     }
 
     let manifest = BackupManifest {
@@ -760,6 +787,8 @@ fn restore_archive_to_profile(
     let mut has_vault = false;
     let mut has_kdf_salt = false;
     let mut has_key_check = false;
+    let mut has_vault_key = false;
+    let mut has_dpapi_key = false;
 
     for f in &manifest.files {
         if !seen.insert(&f.path) {
@@ -774,16 +803,26 @@ fn restore_archive_to_profile(
         if f.path == "key_check.bin" {
             has_key_check = true;
         }
+        if f.path == "vault_key.bin" {
+            has_vault_key = true;
+        }
+        if f.path == "dpapi_key.bin" {
+            has_dpapi_key = true;
+        }
     }
 
     if !has_vault {
         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
     }
     if manifest.vault_mode == "protected" {
-        if !has_kdf_salt || !has_key_check {
+        if !has_kdf_salt || !has_key_check || !has_vault_key {
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
-    } else if manifest.vault_mode != "passwordless" {
+    } else if manifest.vault_mode == "passwordless" {
+        if !has_dpapi_key {
+            return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+        }
+    } else {
         return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
     }
 
@@ -908,7 +947,14 @@ fn restore_archive_to_profile(
             }
         }
 
-        for file_name in ["config.json", "user_settings.json", "kdf_salt.bin", "key_check.bin"] {
+        for file_name in [
+            "config.json",
+            "user_settings.json",
+            "kdf_salt.bin",
+            "key_check.bin",
+            "vault_key.bin",
+            "dpapi_key.bin",
+        ] {
             let extracted_file = temp_dir.path().join(file_name);
             if extracted_file.exists() {
                 let target = profile_root.join(file_name);
@@ -990,6 +1036,7 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
     if manifest.vault_mode == "protected" {
         let mut has_kdf_salt = false;
         let mut has_key_check = false;
+        let mut has_vault_key = false;
         for f in &manifest.files {
             if f.path == "kdf_salt.bin" {
                 has_kdf_salt = true;
@@ -997,10 +1044,25 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
             if f.path == "key_check.bin" {
                 has_key_check = true;
             }
+            if f.path == "vault_key.bin" {
+                has_vault_key = true;
+            }
         }
-        if !has_kdf_salt || !has_key_check {
+        if !has_kdf_salt || !has_key_check || !has_vault_key {
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
+    } else if manifest.vault_mode == "passwordless" {
+        let mut has_dpapi_key = false;
+        for f in &manifest.files {
+            if f.path == "dpapi_key.bin" {
+                has_dpapi_key = true;
+            }
+        }
+        if !has_dpapi_key {
+            return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+        }
+    } else {
+        return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
     }
 
     let exists = registry::get_profile(&sp, &manifest.profile_id)?.is_some();
