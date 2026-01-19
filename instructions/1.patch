@@ -1,116 +1,372 @@
-diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
-index 9b60d00..0600249 100644
---- a/src-tauri/src/data/profiles/registry.rs
-+++ b/src-tauri/src/data/profiles/registry.rs
-@@ -7,6 +7,7 @@ use uuid::Uuid;
- use crate::data::crypto::cipher::PM_ENC_MAGIC;
- use crate::data::fs::atomic_write::write_atomic;
- use crate::data::profiles::paths::{
-+    dpapi_key_path,
-     ensure_profiles_dir,
-     key_check_path,
-     kdf_salt_path,
-@@ -14,6 +15,7 @@ use crate::data::profiles::paths::{
-     profile_dir,
-     registry_path,
-     vault_db_path,
-+    vault_key_path,
- };
- use crate::data::storage_paths::StoragePaths;
+diff --git a/src-tauri/src/commands/profiles.rs b/src-tauri/src/commands/profiles.rs
+index 4bb0bdb..9c9d2ab 100644
+--- a/src-tauri/src/commands/profiles.rs
++++ b/src-tauri/src/commands/profiles.rs
+@@ -4,7 +4,9 @@ use tauri::State;
+ 
+ use crate::app_state::AppState;
  use crate::error::{ErrorCodeString, Result};
-@@ -212,23 +214,35 @@ fn vault_looks_plaintext(sp: &StoragePaths, id: &str) -> bool {
- }
++use crate::data::profiles::registry;
+ use crate::services::profiles_service;
++use crate::services::security_service;
+ use crate::types::{ProfileMeta, ProfilesList};
  
- fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
--    // If the vault is clearly a plaintext SQLite database, treat the profile as passwordless even
-+    // Legacy: if the vault is clearly a plaintext SQLite database, treat the profile as passwordless even
-     // if registry/config got out of sync (e.g. interrupted remove password / restore / bug).
-     if vault_looks_plaintext(sp, id) {
-         return false;
-     }
+ #[tauri::command]
+@@ -120,16 +122,32 @@ pub async fn set_active_profile(id: String, state: State<'_, Arc<AppState>>) ->
+             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+             .clone();
  
--    // If the registry says protected, keep it protected unless we have positive evidence of passwordless.
--    if record_has_password {
-+    // New security model: vault.db is ALWAYS encrypted on disk.
-+    // The password requirement is determined by which master-key wrapper exists:
-+    //   - dpapi_key.bin  -> passwordless (DPAPI unlock)
-+    //   - vault_key.bin  -> password required (KDF unlock)
-+    let dpapi_ok = dpapi_key_path(sp, id).ok().is_some_and(|p| p.exists());
-+    if dpapi_ok {
-+        return false;
-+    }
++        // If we are switching profiles, persist and clear any currently-unlocked vault session.
++        if old_active_profile_id.as_deref() != Some(id.as_str()) {
++            security_service::persist_active_vault(&app_state)?;
++            if let Ok(mut session) = app_state.vault_session.lock() {
++                *session = None;
++            }
 +
-+    let vault_key_ok = vault_key_path(sp, id).ok().is_some_and(|p| p.exists());
-+    if vault_key_ok {
-         return true;
-     }
++            if let Some(old_id) = &old_active_profile_id {
++                crate::data::sqlite::pool::clear_pool(old_id);
++            }
++        }
++
+         if let Ok(mut active) = app_state.active_profile.lock() {
+             *active = Some(id.clone());
+         }
+         profiles_service::set_active_profile(&storage_paths, &id)?;
  
-+    // Backwards-compatibility / partial upgrades: if we see salt+key_check, treat as password-protected.
-     let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
-     let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
-     if salt_ok && key_ok {
-         return true;
-     }
--    vault_looks_encrypted(sp, id)
-+
-+    // Fall back to the registry value.
-+    record_has_password
- }
- 
- pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
-@@ -422,4 +436,4 @@ pub fn get_profile(sp: &StoragePaths, id: &str) -> Result<Option<ProfileRecord>>
-         None => return Ok(None),
-     };
-     Ok(Some(registry.profiles[idx].clone()))
--}
-+}
-\ No newline at end of file
-diff --git a/src-tauri/src/services/profiles_service.rs b/src-tauri/src/services/profiles_service.rs
-index 57d1345..35f2f76 100644
---- a/src-tauri/src/services/profiles_service.rs
-+++ b/src-tauri/src/services/profiles_service.rs
-@@ -1,10 +1,11 @@
- use crate::data::crypto::kdf::{derive_master_key, generate_kdf_salt};
-+use crate::data::crypto::master_key;
- use crate::data::crypto::key_check;
- use crate::data::fs::atomic_write::write_atomic;
- use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path};
- use crate::data::profiles::registry;
- use crate::data::settings::config;
--use crate::data::sqlite::init::{init_database_passwordless, init_database_protected_encrypted};
-+use crate::data::sqlite::init::init_database_protected_encrypted;
- use crate::data::storage_paths::StoragePaths;
- use crate::error::{ErrorCodeString, Result};
- use crate::services::settings_service::get_settings;
-@@ -37,18 +38,27 @@ pub fn create_profile(
-         ensure_profile_dirs(sp, &profile.id)
-             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
- 
-+        // New security model: vault.db is ALWAYS an encrypted blob on disk.
-+        // Password vs passwordless only changes how the master key is wrapped:
-+        //   - password mode: master key is wrapped by a KDF-derived wrapping key (vault_key.bin + salt + key_check)
-+        //   - passwordless: master key is wrapped by Windows DPAPI (dpapi_key.bin)
-+
-+        let mk = master_key::generate_master_key();
-+        init_database_protected_encrypted(sp, &profile.id, &mk)?;
-+
-         let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
-         if is_passwordless {
--            init_database_passwordless(sp, &profile.id)?;
-+            master_key::write_master_key_wrapped_with_dpapi(sp, &profile.id, &mk)?;
-         } else {
-             let salt = generate_kdf_salt();
-             let salt_path = kdf_salt_path(sp, &profile.id)?;
-             write_atomic(&salt_path, &salt)
-                 .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+
-             let pwd = password.unwrap_or_default();
--            let key = Zeroizing::new(derive_master_key(&pwd, &salt)?);
--            key_check::create_key_check_file(sp, &profile.id, &key)?;
--            init_database_protected_encrypted(sp, &profile.id, &key)?;
-+            let wrapping = Zeroizing::new(derive_master_key(&pwd, &salt)?);
-+            key_check::create_key_check_file(sp, &profile.id, &wrapping)?;
-+            master_key::write_master_key_wrapped_with_password(sp, &profile.id, &wrapping, &mk)?;
+-        if let Some(old_id) = old_active_profile_id {
+-            crate::data::sqlite::pool::clear_pool(&old_id);
++        // Preserve legacy behavior: passwordless profiles auto-unlock on selection.
++        let profile = registry::get_profile(&storage_paths, &id)?
++            .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++        if !profile.has_password {
++            security_service::login_vault(&id, None, &app_state)?;
          }
  
-         let _ = get_settings(sp, &profile.id)?;
+         Ok(true)
++
+     })
+     .await
+     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
+index 11708d0..02e3021 100644
+--- a/src-tauri/src/data/sqlite/repo_impl.rs
++++ b/src-tauri/src/data/sqlite/repo_impl.rs
+@@ -6,9 +6,9 @@ use rusqlite::Connection;
+ use uuid::Uuid;
+ 
+ use super::diagnostics::log_sqlite_err;
+-use super::pool::{self, DbTarget};
++
+ use crate::app_state::AppState;
+-use crate::data::profiles::paths::vault_db_path;
++
+ use crate::error::{ErrorCodeString, Result};
+ use crate::types::{
+     AttachmentMeta, BankCardItem, BankCardSummary, CreateBankCardInput, CreateDataCardInput,
+@@ -37,10 +37,7 @@ fn with_connection<T>(
+         }
+     }
+ 
+-    let storage_paths = state.get_storage_paths()?;
+-    let target = DbTarget::File(vault_db_path(&storage_paths, profile_id)?);
+-    let pooled = pool::get_conn(profile_id, target)?;
+-    f(&pooled)
++    Err(ErrorCodeString::new("VAULT_LOCKED"))
+ }
+ 
+ fn deserialize_json<T: serde::de::DeserializeOwned>(value: String) -> rusqlite::Result<T> {
+diff --git a/src-tauri/src/services/attachments_service.rs b/src-tauri/src/services/attachments_service.rs
+index 58d7f0a..0808065 100644
+--- a/src-tauri/src/services/attachments_service.rs
++++ b/src-tauri/src/services/attachments_service.rs
+@@ -26,7 +26,7 @@ struct ActiveSession {
+     state: Arc<AppState>,
+     storage_paths: crate::data::storage_paths::StoragePaths,
+     profile_id: String,
+-    vault_key: Option<[u8; 32]>,
++    vault_key: [u8; 32],
+ }
+ 
+ fn require_logged_in(app: &AppHandle) -> Result<ActiveSession> {
+@@ -102,15 +102,11 @@ pub fn add_attachment_from_fs_path(
+     let file_path = attachment_file_path(&session.storage_paths, &session.profile_id, &meta.id)?;
+     ensure_target_dir(&file_path)?;
+ 
+-    if let Some(key) = session.vault_key {
+-        let encrypted =
+-            cipher::encrypt_attachment_blob(&session.profile_id, &meta.id, &key, &bytes)?;
+-        write_atomic(&file_path, &encrypted)
+-            .map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
+-    } else {
+-        write_atomic(&file_path, &bytes)
+-            .map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
+-    }
++    let encrypted =
++        cipher::encrypt_attachment_blob(&session.profile_id, &meta.id, &session.vault_key, &bytes)?;
++    write_atomic(&file_path, &encrypted)
++        .map_err(|_| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?;
++
+ 
+     repo_impl::insert_attachment(&session.state, &session.profile_id, &meta)?;
+ 
+@@ -160,8 +156,8 @@ pub fn save_attachment_to_path(
+         attachment_file_path(&session.storage_paths, &session.profile_id, &meta.id)?;
+     let bytes =
+         fs::read(&stored_path).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
+-    let output_bytes = if let Some(key) = session.vault_key {
+-        cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &key, &bytes)?
++    let output_bytes = if bytes.starts_with(&cipher::PM_ENC_MAGIC) {
++        cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &session.vault_key, &bytes)?
+     } else {
+         bytes
+     };
+@@ -191,8 +187,8 @@ pub fn get_attachment_preview(
+     let bytes =
+         fs::read(&stored_path).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ_FAILED"))?;
+ 
+-    let output_bytes = if let Some(key) = session.vault_key {
+-        cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &key, &bytes)?
++    let output_bytes = if bytes.starts_with(&cipher::PM_ENC_MAGIC) {
++        cipher::decrypt_attachment_blob(&session.profile_id, &meta.id, &session.vault_key, &bytes)?
+     } else {
+         bytes
+     };
+diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
+index 1d015bf..1513ca3 100644
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -15,13 +15,12 @@ use zeroize::{Zeroize, Zeroizing};
+ use walkdir::WalkDir;
+ 
+ use crate::app_state::{AppState, VaultSession};
+-use crate::data::crypto::{cipher, kdf, key_check};
++use crate::data::crypto::{cipher, kdf, key_check, master_key};
+ use crate::data::fs::atomic_write::write_atomic;
+ use crate::data::profiles::paths::{
+     ensure_profile_dirs, kdf_salt_path, key_check_path, profile_dir, vault_db_path,
+ };
+ use crate::data::profiles::registry;
+-use crate::data::sqlite::init::init_database_passwordless;
+ use crate::data::sqlite::migrations;
+ use crate::data::sqlite::pool::{clear_pool, drain_and_drop_profile_pools, MaintenanceGuard};
+ use crate::error::{ErrorCodeString, Result};
+@@ -190,24 +189,35 @@ fn open_protected_vault_session(
+     }
+     let salt =
+         std::fs::read(&salt_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+-    let key = Zeroizing::new(kdf::derive_master_key(password, &salt)?);
+ 
+-    if !key_check::verify_key_check_file(storage_paths, profile_id, &key)? {
++    // Password is used ONLY to unwrap the master key (vault_key.bin). Vault data is always
++    // encrypted with the master key.
++    let wrapping_key = Zeroizing::new(kdf::derive_master_key(password, &salt)?);
++
++    if !key_check::verify_key_check_file(storage_paths, profile_id, &wrapping_key)? {
+         return Err(ErrorCodeString::new("INVALID_PASSWORD"));
+     }
+ 
++    let master = Zeroizing::new(
++        master_key::read_master_key_wrapped_with_password(storage_paths, profile_id, &wrapping_key)?,
++    );
++
+     let vault_path = vault_db_path(storage_paths, profile_id)?;
+     if !vault_path.exists() {
+         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
+     }
+     let encrypted = cipher::read_encrypted_file(&vault_path)?;
+-    let decrypted = cipher::decrypt_vault_blob(profile_id, &key, &encrypted)
++    let decrypted = cipher::decrypt_vault_blob(profile_id, &master, &encrypted)
+         .map_err(|_| ErrorCodeString::new("VAULT_DECRYPT_FAILED"))?;
+ 
+     // If the stored DB image is marked WAL, SQLite may try to open -wal/-shm even for :memory:
+     // deserialization and fail with SQLITE_CANTOPEN (14). Normalize header before deserialize.
+     let mut decrypted = decrypted;
+-    normalize_sqlite_header_disable_wal(decrypted.as_mut_slice(), profile_id, "unlock_before_deserialize");
++    normalize_sqlite_header_disable_wal(
++        decrypted.as_mut_slice(),
++        profile_id,
++        "unlock_before_deserialize",
++    );
+ 
+     let mut conn = rusqlite::Connection::open_in_memory().map_err(|e| {
+         log::error!(
+@@ -217,6 +227,7 @@ fn open_protected_vault_session(
+         );
+         ErrorCodeString::new("DB_OPEN_FAILED")
+     })?;
++
+     // Set pragmas BEFORE deserialize to avoid temp file writes during the first statements.
+     apply_in_memory_pragmas(&conn, profile_id, "open_in_memory_before_deserialize")?;
+     let owned = owned_data_from_bytes(decrypted)?;
+@@ -228,6 +239,7 @@ fn open_protected_vault_session(
+         );
+         ErrorCodeString::new("VAULT_CORRUPTED")
+     })?;
++
+     if let Err(e) = migrations::migrate_to_latest(&conn) {
+         log::error!(
+             "[SECURITY][login] profile_id={} step=migrate_to_latest failed code={}",
+@@ -250,7 +262,79 @@ fn open_protected_vault_session(
+         *session = Some(VaultSession {
+             profile_id: profile_id.to_string(),
+             conn,
+-            key,
++            key: master,
++        });
++    }
++
++    Ok(())
++}
++
++fn open_passwordless_vault_session(
++    profile_id: &str,
++    storage_paths: &crate::data::storage_paths::StoragePaths,
++    state: &Arc<AppState>,
++) -> Result<()> {
++    // Passwordless mode: unwrap master key using Windows DPAPI (dpapi_key.bin).
++    let master = Zeroizing::new(master_key::read_master_key_wrapped_with_dpapi(storage_paths, profile_id)?);
++
++    let vault_path = vault_db_path(storage_paths, profile_id)?;
++    if !vault_path.exists() {
++        return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
++    }
++    let encrypted = cipher::read_encrypted_file(&vault_path)?;
++    let decrypted = cipher::decrypt_vault_blob(profile_id, &master, &encrypted)
++        .map_err(|_| ErrorCodeString::new("VAULT_DECRYPT_FAILED"))?;
++
++    let mut decrypted = decrypted;
++    normalize_sqlite_header_disable_wal(
++        decrypted.as_mut_slice(),
++        profile_id,
++        "unlock_before_deserialize",
++    );
++
++    let mut conn = rusqlite::Connection::open_in_memory().map_err(|e| {
++        log::error!(
++            "[SECURITY][login] profile_id={} step=open_in_memory err={}",
++            profile_id,
++            format_rusqlite_error(&e)
++        );
++        ErrorCodeString::new("DB_OPEN_FAILED")
++    })?;
++
++    apply_in_memory_pragmas(&conn, profile_id, "open_in_memory_before_deserialize")?;
++    let owned = owned_data_from_bytes(decrypted)?;
++    conn.deserialize(DatabaseName::Main, owned, false).map_err(|e| {
++        log::error!(
++            "[SECURITY][login] profile_id={} step=deserialize err={}",
++            profile_id,
++            format_rusqlite_error(&e)
++        );
++        ErrorCodeString::new("VAULT_CORRUPTED")
++    })?;
++
++    if let Err(e) = migrations::migrate_to_latest(&conn) {
++        log::error!(
++            "[SECURITY][login] profile_id={} step=migrate_to_latest failed code={}",
++            profile_id,
++            e.code
++        );
++        return Err(e);
++    }
++    migrations::validate_core_schema(&conn)
++        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
++
++    best_effort_force_journal_mode_memory(&conn, profile_id, "unlock_after_deserialize");
++
++    {
++        let mut session = state
++            .vault_session
++            .lock()
++            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
++
++        *session = Some(VaultSession {
++            profile_id: profile_id.to_string(),
++            conn,
++            key: master,
+         });
+     }
+ 
+@@ -1400,7 +1484,7 @@ pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> R
+     let is_passwordless = !profile.has_password;
+ 
+     if is_passwordless {
+-        init_database_passwordless(&storage_paths, id)?;
++        open_passwordless_vault_session(id, &storage_paths, state)?;
+     } else {
+         open_protected_vault_session(id, pwd, &storage_paths, state)?;
+     }
+@@ -2523,8 +2607,6 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
+ }
+ 
+ pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
+-    let storage_paths = state.get_storage_paths()?;
+-
+     let active_id = state
+         .active_profile
+         .lock()
+@@ -2535,13 +2617,6 @@ pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
+         return Ok(false);
+     };
+ 
+-    let profile = crate::data::profiles::registry::get_profile(&storage_paths, &id)?
+-        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+-
+-    if !profile.has_password {
+-        return Ok(true);
+-    }
+-
+     let session = state
+         .vault_session
+         .lock()
+@@ -2553,14 +2628,13 @@ pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
+         .unwrap_or(false))
+ }
+ 
++
+ pub struct ActiveSessionInfo {
+     pub profile_id: String,
+-    pub vault_key: Option<[u8; 32]>,
++    pub vault_key: [u8; 32],
+ }
+ 
+ pub fn require_unlocked_active_profile(state: &Arc<AppState>) -> Result<ActiveSessionInfo> {
+-    let storage_paths = state.get_storage_paths()?;
+-
+     let active_id = state
+         .active_profile
+         .lock()
+@@ -2568,16 +2642,6 @@ pub fn require_unlocked_active_profile(state: &Arc<AppState>) -> Result<ActiveSe
+         .clone()
+         .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
+ 
+-    let profile = crate::data::profiles::registry::get_profile(&storage_paths, &active_id)?
+-        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+-
+-    if !profile.has_password {
+-        return Ok(ActiveSessionInfo {
+-            profile_id: active_id,
+-            vault_key: None,
+-        });
+-    }
+-
+     let session = state
+         .vault_session
+         .lock()
+@@ -2587,7 +2651,7 @@ pub fn require_unlocked_active_profile(state: &Arc<AppState>) -> Result<ActiveSe
+         if s.profile_id == active_id {
+             return Ok(ActiveSessionInfo {
+                 profile_id: active_id,
+-                vault_key: Some(*s.key),
++                vault_key: *s.key,
+             });
+         }
+     }
+@@ -2595,6 +2659,7 @@ pub fn require_unlocked_active_profile(state: &Arc<AppState>) -> Result<ActiveSe
+     Err(ErrorCodeString::new("VAULT_LOCKED"))
+ }
+ 
++
+ pub fn auto_lock_cleanup(state: &Arc<AppState>) -> Result<bool> {
+     if let Some(id) = persist_active_vault(state)? {
+         attachments_service::clear_previews_for_profile(state, &id)?;
