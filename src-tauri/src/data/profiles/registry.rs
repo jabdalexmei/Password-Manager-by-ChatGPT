@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::data::crypto::cipher::PM_ENC_MAGIC;
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
+    dpapi_key_path,
     ensure_profiles_dir,
     key_check_path,
     kdf_salt_path,
@@ -14,6 +15,7 @@ use crate::data::profiles::paths::{
     profile_dir,
     registry_path,
     vault_db_path,
+    vault_key_path,
 };
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
@@ -212,23 +214,35 @@ fn vault_looks_plaintext(sp: &StoragePaths, id: &str) -> bool {
 }
 
 fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
-    // If the vault is clearly a plaintext SQLite database, treat the profile as passwordless even
+    // Legacy: if the vault is clearly a plaintext SQLite database, treat the profile as passwordless even
     // if registry/config got out of sync (e.g. interrupted remove password / restore / bug).
     if vault_looks_plaintext(sp, id) {
         return false;
     }
 
-    // If the registry says protected, keep it protected unless we have positive evidence of passwordless.
-    if record_has_password {
+    // New security model: vault.db is ALWAYS encrypted on disk.
+    // The password requirement is determined by which master-key wrapper exists:
+    //   - dpapi_key.bin  -> passwordless (DPAPI unlock)
+    //   - vault_key.bin  -> password required (KDF unlock)
+    let dpapi_ok = dpapi_key_path(sp, id).ok().is_some_and(|p| p.exists());
+    if dpapi_ok {
+        return false;
+    }
+
+    let vault_key_ok = vault_key_path(sp, id).ok().is_some_and(|p| p.exists());
+    if vault_key_ok {
         return true;
     }
 
+    // Backwards-compatibility / partial upgrades: if we see salt+key_check, treat as password-protected.
     let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
     let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
     if salt_ok && key_ok {
         return true;
     }
-    vault_looks_encrypted(sp, id)
+
+    // Fall back to the registry value.
+    record_has_password
 }
 
 pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {

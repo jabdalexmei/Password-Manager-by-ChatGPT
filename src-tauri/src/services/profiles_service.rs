@@ -1,10 +1,11 @@
 use crate::data::crypto::kdf::{derive_master_key, generate_kdf_salt};
 use crate::data::crypto::key_check;
+use crate::data::crypto::master_key;
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{ensure_profile_dirs, kdf_salt_path};
 use crate::data::profiles::registry;
 use crate::data::settings::config;
-use crate::data::sqlite::init::{init_database_passwordless, init_database_protected_encrypted};
+use crate::data::sqlite::init::init_database_protected_encrypted;
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::settings_service::get_settings;
@@ -37,18 +38,26 @@ pub fn create_profile(
         ensure_profile_dirs(sp, &profile.id)
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
+        // New security model: vault.db is ALWAYS an encrypted blob on disk.
+        // Password vs passwordless only changes how the master key is wrapped:
+        //   - password mode: master key is wrapped by a KDF-derived wrapping key (vault_key.bin + salt + key_check)
+        //   - passwordless: master key is wrapped by Windows DPAPI (dpapi_key.bin)
+
+        let mk = master_key::generate_master_key();
+        init_database_protected_encrypted(sp, &profile.id, &mk)?;
+
         let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
         if is_passwordless {
-            init_database_passwordless(sp, &profile.id)?;
+            master_key::write_master_key_wrapped_with_dpapi(sp, &profile.id, &mk)?;
         } else {
             let salt = generate_kdf_salt();
             let salt_path = kdf_salt_path(sp, &profile.id)?;
             write_atomic(&salt_path, &salt)
                 .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
             let pwd = password.unwrap_or_default();
-            let key = Zeroizing::new(derive_master_key(&pwd, &salt)?);
-            key_check::create_key_check_file(sp, &profile.id, &key)?;
-            init_database_protected_encrypted(sp, &profile.id, &key)?;
+            let wrapping = Zeroizing::new(derive_master_key(&pwd, &salt)?);
+            key_check::create_key_check_file(sp, &profile.id, &wrapping)?;
+            master_key::write_master_key_wrapped_with_password(sp, &profile.id, &wrapping, &mk)?;
         }
 
         let _ = get_settings(sp, &profile.id)?;
