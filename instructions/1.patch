@@ -1,27 +1,285 @@
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -2255,6 +2255,14 @@
-         let _ = rename_retry(&rb.attachments_backup_dir, &rb.attachments_dir, 20, Duration::from_millis(50));
+--- a/src-tauri/Cargo.toml
++++ b/src-tauri/Cargo.toml
+@@ -33,11 +33,13 @@
+ [target.'cfg(windows)'.dependencies]
+ windows-sys = { version = "0.61", features = [
+   "Win32_Foundation",
+   "Win32_Storage_FileSystem",
+   "Win32_System_DataExchange",
++  "Win32_System_Memory",
++  "Win32_Security_Cryptography",
+   "Win32_UI_WindowsAndMessaging"
+ ] }
+ webview2-com = "0.38.0"
+ windows = "0.61"
+
+--- a/src-tauri/src/main.rs
++++ b/src-tauri/src/main.rs
+@@ -14,11 +14,13 @@
      }
+     pub mod crypto {
+         pub mod cipher;
++        pub mod dpapi;
+         pub mod kdf;
+         pub mod key_check;
++        pub mod master_key;
+     }
+     pub mod profiles {
+         pub mod paths;
+         pub mod registry;
+     }
+
+--- a/src-tauri/src/data/profiles/paths.rs
++++ b/src-tauri/src/data/profiles/paths.rs
+@@ -102,6 +102,14 @@
+ pub fn key_check_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
+     Ok(profile_dir(sp, profile_id)?.join("key_check.bin"))
+ }
  
++pub fn vault_key_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
++    Ok(profile_dir(sp, profile_id)?.join("vault_key.bin"))
++}
 +
-+    // Best-effort: remove plaintext staging dir if it was created.
-+    // It can contain decrypted attachment files if the transition failed mid-flight.
-+    if let Some(backup_root) = rb.attachments_backup_dir.parent() {
-+        let staging_dir = backup_root.join("attachments_plain_staging");
-+        best_effort_remove_dir_all_retry(&staging_dir, 40, Duration::from_millis(50));
++pub fn dpapi_key_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
++    Ok(profile_dir(sp, profile_id)?.join("dpapi_key.bin"))
++}
++
+ pub fn attachment_file_path(
+     sp: &StoragePaths,
+     profile_id: &str,
+     attachment_id: &str,
+ ) -> Result<PathBuf> {
+
+--- /dev/null
++++ b/src-tauri/src/data/crypto/dpapi.rs
+@@ -0,0 +1,108 @@
++use crate::error::{ErrorCodeString, Result};
++
++/// Windows DPAPI wrapper (CryptProtectData / CryptUnprotectData).
++///
++/// Always uses `CRYPTPROTECT_UI_FORBIDDEN` to prevent any UI prompt.
++///
++/// The optional `entropy` is additional authenticated data for DPAPI. We use it
++/// (e.g., profile_id bytes) to make accidental file swaps fail early.
++#[cfg(windows)]
++mod imp {
++    use super::*;
++    use std::ptr;
++
++    use windows_sys::Win32::Security::Cryptography::{
++        CryptProtectData, CryptUnprotectData, DATA_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
++    };
++    use windows_sys::Win32::System::Memory::LocalFree;
++
++    fn blob_from_slice(bytes: &[u8]) -> DATA_BLOB {
++        DATA_BLOB {
++            cbData: bytes.len() as u32,
++            pbData: bytes.as_ptr() as *mut u8,
++        }
 +    }
 +
-     // Avoid delete-then-rename gap: atomically swap backup back into place.
-     let _ = replace_file_retry(
-         &rb.vault_backup_path,
-@@ -2314,7 +2322,7 @@
-     drain_and_drop_profile_pools(id, Duration::from_secs(5));
-     clear_pool(id);
- 
--    recover_incomplete_profile_transitions_with_password(&storage_paths, id, &profile.name, password)?;
-+    recover_incomplete_profile_transitions_with_password(&storage_paths, id, &profile.name, None)?;
- 
-     let profile_root = profile_dir(&storage_paths, id)?;
-     let backup_root = profile_root.join("tmp").join("remove_password_backup");
++    pub fn protect(plaintext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
++        unsafe {
++            let mut in_blob = blob_from_slice(plaintext);
++            let mut out_blob = DATA_BLOB {
++                cbData: 0,
++                pbData: ptr::null_mut(),
++            };
++
++            let mut ent_blob = DATA_BLOB {
++                cbData: 0,
++                pbData: ptr::null_mut(),
++            };
++            let ent_ptr: *mut DATA_BLOB = match entropy {
++                Some(e) if !e.is_empty() => {
++                    ent_blob = blob_from_slice(e);
++                    &mut ent_blob as *mut DATA_BLOB
++                }
++                _ => ptr::null_mut(),
++            };
++
++            let ok = CryptProtectData(
++                &mut in_blob as *mut DATA_BLOB,
++                ptr::null(),
++                ent_ptr,
++                ptr::null_mut(),
++                ptr::null_mut(),
++                CRYPTPROTECT_UI_FORBIDDEN,
++                &mut out_blob as *mut DATA_BLOB,
++            );
++
++            if ok == 0 {
++                return Err(ErrorCodeString::new("DPAPI_PROTECT_FAILED"));
++            }
++
++            let out = std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize).to_vec();
++            let _ = LocalFree(out_blob.pbData as isize);
++            Ok(out)
++        }
++    }
++
++    pub fn unprotect(ciphertext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
++        unsafe {
++            let mut in_blob = blob_from_slice(ciphertext);
++            let mut out_blob = DATA_BLOB {
++                cbData: 0,
++                pbData: ptr::null_mut(),
++            };
++
++            let mut ent_blob = DATA_BLOB {
++                cbData: 0,
++                pbData: ptr::null_mut(),
++            };
++            let ent_ptr: *mut DATA_BLOB = match entropy {
++                Some(e) if !e.is_empty() => {
++                    ent_blob = blob_from_slice(e);
++                    &mut ent_blob as *mut DATA_BLOB
++                }
++                _ => ptr::null_mut(),
++            };
++
++            let ok = CryptUnprotectData(
++                &mut in_blob as *mut DATA_BLOB,
++                ptr::null_mut(),
++                ent_ptr,
++                ptr::null_mut(),
++                ptr::null_mut(),
++                CRYPTPROTECT_UI_FORBIDDEN,
++                &mut out_blob as *mut DATA_BLOB,
++            );
++
++            if ok == 0 {
++                return Err(ErrorCodeString::new("DPAPI_UNPROTECT_FAILED"));
++            }
++
++            let out = std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize).to_vec();
++            let _ = LocalFree(out_blob.pbData as isize);
++            Ok(out)
++        }
++    }
++}
++
++#[cfg(windows)]
++pub fn protect(plaintext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
++    imp::protect(plaintext, entropy)
++}
++
++#[cfg(windows)]
++pub fn unprotect(ciphertext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
++    imp::unprotect(ciphertext, entropy)
++}
++
++#[cfg(not(windows))]
++pub fn protect(_plaintext: &[u8], _entropy: Option<&[u8]>) -> Result<Vec<u8>> {
++    Err(ErrorCodeString::new("WINDOWS_ONLY"))
++}
++
++#[cfg(not(windows))]
++pub fn unprotect(_ciphertext: &[u8], _entropy: Option<&[u8]>) -> Result<Vec<u8>> {
++    Err(ErrorCodeString::new("WINDOWS_ONLY"))
++}
+
+--- /dev/null
++++ b/src-tauri/src/data/crypto/master_key.rs
+@@ -0,0 +1,171 @@
++use std::fs;
++
++use rand::rngs::OsRng;
++use rand::RngCore;
++use zeroize::Zeroizing;
++
++use crate::data::crypto::{cipher, dpapi};
++use crate::data::fs::atomic_write::write_atomic;
++use crate::data::profiles::paths::{dpapi_key_path, vault_key_path};
++use crate::data::storage_paths::StoragePaths;
++use crate::error::{ErrorCodeString, Result};
++
++pub const MASTER_KEY_LEN: usize = 32;
++
++// Plaintext encoding:
++//   "PMMK1:" + profile_id + "\0" + 32-bytes key
++// This prevents accidental cross-profile key swaps.
++const PREFIX: &[u8] = b"PMMK1:";
++
++pub fn generate_master_key() -> [u8; MASTER_KEY_LEN] {
++    let mut key = [0u8; MASTER_KEY_LEN];
++    OsRng.fill_bytes(&mut key);
++    key
++}
++
++fn build_plaintext(profile_id: &str, master_key: &[u8; MASTER_KEY_LEN]) -> Zeroizing<Vec<u8>> {
++    let mut out = Vec::with_capacity(PREFIX.len() + profile_id.len() + 1 + MASTER_KEY_LEN);
++    out.extend_from_slice(PREFIX);
++    out.extend_from_slice(profile_id.as_bytes());
++    out.push(0);
++    out.extend_from_slice(master_key);
++    Zeroizing::new(out)
++}
++
++fn parse_plaintext(profile_id: &str, plaintext: &[u8]) -> Result<[u8; MASTER_KEY_LEN]> {
++    if !plaintext.starts_with(PREFIX) {
++        return Err(ErrorCodeString::new("MASTER_KEY_CORRUPTED"));
++    }
++    let rest = &plaintext[PREFIX.len()..];
++    let nul = rest.iter().position(|b| *b == 0).ok_or_else(|| ErrorCodeString::new("MASTER_KEY_CORRUPTED"))?;
++    let pid = &rest[..nul];
++    if pid != profile_id.as_bytes() {
++        return Err(ErrorCodeString::new("MASTER_KEY_PROFILE_MISMATCH"));
++    }
++    let key_bytes = &rest[nul + 1..];
++    if key_bytes.len() != MASTER_KEY_LEN {
++        return Err(ErrorCodeString::new("MASTER_KEY_CORRUPTED"));
++    }
++    let mut key = [0u8; MASTER_KEY_LEN];
++    key.copy_from_slice(key_bytes);
++    Ok(key)
++}
++
++fn aad(profile_id: &str) -> Vec<u8> {
++    format!("master_key:{}", profile_id).into_bytes()
++}
++
++pub fn write_master_key_wrapped_with_password(
++    sp: &StoragePaths,
++    profile_id: &str,
++    wrapping_key: &[u8; MASTER_KEY_LEN],
++    master_key: &[u8; MASTER_KEY_LEN],
++) -> Result<()> {
++    let plaintext = build_plaintext(profile_id, master_key);
++    let blob = cipher::encrypt_bytes(wrapping_key, &aad(profile_id), plaintext.as_slice())?;
++    cipher::write_encrypted_file(&vault_key_path(sp, profile_id)?, &blob)
++}
++
++pub fn read_master_key_wrapped_with_password(
++    sp: &StoragePaths,
++    profile_id: &str,
++    wrapping_key: &[u8; MASTER_KEY_LEN],
++) -> Result<[u8; MASTER_KEY_LEN]> {
++    let blob = cipher::read_encrypted_file(&vault_key_path(sp, profile_id)?)?;
++    let plaintext = cipher::decrypt_bytes(wrapping_key, &aad(profile_id), &blob)?;
++    parse_plaintext(profile_id, &plaintext)
++}
++
++pub fn write_master_key_wrapped_with_dpapi(
++    sp: &StoragePaths,
++    profile_id: &str,
++    master_key: &[u8; MASTER_KEY_LEN],
++) -> Result<()> {
++    let plaintext = build_plaintext(profile_id, master_key);
++    let protected = dpapi::protect(plaintext.as_slice(), Some(profile_id.as_bytes()))?;
++    write_atomic(&dpapi_key_path(sp, profile_id)?, &protected)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
++}
++
++pub fn read_master_key_wrapped_with_dpapi(
++    sp: &StoragePaths,
++    profile_id: &str,
++) -> Result<[u8; MASTER_KEY_LEN]> {
++    let path = dpapi_key_path(sp, profile_id)?;
++    if !path.exists() {
++        return Err(ErrorCodeString::new("DPAPI_KEY_MISSING"));
++    }
++    let protected = fs::read(&path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
++    let plaintext = dpapi::unprotect(&protected, Some(profile_id.as_bytes()))?;
++    parse_plaintext(profile_id, &plaintext)
++}
