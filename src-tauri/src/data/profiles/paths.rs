@@ -20,6 +20,78 @@ fn validate_profile_id(id: &str) -> Result<()> {
     }
 }
 
+#[cfg(windows)]
+fn set_dir_private(path: &Path) -> std::io::Result<()> {
+    use std::ffi::OsString;
+    use std::process::Command;
+
+    // Harden directory ACLs on Windows:
+    // - remove inherited ACEs
+    // - grant ONLY: current user + LocalSystem (SID S-1-5-18)
+    // We call icacls.exe directly to avoid PATH hijacking.
+    // NOTE: This is best-effort but intentionally returns an error on failure.
+
+    let icacls = std::env::var_os("SystemRoot")
+        .map(|root| PathBuf::from(root).join("System32").join("icacls.exe"))
+        .unwrap_or_else(|| PathBuf::from("icacls.exe"));
+
+    // Use DOMAIN\\User if available, otherwise fallback to USERNAME.
+    let username = std::env::var_os("USERNAME").unwrap_or_default();
+    let userdomain = std::env::var_os("USERDOMAIN").unwrap_or_default();
+    let principal: OsString = if !userdomain.is_empty() && !username.is_empty() {
+        let mut s = OsString::new();
+        s.push(userdomain);
+        s.push("\\");
+        s.push(username);
+        s
+    } else {
+        username
+    };
+
+    if principal.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "set_dir_private: unable to resolve current user principal",
+        ));
+    }
+
+    let mut user_grant = principal.clone();
+    user_grant.push(":(OI)(CI)F");
+    let system_grant: OsString = "*S-1-5-18:(OI)(CI)F".into();
+
+    // Remove common broad SIDs (Everyone / Authenticated Users / BUILTIN\\Users).
+    // Using well-known SIDs avoids localization issues.
+    let output = Command::new(&icacls)
+        .arg(path)
+        .arg("/inheritance:r")
+        .arg("/grant:r")
+        .arg(user_grant)
+        .arg("/grant:r")
+        .arg(system_grant)
+        .arg("/remove")
+        .arg("*S-1-1-0")
+        .arg("*S-1-5-11")
+        .arg("*S-1-5-32-545")
+        .arg("/c")
+        .output()?;
+
+    if !output.status.success() {
+        let mut msg = String::from("icacls failed");
+        if !output.stdout.is_empty() {
+            msg.push_str(": ");
+            msg.push_str(&String::from_utf8_lossy(&output.stdout));
+        }
+        if !output.stderr.is_empty() {
+            msg.push_str(" ");
+            msg.push_str(&String::from_utf8_lossy(&output.stderr));
+        }
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, msg));
+    }
+
+    Ok(())
+}
+
+#[cfg(not(windows))]
 fn set_dir_private(_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
