@@ -10,6 +10,7 @@ use crate::error::{ErrorCodeString, Result};
 mod imp {
     use super::*;
     use std::ptr;
+    use core::ffi::c_void;
 
     // windows-sys does not always expose the `DATA_BLOB` alias name.
     // In Win32 headers, `DATA_BLOB` is just an alias of `_CRYPTOAPI_BLOB` (aka
@@ -70,7 +71,7 @@ mod imp {
             let out =
                 std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize)
                     .to_vec();
-            let _ = LocalFree(out_blob.pbData as isize);
+            let _ = LocalFree(out_blob.pbData as *mut c_void);
             Ok(out)
         }
     }
@@ -112,7 +113,7 @@ mod imp {
             let out =
                 std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize)
                     .to_vec();
-            let _ = LocalFree(out_blob.pbData as isize);
+            let _ = LocalFree(out_blob.pbData as *mut c_void);
             Ok(out)
         }
     }

@@ -361,7 +361,7 @@ fn build_backup_source(
 
 fn create_archive(
     destination: &Path,
-    mut source: BackupSource,
+    source: BackupSource,
     profile_id: &str,
     profile_name: &str,
     vault_mode: &str,
