@@ -4,6 +4,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+use crate::data::crypto::cipher::PM_ENC_MAGIC;
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
     dpapi_key_path,
