@@ -1,31 +1,61 @@
---- a/src-tauri/src/commands/backup.rs
-+++ b/src-tauri/src/commands/backup.rs
-@@ -138,11 +138,25 @@
-         let now = now_ms()?;
-         cleanup_stale_backup_picks(&st, now)?;
+diff --git a/src-tauri/src/app_state.rs b/src-tauri/src/app_state.rs
+--- a/src-tauri/src/app_state.rs
++++ b/src-tauri/src/app_state.rs
+@@ -91,6 +91,26 @@ impl AppState {
+     }
  
--        let selection = app
-+        // UX: when restoring from the Workspace screen users often keep their backups
-+        // inside the selected workspace (Profiles/.../backups). Start browsing there.
-+        // Also: do not rely on extension filters here - some platforms handle multi-dot
-+        // extensions inconsistently (e.g. *.pmbackup.zip). We validate the picked file
-+        // via backup_inspect_service anyway.
-+        let mut dialog = app
-             .dialog()
-             .file()
--            .add_filter("Backup", &["pmbackup", "zip"])
--            .blocking_pick_file();
-+            .set_title("Select backup archive (.pmbackup.zip)");
+     pub fn set_workspace_root(&self, workspace_root: std::path::PathBuf) -> Result<()> {
++        // If the requested workspace is already active in this process, don't try to re-lock it.
++        // On Windows, re-acquiring the same lock from the same process can fail (WORKSPACE_ALREADY_IN_USE).
++        {
++            let storage_paths = self
++                .storage_paths
++                .lock()
++                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
 +
-+        if let Ok(sp) = st.get_storage_paths() {
-+            if let Ok(profiles_root) = sp.profiles_root() {
-+                dialog = dialog.set_directory(profiles_root);
-+            } else if let Ok(workspace_root) = sp.workspace_root() {
-+                dialog = dialog.set_directory(workspace_root);
++            if let Ok(current) = storage_paths.workspace_root() {
++                let current_can =
++                    std::fs::canonicalize(current).unwrap_or_else(|_| current.clone());
++                let requested_can = std::fs::canonicalize(&workspace_root)
++                    .unwrap_or_else(|_| workspace_root.clone());
++
++                if current_can == requested_can {
++                    return Ok(());
++                }
 +            }
 +        }
 +
-+        let selection = dialog.blocking_pick_file();
+         // Preflight create to ensure workspace_root exists before we attempt to lock.
+         // This is safe even if locking fails (no user data is modified here).
+         let profiles_dir = workspace_root.join("Profiles");
+         std::fs::create_dir_all(&profiles_dir)
+             .map_err(|_| ErrorCodeString::new("WORKSPACE_PROFILES_CREATE_FAILED"))?;
+
+diff --git a/src-tauri/src/commands/workspace.rs b/src-tauri/src/commands/workspace.rs
+--- a/src-tauri/src/commands/workspace.rs
++++ b/src-tauri/src/commands/workspace.rs
+@@ -194,6 +194,23 @@ pub async fn workspace_select(
  
-         let Some(fp) = selection else {
-             return Ok(None);
+         let resolved = resolve_workspace_path(&app_dir, &record);
+         validate_workspace_root(&resolved)?;
++
++        // If user selects the already-open workspace, treat it as a no-op.
++        // This avoids re-locking .pm-workspace.lock (which can fail on Windows) and avoids
++        // unnecessarily logging out an active profile/session.
++        if registry.active_workspace_id.as_deref() == Some(&id) {
++            if let Ok(sp) = app_state.get_storage_paths() {
++                if let Ok(current) = sp.workspace_root() {
++                    let current_can = std::fs::canonicalize(current)
++                        .unwrap_or_else(|_| current.clone());
++                    let resolved_can = std::fs::canonicalize(&resolved)
++                        .unwrap_or_else(|_| resolved.clone());
++                    if current_can == resolved_can {
++                        return Ok(true);
++                    }
++                }
++            }
++        }
+         app_state.logout_and_cleanup()?;
+         app_state.set_workspace_root(resolved)?;
+         registry.active_workspace_id = Some(id);
+         if let Err(err) = save_registry(&app_dir, &registry) {
