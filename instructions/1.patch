@@ -1,169 +1,40 @@
-diff --git a/src-tauri/src/data/crypto/dpapi.rs b/src-tauri/src/data/crypto/dpapi.rs
-index 3e1b9f0..b7da03a 100644
 --- a/src-tauri/src/data/crypto/dpapi.rs
 +++ b/src-tauri/src/data/crypto/dpapi.rs
-@@ -11,13 +11,23 @@ mod imp {
+@@ -10,6 +10,7 @@
+ mod imp {
      use super::*;
      use std::ptr;
++    use core::ffi::c_void;
  
-+    // windows-sys does not always expose the `DATA_BLOB` alias name.
-+    // In Win32 headers, `DATA_BLOB` is just an alias of `_CRYPTOAPI_BLOB` (aka
-+    // `CRYPT_INTEGER_BLOB`). We use `CRYPT_INTEGER_BLOB` to keep this compatible
-+    // across windows-sys versions.
-+    //
-+    // Ref: in Win32 headers `DATA_BLOB` is an alias of `_CRYPTOAPI_BLOB`.
-+    // (see the `CRYPT_INTEGER_BLOB`/`_CRYPTOAPI_BLOB` family of aliases).
-     use windows_sys::Win32::Security::Cryptography::{
--        CryptProtectData, CryptUnprotectData, DATA_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
-+        CryptProtectData, CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
-     };
--    use windows_sys::Win32::System::Memory::LocalFree;
-+    // `LocalFree` is exposed from Win32 Foundation in windows-sys.
-+    use windows_sys::Win32::Foundation::LocalFree;
- 
--    fn blob_from_slice(bytes: &[u8]) -> DATA_BLOB {
--        DATA_BLOB {
-+    type DataBlob = CRYPT_INTEGER_BLOB;
-+
-+    fn blob_from_slice(bytes: &[u8]) -> DataBlob {
-+        DataBlob {
-             cbData: bytes.len() as u32,
-             pbData: bytes.as_ptr() as *mut u8,
+     // windows-sys does not always expose the `DATA_BLOB` alias name.
+     // In Win32 headers, `DATA_BLOB` is just an alias of `_CRYPTOAPI_BLOB` (aka
+@@ -70,7 +71,7 @@
+             let out =
+                 std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize)
+                     .to_vec();
+-            let _ = LocalFree(out_blob.pbData as isize);
++            let _ = LocalFree(out_blob.pbData as *mut c_void);
+             Ok(out)
          }
-@@ -26,31 +36,31 @@ mod imp {
-     pub fn protect(plaintext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
-         unsafe {
-             let mut in_blob = blob_from_slice(plaintext);
--            let mut out_blob = DATA_BLOB {
-+            let mut out_blob = DataBlob {
-                 cbData: 0,
-                 pbData: ptr::null_mut(),
-             };
- 
--            let mut ent_blob = DATA_BLOB {
-+            let mut ent_blob = DataBlob {
-                 cbData: 0,
-                 pbData: ptr::null_mut(),
-             };
--            let ent_ptr: *mut DATA_BLOB = match entropy {
-+            let ent_ptr: *mut DataBlob = match entropy {
-                 Some(e) if !e.is_empty() => {
-                     ent_blob = blob_from_slice(e);
--                    &mut ent_blob as *mut DATA_BLOB
-+                    &mut ent_blob as *mut DataBlob
-                 }
-                 _ => ptr::null_mut(),
-             };
- 
-             let ok = CryptProtectData(
--                &mut in_blob as *mut DATA_BLOB,
-+                &mut in_blob as *mut DataBlob,
-                 ptr::null(),
-                 ent_ptr,
-                 ptr::null_mut(),
-                 ptr::null_mut(),
-                 CRYPTPROTECT_UI_FORBIDDEN,
--                &mut out_blob as *mut DATA_BLOB,
-+                &mut out_blob as *mut DataBlob,
-             );
- 
-             if ok == 0 {
-@@ -68,31 +78,31 @@ mod imp {
-     pub fn unprotect(ciphertext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
-         unsafe {
-             let mut in_blob = blob_from_slice(ciphertext);
--            let mut out_blob = DATA_BLOB {
-+            let mut out_blob = DataBlob {
-                 cbData: 0,
-                 pbData: ptr::null_mut(),
-             };
- 
--            let mut ent_blob = DATA_BLOB {
-+            let mut ent_blob = DataBlob {
-                 cbData: 0,
-                 pbData: ptr::null_mut(),
-             };
--            let ent_ptr: *mut DATA_BLOB = match entropy {
-+            let ent_ptr: *mut DataBlob = match entropy {
-                 Some(e) if !e.is_empty() => {
-                     ent_blob = blob_from_slice(e);
--                    &mut ent_blob as *mut DATA_BLOB
-+                    &mut ent_blob as *mut DataBlob
-                 }
-                 _ => ptr::null_mut(),
-             };
- 
-             let ok = CryptUnprotectData(
--                &mut in_blob as *mut DATA_BLOB,
-+                &mut in_blob as *mut DataBlob,
-                 ptr::null_mut(),
-                 ent_ptr,
-                 ptr::null_mut(),
-                 ptr::null_mut(),
-                 CRYPTPROTECT_UI_FORBIDDEN,
--                &mut out_blob as *mut DATA_BLOB,
-+                &mut out_blob as *mut DataBlob,
-             );
- 
-             if ok == 0 {
-diff --git a/src-tauri/src/data/workspaces/registry.rs b/src-tauri/src/data/workspaces/registry.rs
-index f9625f1..3e23273 100644
---- a/src-tauri/src/data/workspaces/registry.rs
-+++ b/src-tauri/src/data/workspaces/registry.rs
-@@ -1,5 +1,6 @@
- use serde::{Deserialize, Serialize};
- use std::path::{Path, PathBuf};
-+use uuid::Uuid;
- 
- use crate::data::fs::atomic_write::write_atomic;
- 
-diff --git a/src-tauri/src/services/backup_service.rs b/src-tauri/src/services/backup_service.rs
-index 8b821b7..0f039d7 100644
+     }
+@@ -112,7 +113,7 @@
+             let out =
+                 std::slice::from_raw_parts(out_blob.pbData as *const u8, out_blob.cbData as usize)
+                     .to_vec();
+-            let _ = LocalFree(out_blob.pbData as isize);
++            let _ = LocalFree(out_blob.pbData as *mut c_void);
+             Ok(out)
+         }
+     }
+
 --- a/src-tauri/src/services/backup_service.rs
 +++ b/src-tauri/src/services/backup_service.rs
-@@ -947,7 +947,7 @@ fn restore_archive_to_profile(
-                     .sync_all()
-                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+@@ -361,7 +361,7 @@
  
--                let replaced = (|| {
-+                let replaced: Result<()> = (|| {
-                     replace_file_windows(&tmp, &target)
-                         .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
-                     best_effort_fsync_rename_dirs(&tmp, &target);
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 063fffe..82f088e 100644
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -5,8 +5,6 @@ use std::sync::atomic::Ordering;
- use std::sync::Arc;
- use std::time::Duration;
- 
--use rusqlite::backup::Backup;
--use rusqlite::Connection;
- use rusqlite::OpenFlags;
- use rusqlite::ffi;
- use rusqlite::serialize::OwnedData;
-@@ -19,11 +17,10 @@ use crate::data::crypto::{cipher, kdf, key_check, master_key};
- use crate::data::fs::atomic_write::write_atomic;
- use crate::data::profiles::paths::{
-     dpapi_key_path, ensure_profile_dirs, kdf_salt_path, key_check_path, profile_dir, vault_db_path,
--    vault_key_path,
- };
- use crate::data::profiles::registry;
- use crate::data::sqlite::migrations;
--use crate::data::sqlite::pool::{clear_pool, drain_and_drop_profile_pools, MaintenanceGuard};
-+use crate::data::sqlite::pool::clear_pool;
- use crate::error::{ErrorCodeString, Result};
- use crate::services::attachments_service;
- use crate::types::ProfileMeta;
-@@ -540,8 +537,8 @@ fn best_effort_encrypt_set_password_backups(
-                 continue;
-             }
-             let attachment_id = match attachment_id_from_path(path) {
--                Some(id) => id,
--                None => continue,
-+                Ok(id) => id,
-+                Err(_) => continue,
-             };
- 
-             match std::fs::read(path) {
+ fn create_archive(
+     destination: &Path,
+-    mut source: BackupSource,
++    source: BackupSource,
+     profile_id: &str,
+     profile_name: &str,
+     vault_mode: &str,
