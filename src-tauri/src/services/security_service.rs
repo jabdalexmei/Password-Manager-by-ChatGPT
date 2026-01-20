@@ -1417,6 +1417,25 @@ fn attachment_id_from_path(path: &Path) -> Result<String> {
 }
 
 pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> Result<bool> {
+    // No-op if the vault is already unlocked for this profile.
+    // In dev builds the UI can accidentally invoke login multiple times (e.g. React StrictMode).
+    {
+        let session_guard = state
+            .vault_session
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
+
+        if let Some(session) = session_guard.as_ref() {
+            if session.profile_id == id {
+                log::debug!("[SECURITY][login] no-op already_unlocked profile_id={}", id);
+                if let Ok(mut active) = state.active_profile.lock() {
+                    *active = Some(id.to_string());
+                }
+                return Ok(true);
+            }
+        }
+    }
+
     let storage_paths = state.get_storage_paths()?;
     let mut profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;

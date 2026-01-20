@@ -52,6 +52,11 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
             ErrorCodeString::new("DB_QUERY_FAILED")
         })?;
 
+    if version == CURRENT_SCHEMA_VERSION {
+        log::debug!("[DB][migrate] up_to_date version={version}");
+        return Ok(());
+    }
+
     // Fresh DB: create schema and stamp it with the baseline version.
     if version == 0 {
         log::info!("[DB][migrate] init schema user_version={CURRENT_SCHEMA_VERSION}");
@@ -62,10 +67,7 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
         return Ok(());
     }
 
-    // Current baseline.
-    if version == CURRENT_SCHEMA_VERSION {
-        return Ok(());
-    }
+    log::info!("[DB][migrate] migrate from={version} to={CURRENT_SCHEMA_VERSION}");
 
     // Any other version is unsupported in this dev branch.
     log::warn!(
