@@ -5,7 +5,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use rusqlite::OpenFlags;
 use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
 use rusqlite::DatabaseName;
@@ -99,47 +98,6 @@ fn best_effort_force_journal_mode_memory(conn: &rusqlite::Connection, profile_id
             "[SECURITY][pragmas] profile_id={} ctx={} action=journal_mode_memory_failed err={}",
             profile_id,
             ctx,
-            format_rusqlite_error(&e)
-        );
-    }
-}
-
-#[allow(dead_code)]
-fn best_effort_checkpoint_and_set_journal_mode_delete_on_disk(
-    vault_path: &Path,
-    profile_id: &str,
-    ctx: &str,
-) {
-    // Best-effort hardening:
-    // - If the on-disk passwordless DB is in WAL mode, force a checkpoint and truncate WAL.
-    // - Then switch journal_mode to DELETE to avoid leaving plaintext copies in *-wal/*-shm.
-    //
-    // This is intentionally non-fatal. If it fails, we continue; later steps still snapshot the DB
-    // and protected-mode conversion will attempt to remove sidecar files.
-
-    let res: rusqlite::Result<()> = (|| {
-        let conn = rusqlite::Connection::open_with_flags(
-            vault_path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE,
-        )?;
-        let _ = conn.busy_timeout(Duration::from_secs(15));
-
-        let current: String = conn.query_row("PRAGMA journal_mode;", [], |row| row.get(0))?;
-        if current.to_uppercase() == "WAL" {
-            // wal_checkpoint returns (busy, log, checkpointed). We only care that it ran.
-            let _busy: i64 = conn.query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |row| row.get(0))?;
-        }
-
-        let _new_mode: String = conn.query_row("PRAGMA journal_mode=DELETE;", [], |row| row.get(0))?;
-        Ok(())
-    })();
-
-    if let Err(e) = res {
-        log::warn!(
-            "[SECURITY][sqlite_disk_pragmas] profile_id={} ctx={} action=checkpoint_disable_wal_failed vault={:?} err={}",
-            profile_id,
-            ctx,
-            vault_path,
             format_rusqlite_error(&e)
         );
     }
@@ -431,32 +389,7 @@ fn file_has_sqlite_magic(path: &Path) -> bool {
     file_has_prefix(path, MAGIC)
 }
 
-#[allow(dead_code)]
-fn prepare_transition_backup_root(
-    backup_root: &Path,
-    storage_paths: &crate::data::storage_paths::StoragePaths,
-    profile_id: &str,
-    profile_name: &str,
-) -> Result<()> {
-    if backup_root.exists() {
-        // If it contains data, treat it as an incomplete prior transaction and recover first.
-        if is_dir_nonempty(backup_root).unwrap_or(false) {
-            recover_incomplete_profile_transitions(storage_paths, profile_id, profile_name)?;
-        }
-        remove_dir_all_retry(backup_root, 40, Duration::from_millis(50))
-            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    }
-
-    std::fs::create_dir_all(backup_root).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
-}
-
 const REMOVE_PASSWORD_COMMIT_MARKER: &str = "remove_password.commit";
-
-#[allow(dead_code)]
-fn write_remove_password_commit_marker(backup_root: &Path) -> Result<()> {
-    let marker_path = backup_root.join(REMOVE_PASSWORD_COMMIT_MARKER);
-    write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
-}
 
 const SET_PASSWORD_COMMIT_MARKER: &str = "set_password.commit";
 const CHANGE_PASSWORD_COMMIT_MARKER: &str = "change_password.commit";
@@ -464,18 +397,6 @@ const CHANGE_PASSWORD_COMMIT_MARKER: &str = "change_password.commit";
 // Crash-safe transaction folder for password changes (only re-wraps the master key).
 const CHANGE_PASSWORD_TX_DIR: &str = "change_password_tx";
 const CHANGE_PASSWORD_TX_COMMIT_MARKER: &str = "commit";
-
-#[allow(dead_code)]
-fn write_set_password_commit_marker(backup_root: &Path) -> Result<()> {
-    let marker_path = backup_root.join(SET_PASSWORD_COMMIT_MARKER);
-    write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
-}
-
-#[allow(dead_code)]
-fn write_change_password_commit_marker(backup_root: &Path) -> Result<()> {
-    let marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
-    write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
-}
 
 fn best_effort_encrypt_set_password_backups(
     profile_id: &str,
@@ -1331,15 +1252,6 @@ fn recover_incomplete_profile_transitions_with_password(
     Ok(())
 }
 
-#[allow(dead_code)]
-fn recover_incomplete_profile_transitions(
-    storage_paths: &crate::data::storage_paths::StoragePaths,
-    profile_id: &str,
-    profile_name: &str,
-) -> Result<()> {
-    recover_incomplete_profile_transitions_with_password(storage_paths, profile_id, profile_name, None)
-}
-
 fn best_effort_fsync_parent_dir(_path: &Path) {
     // Windows-only build: directory fsync not portable; keep hook as no-op.
     let _ = _path;
@@ -1486,7 +1398,6 @@ fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duratio
     }
 }
 
-#[allow(dead_code)]
 fn prepare_empty_dir(path: &Path) -> Result<()> {
     if path.exists() {
         remove_dir_all_retry(path, 40, Duration::from_millis(50))
@@ -1497,7 +1408,6 @@ fn prepare_empty_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
 fn list_attachment_files(dir: &Path) -> Result<Vec<PathBuf>> {
     if !dir.exists() {
         return Ok(Vec::new());
@@ -1519,67 +1429,6 @@ fn attachment_id_from_path(path: &Path) -> Result<String> {
         .and_then(|s| s.to_str())
         .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_READ"))?;
     Ok(stem.to_string())
-}
-
-#[allow(dead_code)]
-fn encrypt_attachments_plain_to_staging(
-    profile_id: &str,
-    key: &[u8; 32],
-    attachments_dir: &Path,
-    staging_dir: &Path,
-) -> Result<()> {
-    prepare_empty_dir(staging_dir)?;
-    for file in list_attachment_files(attachments_dir)? {
-        let attachment_id = attachment_id_from_path(&file)?;
-        let blob = std::fs::read(&file).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
-
-        // If we see encrypted magic in a passwordless profile, we can't safely recover it (no old key).
-        if blob.starts_with(&cipher::PM_ENC_MAGIC) {
-            return Err(ErrorCodeString::new("ATTACHMENT_CORRUPTED"));
-        }
-
-        let enc = cipher::encrypt_attachment_blob(profile_id, &attachment_id, key, &blob)?;
-        let out_path = staging_dir.join(
-            file.file_name()
-                .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?,
-        );
-        if write_atomic(&out_path, &enc).is_err() {
-            return Err(ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"));
-        }
-    }
-    Ok(())
-}
-
-#[allow(dead_code)]
-fn reencrypt_attachments_to_staging(
-    profile_id: &str,
-    old_key: &[u8; 32],
-    new_key: &[u8; 32],
-    attachments_dir: &Path,
-    staging_dir: &Path,
-) -> Result<()> {
-    prepare_empty_dir(staging_dir)?;
-    for file in list_attachment_files(attachments_dir)? {
-        let attachment_id = attachment_id_from_path(&file)?;
-        let blob = std::fs::read(&file).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
-
-        let plain = if blob.starts_with(&cipher::PM_ENC_MAGIC) {
-            cipher::decrypt_attachment_blob(profile_id, &attachment_id, old_key, &blob)?
-        } else {
-            // Tolerate plaintext leftovers (legacy/edge cases) and bring them into the new key.
-            blob
-        };
-
-        let enc = cipher::encrypt_attachment_blob(profile_id, &attachment_id, new_key, &plain)?;
-        let out_path = staging_dir.join(
-            file.file_name()
-                .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"))?,
-        );
-        if write_atomic(&out_path, &enc).is_err() {
-            return Err(ErrorCodeString::new("ATTACHMENT_WRITE_FAILED"));
-        }
-    }
-    Ok(())
 }
 
 pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> Result<bool> {
@@ -1712,37 +1561,6 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
     if let Some(id) = cleanup_id.as_ref() {
         clear_pool(id);
     }
-
-    Ok(true)
-}
-
-#[allow(dead_code)]
-pub fn drop_active_session_without_persist(state: &Arc<AppState>) -> Result<bool> {
-    let storage_paths = state.get_storage_paths()?;
-
-    let active_id = state
-        .active_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone();
-
-    let Some(profile_id) = active_id else {
-        return Ok(true);
-    };
-
-    attachments_service::clear_previews_for_profile(state, &profile_id)?;
-
-    {
-        let mut session = state
-            .vault_session
-            .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-        *session = None;
-    }
-
-    clear_pool(&profile_id);
-
-    let _ = registry::get_profile(&storage_paths, &profile_id)?;
 
     Ok(true)
 }
