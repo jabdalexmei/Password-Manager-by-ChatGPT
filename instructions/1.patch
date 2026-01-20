@@ -1,62 +1,479 @@
+diff --git a/src/i18n/locales/en/Vault.json b/src/i18n/locales/en/Vault.json
+index c912742..c3e5eb3 100644
+--- a/src/i18n/locales/en/Vault.json
++++ b/src/i18n/locales/en/Vault.json
+@@ -70,7 +70,7 @@
+ 
+   "settingsModal.profile.removePasswordAction": "Remove password",
+   "settingsModal.profile.removePasswordTitle": "Remove password",
+-  "settingsModal.profile.removePasswordDescription": "This will remove the password from this profile and make it passwordless. Anyone with access to this device account will be able to open it.",
++  "settingsModal.profile.removePasswordDescription": "This will remove the password from this profile and make it passwordless. Anyone with access to this device or your backup can open it.",
+   "settingsModal.profile.removePasswordConfirmAction": "Remove password",
+   "settingsModal.profile.removePasswordSuccess": "Password removed",
+   "settingsModal.profile.removePasswordError": "Failed to remove password"
+diff --git a/src-tauri/src/data/crypto/master_key.rs b/src-tauri/src/data/crypto/master_key.rs
+index 3f1e427..2b23ad7 100644
+--- a/src-tauri/src/data/crypto/master_key.rs
++++ b/src-tauri/src/data/crypto/master_key.rs
+@@ -102,3 +102,65 @@ pub fn read_master_key_wrapped_with_dpapi(
+     let plaintext = dpapi::unprotect(&protected, Some(profile_id.as_bytes()))?;
+     parse_plaintext(profile_id, &plaintext)
+ }
++
++
++/// Passwordless portable mode: store the master key *unwrapped* in vault_key.bin.
++///
++/// SECURITY NOTE:
++/// This intentionally lowers security: anyone who can read the profile folder / backup can unlock the vault.
++/// This is by design for the "passwordless but portable" mode.
++pub fn write_master_key_unwrapped(
++    sp: &StoragePaths,
++    profile_id: &str,
++    master_key: &[u8; MASTER_KEY_LEN],
++) -> Result<()> {
++    let plaintext = build_plaintext(profile_id, master_key);
++    write_atomic(&vault_key_path(sp, profile_id)?, plaintext.as_slice())
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
++}
++
++pub fn read_master_key_unwrapped(sp: &StoragePaths, profile_id: &str) -> Result<[u8; MASTER_KEY_LEN]> {
++    let path = vault_key_path(sp, profile_id)?;
++    if !path.exists() {
++        return Err(ErrorCodeString::new("VAULT_KEY_MISSING"));
++    }
++
++    let bytes = fs::read(&path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
++
++    // If vault_key.bin looks like our encrypted file format, then this isn't passwordless.
++    if bytes.starts_with(&cipher::PM_ENC_MAGIC) {
++        return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
++    }
++
++    parse_plaintext(profile_id, &bytes)
++}
++
++/// Read passwordless master key in the current (portable) format.
++///
++/// Backwards-compatibility:
++/// If vault_key.bin doesn't exist yet, we try legacy dpapi_key.bin (Windows only),
++/// and migrate it to portable vault_key.bin.
++pub fn read_master_key_passwordless_portable(
++    sp: &StoragePaths,
++    profile_id: &str,
++) -> Result<[u8; MASTER_KEY_LEN]> {
++    match read_master_key_unwrapped(sp, profile_id) {
++        Ok(key) => Ok(key),
++        Err(e) => {
++            // Only attempt DPAPI migration when the portable file is missing.
++            if e.code != "VAULT_KEY_MISSING" {
++                return Err(e);
++            }
++
++            let key = read_master_key_wrapped_with_dpapi(sp, profile_id)?;
++
++            // Best-effort migration to portable format.
++            let _ = write_master_key_unwrapped(sp, profile_id, &key);
++            if let Ok(p) = dpapi_key_path(sp, profile_id) {
++                let _ = fs::remove_file(p);
++            }
++
++            Ok(key)
++        }
++    }
++}
+diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
+index 97e863b..cacfe51 100644
+--- a/src-tauri/src/data/profiles/registry.rs
++++ b/src-tauri/src/data/profiles/registry.rs
+@@ -194,6 +194,8 @@ fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
+ 
+ const SQLITE_HEADER_MAGIC: [u8; 16] = *b"SQLite format 3\0";
+ 
++const MASTER_KEY_PREFIX: [u8; 6] = *b"PMMK1:";
++
+ fn vault_looks_plaintext(sp: &StoragePaths, id: &str) -> bool {
+     let path = match vault_db_path(sp, id) {
+         Ok(p) => p,
+@@ -220,18 +222,31 @@ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) ->
+         return false;
+     }
+ 
+-    // New security model: vault.db is ALWAYS encrypted on disk.
+-    // The password requirement is determined by which master-key wrapper exists:
+-    //   - dpapi_key.bin  -> passwordless (DPAPI unlock)
+-    //   - vault_key.bin  -> password required (KDF unlock)
++    // Backwards-compatibility: very old passwordless profiles used Windows DPAPI (dpapi_key.bin).
++    // If it exists, treat as passwordless.
+     let dpapi_ok = dpapi_key_path(sp, id).ok().is_some_and(|p| p.exists());
+     if dpapi_ok {
+         return false;
+     }
+ 
+-    let vault_key_ok = vault_key_path(sp, id).ok().is_some_and(|p| p.exists());
+-    if vault_key_ok {
+-        return true;
++    // Current model:
++    // - vault.db is always encrypted on disk.
++    // - password mode is determined by an *encrypted* vault_key.bin (PMENC1...)
++    // - passwordless portable mode stores the master key *unwrapped* in vault_key.bin (PMMK1:...)
++    if let Ok(path) = vault_key_path(sp, id) {
++        if path.exists() {
++            if let Ok(mut f) = fs::File::open(&path) {
++                let mut buf = [0u8; 6];
++                if f.read_exact(&mut buf).is_ok() {
++                    if buf == PM_ENC_MAGIC {
++                        return true;
++                    }
++                    if buf == MASTER_KEY_PREFIX {
++                        return false;
++                    }
++                }
++            }
++        }
+     }
+ 
+     // Backwards-compatibility / partial upgrades: if we see salt+key_check, treat as password-protected.
+@@ -245,6 +260,7 @@ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) ->
+     record_has_password
+ }
+ 
++
+ pub fn list_profiles(sp: &StoragePaths) -> Result<Vec<ProfileMeta>> {
+     let registry = load_registry(sp)?;
+     Ok(registry.profiles.into_iter().map(ProfileMeta::from).collect())
+diff --git a/src-tauri/src/services/backup_service.rs b/src-tauri/src/services/backup_service.rs
+index 2f67b91..49d6a95 100644
 --- a/src-tauri/src/services/backup_service.rs
 +++ b/src-tauri/src/services/backup_service.rs
-@@ -237,6 +237,15 @@
+@@ -27,6 +27,7 @@ use crate::data::profiles::paths::{
+     key_check_path,
+     profile_config_path,
+     profile_dir,
++    ensure_profile_dirs,
+     user_settings_path,
+     vault_db_path,
+     vault_key_path,
+@@ -237,13 +238,8 @@ fn ensure_backup_guard(state: &Arc<AppState>) -> Result<std::sync::MutexGuard<'_
          .map_err(|_| ErrorCodeString::new("BACKUP_ALREADY_RUNNING"))
  }
  
-+fn require_active_profile_id(state: &Arc<AppState>) -> Result<String> {
-+    state
-+        .active_profile
-+        .lock()
-+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-+        .clone()
-+        .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))
-+}
-+
+-fn require_active_profile_id(state: &Arc<AppState>) -> Result<String> {
+-    state
+-        .active_profile
+-        .lock()
+-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+-        .clone()
+-        .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))
++fn require_unlocked_active_profile_id(state: &Arc<AppState>) -> Result<String> {
++    Ok(security_service::require_unlocked_active_profile(state)?.profile_id)
+ }
+ 
  fn add_file_to_zip(
-     writer: &mut ZipWriter<fs::File>,
-     source_path: &Path,
-@@ -584,7 +593,7 @@
+@@ -331,31 +327,18 @@ fn build_backup_source(
+         }
+         (Some(salt), Some(key_check))
+     } else {
+-        (
+-            kdf_salt_path(sp, profile_id).ok().filter(|path| path.exists()),
+-            key_check_path(sp, profile_id).ok().filter(|path| path.exists()),
+-        )
++        (None, None)
+     };
+ 
+-    let vault_key = if profile.has_password {
++    let vault_key = {
+         let p = vault_key_path(sp, profile_id)?;
+         if !p.exists() {
+             return Err(ErrorCodeString::new("VAULT_KEY_MISSING"));
+         }
+         Some(p)
+-    } else {
+-        None
+     };
+ 
+-    let dpapi_key = if !profile.has_password {
+-        let p = dpapi_key_path(sp, profile_id)?;
+-        if !p.exists() {
+-            return Err(ErrorCodeString::new("DPAPI_KEY_MISSING"));
+-        }
+-        Some(p)
+-    } else {
+-        None
+-    };
++    let dpapi_key: Option<PathBuf> = None;
+ 
+     let vault_path = vault_db_path(sp, profile_id)?;
+ 
+@@ -443,27 +426,14 @@ fn create_archive(
+         }
+         add_file_to_zip(&mut writer, key_check_path, "key_check.bin", &mut manifest_entries)?;
+     } else if vault_mode == "passwordless" {
+-        let dpapi_key_path = source
+-            .dpapi_key_path
++        let vault_key_path = source
++            .vault_key_path
+             .as_ref()
+-            .ok_or_else(|| ErrorCodeString::new("DPAPI_KEY_MISSING"))?;
+-        if !dpapi_key_path.exists() {
+-            return Err(ErrorCodeString::new("DPAPI_KEY_MISSING"));
++            .ok_or_else(|| ErrorCodeString::new("VAULT_KEY_MISSING"))?;
++        if !vault_key_path.exists() {
++            return Err(ErrorCodeString::new("VAULT_KEY_MISSING"));
+         }
+-        add_file_to_zip(&mut writer, dpapi_key_path, "dpapi_key.bin", &mut manifest_entries)?;
+-
+-        add_optional_file(
+-            &mut writer,
+-            source.kdf_salt_path.take(),
+-            "kdf_salt.bin",
+-            &mut manifest_entries,
+-        )?;
+-        add_optional_file(
+-            &mut writer,
+-            source.key_check_path.take(),
+-            "key_check.bin",
+-            &mut manifest_entries,
+-        )?;
++        add_file_to_zip(&mut writer, vault_key_path, "vault_key.bin", &mut manifest_entries)?;
+     } else {
+         return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
+     }
+@@ -593,7 +563,7 @@ fn create_backup_internal(
      use_default_path: bool,
  ) -> Result<BackupResult> {
      let _guard = ensure_backup_guard(state)?;
--    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let profile_id = require_active_profile_id(state)?;
+-    let profile_id = require_active_profile_id(state)?;
++    let profile_id = require_unlocked_active_profile_id(state)?;
      let sp = state.get_storage_paths()?;
  
      let (backup_id, destination) = resolve_destination_path(&sp, &profile_id, destination_path, use_default_path)?;
-@@ -619,7 +628,7 @@
+@@ -628,7 +598,7 @@ pub fn backup_create(
      destination_path: Option<String>,
      use_default_path: bool,
  ) -> Result<String> {
--    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let profile_id = require_active_profile_id(state)?;
+-    let profile_id = require_active_profile_id(state)?;
++    let profile_id = require_unlocked_active_profile_id(state)?;
      let sp = state.get_storage_paths()?;
      let settings = settings_service::get_settings(&sp, &profile_id)?;
      let managed_root = backups_dir(&sp, &profile_id)?;
-@@ -641,7 +650,7 @@
+@@ -650,7 +620,7 @@ pub fn backup_create(
  }
  
  pub fn backup_list(state: &Arc<AppState>) -> Result<Vec<BackupListItem>> {
--    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let profile_id = require_active_profile_id(state)?;
+-    let profile_id = require_active_profile_id(state)?;
++    let profile_id = require_unlocked_active_profile_id(state)?;
      let sp = state.get_storage_paths()?;
      let mut registry = load_registry(&sp, &profile_id)?;
      prune_registry(&mut registry);
-@@ -1081,7 +1090,15 @@
+@@ -733,9 +703,9 @@ fn restore_archive_to_profile(
+         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+     }
+ 
++    ensure_profile_dirs(sp, target_profile_id)?;
++
+     let profile_root = profile_dir(sp, target_profile_id)?;
+-    fs::create_dir_all(profile_root.join("tmp"))
+-        .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+     let temp_dir = tempfile::Builder::new()
+         .prefix("backup_restore")
+         .tempdir_in(profile_root.join("tmp"))
+@@ -828,7 +798,8 @@ fn restore_archive_to_profile(
+             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+         }
+     } else if manifest.vault_mode == "passwordless" {
+-        if !has_dpapi_key {
++        // New format: require vault_key.bin; legacy backups may contain dpapi_key.bin.
++        if !has_vault_key && !has_dpapi_key {
+             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+         }
+     } else {
+@@ -990,6 +961,36 @@ fn restore_archive_to_profile(
+             }
+         }
+ 
++        // Post-restore key hygiene: remove incompatible key files so we don't end up with
++        // "two locks on one door".
++        if manifest.vault_mode == "protected" {
++            if let Ok(p) = dpapi_key_path(sp, target_profile_id) {
++                let _ = fs::remove_file(p);
++            }
++        } else if manifest.vault_mode == "passwordless" {
++            // Remove password-based wrapper files if they existed before or were included accidentally.
++            if let Ok(p) = kdf_salt_path(sp, target_profile_id) {
++                let _ = fs::remove_file(p);
++            }
++            if let Ok(p) = key_check_path(sp, target_profile_id) {
++                let _ = fs::remove_file(p);
++            }
++
++            // If we restored a legacy DPAPI-only backup, try to migrate it to portable vault_key.bin.
++            if let Ok(vk) = vault_key_path(sp, target_profile_id) {
++                if !vk.exists() {
++                    if let Ok(dp) = dpapi_key_path(sp, target_profile_id) {
++                        if dp.exists() {
++                            let master = crate::data::crypto::master_key::read_master_key_wrapped_with_dpapi(sp, target_profile_id)?;
++                            let _ = crate::data::crypto::master_key::write_master_key_unwrapped(sp, target_profile_id, &master);
++                            let _ = fs::remove_file(dp);
++                        }
++                    }
++                }
++            }
++        }
++
++
+         Ok(())
+     })();
+ 
+@@ -1061,13 +1062,17 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
+             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+         }
+     } else if manifest.vault_mode == "passwordless" {
++        let mut has_vault_key = false;
+         let mut has_dpapi_key = false;
+         for f in &manifest.files {
++            if f.path == "vault_key.bin" {
++                has_vault_key = true;
++            }
+             if f.path == "dpapi_key.bin" {
+                 has_dpapi_key = true;
+             }
+         }
+-        if !has_dpapi_key {
++        if !has_vault_key && !has_dpapi_key {
+             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+         }
+     } else {
+@@ -1090,14 +1095,15 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
  }
  
  pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {
--    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let profile_id = match state
-+        .active_profile
-+        .lock()
-+        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-+        .clone()
-+    {
-+        Some(id) => id,
-+        None => return Ok(None),
-+    };
+-    let profile_id = match state
+-        .active_profile
+-        .lock()
+-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
+-        .clone()
+-    {
+-        Some(id) => id,
+-        None => return Ok(None),
++    let profile_id = match security_service::require_unlocked_active_profile(state) {
++        Ok(info) => info.profile_id,
++        Err(e) => {
++            // No auto-backup when the vault is locked / no active session.
++            if e.code == "VAULT_LOCKED" {
++                return Ok(None);
++            }
++            return Err(e);
++        }
+     };
      let sp = state.get_storage_paths()?;
      let settings = settings_service::get_settings(&sp, &profile_id)?;
-     if !settings.backups_enabled {
+diff --git a/src-tauri/src/services/profiles_service.rs b/src-tauri/src/services/profiles_service.rs
+index bd216c3..eaba59d 100644
+--- a/src-tauri/src/services/profiles_service.rs
++++ b/src-tauri/src/services/profiles_service.rs
+@@ -41,14 +41,14 @@ pub fn create_profile(
+         // New security model: vault.db is ALWAYS an encrypted blob on disk.
+         // Password vs passwordless only changes how the master key is wrapped:
+         //   - password mode: master key is wrapped by a KDF-derived wrapping key (vault_key.bin + salt + key_check)
+-        //   - passwordless: master key is wrapped by Windows DPAPI (dpapi_key.bin)
++        //   - passwordless: master key is stored unwrapped for portability (vault_key.bin)
+ 
+         let mk = master_key::generate_master_key();
+         init_database_protected_encrypted(sp, &profile.id, &mk)?;
+ 
+         let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
+         if is_passwordless {
+-            master_key::write_master_key_wrapped_with_dpapi(sp, &profile.id, &mk)?;
++            master_key::write_master_key_unwrapped(sp, &profile.id, &mk)?;
+         } else {
+             let salt = generate_kdf_salt();
+             let salt_path = kdf_salt_path(sp, &profile.id)?;
+diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
+index 378de27..92b6e74 100644
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -274,9 +274,10 @@ fn open_passwordless_vault_session(
+     storage_paths: &crate::data::storage_paths::StoragePaths,
+     state: &Arc<AppState>,
+ ) -> Result<()> {
+-    // Passwordless mode: unwrap master key using Windows DPAPI (dpapi_key.bin).
++    // Passwordless portable mode: read the master key from vault_key.bin.
++    // (Best-effort legacy migration from dpapi_key.bin may happen on Windows.)
+     let master =
+-        Zeroizing::new(master_key::read_master_key_wrapped_with_dpapi(storage_paths, profile_id)?);
++        Zeroizing::new(master_key::read_master_key_passwordless_portable(storage_paths, profile_id)?);
+ 
+     let vault_path = vault_db_path(storage_paths, profile_id)?;
+     if !vault_path.exists() {
+@@ -1652,7 +1653,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) ->
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
+     // Obtain the master key.
+-    // Prefer the currently unlocked in-memory session; otherwise unwrap it from dpapi_key.bin.
++    // Prefer the currently unlocked in-memory session; otherwise read it from vault_key.bin.
+     let master = {
+         let session = state
+             .vault_session
+@@ -1663,10 +1664,10 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) ->
+             if s.profile_id == id {
+                 Zeroizing::new(*s.key)
+             } else {
+-                Zeroizing::new(master_key::read_master_key_wrapped_with_dpapi(&storage_paths, id)?)
++                Zeroizing::new(master_key::read_master_key_passwordless_portable(&storage_paths, id)?)
+             }
+         } else {
+-            Zeroizing::new(master_key::read_master_key_wrapped_with_dpapi(&storage_paths, id)?)
++            Zeroizing::new(master_key::read_master_key_passwordless_portable(&storage_paths, id)?)
+         }
+     };
+ 
+@@ -1681,16 +1682,9 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) ->
+     key_check::create_key_check_file(&storage_paths, id, &*wrapping_key)?;
+     master_key::write_master_key_wrapped_with_password(&storage_paths, id, &*wrapping_key, &*master)?;
+ 
+-    // Remove dpapi_key.bin last. Partial failures are safe because passwordless unwrap still exists
+-    // until we remove it.
+-    let dpapi_path = dpapi_key_path(&storage_paths, id)?;
+-    if let Err(e) = remove_file_retry(&dpapi_path, 20, Duration::from_millis(50)) {
+-        log::warn!(
+-            "[SECURITY][set_profile_password] profile_id={} action=remove_dpapi_key_failed path={:?} err={}",
+-            id,
+-            dpapi_path,
+-            e
+-        );
++    // Best-effort cleanup of any legacy dpapi_key.bin after switching to password mode.
++    if let Ok(dpapi_path) = dpapi_key_path(&storage_paths, id) {
++        let _ = fs::remove_file(&dpapi_path);
+     }
+ 
+     let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)?;
+@@ -1783,20 +1777,23 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
+     ensure_profile_dirs(&storage_paths, id)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
+-    // Write dpapi_key.bin FIRST. Only after it exists do we remove password-based key material.
+-    master_key::write_master_key_wrapped_with_dpapi(&storage_paths, id, &*master)?;
++    // Switch to passwordless portable mode by writing the master key unwrapped into vault_key.bin.
++    // Only after it exists do we remove password-based key material.
++    master_key::write_master_key_unwrapped(&storage_paths, id, &*master)?;
+ 
+     // Remove password-based key material.
+-    let vk = vault_key_path(&storage_paths, id)?;
+     let salt = kdf_salt_path(&storage_paths, id)?;
+     let kc = key_check_path(&storage_paths, id)?;
+ 
+-    // If any remove fails, we keep registry unchanged (still protected) and return an error.
+-    remove_file_retry(&vk, 20, Duration::from_millis(50))
+-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    // Best-effort cleanup: removing these should not brick the vault because vault_key.bin already exists.
+     let _ = remove_file_retry(&salt, 20, Duration::from_millis(50));
+     let _ = remove_file_retry(&kc, 20, Duration::from_millis(50));
+ 
++    // Also remove any legacy dpapi_key.bin if it exists.
++    if let Ok(dpapi_path) = dpapi_key_path(&storage_paths, id) {
++        let _ = remove_file_retry(&dpapi_path, 20, Duration::from_millis(50));
++    }
++
+     let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, false)?;
+     Ok(updated.into())
+ }
