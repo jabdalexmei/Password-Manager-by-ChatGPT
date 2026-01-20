@@ -1,59 +1,646 @@
-diff -ruN /mnt/data/work/orig/src-tauri/src/data/sqlite/migrations.rs /mnt/data/work/src/Password-Manager-by-ChatGPT-Passwordless-encrypted/src-tauri/src/data/sqlite/migrations.rs
---- /mnt/data/work/orig/src-tauri/src/data/sqlite/migrations.rs	2026-01-20 07:15:33.000000000 +0000
-+++ /mnt/data/work/src/Password-Manager-by-ChatGPT-Passwordless-encrypted/src-tauri/src/data/sqlite/migrations.rs	2026-01-20 09:45:13.252874013 +0000
-@@ -294,12 +294,14 @@
-             ErrorCodeString::new("DB_QUERY_FAILED")
-         })?;
- 
--    log::info!(
--        "[DB][migrate] user_version={version}, current={CURRENT_SCHEMA_VERSION}"
--    );
-+    if version == CURRENT_SCHEMA_VERSION {
-+        log::debug!("[DB][migrate] up_to_date version={version}");
-+        return Ok(());
-+    }
- 
-     // Fresh DB: create schema and stamp it with the current version.
-     if version == 0 {
-+        log::info!("[DB][migrate] init schema version={CURRENT_SCHEMA_VERSION}");
-         conn.execute_batch(include_str!("schema.sql"))
-             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-         ensure_ui_preferences_table(conn)?;
-@@ -308,6 +310,8 @@
-         return Ok(());
-     }
- 
-+    log::info!("[DB][migrate] migrate from={version} to={CURRENT_SCHEMA_VERSION}");
+--- a/src-tauri/src/services/security_service.rs+++ b/src-tauri/src/services/security_service.rs@@ -10,6 +10,9 @@ use rusqlite::DatabaseName;
+ use zeroize::{Zeroize, Zeroizing};
+ use walkdir::WalkDir;
 +
-     match version {
-         1 => {
-             migrate_1_to_2(conn)?;
-diff -ruN /mnt/data/work/orig/src-tauri/src/services/security_service.rs /mnt/data/work/src/Password-Manager-by-ChatGPT-Passwordless-encrypted/src-tauri/src/services/security_service.rs
---- /mnt/data/work/orig/src-tauri/src/services/security_service.rs	2026-01-20 07:15:33.000000000 +0000
-+++ /mnt/data/work/src/Password-Manager-by-ChatGPT-Passwordless-encrypted/src-tauri/src/services/security_service.rs	2026-01-20 09:46:24.658415261 +0000
-@@ -1432,6 +1432,25 @@
++use rand::rngs::OsRng;
++use rand::RngCore;
+ 
+ use crate::app_state::{AppState, VaultSession};
+ use crate::data::crypto::{cipher, kdf, key_check, master_key};
+@@ -393,6 +396,18 @@ 
+ const SET_PASSWORD_COMMIT_MARKER: &str = "set_password.commit";
+ const CHANGE_PASSWORD_COMMIT_MARKER: &str = "change_password.commit";
++
++
++// Passwordless portable master key prefix.
++const MASTER_KEY_PREFIX: &[u8] = b"PMMK1:";
++
++// Crash-safe transaction folders for set/remove password.
++// These transactions only rotate key material on disk.
++const SET_PASSWORD_TX_DIR: &str = "set_password_tx";
++const SET_PASSWORD_TX_COMMIT_MARKER: &str = "commit";
++
++const REMOVE_PASSWORD_TX_DIR: &str = "remove_password_tx";
++const REMOVE_PASSWORD_TX_COMMIT_MARKER: &str = "commit";
+ 
+ // Crash-safe transaction folder for password changes (only re-wraps the master key).
+ const CHANGE_PASSWORD_TX_DIR: &str = "change_password_tx";
+@@ -1161,6 +1176,242 @@     Ok(())
  }
  
- pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> Result<bool> {
-+    // No-op if the vault is already unlocked for this profile.
-+    // In dev builds the UI can accidentally invoke login multiple times (e.g. React StrictMode).
-+    {
-+        let session_guard = state
-+            .vault_session
-+            .lock()
-+            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
 +
-+        if let Some(session) = session_guard.as_ref() {
-+            if session.profile_id == id {
-+                log::debug!("[SECURITY][login] no-op already_unlocked profile_id={}", id);
-+                if let Ok(mut active) = state.active_profile.lock() {
-+                    *active = Some(id.to_string());
-+                }
-+                return Ok(true);
-+            }
++fn rollback_set_password_tx(
++    tx_root: &Path,
++    vault_key_final: &Path,
++    salt_final: &Path,
++    key_check_final: &Path,
++) -> io::Result<()> {
++    let commit = tx_root.join(SET_PASSWORD_TX_COMMIT_MARKER);
++
++    let vault_key_new = tx_root.join("vault_key.bin.new");
++    let salt_new = tx_root.join("kdf_salt.bin.new");
++    let key_check_new = tx_root.join("key_check.bin.new");
++
++    let vault_key_bak = tx_root.join("vault_key.bin.bak");
++    let salt_bak = tx_root.join("kdf_salt.bin.bak");
++    let key_check_bak = tx_root.join("key_check.bin.bak");
++
++    // Remove commit marker to signal rollback
++    let _ = remove_file_retry(&commit, 20, Duration::from_millis(50));
++
++    // Restore backups (overwrite if needed).
++    if vault_key_bak.exists() {
++        if vault_key_final.exists() {
++            replace_file_retry(&vault_key_bak, vault_key_final, 20, Duration::from_millis(50))?;
++        } else {
++            rename_retry(&vault_key_bak, vault_key_final, 20, Duration::from_millis(50))?;
 +        }
 +    }
 +
-     let storage_paths = state.get_storage_paths()?;
-     let mut profile = registry::get_profile(&storage_paths, id)?
-         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++    if salt_bak.exists() {
++        if salt_final.exists() {
++            replace_file_retry(&salt_bak, salt_final, 20, Duration::from_millis(50))?;
++        } else {
++            rename_retry(&salt_bak, salt_final, 20, Duration::from_millis(50))?;
++        }
++    } else {
++        let _ = remove_file_retry(salt_final, 20, Duration::from_millis(50));
++    }
++
++    if key_check_bak.exists() {
++        if key_check_final.exists() {
++            replace_file_retry(&key_check_bak, key_check_final, 20, Duration::from_millis(50))?;
++        } else {
++            rename_retry(&key_check_bak, key_check_final, 20, Duration::from_millis(50))?;
++        }
++    } else {
++        let _ = remove_file_retry(key_check_final, 20, Duration::from_millis(50));
++    }
++
++    // Drop any staged new files.
++    let _ = remove_file_retry(&vault_key_new, 20, Duration::from_millis(50));
++    let _ = remove_file_retry(&salt_new, 20, Duration::from_millis(50));
++    let _ = remove_file_retry(&key_check_new, 20, Duration::from_millis(50));
++
++    Ok(())
++}
++
++fn recover_set_password_tx(
++    storage_paths: &crate::data::storage_paths::StoragePaths,
++    profile_id: &str,
++    profile_name: &str,
++) -> Result<()> {
++    let profile_root = profile_dir(storage_paths, profile_id)?;
++    let tx_root = profile_root.join("tmp").join(SET_PASSWORD_TX_DIR);
++    if !is_dir_nonempty(&tx_root).unwrap_or(false) {
++        return Ok(());
++    }
++
++    let commit = tx_root.join(SET_PASSWORD_TX_COMMIT_MARKER);
++
++    let vault_key_final = vault_key_path(storage_paths, profile_id)?;
++    let salt_final = kdf_salt_path(storage_paths, profile_id)?;
++    let key_check_final = key_check_path(storage_paths, profile_id)?;
++
++    if commit.exists() {
++        // Commit path: ensure final files exist; if any staged files remain, move them into place.
++        let vault_key_new = tx_root.join("vault_key.bin.new");
++        let salt_new = tx_root.join("kdf_salt.bin.new");
++        let key_check_new = tx_root.join("key_check.bin.new");
++
++        if vault_key_new.exists() {
++            if vault_key_final.exists() {
++                let _ = remove_file_retry(&vault_key_new, 20, Duration::from_millis(50));
++            } else {
++                rename_retry(&vault_key_new, &vault_key_final, 20, Duration::from_millis(50))
++                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++            }
++        }
++        if salt_new.exists() {
++            if salt_final.exists() {
++                let _ = remove_file_retry(&salt_new, 20, Duration::from_millis(50));
++            } else {
++                rename_retry(&salt_new, &salt_final, 20, Duration::from_millis(50))
++                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++            }
++        }
++        if key_check_new.exists() {
++            if key_check_final.exists() {
++                let _ = remove_file_retry(&key_check_new, 20, Duration::from_millis(50));
++            } else {
++                rename_retry(&key_check_new, &key_check_final, 20, Duration::from_millis(50))
++                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++            }
++        }
++
++        // Security: if the backup still contains an unwrapped master key, redact it by overwriting
++        // with the new encrypted vault_key.bin (no password needed for this).
++        let vault_key_bak = tx_root.join("vault_key.bin.bak");
++        if vault_key_bak.exists() && file_has_prefix(&vault_key_bak, MASTER_KEY_PREFIX) {
++            if let Ok(blob) = std::fs::read(&vault_key_final) {
++                let _ = write_atomic(&vault_key_bak, &blob);
++            }
++        }
++
++        // Best-effort cleanup of backups and tx dir.
++        let _ = remove_file_retry(&tx_root.join("vault_key.bin.bak"), 20, Duration::from_millis(50));
++        let _ = remove_file_retry(&tx_root.join("kdf_salt.bin.bak"), 20, Duration::from_millis(50));
++        let _ = remove_file_retry(&tx_root.join("key_check.bin.bak"), 20, Duration::from_millis(50));
++        let _ = remove_file_retry(&commit, 20, Duration::from_millis(50));
++
++        registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
++        clear_pool(profile_id);
++        best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
++        return Ok(());
++    }
++
++    // Rollback path: restore backups so the profile remains passwordless.
++    rollback_set_password_tx(&tx_root, &vault_key_final, &salt_final, &key_check_final)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
++    registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
++    clear_pool(profile_id);
++    best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
++    Ok(())
++}
++
++fn rollback_remove_password_tx(
++    tx_root: &Path,
++    vault_key_final: &Path,
++    salt_final: &Path,
++    key_check_final: &Path,
++) -> io::Result<()> {
++    let commit = tx_root.join(REMOVE_PASSWORD_TX_COMMIT_MARKER);
++
++    let vault_key_new = tx_root.join("vault_key.bin.new");
++
++    let vault_key_bak = tx_root.join("vault_key.bin.bak");
++    let salt_bak = tx_root.join("kdf_salt.bin.bak");
++    let key_check_bak = tx_root.join("key_check.bin.bak");
++
++    // Remove commit marker to signal rollback
++    let _ = remove_file_retry(&commit, 20, Duration::from_millis(50));
++
++    // Restore backups (overwrite if needed).
++    if vault_key_bak.exists() {
++        if vault_key_final.exists() {
++            replace_file_retry(&vault_key_bak, vault_key_final, 20, Duration::from_millis(50))?;
++        } else {
++            rename_retry(&vault_key_bak, vault_key_final, 20, Duration::from_millis(50))?;
++        }
++    }
++
++    if salt_bak.exists() {
++        if salt_final.exists() {
++            replace_file_retry(&salt_bak, salt_final, 20, Duration::from_millis(50))?;
++        } else {
++            rename_retry(&salt_bak, salt_final, 20, Duration::from_millis(50))?;
++        }
++    }
++
++    if key_check_bak.exists() {
++        if key_check_final.exists() {
++            replace_file_retry(&key_check_bak, key_check_final, 20, Duration::from_millis(50))?;
++        } else {
++            rename_retry(&key_check_bak, key_check_final, 20, Duration::from_millis(50))?;
++        }
++    }
++
++    // Drop any staged new file.
++    let _ = remove_file_retry(&vault_key_new, 20, Duration::from_millis(50));
++
++    Ok(())
++}
++
++fn recover_remove_password_tx(
++    storage_paths: &crate::data::storage_paths::StoragePaths,
++    profile_id: &str,
++    profile_name: &str,
++) -> Result<()> {
++    let profile_root = profile_dir(storage_paths, profile_id)?;
++    let tx_root = profile_root.join("tmp").join(REMOVE_PASSWORD_TX_DIR);
++    if !is_dir_nonempty(&tx_root).unwrap_or(false) {
++        return Ok(());
++    }
++
++    let commit = tx_root.join(REMOVE_PASSWORD_TX_COMMIT_MARKER);
++
++    let vault_key_final = vault_key_path(storage_paths, profile_id)?;
++    let salt_final = kdf_salt_path(storage_paths, profile_id)?;
++    let key_check_final = key_check_path(storage_paths, profile_id)?;
++
++    if commit.exists() {
++        // Commit path: ensure final vault_key exists; if any staged file remains, move it into place.
++        let vault_key_new = tx_root.join("vault_key.bin.new");
++        if vault_key_new.exists() {
++            if vault_key_final.exists() {
++                let _ = remove_file_retry(&vault_key_new, 20, Duration::from_millis(50));
++            } else {
++                rename_retry(&vault_key_new, &vault_key_final, 20, Duration::from_millis(50))
++                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++            }
++        }
++
++        // Ensure protected-only materials are removed from the profile root.
++        let _ = remove_file_retry(&salt_final, 20, Duration::from_millis(50));
++        let _ = remove_file_retry(&key_check_final, 20, Duration::from_millis(50));
++
++        registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
++        clear_pool(profile_id);
++        // Best-effort cleanup.
++        let _ = remove_file_retry(&commit, 20, Duration::from_millis(50));
++        best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
++        return Ok(());
++    }
++
++    // Rollback path: restore backups so the profile remains protected.
++    rollback_remove_password_tx(&tx_root, &vault_key_final, &salt_final, &key_check_final)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
++    registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
++    clear_pool(profile_id);
++    best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
++    Ok(())
++}
++
++
+ fn recover_change_password_tx(
+     storage_paths: &crate::data::storage_paths::StoragePaths,
+     profile_id: &str,
+@@ -1227,6 +1478,9 @@ 
+     // Recover any pending crash-safe password-change transaction (master key re-wrap only).
+     recover_change_password_tx(storage_paths, profile_id, profile_name)?;
++    recover_set_password_tx(storage_paths, profile_id, profile_name)?;
++    recover_remove_password_tx(storage_paths, profile_id, profile_name)?;
++
+ 
+     let set_root = tmp_root.join("set_password_backup");
+     if set_root.exists() {
+@@ -1570,59 +1824,155 @@ }
+ 
+ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+-    let storage_paths = state.get_storage_paths()?;
+-
+-    let profile = registry::get_profile(&storage_paths, id)?
+-        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+-
+-    if profile.has_password {
+-        return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
+-    }
+-
+-    if password.chars().all(|c| c.is_whitespace()) {
+-        return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
+-    }
+-
+-    ensure_profile_dirs(&storage_paths, id)
+-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+-
+-    // Prevent concurrent persists while we rotate key material.
+-    let _persist_guard = state
++    let _flight_guard = state
+         .vault_persist_guard
+         .lock()
+         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+ 
+-    // Obtain the master key from the currently unlocked session.
+-    // (By design: profile mutations happen only while the profile is active/unlocked.)
+-    let master = {
+-        let session = state
++    let storage_paths = state.get_storage_paths()?;
++    let profile = registry::get_profile(&storage_paths, id)?
++        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++
++    if profile.has_password {
++        return Err(ErrorCodeString::new("PROFILE_ALREADY_PROTECTED"));
++    }
++
++    // Must be unlocked to set a password: we need the current master key.
++    let master: Zeroizing<[u8; cipher::KEY_LEN]> = {
++        let session_guard = state
+             .vault_session
+             .lock()
+             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+-        let s = session.as_ref().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
+-        if s.profile_id != id {
+-            return Err(ErrorCodeString::new("VAULT_LOCKED"));
+-        }
+-        Zeroizing::new(*s.key)
++
++        let session = session_guard
++            .as_ref()
++            .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
++
++        if session.profile_id != id {
++            return Err(ErrorCodeString::new("WRONG_PROFILE_ACTIVE"));
++        }
++        Zeroizing::new(*session.key)
+     };
+ 
+-    // Create salt + password-derived wrapping key.
+-    let salt = kdf::generate_kdf_salt();
+-    write_atomic(&kdf_salt_path(&storage_paths, id)?, &salt)
++    ensure_profile_dirs(&storage_paths, id)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
+-    let wrapping_key = Zeroizing::new(kdf::derive_master_key(password, &salt)?);
+-
+-    // Write key check + password-wrapped master key.
+-    key_check::create_key_check_file(&storage_paths, id, &*wrapping_key)?;
+-    master_key::write_master_key_wrapped_with_password(&storage_paths, id, &*wrapping_key, &*master)?;
+-
+-    // Best-effort cleanup of any legacy dpapi_key.bin after switching to password mode.
+-    if let Ok(dpapi_path) = dpapi_key_path(&storage_paths, id) {
+-        let _ = std::fs::remove_file(&dpapi_path);
++    // If there is a leftover transaction from a previous crash, recover it first.
++    recover_set_password_tx(&storage_paths, id, &profile.name)?;
++    recover_remove_password_tx(&storage_paths, id, &profile.name)?;
++
++    let profile_root = profile_dir(&storage_paths, id)?;
++    let tx_root = profile_root.join("tmp").join(SET_PASSWORD_TX_DIR);
++    prepare_empty_dir(&tx_root)?;
++
++    // Build new key material (salt + wrapping key + key_check + wrapped vault_key).
++    let mut salt = [0u8; 16];
++        let mut rng = OsRng;
++    rng.fill_bytes(&mut salt);
++
++    let wrapping_key = Zeroizing::new(
++        kdf::derive_master_key(password, &salt).map_err(|_| ErrorCodeString::new("KDF_FAILED"))?,
++    );
++
++    let key_check_blob = key_check::create_key_check_blob(id, &*wrapping_key)?;
++    let vault_key_blob =
++        master_key::wrap_master_key_with_password_blob(id, &*wrapping_key, &*master)?;
++
++    // Stage new files into tx dir first.
++    let vault_key_new = tx_root.join("vault_key.bin.new");
++    let salt_new = tx_root.join("kdf_salt.bin.new");
++    let key_check_new = tx_root.join("key_check.bin.new");
++
++    write_atomic(&vault_key_new, &vault_key_blob)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    write_atomic(&salt_new, &salt)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    write_atomic(&key_check_new, &key_check_blob)
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
++    let vault_key_final = vault_key_path(&storage_paths, id)?;
++    let salt_final = kdf_salt_path(&storage_paths, id)?;
++    let key_check_final = key_check_path(&storage_paths, id)?;
++
++    let vault_key_bak = tx_root.join("vault_key.bin.bak");
++    let salt_bak = tx_root.join("kdf_salt.bin.bak");
++    let key_check_bak = tx_root.join("key_check.bin.bak");
++    let commit = tx_root.join(SET_PASSWORD_TX_COMMIT_MARKER);
++
++    let tx_result = (|| -> io::Result<()> {
++        // Backup existing key file (it contains the unwrapped master key, so keep it only in tx dir).
++        if !vault_key_final.exists() {
++            return Err(io::Error::new(
++                io::ErrorKind::NotFound,
++                "vault_key.bin missing",
++            ));
++        }
++        if vault_key_bak.exists() {
++            remove_file_retry(&vault_key_bak, 20, Duration::from_millis(50))?;
++        }
++        rename_retry(&vault_key_final, &vault_key_bak, 20, Duration::from_millis(50))?;
++
++        // Backup existing protected-only files if they exist (stale leftovers).
++        if salt_final.exists() {
++            if salt_bak.exists() {
++                remove_file_retry(&salt_bak, 20, Duration::from_millis(50))?;
++            }
++            rename_retry(&salt_final, &salt_bak, 20, Duration::from_millis(50))?;
++        }
++        if key_check_final.exists() {
++            if key_check_bak.exists() {
++                remove_file_retry(&key_check_bak, 20, Duration::from_millis(50))?;
++            }
++            rename_retry(&key_check_final, &key_check_bak, 20, Duration::from_millis(50))?;
++        }
++
++        // Move staged files into place.
++        rename_retry(&vault_key_new, &vault_key_final, 20, Duration::from_millis(50))?;
++        rename_retry(&salt_new, &salt_final, 20, Duration::from_millis(50))?;
++        rename_retry(&key_check_new, &key_check_final, 20, Duration::from_millis(50))?;
++
++        // Commit marker is written last to make crash recovery deterministic.
++        write_atomic(&commit, b"1")?;
++        Ok(())
++    })();
++
++    if let Err(e) = tx_result {
++        log::warn!(
++            "[SECURITY][set_profile_password] profile_id={} action=tx_failed err={}",
++            id,
++            e
++        );
++        let _ = rollback_set_password_tx(&tx_root, &vault_key_final, &salt_final, &key_check_final);
++        best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
++        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+     }
+ 
+     let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)?;
++
++    // Best-effort cleanup: if deletion fails, at least remove the plaintext backup by overwriting it
++    // with the encrypted vault_key.bin.
++    if let Err(e) = remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50)) {
++        log::warn!(
++            "[SECURITY][set_profile_password] profile_id={} action=cleanup_failed tx_root={:?} err={}",
++            id,
++            tx_root,
++            e
++        );
++        let vault_key_bak = tx_root.join("vault_key.bin.bak");
++        if vault_key_bak.exists() && file_has_prefix(&vault_key_bak, MASTER_KEY_PREFIX) {
++            if let Ok(blob) = std::fs::read(&vault_key_final) {
++                let _ = write_atomic(&vault_key_bak, &blob);
++            }
++        }
++        let _ = remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
++    }
++
++    // Legacy: remove dpapi_key.bin if present (best-effort).
++    if let Ok(p) = dpapi_key_path(&storage_paths, id) {
++        let _ = remove_file_retry(&p, 20, Duration::from_millis(50));
++    }
++
++    clear_pool(id);
+     Ok(updated.into())
+ }
+ 
+@@ -1731,59 +2081,122 @@ }
+ 
+ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
+-    let storage_paths = state.get_storage_paths()?;
+-
+-    let profile = registry::get_profile(&storage_paths, id)?
+-        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
+-
+-    if !profile.has_password {
+-        return Err(ErrorCodeString::new("PROFILE_NOT_PROTECTED"));
+-    }
+-
+-    // Prevent concurrent persists while we rotate key material.
+-    let _persist_guard = state
++    let _flight_guard = state
+         .vault_persist_guard
+         .lock()
+         .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+ 
+-    // Must be unlocked (session exists and matches profile) because we do NOT re-encrypt vault.db;
+-    // we only re-wrap the existing master key.
+-    let master = {
+-        let session = state
++    let storage_paths = state.get_storage_paths()?;
++    let profile = registry::get_profile(&storage_paths, id)?
++        .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
++
++    if !profile.has_password {
++        return Err(ErrorCodeString::new("PROFILE_ALREADY_PASSWORDLESS"));
++    }
++
++    // Must be unlocked to remove a password: we need the current master key.
++    let master: Zeroizing<[u8; cipher::KEY_LEN]> = {
++        let session_guard = state
+             .vault_session
+             .lock()
+             .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+-        let s = session.as_ref().ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
+-        if s.profile_id != id {
+-            return Err(ErrorCodeString::new("VAULT_LOCKED"));
+-        }
+-        Zeroizing::new(*s.key)
++
++        let session = session_guard
++            .as_ref()
++            .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))?;
++
++        if session.profile_id != id {
++            return Err(ErrorCodeString::new("WRONG_PROFILE_ACTIVE"));
++        }
++        Zeroizing::new(*session.key)
+     };
+ 
+     ensure_profile_dirs(&storage_paths, id)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
+-    // Switch to passwordless portable mode by writing the master key unwrapped into vault_key.bin.
+-    // Only after it exists do we remove password-based key material.
+-    master_key::write_master_key_unwrapped(&storage_paths, id, &*master)?;
+-
+-    // Remove password-based key material.
+-    let salt = kdf_salt_path(&storage_paths, id)?;
+-    let kc = key_check_path(&storage_paths, id)?;
+-
+-    // Best-effort cleanup: removing these should not brick the vault because vault_key.bin already exists.
+-    let _ = remove_file_retry(&salt, 20, Duration::from_millis(50));
+-    let _ = remove_file_retry(&kc, 20, Duration::from_millis(50));
+-
+-    // Also remove any legacy dpapi_key.bin if it exists.
+-    if let Ok(dpapi_path) = dpapi_key_path(&storage_paths, id) {
+-        let _ = remove_file_retry(&dpapi_path, 20, Duration::from_millis(50));
++    // If there is a leftover transaction from a previous crash, recover it first.
++    recover_change_password_tx(&storage_paths, id, &profile.name)?;
++    recover_set_password_tx(&storage_paths, id, &profile.name)?;
++    recover_remove_password_tx(&storage_paths, id, &profile.name)?;
++
++    let profile_root = profile_dir(&storage_paths, id)?;
++    let tx_root = profile_root.join("tmp").join(REMOVE_PASSWORD_TX_DIR);
++    prepare_empty_dir(&tx_root)?;
++
++    let vault_key_final = vault_key_path(&storage_paths, id)?;
++    let salt_final = kdf_salt_path(&storage_paths, id)?;
++    let key_check_final = key_check_path(&storage_paths, id)?;
++
++    // Stage the new unwrapped vault_key.bin into tx dir first.
++    let vault_key_new = tx_root.join("vault_key.bin.new");
++    let master_arr: [u8; master_key::MASTER_KEY_LEN] = *master;
++    let plain_blob = master_key::unwrapped_master_key_blob(id, &master_arr);
++    write_atomic(&vault_key_new, plain_blob.as_slice())
++        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
++    let vault_key_bak = tx_root.join("vault_key.bin.bak");
++    let salt_bak = tx_root.join("kdf_salt.bin.bak");
++    let key_check_bak = tx_root.join("key_check.bin.bak");
++    let commit = tx_root.join(REMOVE_PASSWORD_TX_COMMIT_MARKER);
++
++    let tx_result = (|| -> io::Result<()> {
++        // Backup old protected materials into tx dir.
++        if vault_key_final.exists() {
++            if vault_key_bak.exists() {
++                remove_file_retry(&vault_key_bak, 20, Duration::from_millis(50))?;
++            }
++            rename_retry(&vault_key_final, &vault_key_bak, 20, Duration::from_millis(50))?;
++        } else {
++            return Err(io::Error::new(
++                io::ErrorKind::NotFound,
++                "vault_key.bin missing",
++            ));
++        }
++
++        if salt_final.exists() {
++            if salt_bak.exists() {
++                remove_file_retry(&salt_bak, 20, Duration::from_millis(50))?;
++            }
++            rename_retry(&salt_final, &salt_bak, 20, Duration::from_millis(50))?;
++        }
++
++        if key_check_final.exists() {
++            if key_check_bak.exists() {
++                remove_file_retry(&key_check_bak, 20, Duration::from_millis(50))?;
++            }
++            rename_retry(&key_check_final, &key_check_bak, 20, Duration::from_millis(50))?;
++        }
++
++        // Move staged new vault_key.bin into place.
++        rename_retry(&vault_key_new, &vault_key_final, 20, Duration::from_millis(50))?;
++
++        // Commit marker is written last to make crash recovery deterministic.
++        write_atomic(&commit, b"1")?;
++        Ok(())
++    })();
++
++    if let Err(e) = tx_result {
++        log::warn!(
++            "[SECURITY][remove_profile_password] profile_id={} action=tx_failed err={}",
++            id,
++            e
++        );
++        let _ = rollback_remove_password_tx(&tx_root, &vault_key_final, &salt_final, &key_check_final);
++        best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
++        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+     }
+ 
+     let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, false)?;
++
++    // Legacy: remove dpapi_key.bin if present (best-effort).
++    if let Ok(p) = dpapi_key_path(&storage_paths, id) {
++        let _ = remove_file_retry(&p, 20, Duration::from_millis(50));
++    }
++
++    clear_pool(id);
++    best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
+     Ok(updated.into())
+ }
+-
+ pub fn is_logged_in(state: &Arc<AppState>) -> Result<bool> {
+     let active_id = state
+         .active_profile
+
+--- a/src-tauri/src/data/crypto/master_key.rs+++ b/src-tauri/src/data/crypto/master_key.rs@@ -31,6 +31,14 @@     out.extend_from_slice(master_key);
+     Zeroizing::new(out)
+ }
++
++pub fn unwrapped_master_key_blob(
++    profile_id: &str,
++    master_key: &[u8; MASTER_KEY_LEN],
++) -> Zeroizing<Vec<u8>> {
++    build_plaintext(profile_id, master_key)
++}
++
+ 
+ fn parse_plaintext(profile_id: &str, plaintext: &[u8]) -> Result<[u8; MASTER_KEY_LEN]> {
+     if !plaintext.starts_with(PREFIX) {
+
