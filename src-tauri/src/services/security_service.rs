@@ -1,5 +1,5 @@
 use std::io::{self, Read};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -1406,21 +1406,6 @@ fn prepare_empty_dir(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     Ok(())
-}
-
-fn list_attachment_files(dir: &Path) -> Result<Vec<PathBuf>> {
-    if !dir.exists() {
-        return Ok(Vec::new());
-    }
-    let mut out = Vec::new();
-    for entry in std::fs::read_dir(dir).map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))? {
-        let entry = entry.map_err(|_| ErrorCodeString::new("ATTACHMENT_READ"))?;
-        let p = entry.path();
-        if p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("bin") {
-            out.push(p);
-        }
-    }
-    Ok(out)
 }
 
 fn attachment_id_from_path(path: &Path) -> Result<String> {
