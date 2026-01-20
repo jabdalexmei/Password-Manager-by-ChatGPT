@@ -138,11 +138,25 @@ pub async fn backup_pick_file(
         let now = now_ms()?;
         cleanup_stale_backup_picks(&st, now)?;
 
-        let selection = app
+        // UX: when restoring from the Workspace screen users often keep their backups
+        // inside the selected workspace (Profiles/.../backups). Start browsing there.
+        // Also: do not rely on extension filters here - some platforms handle multi-dot
+        // extensions inconsistently (e.g. *.pmbackup.zip). We validate the picked file
+        // via backup_inspect_service anyway.
+        let mut dialog = app
             .dialog()
             .file()
-            .add_filter("Backup", &["pmbackup", "zip"])
-            .blocking_pick_file();
+            .set_title("Select backup archive (.pmbackup.zip)");
+
+        if let Ok(sp) = st.get_storage_paths() {
+            if let Ok(profiles_root) = sp.profiles_root() {
+                dialog = dialog.set_directory(profiles_root);
+            } else if let Ok(workspace_root) = sp.workspace_root() {
+                dialog = dialog.set_directory(workspace_root);
+            }
+        }
+
+        let selection = dialog.blocking_pick_file();
 
         let Some(fp) = selection else {
             return Ok(None);
