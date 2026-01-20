@@ -958,7 +958,10 @@ fn restore_archive_to_profile(
         vault_tmp_path = Some(tmp.clone());
         fs::copy(&extracted_vault, &tmp)
             .map_err(|e| map_restore_io_error("copy_vault_to_tmp", Some(&extracted_vault), Some(&tmp), e))?;
-        fs::File::open(&tmp)
+        fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&tmp)
             .map_err(|e| map_restore_io_error("open_tmp_vault", Some(&tmp), None, e))?
             .sync_all()
             .map_err(|e| map_restore_io_error("sync_tmp_vault", Some(&tmp), None, e))?;
@@ -1019,7 +1022,10 @@ fn restore_archive_to_profile(
                 let tmp = profile_root.join(format!("{}.restore.{}", file_name, Uuid::new_v4()));
                 fs::copy(&extracted_file, &tmp)
                     .map_err(|e| map_restore_io_error("copy_keyfile_to_tmp", Some(&extracted_file), Some(&tmp), e))?;
-                fs::File::open(&tmp)
+                fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(&tmp)
                     .map_err(|e| map_restore_io_error("open_tmp_keyfile", Some(&tmp), None, e))?
                     .sync_all()
                     .map_err(|e| map_restore_io_error("sync_tmp_keyfile", Some(&tmp), None, e))?;
