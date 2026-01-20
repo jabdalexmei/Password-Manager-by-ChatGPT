@@ -91,6 +91,26 @@ impl AppState {
     }
 
     pub fn set_workspace_root(&self, workspace_root: std::path::PathBuf) -> Result<()> {
+        // If the requested workspace is already active in this process, don't try to re-lock it.
+        // On Windows, re-acquiring the same lock from the same process can fail (WORKSPACE_ALREADY_IN_USE).
+        {
+            let storage_paths = self
+                .storage_paths
+                .lock()
+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+
+            if let Ok(current) = storage_paths.workspace_root() {
+                let current_can =
+                    std::fs::canonicalize(current).unwrap_or_else(|_| current.clone());
+                let requested_can = std::fs::canonicalize(&workspace_root)
+                    .unwrap_or_else(|_| workspace_root.clone());
+
+                if current_can == requested_can {
+                    return Ok(());
+                }
+            }
+        }
+
         // Preflight create to ensure workspace_root exists before we attempt to lock.
         // This is safe even if locking fails (no user data is modified here).
         let profiles_dir = workspace_root.join("Profiles");

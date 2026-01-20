@@ -194,6 +194,23 @@ pub async fn workspace_select(
 
         let resolved = resolve_workspace_path(&app_dir, &record);
         validate_workspace_root(&resolved)?;
+
+        // If user selects the already-open workspace, treat it as a no-op.
+        // This avoids re-locking .pm-workspace.lock (which can fail on Windows) and avoids
+        // unnecessarily logging out an active profile/session.
+        if registry.active_workspace_id.as_deref() == Some(&id) {
+            if let Ok(sp) = app_state.get_storage_paths() {
+                if let Ok(current) = sp.workspace_root() {
+                    let current_can = std::fs::canonicalize(current)
+                        .unwrap_or_else(|_| current.clone());
+                    let resolved_can = std::fs::canonicalize(&resolved)
+                        .unwrap_or_else(|_| resolved.clone());
+                    if current_can == resolved_can {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
         app_state.logout_and_cleanup()?;
         app_state.set_workspace_root(resolved)?;
         registry.active_workspace_id = Some(id);
@@ -295,4 +312,3 @@ pub async fn workspace_open_in_explorer(
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
 }
-
