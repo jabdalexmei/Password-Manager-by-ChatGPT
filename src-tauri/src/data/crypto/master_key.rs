@@ -69,6 +69,20 @@ pub fn write_master_key_wrapped_with_password(
     cipher::write_encrypted_file(&vault_key_path(sp, profile_id)?, &blob)
 }
 
+
+/// Build the password-wrapped master key blob without writing it to disk.
+///
+/// This is used for crash-safe password rotation, where we want to stage the new
+/// wrapped key and swap it into place together with key_check.bin.
+pub fn wrap_master_key_with_password_blob(
+    profile_id: &str,
+    wrapping_key: &[u8; MASTER_KEY_LEN],
+    master_key: &[u8; MASTER_KEY_LEN],
+) -> Result<Vec<u8>> {
+    let plaintext = build_plaintext(profile_id, master_key);
+    cipher::encrypt_bytes(wrapping_key, &aad(profile_id), plaintext.as_slice())
+}
+
 pub fn read_master_key_wrapped_with_password(
     sp: &StoragePaths,
     profile_id: &str,
