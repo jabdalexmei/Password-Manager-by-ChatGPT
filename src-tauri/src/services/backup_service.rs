@@ -212,6 +212,45 @@ fn is_transient_windows_fs_error(e: &std::io::Error) -> bool {
     }
 }
 
+fn map_restore_io_error(
+    step: &'static str,
+    a: Option<&Path>,
+    b: Option<&Path>,
+    e: std::io::Error,
+) -> ErrorCodeString {
+    let os = e.raw_os_error();
+    log::error!(
+        "[BACKUP][restore] io_error step={} a={:?} b={:?} kind={:?} os={:?} err={}",
+        step,
+        a,
+        b,
+        e.kind(),
+        os,
+        e
+    );
+
+    if is_transient_windows_fs_error(&e) {
+        return ErrorCodeString::new("BACKUP_RESTORE_FILE_IN_USE");
+    }
+
+    if e.kind() == std::io::ErrorKind::PermissionDenied {
+        return ErrorCodeString::new("BACKUP_RESTORE_ACCESS_DENIED");
+    }
+
+    match os {
+        Some(206) => ErrorCodeString::new("BACKUP_RESTORE_PATH_TOO_LONG"), // ERROR_FILENAME_EXCED_RANGE
+        Some(112) => ErrorCodeString::new("BACKUP_RESTORE_DISK_FULL"),    // ERROR_DISK_FULL
+        _ => ErrorCodeString::new("BACKUP_RESTORE_FAILED"),
+    }
+}
+
+fn prepare_empty_dir_for_restore(path: &Path) -> std::io::Result<()> {
+    if path.exists() {
+        fs::remove_dir_all(path)?;
+    }
+    fs::create_dir_all(path)
+}
+
 fn rename_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::time::Duration;
 
@@ -712,10 +751,18 @@ fn restore_archive_to_profile(
     ensure_profile_dirs(sp, target_profile_id)?;
 
     let profile_root = profile_dir(sp, target_profile_id)?;
-    let temp_dir = tempfile::Builder::new()
-        .prefix("backup_restore")
-        .tempdir_in(profile_root.join("tmp"))
-        .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+
+    log::info!(
+        "[BACKUP][restore] begin profile_id={} backup_path={:?}",
+        target_profile_id,
+        backup_path
+    );
+
+    let staging_root = profile_root.join("tmp").join("restore_staging");
+    // Keep staging paths short (important on Windows) and deterministic for easier debugging.
+    // We clear it on each restore attempt.
+    prepare_empty_dir_for_restore(&staging_root)
+        .map_err(|e| map_restore_io_error("prepare_staging_root", Some(&staging_root), None, e))?;
 
     let archive_file = fs::File::open(&backup_path)
         .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
@@ -823,14 +870,14 @@ fn restore_archive_to_profile(
             .by_name(&entry.path)
             .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
 
-        let target_path = temp_dir.path().join(rel_path);
+        let target_path = staging_root.as_path().join(rel_path);
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                .map_err(|e| map_restore_io_error("create_parent_dirs", Some(parent), None, e))?;
         }
 
         let file = fs::File::create(&target_path)
-            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+            .map_err(|e| map_restore_io_error("create_extracted_file", Some(&target_path), None, e))?;
         let mut writer = BufWriter::new(file);
         let mut buffer = [0u8; 64 * 1024];
         let mut hasher = Sha256::new();
@@ -845,7 +892,7 @@ fn restore_archive_to_profile(
             }
             writer
                 .write_all(&buffer[..read])
-                .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                .map_err(|e| map_restore_io_error("write_extracted_file", Some(&target_path), None, e))?;
             bytes_written = bytes_written
                 .checked_add(read as i64)
                 .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
@@ -862,11 +909,11 @@ fn restore_archive_to_profile(
 
         writer
             .flush()
-            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+            .map_err(|e| map_restore_io_error("flush_extracted_file", Some(&target_path), None, e))?;
         writer
             .get_ref()
             .sync_all()
-            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+            .map_err(|e| map_restore_io_error("sync_extracted_file", Some(&target_path), None, e))?;
 
         let sha256 = hex::encode(hasher.finalize());
         if sha256 != entry.sha256 || bytes_written != entry.bytes {
@@ -875,13 +922,13 @@ fn restore_archive_to_profile(
     }
 
     let vault_path = vault_db_path(sp, target_profile_id)?;
-    let extracted_vault = temp_dir.path().join("vault.db");
+    let extracted_vault = staging_root.as_path().join("vault.db");
     if !extracted_vault.exists() {
         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
     }
 
     let attachments_path = profile_root.join("attachments");
-    let extracted_attachments = temp_dir.path().join("attachments");
+    let extracted_attachments = staging_root.as_path().join("attachments");
     let attachments_existed_before = attachments_path.exists();
 
     let vault_backup_path = vault_path.with_extension(format!("old.{}", Uuid::new_v4()));
@@ -897,17 +944,12 @@ fn restore_archive_to_profile(
     let restore_result: Result<()> = (|| {
         if vault_path.exists() {
             rename_with_retry(&vault_path, &vault_backup_path).map_err(|e| {
-                log::error!(
-                    "[BACKUP][restore] rename_failed src={:?} dst={:?} err={}",
-                    vault_path,
-                    vault_backup_path,
-                    e
-                );
-                if is_transient_windows_fs_error(&e) {
-                    ErrorCodeString::new("BACKUP_RESTORE_FILE_IN_USE")
-                } else {
-                    ErrorCodeString::new("BACKUP_RESTORE_FAILED")
-                }
+                map_restore_io_error(
+                    "rename_vault_to_backup",
+                    Some(&vault_path),
+                    Some(&vault_backup_path),
+                    e,
+                )
             })?;
             moved_vault = true;
         }
@@ -915,64 +957,49 @@ fn restore_archive_to_profile(
         let tmp = profile_root.join(format!("vault.db.restore.{}", Uuid::new_v4()));
         vault_tmp_path = Some(tmp.clone());
         fs::copy(&extracted_vault, &tmp)
-            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+            .map_err(|e| map_restore_io_error("copy_vault_to_tmp", Some(&extracted_vault), Some(&tmp), e))?;
         fs::File::open(&tmp)
-            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?
+            .map_err(|e| map_restore_io_error("open_tmp_vault", Some(&tmp), None, e))?
             .sync_all()
-            .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+            .map_err(|e| map_restore_io_error("sync_tmp_vault", Some(&tmp), None, e))?;
 
         rename_with_retry(&tmp, &vault_path).map_err(|e| {
-                log::error!(
-                    "[BACKUP][restore] rename_failed src={:?} dst={:?} err={}",
-                    tmp,
-                    vault_path,
-                    e
-                );
-                if is_transient_windows_fs_error(&e) {
-                    ErrorCodeString::new("BACKUP_RESTORE_FILE_IN_USE")
-                } else {
-                    ErrorCodeString::new("BACKUP_RESTORE_FAILED")
-                }
-            })?;
+            map_restore_io_error(
+                "rename_tmp_vault_to_live",
+                Some(&tmp),
+                Some(&vault_path),
+                e,
+            )
+        })?;
         vault_replaced = true;
 
         if attachments_path.exists() {
             rename_with_retry(&attachments_path, &attachments_backup_path).map_err(|e| {
-                log::error!(
-                    "[BACKUP][restore] rename_failed src={:?} dst={:?} err={}",
-                    attachments_path,
-                    attachments_backup_path,
-                    e
-                );
-                if is_transient_windows_fs_error(&e) {
-                    ErrorCodeString::new("BACKUP_RESTORE_FILE_IN_USE")
-                } else {
-                    ErrorCodeString::new("BACKUP_RESTORE_FAILED")
-                }
+                map_restore_io_error(
+                    "rename_attachments_to_backup",
+                    Some(&attachments_path),
+                    Some(&attachments_backup_path),
+                    e,
+                )
             })?;
             moved_attachments = true;
         }
 
         if extracted_attachments.exists() {
             rename_with_retry(&extracted_attachments, &attachments_path).map_err(|e| {
-                log::error!(
-                    "[BACKUP][restore] rename_failed src={:?} dst={:?} err={}",
-                    extracted_attachments,
-                    attachments_path,
-                    e
-                );
-                if is_transient_windows_fs_error(&e) {
-                    ErrorCodeString::new("BACKUP_RESTORE_FILE_IN_USE")
-                } else {
-                    ErrorCodeString::new("BACKUP_RESTORE_FAILED")
-                }
+                map_restore_io_error(
+                    "rename_extracted_attachments_to_live",
+                    Some(&extracted_attachments),
+                    Some(&attachments_path),
+                    e,
+                )
             })?;
             restored_attachments_created = true;
 
         } else {
             if !attachments_path.exists() {
                 fs::create_dir_all(&attachments_path)
-                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                    .map_err(|e| map_restore_io_error("create_attachments_dir", Some(&attachments_path), None, e))?;
                 restored_attachments_created = true;
             }
         }
@@ -985,31 +1012,21 @@ fn restore_archive_to_profile(
             "vault_key.bin",
             "dpapi_key.bin",
         ] {
-            let extracted_file = temp_dir.path().join(file_name);
+            let extracted_file = staging_root.as_path().join(file_name);
             if extracted_file.exists() {
                 let target = profile_root.join(file_name);
 
                 let tmp = profile_root.join(format!("{}.restore.{}", file_name, Uuid::new_v4()));
                 fs::copy(&extracted_file, &tmp)
-                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                    .map_err(|e| map_restore_io_error("copy_keyfile_to_tmp", Some(&extracted_file), Some(&tmp), e))?;
                 fs::File::open(&tmp)
-                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?
+                    .map_err(|e| map_restore_io_error("open_tmp_keyfile", Some(&tmp), None, e))?
                     .sync_all()
-                    .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
+                    .map_err(|e| map_restore_io_error("sync_tmp_keyfile", Some(&tmp), None, e))?;
 
                 let replaced: Result<()> = (|| {
                     replace_file_windows(&tmp, &target).map_err(|e| {
-                        log::error!(
-                            "[BACKUP][restore] replace_failed src={:?} dst={:?} err={}",
-                            tmp,
-                            target,
-                            e
-                        );
-                        if is_transient_windows_fs_error(&e) {
-                            ErrorCodeString::new("BACKUP_RESTORE_FILE_IN_USE")
-                        } else {
-                            ErrorCodeString::new("BACKUP_RESTORE_FAILED")
-                        }
+                        map_restore_io_error("replace_keyfile", Some(&tmp), Some(&target), e)
                     })?;
                     best_effort_fsync_rename_dirs(&tmp, &target);
                     Ok(())
@@ -1084,6 +1101,13 @@ fn restore_archive_to_profile(
             let _ = fs::remove_dir_all(&attachments_path);
         }
 
+        log::error!(
+            "[BACKUP][restore] failed code={} profile_id={} backup_path={:?}",
+            err.code,
+            target_profile_id,
+            backup_path
+        );
+        let _ = fs::remove_dir_all(&staging_root);
         return Err(err);
     }
 
@@ -1098,6 +1122,15 @@ fn restore_archive_to_profile(
     let shm_path = vault_path.with_extension("db-shm");
     let _ = fs::remove_file(&wal_path);
     let _ = fs::remove_file(&shm_path);
+
+    log::info!(
+        "[BACKUP][restore] success profile_id={} backup_path={:?}",
+        target_profile_id,
+        backup_path
+    );
+
+    // Best-effort: clear staging directory after a successful restore.
+    let _ = fs::remove_dir_all(&staging_root);
 
     Ok(true)
 }
