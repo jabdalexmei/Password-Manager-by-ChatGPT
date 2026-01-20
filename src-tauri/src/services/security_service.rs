@@ -274,9 +274,13 @@ fn open_passwordless_vault_session(
     storage_paths: &crate::data::storage_paths::StoragePaths,
     state: &Arc<AppState>,
 ) -> Result<()> {
-    // Passwordless mode: unwrap master key using Windows DPAPI (dpapi_key.bin).
+    // Passwordless portable mode: read the master key from vault_key.bin.
+    // (Best-effort legacy migration from dpapi_key.bin may happen on Windows.)
     let master =
-        Zeroizing::new(master_key::read_master_key_wrapped_with_dpapi(storage_paths, profile_id)?);
+        Zeroizing::new(master_key::read_master_key_passwordless_portable(
+            storage_paths,
+            profile_id,
+        )?);
 
     let vault_path = vault_db_path(storage_paths, profile_id)?;
     if !vault_path.exists() {
@@ -1652,7 +1656,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     // Obtain the master key.
-    // Prefer the currently unlocked in-memory session; otherwise unwrap it from dpapi_key.bin.
+    // Prefer the currently unlocked in-memory session; otherwise read it from vault_key.bin.
     let master = {
         let session = state
             .vault_session
@@ -1663,10 +1667,16 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
             if s.profile_id == id {
                 Zeroizing::new(*s.key)
             } else {
-                Zeroizing::new(master_key::read_master_key_wrapped_with_dpapi(&storage_paths, id)?)
+                Zeroizing::new(master_key::read_master_key_passwordless_portable(
+                    &storage_paths,
+                    id,
+                )?)
             }
         } else {
-            Zeroizing::new(master_key::read_master_key_wrapped_with_dpapi(&storage_paths, id)?)
+            Zeroizing::new(master_key::read_master_key_passwordless_portable(
+                &storage_paths,
+                id,
+            )?)
         }
     };
 
@@ -1681,16 +1691,9 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
     key_check::create_key_check_file(&storage_paths, id, &*wrapping_key)?;
     master_key::write_master_key_wrapped_with_password(&storage_paths, id, &*wrapping_key, &*master)?;
 
-    // Remove dpapi_key.bin last. Partial failures are safe because passwordless unwrap still exists
-    // until we remove it.
-    let dpapi_path = dpapi_key_path(&storage_paths, id)?;
-    if let Err(e) = remove_file_retry(&dpapi_path, 20, Duration::from_millis(50)) {
-        log::warn!(
-            "[SECURITY][set_profile_password] profile_id={} action=remove_dpapi_key_failed path={:?} err={}",
-            id,
-            dpapi_path,
-            e
-        );
+    // Best-effort cleanup of any legacy dpapi_key.bin after switching to password mode.
+    if let Ok(dpapi_path) = dpapi_key_path(&storage_paths, id) {
+        let _ = std::fs::remove_file(&dpapi_path);
     }
 
     let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, true)?;
@@ -1783,19 +1786,22 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
     ensure_profile_dirs(&storage_paths, id)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
-    // Write dpapi_key.bin FIRST. Only after it exists do we remove password-based key material.
-    master_key::write_master_key_wrapped_with_dpapi(&storage_paths, id, &*master)?;
+    // Switch to passwordless portable mode by writing the master key unwrapped into vault_key.bin.
+    // Only after it exists do we remove password-based key material.
+    master_key::write_master_key_unwrapped(&storage_paths, id, &*master)?;
 
     // Remove password-based key material.
-    let vk = vault_key_path(&storage_paths, id)?;
     let salt = kdf_salt_path(&storage_paths, id)?;
     let kc = key_check_path(&storage_paths, id)?;
 
-    // If any remove fails, we keep registry unchanged (still protected) and return an error.
-    remove_file_retry(&vk, 20, Duration::from_millis(50))
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    // Best-effort cleanup: removing these should not brick the vault because vault_key.bin already exists.
     let _ = remove_file_retry(&salt, 20, Duration::from_millis(50));
     let _ = remove_file_retry(&kc, 20, Duration::from_millis(50));
+
+    // Also remove any legacy dpapi_key.bin if it exists.
+    if let Ok(dpapi_path) = dpapi_key_path(&storage_paths, id) {
+        let _ = remove_file_retry(&dpapi_path, 20, Duration::from_millis(50));
+    }
 
     let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, false)?;
     Ok(updated.into())

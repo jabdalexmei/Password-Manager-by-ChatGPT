@@ -27,6 +27,7 @@ use crate::data::profiles::paths::{
     key_check_path,
     profile_config_path,
     profile_dir,
+    ensure_profile_dirs,
     user_settings_path,
     vault_db_path,
     vault_key_path,
@@ -237,13 +238,8 @@ fn ensure_backup_guard(state: &Arc<AppState>) -> Result<std::sync::MutexGuard<'_
         .map_err(|_| ErrorCodeString::new("BACKUP_ALREADY_RUNNING"))
 }
 
-fn require_active_profile_id(state: &Arc<AppState>) -> Result<String> {
-    state
-        .active_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone()
-        .ok_or_else(|| ErrorCodeString::new("VAULT_LOCKED"))
+fn require_unlocked_active_profile_id(state: &Arc<AppState>) -> Result<String> {
+    Ok(security_service::require_unlocked_active_profile(state)?.profile_id)
 }
 
 fn add_file_to_zip(
@@ -331,31 +327,18 @@ fn build_backup_source(
         }
         (Some(salt), Some(key_check))
     } else {
-        (
-            kdf_salt_path(sp, profile_id).ok().filter(|path| path.exists()),
-            key_check_path(sp, profile_id).ok().filter(|path| path.exists()),
-        )
+        (None, None)
     };
 
-    let vault_key = if profile.has_password {
+    let vault_key = {
         let p = vault_key_path(sp, profile_id)?;
         if !p.exists() {
             return Err(ErrorCodeString::new("VAULT_KEY_MISSING"));
         }
         Some(p)
-    } else {
-        None
     };
 
-    let dpapi_key = if !profile.has_password {
-        let p = dpapi_key_path(sp, profile_id)?;
-        if !p.exists() {
-            return Err(ErrorCodeString::new("DPAPI_KEY_MISSING"));
-        }
-        Some(p)
-    } else {
-        None
-    };
+    let dpapi_key: Option<PathBuf> = None;
 
     let vault_path = vault_db_path(sp, profile_id)?;
 
@@ -443,27 +426,14 @@ fn create_archive(
         }
         add_file_to_zip(&mut writer, key_check_path, "key_check.bin", &mut manifest_entries)?;
     } else if vault_mode == "passwordless" {
-        let dpapi_key_path = source
-            .dpapi_key_path
+        let vault_key_path = source
+            .vault_key_path
             .as_ref()
-            .ok_or_else(|| ErrorCodeString::new("DPAPI_KEY_MISSING"))?;
-        if !dpapi_key_path.exists() {
-            return Err(ErrorCodeString::new("DPAPI_KEY_MISSING"));
+            .ok_or_else(|| ErrorCodeString::new("VAULT_KEY_MISSING"))?;
+        if !vault_key_path.exists() {
+            return Err(ErrorCodeString::new("VAULT_KEY_MISSING"));
         }
-        add_file_to_zip(&mut writer, dpapi_key_path, "dpapi_key.bin", &mut manifest_entries)?;
-
-        add_optional_file(
-            &mut writer,
-            source.kdf_salt_path.take(),
-            "kdf_salt.bin",
-            &mut manifest_entries,
-        )?;
-        add_optional_file(
-            &mut writer,
-            source.key_check_path.take(),
-            "key_check.bin",
-            &mut manifest_entries,
-        )?;
+        add_file_to_zip(&mut writer, vault_key_path, "vault_key.bin", &mut manifest_entries)?;
     } else {
         return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
     }
@@ -593,7 +563,7 @@ fn create_backup_internal(
     use_default_path: bool,
 ) -> Result<BackupResult> {
     let _guard = ensure_backup_guard(state)?;
-    let profile_id = require_active_profile_id(state)?;
+    let profile_id = require_unlocked_active_profile_id(state)?;
     let sp = state.get_storage_paths()?;
 
     let (backup_id, destination) = resolve_destination_path(&sp, &profile_id, destination_path, use_default_path)?;
@@ -628,7 +598,7 @@ pub fn backup_create(
     destination_path: Option<String>,
     use_default_path: bool,
 ) -> Result<String> {
-    let profile_id = require_active_profile_id(state)?;
+    let profile_id = require_unlocked_active_profile_id(state)?;
     let sp = state.get_storage_paths()?;
     let settings = settings_service::get_settings(&sp, &profile_id)?;
     let managed_root = backups_dir(&sp, &profile_id)?;
@@ -650,7 +620,7 @@ pub fn backup_create(
 }
 
 pub fn backup_list(state: &Arc<AppState>) -> Result<Vec<BackupListItem>> {
-    let profile_id = require_active_profile_id(state)?;
+    let profile_id = require_unlocked_active_profile_id(state)?;
     let sp = state.get_storage_paths()?;
     let mut registry = load_registry(&sp, &profile_id)?;
     prune_registry(&mut registry);
@@ -733,9 +703,9 @@ fn restore_archive_to_profile(
         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
     }
 
+    ensure_profile_dirs(sp, target_profile_id)?;
+
     let profile_root = profile_dir(sp, target_profile_id)?;
-    fs::create_dir_all(profile_root.join("tmp"))
-        .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
     let temp_dir = tempfile::Builder::new()
         .prefix("backup_restore")
         .tempdir_in(profile_root.join("tmp"))
@@ -828,7 +798,8 @@ fn restore_archive_to_profile(
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
     } else if manifest.vault_mode == "passwordless" {
-        if !has_dpapi_key {
+        // New format: require vault_key.bin; legacy backups may contain dpapi_key.bin.
+        if !has_vault_key && !has_dpapi_key {
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
     } else {
@@ -990,6 +961,43 @@ fn restore_archive_to_profile(
             }
         }
 
+        // Post-restore key hygiene: remove incompatible key files so we don't end up with
+        // "two locks on one door".
+        if manifest.vault_mode == "protected" {
+            if let Ok(p) = dpapi_key_path(sp, target_profile_id) {
+                let _ = fs::remove_file(p);
+            }
+        } else if manifest.vault_mode == "passwordless" {
+            // Remove password-based wrapper files if they existed before or were included accidentally.
+            if let Ok(p) = kdf_salt_path(sp, target_profile_id) {
+                let _ = fs::remove_file(p);
+            }
+            if let Ok(p) = key_check_path(sp, target_profile_id) {
+                let _ = fs::remove_file(p);
+            }
+
+            // If we restored a legacy DPAPI-only backup, try to migrate it to portable vault_key.bin.
+            if let Ok(vk) = vault_key_path(sp, target_profile_id) {
+                if !vk.exists() {
+                    if let Ok(dp) = dpapi_key_path(sp, target_profile_id) {
+                        if dp.exists() {
+                            let master =
+                                crate::data::crypto::master_key::read_master_key_wrapped_with_dpapi(
+                                    sp,
+                                    target_profile_id,
+                                )?;
+                            let _ = crate::data::crypto::master_key::write_master_key_unwrapped(
+                                sp,
+                                target_profile_id,
+                                &master,
+                            );
+                            let _ = fs::remove_file(dp);
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     })();
 
@@ -1061,13 +1069,17 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
     } else if manifest.vault_mode == "passwordless" {
+        let mut has_vault_key = false;
         let mut has_dpapi_key = false;
         for f in &manifest.files {
+            if f.path == "vault_key.bin" {
+                has_vault_key = true;
+            }
             if f.path == "dpapi_key.bin" {
                 has_dpapi_key = true;
             }
         }
-        if !has_dpapi_key {
+        if !has_vault_key && !has_dpapi_key {
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
     } else {
@@ -1090,14 +1102,15 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
 }
 
 pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>> {
-    let profile_id = match state
-        .active_profile
-        .lock()
-        .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?
-        .clone()
-    {
-        Some(id) => id,
-        None => return Ok(None),
+    let profile_id = match security_service::require_unlocked_active_profile(state) {
+        Ok(info) => info.profile_id,
+        Err(e) => {
+            // No auto-backup when the vault is locked / no active session.
+            if e.code == "VAULT_LOCKED" {
+                return Ok(None);
+            }
+            return Err(e);
+        }
     };
     let sp = state.get_storage_paths()?;
     let settings = settings_service::get_settings(&sp, &profile_id)?;

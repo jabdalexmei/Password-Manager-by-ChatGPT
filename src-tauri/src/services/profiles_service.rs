@@ -41,14 +41,14 @@ pub fn create_profile(
         // New security model: vault.db is ALWAYS an encrypted blob on disk.
         // Password vs passwordless only changes how the master key is wrapped:
         //   - password mode: master key is wrapped by a KDF-derived wrapping key (vault_key.bin + salt + key_check)
-        //   - passwordless: master key is wrapped by Windows DPAPI (dpapi_key.bin)
+        //   - passwordless: master key is stored unwrapped for portability (vault_key.bin)
 
         let mk = master_key::generate_master_key();
         init_database_protected_encrypted(sp, &profile.id, &mk)?;
 
         let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
         if is_passwordless {
-            master_key::write_master_key_wrapped_with_dpapi(sp, &profile.id, &mk)?;
+            master_key::write_master_key_unwrapped(sp, &profile.id, &mk)?;
         } else {
             let salt = generate_kdf_salt();
             let salt_path = kdf_salt_path(sp, &profile.id)?;

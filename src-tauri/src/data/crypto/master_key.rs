@@ -102,3 +102,67 @@ pub fn read_master_key_wrapped_with_dpapi(
     let plaintext = dpapi::unprotect(&protected, Some(profile_id.as_bytes()))?;
     parse_plaintext(profile_id, &plaintext)
 }
+
+/// Passwordless portable mode: store the master key *unwrapped* in vault_key.bin.
+///
+/// SECURITY NOTE:
+/// This intentionally lowers security: anyone who can read the profile folder / backup can unlock the vault.
+/// This is by design for the "passwordless but portable" mode.
+pub fn write_master_key_unwrapped(
+    sp: &StoragePaths,
+    profile_id: &str,
+    master_key: &[u8; MASTER_KEY_LEN],
+) -> Result<()> {
+    let plaintext = build_plaintext(profile_id, master_key);
+    write_atomic(&vault_key_path(sp, profile_id)?, plaintext.as_slice())
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
+}
+
+pub fn read_master_key_unwrapped(
+    sp: &StoragePaths,
+    profile_id: &str,
+) -> Result<[u8; MASTER_KEY_LEN]> {
+    let path = vault_key_path(sp, profile_id)?;
+    if !path.exists() {
+        return Err(ErrorCodeString::new("VAULT_KEY_MISSING"));
+    }
+
+    let bytes = fs::read(&path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+
+    // If vault_key.bin looks like our encrypted file format, then this isn't passwordless.
+    if bytes.starts_with(&cipher::PM_ENC_MAGIC) {
+        return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
+    }
+
+    parse_plaintext(profile_id, &bytes)
+}
+
+/// Read passwordless master key in the current (portable) format.
+///
+/// Backwards-compatibility:
+/// If vault_key.bin doesn't exist yet, we try legacy dpapi_key.bin (Windows only),
+/// and migrate it to portable vault_key.bin.
+pub fn read_master_key_passwordless_portable(
+    sp: &StoragePaths,
+    profile_id: &str,
+) -> Result<[u8; MASTER_KEY_LEN]> {
+    match read_master_key_unwrapped(sp, profile_id) {
+        Ok(key) => Ok(key),
+        Err(e) => {
+            // Only attempt DPAPI migration when the portable file is missing.
+            if e.code != "VAULT_KEY_MISSING" {
+                return Err(e);
+            }
+
+            let key = read_master_key_wrapped_with_dpapi(sp, profile_id)?;
+
+            // Best-effort migration to portable format.
+            let _ = write_master_key_unwrapped(sp, profile_id, &key);
+            if let Ok(p) = dpapi_key_path(sp, profile_id) {
+                let _ = fs::remove_file(p);
+            }
+
+            Ok(key)
+        }
+    }
+}

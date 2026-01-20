@@ -194,6 +194,8 @@ fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
 
 const SQLITE_HEADER_MAGIC: [u8; 16] = *b"SQLite format 3\0";
 
+const MASTER_KEY_PREFIX: [u8; 6] = *b"PMMK1:";
+
 fn vault_looks_plaintext(sp: &StoragePaths, id: &str) -> bool {
     let path = match vault_db_path(sp, id) {
         Ok(p) => p,
@@ -220,18 +222,31 @@ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) ->
         return false;
     }
 
-    // New security model: vault.db is ALWAYS encrypted on disk.
-    // The password requirement is determined by which master-key wrapper exists:
-    //   - dpapi_key.bin  -> passwordless (DPAPI unlock)
-    //   - vault_key.bin  -> password required (KDF unlock)
+    // Backwards-compatibility: very old passwordless profiles used Windows DPAPI (dpapi_key.bin).
+    // If it exists, treat as passwordless.
     let dpapi_ok = dpapi_key_path(sp, id).ok().is_some_and(|p| p.exists());
     if dpapi_ok {
         return false;
     }
 
-    let vault_key_ok = vault_key_path(sp, id).ok().is_some_and(|p| p.exists());
-    if vault_key_ok {
-        return true;
+    // Current model:
+    // - vault.db is always encrypted on disk.
+    // - password mode is determined by an *encrypted* vault_key.bin (PMENC1...)
+    // - passwordless portable mode stores the master key *unwrapped* in vault_key.bin (PMMK1:...)
+    if let Ok(path) = vault_key_path(sp, id) {
+        if path.exists() {
+            if let Ok(mut f) = fs::File::open(&path) {
+                let mut buf = [0u8; 6];
+                if f.read_exact(&mut buf).is_ok() {
+                    if buf == PM_ENC_MAGIC {
+                        return true;
+                    }
+                    if buf == MASTER_KEY_PREFIX {
+                        return false;
+                    }
+                }
+            }
+        }
     }
 
     // Backwards-compatibility / partial upgrades: if we see salt+key_check, treat as password-protected.
