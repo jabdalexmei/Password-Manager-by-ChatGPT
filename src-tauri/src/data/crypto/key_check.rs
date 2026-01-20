@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use rand::rngs::OsRng;
 use rand::RngCore;
 
@@ -19,10 +17,6 @@ pub fn create_key_check_blob(profile_id: &str, key: &[u8; KEY_LEN]) -> Result<Ve
     payload.extend_from_slice(&random_bytes);
 
     encrypt_key_check(profile_id, key, &payload)
-}
-
-pub fn write_key_check_blob(path: &Path, blob: &[u8]) -> Result<()> {
-    write_encrypted_file(path, blob)
 }
 
 pub fn create_key_check_file(

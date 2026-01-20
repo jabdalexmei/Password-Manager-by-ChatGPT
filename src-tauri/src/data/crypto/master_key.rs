@@ -79,17 +79,6 @@ pub fn read_master_key_wrapped_with_password(
     parse_plaintext(profile_id, &plaintext)
 }
 
-pub fn write_master_key_wrapped_with_dpapi(
-    sp: &StoragePaths,
-    profile_id: &str,
-    master_key: &[u8; MASTER_KEY_LEN],
-) -> Result<()> {
-    let plaintext = build_plaintext(profile_id, master_key);
-    let protected = dpapi::protect(plaintext.as_slice(), Some(profile_id.as_bytes()))?;
-    write_atomic(&dpapi_key_path(sp, profile_id)?, &protected)
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
-}
-
 pub fn read_master_key_wrapped_with_dpapi(
     sp: &StoragePaths,
     profile_id: &str,

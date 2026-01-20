@@ -8,32 +8,6 @@ use rusqlite::DatabaseName;
 
 use super::migrations;
 
-pub fn init_database_passwordless(sp: &StoragePaths, profile_id: &str) -> Result<()> {
-    ensure_profile_dirs(sp, profile_id)
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-
-    let conn = Connection::open(vault_db_path(sp, profile_id)?)
-        .map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-
-    migrations::migrate_to_latest(&conn)?;
-
-    // Passwordless profiles are stored as plaintext SQLite files.
-    // Avoid WAL-mode for passwordless to prevent extra plaintext copies in *-wal/*-shm sidecar files.
-    // (Protected profiles are stored as encrypted blobs and do not use SQLite-on-disk.)
-    let current: String = conn
-        .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-
-    if current.to_uppercase() != "DELETE" {
-        // This PRAGMA changes the DB file state; run it only from init, not from r2d2 on_acquire.
-        let _: String = conn
-            .query_row("PRAGMA journal_mode=DELETE;", [], |row| row.get(0))
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-    }
-
-    Ok(())
-}
-
 pub fn init_database_protected_encrypted(
     sp: &StoragePaths,
     profile_id: &str,

@@ -114,10 +114,6 @@ struct BackupSource {
     kdf_salt_path: Option<PathBuf>,
     key_check_path: Option<PathBuf>,
     vault_key_path: Option<PathBuf>,
-
-    // Passwordless-mode file
-    dpapi_key_path: Option<PathBuf>,
-
     _temp_dir: Option<tempfile::TempDir>,
 }
 
@@ -338,8 +334,6 @@ fn build_backup_source(
         Some(p)
     };
 
-    let dpapi_key: Option<PathBuf> = None;
-
     let vault_path = vault_db_path(sp, profile_id)?;
 
     Ok((
@@ -351,7 +345,6 @@ fn build_backup_source(
             kdf_salt_path: salt_path,
             key_check_path: key_check,
             vault_key_path: vault_key,
-            dpapi_key_path: dpapi_key,
             _temp_dir: None,
         },
         vault_mode,

@@ -4,7 +4,6 @@ use std::io::Read;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::data::crypto::cipher::PM_ENC_MAGIC;
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
     dpapi_key_path,
@@ -171,25 +170,6 @@ fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
         .map_err(|_| ErrorCodeString::new("PROFILE_REGISTRY_SERIALIZATION_FAILED"))?;
     write_atomic(&path, serialized.as_bytes())
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
-}
-
-fn vault_looks_encrypted(sp: &StoragePaths, id: &str) -> bool {
-    let path = match vault_db_path(sp, id) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-    if !path.exists() {
-        return false;
-    }
-    let mut f = match fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => return false,
-    };
-    let mut buf = [0u8; 6];
-    if f.read_exact(&mut buf).is_err() {
-        return false;
-    }
-    buf == PM_ENC_MAGIC
 }
 
 const SQLITE_HEADER_MAGIC: [u8; 16] = *b"SQLite format 3\0";

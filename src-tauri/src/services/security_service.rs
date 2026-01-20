@@ -103,6 +103,7 @@ fn best_effort_force_journal_mode_memory(conn: &rusqlite::Connection, profile_id
     }
 }
 
+#[allow(dead_code)]
 fn best_effort_checkpoint_and_set_journal_mode_delete_on_disk(
     vault_path: &Path,
     profile_id: &str,
@@ -429,6 +430,7 @@ fn file_has_sqlite_magic(path: &Path) -> bool {
     file_has_prefix(path, MAGIC)
 }
 
+#[allow(dead_code)]
 fn prepare_transition_backup_root(
     backup_root: &Path,
     storage_paths: &crate::data::storage_paths::StoragePaths,
@@ -449,6 +451,7 @@ fn prepare_transition_backup_root(
 
 const REMOVE_PASSWORD_COMMIT_MARKER: &str = "remove_password.commit";
 
+#[allow(dead_code)]
 fn write_remove_password_commit_marker(backup_root: &Path) -> Result<()> {
     let marker_path = backup_root.join(REMOVE_PASSWORD_COMMIT_MARKER);
     write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
@@ -457,11 +460,13 @@ fn write_remove_password_commit_marker(backup_root: &Path) -> Result<()> {
 const SET_PASSWORD_COMMIT_MARKER: &str = "set_password.commit";
 const CHANGE_PASSWORD_COMMIT_MARKER: &str = "change_password.commit";
 
+#[allow(dead_code)]
 fn write_set_password_commit_marker(backup_root: &Path) -> Result<()> {
     let marker_path = backup_root.join(SET_PASSWORD_COMMIT_MARKER);
     write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
 }
 
+#[allow(dead_code)]
 fn write_change_password_commit_marker(backup_root: &Path) -> Result<()> {
     let marker_path = backup_root.join(CHANGE_PASSWORD_COMMIT_MARKER);
     write_atomic(&marker_path, b"1").map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
@@ -1225,6 +1230,7 @@ fn recover_incomplete_profile_transitions_with_password(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn recover_incomplete_profile_transitions(
     storage_paths: &crate::data::storage_paths::StoragePaths,
     profile_id: &str,
@@ -1379,6 +1385,7 @@ fn replace_file_retry(from: &Path, to: &Path, attempts: u32, base_delay: Duratio
     }
 }
 
+#[allow(dead_code)]
 fn prepare_empty_dir(path: &Path) -> Result<()> {
     if path.exists() {
         remove_dir_all_retry(path, 40, Duration::from_millis(50))
@@ -1389,6 +1396,7 @@ fn prepare_empty_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn list_attachment_files(dir: &Path) -> Result<Vec<PathBuf>> {
     if !dir.exists() {
         return Ok(Vec::new());
@@ -1412,6 +1420,7 @@ fn attachment_id_from_path(path: &Path) -> Result<String> {
     Ok(stem.to_string())
 }
 
+#[allow(dead_code)]
 fn encrypt_attachments_plain_to_staging(
     profile_id: &str,
     key: &[u8; 32],
@@ -1440,6 +1449,7 @@ fn encrypt_attachments_plain_to_staging(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn reencrypt_attachments_to_staging(
     profile_id: &str,
     old_key: &[u8; 32],
@@ -1605,6 +1615,7 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
     Ok(true)
 }
 
+#[allow(dead_code)]
 pub fn drop_active_session_without_persist(state: &Arc<AppState>) -> Result<bool> {
     let storage_paths = state.get_storage_paths()?;
 
