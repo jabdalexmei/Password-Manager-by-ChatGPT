@@ -209,15 +209,29 @@ pub async fn backup_restore_workflow_from_pick(
 ) -> Result<bool> {
     let st = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // Don't consume the pick token before restore succeeds.
+        // This lets the user retry restore if it fails without getting BACKUP_PICK_NOT_FOUND.
         let pick = {
+            let map = st
+                .pending_backup_picks
+                .lock()
+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+            map.get(&token)
+                .cloned()
+                .ok_or_else(|| ErrorCodeString::new("BACKUP_PICK_NOT_FOUND"))?
+        };
+
+        let result = backup_restore_workflow_service(&st, pick.path.to_string_lossy().to_string());
+
+        if result.is_ok() {
             let mut map = st
                 .pending_backup_picks
                 .lock()
                 .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-            map.remove(&token)
-                .ok_or_else(|| ErrorCodeString::new("BACKUP_PICK_NOT_FOUND"))?
-        };
-        backup_restore_workflow_service(&st, pick.path.to_string_lossy().to_string())
+            map.remove(&token);
+        }
+
+        result
     })
     .await
     .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
