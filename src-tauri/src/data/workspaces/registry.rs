@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 use crate::data::fs::atomic_write::write_atomic;
 

@@ -947,7 +947,7 @@ fn restore_archive_to_profile(
                     .sync_all()
                     .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
 
-                let replaced = (|| {
+                let replaced: Result<()> = (|| {
                     replace_file_windows(&tmp, &target)
                         .map_err(|_| ErrorCodeString::new("BACKUP_RESTORE_FAILED"))?;
                     best_effort_fsync_rename_dirs(&tmp, &target);

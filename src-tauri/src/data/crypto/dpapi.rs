@@ -11,13 +11,23 @@ mod imp {
     use super::*;
     use std::ptr;
 
+    // windows-sys does not always expose the `DATA_BLOB` alias name.
+    // In Win32 headers, `DATA_BLOB` is just an alias of `_CRYPTOAPI_BLOB` (aka
+    // `CRYPT_INTEGER_BLOB`). We use `CRYPT_INTEGER_BLOB` to keep this compatible
+    // across windows-sys versions.
+    //
+    // Ref: in Win32 headers `DATA_BLOB` is an alias of `_CRYPTOAPI_BLOB`.
+    // (see the `CRYPT_INTEGER_BLOB`/`_CRYPTOAPI_BLOB` family of aliases).
     use windows_sys::Win32::Security::Cryptography::{
-        CryptProtectData, CryptUnprotectData, DATA_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptProtectData, CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
-    use windows_sys::Win32::System::Memory::LocalFree;
+    // `LocalFree` is exposed from Win32 Foundation in windows-sys.
+    use windows_sys::Win32::Foundation::LocalFree;
 
-    fn blob_from_slice(bytes: &[u8]) -> DATA_BLOB {
-        DATA_BLOB {
+    type DataBlob = CRYPT_INTEGER_BLOB;
+
+    fn blob_from_slice(bytes: &[u8]) -> DataBlob {
+        DataBlob {
             cbData: bytes.len() as u32,
             pbData: bytes.as_ptr() as *mut u8,
         }
@@ -26,31 +36,31 @@ mod imp {
     pub fn protect(plaintext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
         unsafe {
             let mut in_blob = blob_from_slice(plaintext);
-            let mut out_blob = DATA_BLOB {
+            let mut out_blob = DataBlob {
                 cbData: 0,
                 pbData: ptr::null_mut(),
             };
 
-            let mut ent_blob = DATA_BLOB {
+            let mut ent_blob = DataBlob {
                 cbData: 0,
                 pbData: ptr::null_mut(),
             };
-            let ent_ptr: *mut DATA_BLOB = match entropy {
+            let ent_ptr: *mut DataBlob = match entropy {
                 Some(e) if !e.is_empty() => {
                     ent_blob = blob_from_slice(e);
-                    &mut ent_blob as *mut DATA_BLOB
+                    &mut ent_blob as *mut DataBlob
                 }
                 _ => ptr::null_mut(),
             };
 
             let ok = CryptProtectData(
-                &mut in_blob as *mut DATA_BLOB,
+                &mut in_blob as *mut DataBlob,
                 ptr::null(),
                 ent_ptr,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 CRYPTPROTECT_UI_FORBIDDEN,
-                &mut out_blob as *mut DATA_BLOB,
+                &mut out_blob as *mut DataBlob,
             );
 
             if ok == 0 {
@@ -68,31 +78,31 @@ mod imp {
     pub fn unprotect(ciphertext: &[u8], entropy: Option<&[u8]>) -> Result<Vec<u8>> {
         unsafe {
             let mut in_blob = blob_from_slice(ciphertext);
-            let mut out_blob = DATA_BLOB {
+            let mut out_blob = DataBlob {
                 cbData: 0,
                 pbData: ptr::null_mut(),
             };
 
-            let mut ent_blob = DATA_BLOB {
+            let mut ent_blob = DataBlob {
                 cbData: 0,
                 pbData: ptr::null_mut(),
             };
-            let ent_ptr: *mut DATA_BLOB = match entropy {
+            let ent_ptr: *mut DataBlob = match entropy {
                 Some(e) if !e.is_empty() => {
                     ent_blob = blob_from_slice(e);
-                    &mut ent_blob as *mut DATA_BLOB
+                    &mut ent_blob as *mut DataBlob
                 }
                 _ => ptr::null_mut(),
             };
 
             let ok = CryptUnprotectData(
-                &mut in_blob as *mut DATA_BLOB,
+                &mut in_blob as *mut DataBlob,
                 ptr::null_mut(),
                 ent_ptr,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 CRYPTPROTECT_UI_FORBIDDEN,
-                &mut out_blob as *mut DATA_BLOB,
+                &mut out_blob as *mut DataBlob,
             );
 
             if ok == 0 {

@@ -5,8 +5,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use rusqlite::backup::Backup;
-use rusqlite::Connection;
 use rusqlite::OpenFlags;
 use rusqlite::ffi;
 use rusqlite::serialize::OwnedData;
@@ -19,11 +17,10 @@ use crate::data::crypto::{cipher, kdf, key_check, master_key};
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
     dpapi_key_path, ensure_profile_dirs, kdf_salt_path, key_check_path, profile_dir, vault_db_path,
-    vault_key_path,
 };
 use crate::data::profiles::registry;
 use crate::data::sqlite::migrations;
-use crate::data::sqlite::pool::{clear_pool, drain_and_drop_profile_pools, MaintenanceGuard};
+use crate::data::sqlite::pool::clear_pool;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::attachments_service;
 use crate::types::ProfileMeta;
@@ -540,8 +537,8 @@ fn best_effort_encrypt_set_password_backups(
                 continue;
             }
             let attachment_id = match attachment_id_from_path(path) {
-                Some(id) => id,
-                None => continue,
+                Ok(id) => id,
+                Err(_) => continue,
             };
 
             match std::fs::read(path) {
