@@ -148,6 +148,20 @@ export function useVault(profileId: string, onLocked: () => void) {
           return tCommon('error.backupInvalid', { code });
         case 'BACKUP_INTEGRITY_FAILED':
           return tCommon('error.backupIntegrityFailed', { code });
+        case 'BACKUP_PICK_NOT_FOUND':
+          return tCommon('error.backupPickNotFound', { code });
+        case 'BACKUP_RESTORE_FILE_IN_USE':
+          return tCommon('error.backupRestoreFileInUse', { code });
+        case 'BACKUP_RESTORE_ACCESS_DENIED':
+          return tCommon('error.backupRestoreAccessDenied', { code });
+        case 'BACKUP_RESTORE_PATH_TOO_LONG':
+          return tCommon('error.backupRestorePathTooLong', { code });
+        case 'BACKUP_RESTORE_DISK_FULL':
+          return tCommon('error.backupRestoreDiskFull', { code });
+        case 'BACKUP_DESTINATION_REQUIRED':
+          return tCommon('error.backupDestinationRequired', { code });
+        case 'BACKUP_DESTINATION_UNAVAILABLE':
+          return tCommon('error.backupDestinationUnavailable', { code });
         case 'DIALOG_UNSUPPORTED_FILE_URI':
           return tCommon('error.dialogUnsupported', { code });
         case 'WORKSPACE_CREATE_PATH_FORBIDDEN':

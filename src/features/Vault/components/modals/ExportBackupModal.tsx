@@ -46,7 +46,21 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
       onClose();
     } catch (err: any) {
       const code = err?.code ?? err?.error ?? 'UNKNOWN';
-      showToast(`${tCommon('error.operationFailed')} (${code})`, 'error');
+      switch (code) {
+        case 'BACKUP_DESTINATION_REQUIRED':
+          showToast(`${tCommon('error.backupDestinationRequired')} (${code})`, 'error');
+          break;
+        case 'BACKUP_DESTINATION_UNAVAILABLE':
+          showToast(`${tCommon('error.backupDestinationUnavailable')} (${code})`, 'error');
+          break;
+        case 'BACKUP_DESTINATION_PATH_FORBIDDEN':
+        case 'BACKUP_INSPECT_PATH_FORBIDDEN':
+        case 'BACKUP_RESTORE_PATH_FORBIDDEN':
+          showToast(`${tCommon('error.operationBlocked')} (${code})`, 'error');
+          break;
+        default:
+          showToast(`${tCommon('error.operationFailed')} (${code})`, 'error');
+      }
     } finally {
       setIsSaving(false);
     }

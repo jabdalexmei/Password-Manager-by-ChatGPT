@@ -138,7 +138,25 @@ export default function Vault({
         onLocked();
         return;
       }
-      showToast(`${tCommon('error.operationFailed')} (${code})`, 'error');
+      switch (code) {
+        case 'BACKUP_PICK_NOT_FOUND':
+          showToast(`${tCommon('error.backupPickNotFound')} (${code})`, 'error');
+          return;
+        case 'BACKUP_RESTORE_FILE_IN_USE':
+          showToast(`${tCommon('error.backupRestoreFileInUse')} (${code})`, 'error');
+          return;
+        case 'BACKUP_RESTORE_ACCESS_DENIED':
+          showToast(`${tCommon('error.backupRestoreAccessDenied')} (${code})`, 'error');
+          return;
+        case 'BACKUP_RESTORE_PATH_TOO_LONG':
+          showToast(`${tCommon('error.backupRestorePathTooLong')} (${code})`, 'error');
+          return;
+        case 'BACKUP_RESTORE_DISK_FULL':
+          showToast(`${tCommon('error.backupRestoreDiskFull')} (${code})`, 'error');
+          return;
+        default:
+          showToast(`${tCommon('error.operationFailed')} (${code})`, 'error');
+      }
     },
     [onLocked, showToast, tCommon],
   );
