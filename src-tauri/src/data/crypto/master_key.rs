@@ -32,6 +32,13 @@ fn build_plaintext(profile_id: &str, master_key: &[u8; MASTER_KEY_LEN]) -> Zeroi
     Zeroizing::new(out)
 }
 
+pub fn unwrapped_master_key_blob(
+    profile_id: &str,
+    master_key: &[u8; MASTER_KEY_LEN],
+) -> Zeroizing<Vec<u8>> {
+    build_plaintext(profile_id, master_key)
+}
+
 fn parse_plaintext(profile_id: &str, plaintext: &[u8]) -> Result<[u8; MASTER_KEY_LEN]> {
     if !plaintext.starts_with(PREFIX) {
         return Err(ErrorCodeString::new("MASTER_KEY_CORRUPTED"));
