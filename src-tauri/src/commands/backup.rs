@@ -102,33 +102,6 @@ pub async fn backup_list(state: State<'_, Arc<AppState>>) -> Result<Vec<BackupLi
 }
 
 #[tauri::command]
-pub async fn backup_restore(backup_path: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
-    let _ = backup_path;
-    let _ = state;
-    Err(ErrorCodeString::new("BACKUP_RESTORE_PATH_FORBIDDEN"))
-}
-
-#[tauri::command]
-pub async fn backup_inspect(
-    backup_path: String,
-    state: State<'_, Arc<AppState>>,
-) -> Result<BackupInspectResult> {
-    let _ = backup_path;
-    let _ = state;
-    Err(ErrorCodeString::new("BACKUP_INSPECT_PATH_FORBIDDEN"))
-}
-
-#[tauri::command]
-pub async fn backup_restore_workflow(
-    backup_path: String,
-    state: State<'_, Arc<AppState>>,
-) -> Result<bool> {
-    let _ = backup_path;
-    let _ = state;
-    Err(ErrorCodeString::new("BACKUP_RESTORE_PATH_FORBIDDEN"))
-}
-
-#[tauri::command]
 pub async fn backup_pick_file(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,

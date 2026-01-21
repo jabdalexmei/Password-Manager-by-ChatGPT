@@ -1092,12 +1092,6 @@ fn restore_archive_to_profile(
     if attachments_backup_path.exists() {
         let _ = fs::remove_dir_all(&attachments_backup_path);
     }
-
-    let wal_path = vault_path.with_extension("db-wal");
-    let shm_path = vault_path.with_extension("db-shm");
-    let _ = fs::remove_file(&wal_path);
-    let _ = fs::remove_file(&shm_path);
-
     log::info!(
         "[BACKUP][restore] success profile_id={} backup_path={:?}",
         target_profile_id,
