@@ -152,16 +152,12 @@ export async function moveFolder(input: { id: string; parent_id: string | null }
   return invoke<boolean>('move_folder', { input });
 }
 
-export async function deleteFolderOnly(folder_id: string): Promise<boolean> {
-  return invoke<boolean>('delete_folder_only', { folder_id });
+export async function deleteFolderOnly(id: string): Promise<boolean> {
+  return invoke<boolean>('delete_folder_only', { id });
 }
 
-export async function deleteFolderWithChildren(folder_id: string): Promise<boolean> {
-  return invoke<boolean>('delete_folder_with_children', { folder_id });
-}
-
-export async function deleteFolderFlat(folder_id: string): Promise<boolean> {
-  return invoke<boolean>('delete_folder_flat', { folder_id });
+export async function deleteFolderAndCards(id: string): Promise<boolean> {
+  return invoke<boolean>('delete_folder_and_cards', { id });
 }
 
 export async function restoreFolder(folder_id: string): Promise<boolean> {
