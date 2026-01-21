@@ -1,11 +1,53 @@
-diff --git a/src-tauri/src/data/profiles/registry.rs b/src-tauri/src/data/profiles/registry.rs
---- a/src-tauri/src/data/profiles/registry.rs
-+++ b/src-tauri/src/data/profiles/registry.rs
-@@ -1,6 +1,7 @@
- use serde::{Deserialize, Serialize};
- use std::fs;
-+use std::io::Read;
- use std::path::PathBuf;
- use uuid::Uuid;
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -302,36 +302,6 @@
+     Ok(())
+ }
  
- use crate::data::crypto::cipher::PM_ENC_MAGIC;
+-fn cleanup_sqlite_sidecars(vault_path: &Path) {
+-    // After converting passwordless (sqlite file) -> protected (encrypted blob),
+-    // old SQLite sidecar files may remain. On Windows these can be transiently locked
+-    // by AV/indexers, so do short retries.
+-    //
+-    // NOTE: We intentionally do NOT try to "secure delete" here; we only remove paths.
+-    // The security boundary is: protected profiles must not leave plaintext DB artifacts
+-    // reachable by filename.
+-
+-    use std::ffi::OsString;
+-
+-    fn with_suffix(path: &Path, suffix: &str) -> std::path::PathBuf {
+-        let mut os: OsString = path.as_os_str().to_os_string();
+-        os.push(suffix);
+-        os.into()
+-    }
+-
+-    // -wal/-shm for WAL mode; -journal for rollback journal mode.
+-    for sidecar in ["-wal", "-shm", "-journal"] {
+-        let p = with_suffix(vault_path, sidecar);
+-        if let Err(e) = remove_file_retry(&p, 20, Duration::from_millis(50)) {
+-            log::warn!(
+-                "[SECURITY][cleanup_sqlite_sidecars] path={:?} action=remove_failed err={}",
+-                p,
+-                e
+-            );
+-        }
+-    }
+-}
+-
+ fn is_dir_nonempty(dir: &Path) -> io::Result<bool> {
+     if !dir.exists() {
+         return Ok(false);
+@@ -874,13 +844,6 @@
+     Ok(())
+ }
+ 
+-fn attachment_id_from_path(path: &Path) -> Result<String> {
+-    let stem = path
+-        .file_stem()
+-        .and_then(|s| s.to_str())
+-        .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_READ"))?;
+-    Ok(stem.to_string())
+-}
+ 
+ pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> Result<bool> {
+     // No-op if the vault is already unlocked for this profile.
