@@ -8,8 +8,6 @@ use crate::data::crypto::cipher::PM_ENC_MAGIC;
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
     ensure_profiles_dir,
-    key_check_path,
-    kdf_salt_path,
     profile_config_path,
     profile_dir,
     registry_path,
@@ -194,14 +192,6 @@ fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) ->
         }
     }
 
-    // Backwards-compatibility / partial upgrades: if we see salt+key_check, treat as password-protected.
-    let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
-    let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
-    if salt_ok && key_ok {
-        return true;
-    }
-
-    // Fall back to the registry value.
     record_has_password
 }
 
