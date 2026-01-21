@@ -16,7 +16,6 @@ mod data {
     }
     pub mod crypto {
         pub mod cipher;
-        pub mod dpapi;
         pub mod kdf;
         pub mod key_check;
         pub mod master_key;

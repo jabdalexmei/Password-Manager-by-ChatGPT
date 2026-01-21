@@ -1,20 +1,17 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Read;
 use std::path::PathBuf;
 use uuid::Uuid;
 
 use crate::data::crypto::cipher::PM_ENC_MAGIC;
 use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
-    dpapi_key_path,
     ensure_profiles_dir,
     key_check_path,
     kdf_salt_path,
     profile_config_path,
     profile_dir,
     registry_path,
-    vault_db_path,
     vault_key_path,
 };
 use crate::data::storage_paths::StoragePaths;
@@ -173,43 +170,9 @@ fn save_registry(sp: &StoragePaths, registry: &ProfileRegistry) -> Result<()> {
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))
 }
 
-const SQLITE_HEADER_MAGIC: [u8; 16] = *b"SQLite format 3\0";
-
 const MASTER_KEY_PREFIX: [u8; 6] = *b"PMMK1:";
 
-fn vault_looks_plaintext(sp: &StoragePaths, id: &str) -> bool {
-    let path = match vault_db_path(sp, id) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-    if !path.exists() {
-        return false;
-    }
-    let mut f = match fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => return false,
-    };
-    let mut buf = [0u8; 16];
-    if f.read_exact(&mut buf).is_err() {
-        return false;
-    }
-    buf == SQLITE_HEADER_MAGIC
-}
-
 fn infer_has_password(sp: &StoragePaths, id: &str, record_has_password: bool) -> bool {
-    // Legacy: if the vault is clearly a plaintext SQLite database, treat the profile as passwordless even
-    // if registry/config got out of sync (e.g. interrupted remove password / restore / bug).
-    if vault_looks_plaintext(sp, id) {
-        return false;
-    }
-
-    // Backwards-compatibility: very old passwordless profiles used Windows DPAPI (dpapi_key.bin).
-    // If it exists, treat as passwordless.
-    let dpapi_ok = dpapi_key_path(sp, id).ok().is_some_and(|p| p.exists());
-    if dpapi_ok {
-        return false;
-    }
-
     // Current model:
     // - vault.db is always encrypted on disk.
     // - password mode is determined by an *encrypted* vault_key.bin (PMENC1...)

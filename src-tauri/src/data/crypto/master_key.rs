@@ -4,9 +4,9 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use zeroize::Zeroizing;
 
-use crate::data::crypto::{cipher, dpapi};
+use crate::data::crypto::cipher;
 use crate::data::fs::atomic_write::write_atomic;
-use crate::data::profiles::paths::{dpapi_key_path, vault_key_path};
+use crate::data::profiles::paths::vault_key_path;
 use crate::data::storage_paths::StoragePaths;
 use crate::error::{ErrorCodeString, Result};
 
@@ -100,19 +100,6 @@ pub fn read_master_key_wrapped_with_password(
     parse_plaintext(profile_id, &plaintext)
 }
 
-pub fn read_master_key_wrapped_with_dpapi(
-    sp: &StoragePaths,
-    profile_id: &str,
-) -> Result<[u8; MASTER_KEY_LEN]> {
-    let path = dpapi_key_path(sp, profile_id)?;
-    if !path.exists() {
-        return Err(ErrorCodeString::new("DPAPI_KEY_MISSING"));
-    }
-    let protected = fs::read(&path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
-    let plaintext = dpapi::unprotect(&protected, Some(profile_id.as_bytes()))?;
-    parse_plaintext(profile_id, &plaintext)
-}
-
 /// Passwordless portable mode: store the master key *unwrapped* in vault_key.bin.
 ///
 /// SECURITY NOTE:
@@ -147,32 +134,13 @@ pub fn read_master_key_unwrapped(
     parse_plaintext(profile_id, &bytes)
 }
 
-/// Read passwordless master key in the current (portable) format.
+/// Read passwordless master key in the portable format.
 ///
-/// Backwards-compatibility:
-/// If vault_key.bin doesn't exist yet, we try legacy dpapi_key.bin (Windows only),
-/// and migrate it to portable vault_key.bin.
+/// In this build, passwordless profiles are portable by design: we store the master key
+/// *unwrapped* in vault_key.bin (PMMK1:...).
 pub fn read_master_key_passwordless_portable(
     sp: &StoragePaths,
     profile_id: &str,
 ) -> Result<[u8; MASTER_KEY_LEN]> {
-    match read_master_key_unwrapped(sp, profile_id) {
-        Ok(key) => Ok(key),
-        Err(e) => {
-            // Only attempt DPAPI migration when the portable file is missing.
-            if e.code != "VAULT_KEY_MISSING" {
-                return Err(e);
-            }
-
-            let key = read_master_key_wrapped_with_dpapi(sp, profile_id)?;
-
-            // Best-effort migration to portable format.
-            let _ = write_master_key_unwrapped(sp, profile_id, &key);
-            if let Ok(p) = dpapi_key_path(sp, profile_id) {
-                let _ = fs::remove_file(p);
-            }
-
-            Ok(key)
-        }
-    }
+    read_master_key_unwrapped(sp, profile_id)
 }

@@ -22,7 +22,6 @@ use crate::data::fs::atomic_write::write_atomic;
 use crate::data::profiles::paths::{
     backup_registry_path,
     backups_dir,
-    dpapi_key_path,
     kdf_salt_path,
     key_check_path,
     profile_config_path,
@@ -820,7 +819,6 @@ fn restore_archive_to_profile(
     let mut has_kdf_salt = false;
     let mut has_key_check = false;
     let mut has_vault_key = false;
-    let mut has_dpapi_key = false;
 
     for f in &manifest.files {
         if !seen.insert(&f.path) {
@@ -838,9 +836,6 @@ fn restore_archive_to_profile(
         if f.path == "vault_key.bin" {
             has_vault_key = true;
         }
-        if f.path == "dpapi_key.bin" {
-            has_dpapi_key = true;
-        }
     }
 
     if !has_vault {
@@ -851,8 +846,8 @@ fn restore_archive_to_profile(
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
     } else if manifest.vault_mode == "passwordless" {
-        // New format: require vault_key.bin; legacy backups may contain dpapi_key.bin.
-        if !has_vault_key && !has_dpapi_key {
+        // Passwordless portable format requires vault_key.bin.
+        if !has_vault_key {
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
     } else {
@@ -1013,7 +1008,6 @@ fn restore_archive_to_profile(
             "kdf_salt.bin",
             "key_check.bin",
             "vault_key.bin",
-            "dpapi_key.bin",
         ] {
             let extracted_file = staging_root.as_path().join(file_name);
             if extracted_file.exists() {
@@ -1047,38 +1041,13 @@ fn restore_archive_to_profile(
 
         // Post-restore key hygiene: remove incompatible key files so we don't end up with
         // "two locks on one door".
-        if manifest.vault_mode == "protected" {
-            if let Ok(p) = dpapi_key_path(sp, target_profile_id) {
-                let _ = fs::remove_file(p);
-            }
-        } else if manifest.vault_mode == "passwordless" {
+        if manifest.vault_mode == "passwordless" {
             // Remove password-based wrapper files if they existed before or were included accidentally.
             if let Ok(p) = kdf_salt_path(sp, target_profile_id) {
                 let _ = fs::remove_file(p);
             }
             if let Ok(p) = key_check_path(sp, target_profile_id) {
                 let _ = fs::remove_file(p);
-            }
-
-            // If we restored a legacy DPAPI-only backup, try to migrate it to portable vault_key.bin.
-            if let Ok(vk) = vault_key_path(sp, target_profile_id) {
-                if !vk.exists() {
-                    if let Ok(dp) = dpapi_key_path(sp, target_profile_id) {
-                        if dp.exists() {
-                            let master =
-                                crate::data::crypto::master_key::read_master_key_wrapped_with_dpapi(
-                                    sp,
-                                    target_profile_id,
-                                )?;
-                            let _ = crate::data::crypto::master_key::write_master_key_unwrapped(
-                                sp,
-                                target_profile_id,
-                                &master,
-                            );
-                            let _ = fs::remove_file(dp);
-                        }
-                    }
-                }
             }
         }
 
@@ -1171,16 +1140,12 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
         }
     } else if manifest.vault_mode == "passwordless" {
         let mut has_vault_key = false;
-        let mut has_dpapi_key = false;
         for f in &manifest.files {
             if f.path == "vault_key.bin" {
                 has_vault_key = true;
             }
-            if f.path == "dpapi_key.bin" {
-                has_dpapi_key = true;
-            }
         }
-        if !has_vault_key && !has_dpapi_key {
+        if !has_vault_key {
             return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
         }
     } else {

@@ -131,10 +131,6 @@ pub fn vault_key_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
     Ok(profile_dir(sp, profile_id)?.join("vault_key.bin"))
 }
 
-pub fn dpapi_key_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
-    Ok(profile_dir(sp, profile_id)?.join("dpapi_key.bin"))
-}
-
 pub fn attachment_file_path(
     sp: &StoragePaths,
     profile_id: &str,
