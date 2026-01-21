@@ -1,53 +1,97 @@
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -302,36 +302,6 @@
-     Ok(())
- }
+diff -ruN /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/Cargo.toml /mnt/data/work426_mod/src-tauri/Cargo.toml
+--- /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/Cargo.toml	2026-01-21 01:23:54.000000000 +0000
++++ /mnt/data/work426_mod/src-tauri/Cargo.toml	2026-01-21 01:33:53.063957283 +0000
+@@ -13,11 +13,8 @@
+ uuid = { version = "1.10", features = ["v4"] }
+ argon2 = "0.5"
+ rand = "0.8"
+-rusqlite = { version = "0.32", features = ["bundled", "serialize", "backup"] }
++rusqlite = { version = "0.32", features = ["bundled", "serialize"] }
+ chrono = { version = "0.4", features = ["serde"] }
+-r2d2 = "0.8"
+-r2d2_sqlite = "0.25"
+-once_cell = "1.19"
+ log = "0.4"
+ zip = { version = "0.6", default-features = false }
+ sha2 = "0.10"
+@@ -35,10 +32,7 @@
+ windows-sys = { version = "0.61", features = [
+   "Win32_Foundation",
+   "Win32_Storage_FileSystem",
+-  "Win32_System_DataExchange",
+-  "Win32_System_Memory",
+-  "Win32_Security_Cryptography",
+-  "Win32_UI_WindowsAndMessaging"
++  "Win32_System_DataExchange"
+ ] }
+ webview2-com = "0.38.0"
+ windows = "0.61"
+diff -ruN /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/src/data/profiles/registry.rs /mnt/data/work426_mod/src-tauri/src/data/profiles/registry.rs
+--- /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/src/data/profiles/registry.rs	2026-01-21 01:23:54.000000000 +0000
++++ /mnt/data/work426_mod/src-tauri/src/data/profiles/registry.rs	2026-01-21 01:33:53.062015950 +0000
+@@ -8,8 +8,6 @@
+ use crate::data::fs::atomic_write::write_atomic;
+ use crate::data::profiles::paths::{
+     ensure_profiles_dir,
+-    key_check_path,
+-    kdf_salt_path,
+     profile_config_path,
+     profile_dir,
+     registry_path,
+@@ -194,14 +192,6 @@
+         }
+     }
  
--fn cleanup_sqlite_sidecars(vault_path: &Path) {
--    // After converting passwordless (sqlite file) -> protected (encrypted blob),
--    // old SQLite sidecar files may remain. On Windows these can be transiently locked
--    // by AV/indexers, so do short retries.
--    //
--    // NOTE: We intentionally do NOT try to "secure delete" here; we only remove paths.
--    // The security boundary is: protected profiles must not leave plaintext DB artifacts
--    // reachable by filename.
--
--    use std::ffi::OsString;
--
--    fn with_suffix(path: &Path, suffix: &str) -> std::path::PathBuf {
--        let mut os: OsString = path.as_os_str().to_os_string();
--        os.push(suffix);
--        os.into()
+-    // Backwards-compatibility / partial upgrades: if we see salt+key_check, treat as password-protected.
+-    let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
+-    let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
+-    if salt_ok && key_ok {
+-        return true;
 -    }
 -
--    // -wal/-shm for WAL mode; -journal for rollback journal mode.
--    for sidecar in ["-wal", "-shm", "-journal"] {
--        let p = with_suffix(vault_path, sidecar);
--        if let Err(e) = remove_file_retry(&p, 20, Duration::from_millis(50)) {
--            log::warn!(
--                "[SECURITY][cleanup_sqlite_sidecars] path={:?} action=remove_failed err={}",
--                p,
--                e
--            );
--        }
--    }
--}
--
- fn is_dir_nonempty(dir: &Path) -> io::Result<bool> {
-     if !dir.exists() {
-         return Ok(false);
-@@ -874,13 +844,6 @@
-     Ok(())
+-    // Fall back to the registry value.
+     record_has_password
  }
  
--fn attachment_id_from_path(path: &Path) -> Result<String> {
--    let stem = path
--        .file_stem()
--        .and_then(|s| s.to_str())
--        .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_READ"))?;
--    Ok(stem.to_string())
--}
+diff -ruN /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/src/data/sqlite/pool.rs /mnt/data/work426_mod/src-tauri/src/data/sqlite/pool.rs
+--- /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/src/data/sqlite/pool.rs	2026-01-21 01:23:54.000000000 +0000
++++ /mnt/data/work426_mod/src-tauri/src/data/sqlite/pool.rs	2026-01-21 01:33:53.062392088 +0000
+@@ -1,29 +1,12 @@
+-use std::collections::HashMap;
+-use std::sync::Mutex;
+-
+-use once_cell::sync::Lazy;
+-use r2d2_sqlite::SqliteConnectionManager;
+-
+-// NOTE:
+-// This crate keeps the "pool" module because older versions used r2d2 to manage
+-// file-backed SQLite connections. The current storage model keeps SQLite in
+-// memory and persists an encrypted blob (`vault.db`), so there are no longer
+-// on-disk SQLite connections to pool.
++// This module intentionally provides no-op pool invalidation helpers.
+ //
+-// We still keep a minimal pool registry so callers can invalidate any pooled
+-// connections if this changes again in the future.
+-
+-static POOLS: Lazy<Mutex<HashMap<String, r2d2::Pool<SqliteConnectionManager>>>> =
+-    Lazy::new(|| Mutex::new(HashMap::new()));
++// Older versions of the app used r2d2 to pool file-backed SQLite connections.
++// The current storage model keeps SQLite in memory and persists an encrypted blob (vault.db),
++// so there are no file-backed SQLite connections to pool.
++//
++// We keep these functions because many call sites legitimately want to invalidate any
++// cached connections after restore / password transitions.
  
- pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> Result<bool> {
-     // No-op if the vault is already unlocked for this profile.
+-pub fn clear_pool(profile_id: &str) {
+-    if let Ok(mut pools) = POOLS.lock() {
+-        pools.retain(|key, _| !key.starts_with(&format!("{profile_id}::")));
+-    }
+-}
++pub fn clear_pool(_profile_id: &str) {}
+ 
+-pub fn clear_all_pools() {
+-    if let Ok(mut pools) = POOLS.lock() {
+-        pools.clear();
+-    }
+-}
++pub fn clear_all_pools() {}
