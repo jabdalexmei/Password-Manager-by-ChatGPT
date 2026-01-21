@@ -1,97 +1,117 @@
-diff -ruN /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/Cargo.toml /mnt/data/work426_mod/src-tauri/Cargo.toml
---- /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/Cargo.toml	2026-01-21 01:23:54.000000000 +0000
-+++ /mnt/data/work426_mod/src-tauri/Cargo.toml	2026-01-21 01:33:53.063957283 +0000
-@@ -13,11 +13,8 @@
- uuid = { version = "1.10", features = ["v4"] }
- argon2 = "0.5"
- rand = "0.8"
--rusqlite = { version = "0.32", features = ["bundled", "serialize", "backup"] }
-+rusqlite = { version = "0.32", features = ["bundled", "serialize"] }
- chrono = { version = "0.4", features = ["serde"] }
--r2d2 = "0.8"
--r2d2_sqlite = "0.25"
--once_cell = "1.19"
- log = "0.4"
- zip = { version = "0.6", default-features = false }
- sha2 = "0.10"
-@@ -35,10 +32,7 @@
- windows-sys = { version = "0.61", features = [
-   "Win32_Foundation",
-   "Win32_Storage_FileSystem",
--  "Win32_System_DataExchange",
--  "Win32_System_Memory",
--  "Win32_Security_Cryptography",
--  "Win32_UI_WindowsAndMessaging"
-+  "Win32_System_DataExchange"
- ] }
- webview2-com = "0.38.0"
- windows = "0.61"
-diff -ruN /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/src/data/profiles/registry.rs /mnt/data/work426_mod/src-tauri/src/data/profiles/registry.rs
---- /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/src/data/profiles/registry.rs	2026-01-21 01:23:54.000000000 +0000
-+++ /mnt/data/work426_mod/src-tauri/src/data/profiles/registry.rs	2026-01-21 01:33:53.062015950 +0000
-@@ -8,8 +8,6 @@
- use crate::data::fs::atomic_write::write_atomic;
- use crate::data::profiles::paths::{
-     ensure_profiles_dir,
--    key_check_path,
--    kdf_salt_path,
-     profile_config_path,
-     profile_dir,
-     registry_path,
-@@ -194,14 +192,6 @@
-         }
+diff -ruN a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+--- a/src/features/Vault/Vault.tsx	2026-01-21 01:43:40.000000000 +0000
++++ b/src/features/Vault/Vault.tsx	2026-01-21 02:01:19.128369434 +0000
+@@ -138,7 +138,26 @@
+         onLocked();
+         return;
+       }
+-      showToast(`${tCommon('error.operationFailed')} (${code})`, 'error');
++
++      switch (code) {
++        case 'BACKUP_PICK_NOT_FOUND':
++          showToast(`${tCommon('error.backupPickNotFound')} (${code})`, 'error');
++          return;
++        case 'BACKUP_RESTORE_FILE_IN_USE':
++          showToast(`${tCommon('error.backupRestoreFileInUse')} (${code})`, 'error');
++          return;
++        case 'BACKUP_RESTORE_ACCESS_DENIED':
++          showToast(`${tCommon('error.backupRestoreAccessDenied')} (${code})`, 'error');
++          return;
++        case 'BACKUP_RESTORE_PATH_TOO_LONG':
++          showToast(`${tCommon('error.backupRestorePathTooLong')} (${code})`, 'error');
++          return;
++        case 'BACKUP_RESTORE_DISK_FULL':
++          showToast(`${tCommon('error.backupRestoreDiskFull')} (${code})`, 'error');
++          return;
++        default:
++          showToast(`${tCommon('error.operationFailed')} (${code})`, 'error');
++      }
+     },
+     [onLocked, showToast, tCommon],
+   );
+diff -ruN a/src/features/Vault/components/modals/ExportBackupModal.tsx b/src/features/Vault/components/modals/ExportBackupModal.tsx
+--- a/src/features/Vault/components/modals/ExportBackupModal.tsx	2026-01-21 01:43:40.000000000 +0000
++++ b/src/features/Vault/components/modals/ExportBackupModal.tsx	2026-01-21 02:02:02.595482301 +0000
+@@ -46,7 +46,21 @@
+       onClose();
+     } catch (err: any) {
+       const code = err?.code ?? err?.error ?? 'UNKNOWN';
+-      showToast(`${tCommon('error.operationFailed')} (${code})`, 'error');
++      switch (code) {
++        case 'BACKUP_DESTINATION_REQUIRED':
++          showToast(`${tCommon('error.backupDestinationRequired')} (${code})`, 'error');
++          break;
++        case 'BACKUP_DESTINATION_UNAVAILABLE':
++          showToast(`${tCommon('error.backupDestinationUnavailable')} (${code})`, 'error');
++          break;
++        case 'BACKUP_DESTINATION_PATH_FORBIDDEN':
++        case 'BACKUP_INSPECT_PATH_FORBIDDEN':
++        case 'BACKUP_RESTORE_PATH_FORBIDDEN':
++          showToast(`${tCommon('error.operationBlocked')} (${code})`, 'error');
++          break;
++        default:
++          showToast(`${tCommon('error.operationFailed')} (${code})`, 'error');
++      }
+     } finally {
+       setIsSaving(false);
      }
+diff -ruN a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
+--- a/src/features/Vault/hooks/useVault.ts	2026-01-21 01:43:40.000000000 +0000
++++ b/src/features/Vault/hooks/useVault.ts	2026-01-21 02:02:21.771796405 +0000
+@@ -148,6 +148,20 @@
+           return tCommon('error.backupInvalid', { code });
+         case 'BACKUP_INTEGRITY_FAILED':
+           return tCommon('error.backupIntegrityFailed', { code });
++        case 'BACKUP_PICK_NOT_FOUND':
++          return tCommon('error.backupPickNotFound', { code });
++        case 'BACKUP_RESTORE_FILE_IN_USE':
++          return tCommon('error.backupRestoreFileInUse', { code });
++        case 'BACKUP_RESTORE_ACCESS_DENIED':
++          return tCommon('error.backupRestoreAccessDenied', { code });
++        case 'BACKUP_RESTORE_PATH_TOO_LONG':
++          return tCommon('error.backupRestorePathTooLong', { code });
++        case 'BACKUP_RESTORE_DISK_FULL':
++          return tCommon('error.backupRestoreDiskFull', { code });
++        case 'BACKUP_DESTINATION_REQUIRED':
++          return tCommon('error.backupDestinationRequired', { code });
++        case 'BACKUP_DESTINATION_UNAVAILABLE':
++          return tCommon('error.backupDestinationUnavailable', { code });
+         case 'DIALOG_UNSUPPORTED_FILE_URI':
+           return tCommon('error.dialogUnsupported', { code });
+         case 'WORKSPACE_CREATE_PATH_FORBIDDEN':
+diff -ruN a/src/i18n/locales/en/Common.json b/src/i18n/locales/en/Common.json
+--- a/src/i18n/locales/en/Common.json	2026-01-21 01:43:40.000000000 +0000
++++ b/src/i18n/locales/en/Common.json	2026-01-21 02:01:50.747698588 +0000
+@@ -18,6 +18,13 @@
+   "error.backupInvalid": "Backup file is invalid or corrupted.",
+   "error.backupTooLarge": "Backup is too large to restore safely.",
+   "error.backupTooManyFiles": "Backup contains too many files to restore safely.",
++  "error.backupDestinationRequired": "Please choose where to save the backup.",
++  "error.backupDestinationUnavailable": "Cannot write the backup to the selected location. Choose another folder.",
++  "error.backupPickNotFound": "Backup selection expired. Please pick the backup file again.",
++  "error.backupRestoreFileInUse": "Cannot restore because vault files are in use. Close other instances and try again.",
++  "error.backupRestoreAccessDenied": "Access denied while restoring backup. Check permissions or antivirus and try again.",
++  "error.backupRestorePathTooLong": "Path is too long to restore. Move the workspace closer to the disk root and try again.",
++  "error.backupRestoreDiskFull": "Not enough disk space to restore backup.",
+   "error.dialogUnsupported": "This operation is not supported on this platform.",
+   "error.hookToaster": "useToaster must be used within ToasterProvider",
+   "error.operationBlocked": "Operation blocked for security reasons.",
+diff -ruN a/src-tauri/src/data/profiles/paths.rs b/src-tauri/src/data/profiles/paths.rs
+--- a/src-tauri/src/data/profiles/paths.rs	2026-01-21 01:43:40.000000000 +0000
++++ b/src-tauri/src/data/profiles/paths.rs	2026-01-21 02:05:35.730116542 +0000
+@@ -33,7 +33,14 @@
  
--    // Backwards-compatibility / partial upgrades: if we see salt+key_check, treat as password-protected.
--    let salt_ok = kdf_salt_path(sp, id).ok().is_some_and(|p| p.exists());
--    let key_ok = key_check_path(sp, id).ok().is_some_and(|p| p.exists());
--    if salt_ok && key_ok {
--        return true;
--    }
--
--    // Fall back to the registry value.
-     record_has_password
- }
+     let icacls = std::env::var_os("SystemRoot")
+         .map(|root| PathBuf::from(root).join("System32").join("icacls.exe"))
+-        .unwrap_or_else(|| PathBuf::from("icacls.exe"));
++        .unwrap_or_else(|| PathBuf::from(r"C:\Windows").join("System32").join("icacls.exe"));
++
++    if !icacls.exists() {
++        return Err(std::io::Error::new(
++            std::io::ErrorKind::NotFound,
++            "set_dir_private: icacls.exe not found",
++        ));
++    }
  
-diff -ruN /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/src/data/sqlite/pool.rs /mnt/data/work426_mod/src-tauri/src/data/sqlite/pool.rs
---- /mnt/data/work426/Password-Manager-by-ChatGPT-codex-github-mention-add-crash-safe-set-remove-password-transacti/src-tauri/src/data/sqlite/pool.rs	2026-01-21 01:23:54.000000000 +0000
-+++ /mnt/data/work426_mod/src-tauri/src/data/sqlite/pool.rs	2026-01-21 01:33:53.062392088 +0000
-@@ -1,29 +1,12 @@
--use std::collections::HashMap;
--use std::sync::Mutex;
--
--use once_cell::sync::Lazy;
--use r2d2_sqlite::SqliteConnectionManager;
--
--// NOTE:
--// This crate keeps the "pool" module because older versions used r2d2 to manage
--// file-backed SQLite connections. The current storage model keeps SQLite in
--// memory and persists an encrypted blob (`vault.db`), so there are no longer
--// on-disk SQLite connections to pool.
-+// This module intentionally provides no-op pool invalidation helpers.
- //
--// We still keep a minimal pool registry so callers can invalidate any pooled
--// connections if this changes again in the future.
--
--static POOLS: Lazy<Mutex<HashMap<String, r2d2::Pool<SqliteConnectionManager>>>> =
--    Lazy::new(|| Mutex::new(HashMap::new()));
-+// Older versions of the app used r2d2 to pool file-backed SQLite connections.
-+// The current storage model keeps SQLite in memory and persists an encrypted blob (vault.db),
-+// so there are no file-backed SQLite connections to pool.
-+//
-+// We keep these functions because many call sites legitimately want to invalidate any
-+// cached connections after restore / password transitions.
- 
--pub fn clear_pool(profile_id: &str) {
--    if let Ok(mut pools) = POOLS.lock() {
--        pools.retain(|key, _| !key.starts_with(&format!("{profile_id}::")));
--    }
--}
-+pub fn clear_pool(_profile_id: &str) {}
- 
--pub fn clear_all_pools() {
--    if let Ok(mut pools) = POOLS.lock() {
--        pools.clear();
--    }
--}
-+pub fn clear_all_pools() {}
+     // Use DOMAIN\\User if available, otherwise fallback to USERNAME.
+     let username = std::env::var_os("USERNAME").unwrap_or_default();
