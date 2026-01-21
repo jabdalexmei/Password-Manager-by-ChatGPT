@@ -302,36 +302,6 @@ fn open_passwordless_vault_session(
     Ok(())
 }
 
-fn cleanup_sqlite_sidecars(vault_path: &Path) {
-    // After converting passwordless (sqlite file) -> protected (encrypted blob),
-    // old SQLite sidecar files may remain. On Windows these can be transiently locked
-    // by AV/indexers, so do short retries.
-    //
-    // NOTE: We intentionally do NOT try to "secure delete" here; we only remove paths.
-    // The security boundary is: protected profiles must not leave plaintext DB artifacts
-    // reachable by filename.
-
-    use std::ffi::OsString;
-
-    fn with_suffix(path: &Path, suffix: &str) -> std::path::PathBuf {
-        let mut os: OsString = path.as_os_str().to_os_string();
-        os.push(suffix);
-        os.into()
-    }
-
-    // -wal/-shm for WAL mode; -journal for rollback journal mode.
-    for sidecar in ["-wal", "-shm", "-journal"] {
-        let p = with_suffix(vault_path, sidecar);
-        if let Err(e) = remove_file_retry(&p, 20, Duration::from_millis(50)) {
-            log::warn!(
-                "[SECURITY][cleanup_sqlite_sidecars] path={:?} action=remove_failed err={}",
-                p,
-                e
-            );
-        }
-    }
-}
-
 fn is_dir_nonempty(dir: &Path) -> io::Result<bool> {
     if !dir.exists() {
         return Ok(false);
@@ -872,14 +842,6 @@ fn prepare_empty_dir(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
     Ok(())
-}
-
-fn attachment_id_from_path(path: &Path) -> Result<String> {
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .ok_or_else(|| ErrorCodeString::new("ATTACHMENT_READ"))?;
-    Ok(stem.to_string())
 }
 
 pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> Result<bool> {
