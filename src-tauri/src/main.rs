@@ -16,7 +16,6 @@ mod data {
     }
     pub mod crypto {
         pub mod cipher;
-        pub mod dpapi;
         pub mod kdf;
         pub mod key_check;
         pub mod master_key;
@@ -148,9 +147,6 @@ fn main() {
             save_attachment_via_dialog,
             backup_create,
             backup_create_via_dialog,
-            backup_restore,
-            backup_inspect,
-            backup_restore_workflow,
             backup_pick_file,
             backup_discard_pick,
             backup_restore_workflow_from_pick,

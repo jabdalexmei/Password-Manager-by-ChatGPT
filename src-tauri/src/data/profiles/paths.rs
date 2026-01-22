@@ -33,7 +33,14 @@ fn set_dir_private(path: &Path) -> std::io::Result<()> {
 
     let icacls = std::env::var_os("SystemRoot")
         .map(|root| PathBuf::from(root).join("System32").join("icacls.exe"))
-        .unwrap_or_else(|| PathBuf::from("icacls.exe"));
+        .unwrap_or_else(|| PathBuf::from(r"C:\Windows").join("System32").join("icacls.exe"));
+
+    if !icacls.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "set_dir_private: icacls.exe not found",
+        ));
+    }
 
     // Use DOMAIN\\User if available, otherwise fallback to USERNAME.
     let username = std::env::var_os("USERNAME").unwrap_or_default();
@@ -129,10 +136,6 @@ pub fn key_check_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
 
 pub fn vault_key_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
     Ok(profile_dir(sp, profile_id)?.join("vault_key.bin"))
-}
-
-pub fn dpapi_key_path(sp: &StoragePaths, profile_id: &str) -> Result<PathBuf> {
-    Ok(profile_dir(sp, profile_id)?.join("dpapi_key.bin"))
 }
 
 pub fn attachment_file_path(
