@@ -332,16 +332,20 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
     };
     let pending_serialized = serde_json::to_string_pretty(&pending)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    write_atomic(&pending_path, pending_serialized.as_bytes())
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    if let Err(_) = write_atomic(&pending_path, pending_serialized.as_bytes()) {
+        let _ = fs::remove_file(&pending_path);
+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+    }
 
     // Write profile config first so we never persist a registry change without a matching config.
     let config_path: PathBuf = profile_config_path(sp, id)?;
     let config = serde_json::json!({ "name": name });
     let serialized_config = serde_json::to_string_pretty(&config)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    write_atomic(&config_path, serialized_config.as_bytes())
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    if let Err(_) = write_atomic(&config_path, serialized_config.as_bytes()) {
+        let _ = fs::remove_file(&pending_path);
+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
+    }
 
     // Now update registry and persist.
     registry.profiles[idx].name = name.to_string();
@@ -356,7 +360,10 @@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<Profile
         ),
     };
 
-    save_registry(sp, &registry)?;
+    if let Err(e) = save_registry(sp, &registry) {
+        let _ = fs::remove_file(&pending_path);
+        return Err(e);
+    }
 
     let _ = fs::remove_file(&pending_path);
 

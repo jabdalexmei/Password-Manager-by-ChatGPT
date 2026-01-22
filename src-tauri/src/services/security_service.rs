@@ -868,9 +868,40 @@ pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> R
     let mut profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
-    // If a previous set/change/remove password operation crashed mid-flight,
-    // recover the on-disk profile state before attempting to open the vault.
+    // Recover any pending profile transitions (password changes) and incomplete restore (if any) before opening
     recover_incomplete_profile_transitions_with_password(&storage_paths, id, &profile.name)?;
+    {
+        use std::fs;
+        use crate::data::profiles::paths::{profile_dir, vault_db_path};
+        let profile_root = profile_dir(&storage_paths, id)?;
+        let vault_path = vault_db_path(&storage_paths, id)?;
+        if !vault_path.exists() {
+            for entry in fs::read_dir(&profile_root).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))? {
+                let path = entry.map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?.path();
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with("vault.db.old.") {
+                        fs::rename(&path, &vault_path)
+                            .map_err(|_| ErrorCodeString::new("RESTORE_ROLLBACK_FAILED"))?;
+                        break;
+                    }
+                }
+            }
+        }
+        let attachments_path = profile_root.join("attachments");
+        if !attachments_path.exists() {
+            for entry in fs::read_dir(&profile_root).unwrap_or_else(|_| Vec::new().into_iter()) {
+                if let Ok(ent) = entry {
+                    let p = ent.path();
+                    if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                        if name.starts_with("attachments.old.") {
+                            let _ = fs::rename(&p, &attachments_path);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
     profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
