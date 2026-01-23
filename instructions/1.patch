@@ -1,84 +1,41 @@
-*** Предложение (a): security_service.rs – восстановление vault.db при незавершённом restore ***
-@@ fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> Result<bool> {
--    // If a previous set/change/remove password operation crashed mid-flight,
--    // recover the on-disk profile state before attempting to open the vault.
--    recover_incomplete_profile_transitions_with_password(&storage_paths, &profile.id, &profile.name)?;
-+    // Recover any pending profile transitions (password changes) and incomplete restore (if any) before opening
-+    recover_incomplete_profile_transitions_with_password(&storage_paths, &profile.id, &profile.name)?;
-+    {
-+        use std::fs;
-+        use crate::data::profiles::paths::{profile_dir, vault_db_path};
-+        let profile_root = profile_dir(&storage_paths, &profile.id)?;
-+        let vault_path = vault_db_path(&storage_paths, &profile.id)?;
-+        if !vault_path.exists() {
-+            for entry in fs::read_dir(&profile_root).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))? {
-+                let path = entry.map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?.path();
-+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-+                    if name.starts_with("vault.db.old.") {
-+                        fs::rename(&path, &vault_path)
-+                            .map_err(|_| ErrorCodeString::new("RESTORE_ROLLBACK_FAILED"))?;
+diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
+--- a/src-tauri/src/services/security_service.rs
++++ b/src-tauri/src/services/security_service.rs
+@@ -891,20 +891,29 @@
+         }
+         let attachments_path = profile_root.join("attachments");
+         if !attachments_path.exists() {
+-            for entry in fs::read_dir(&profile_root).unwrap_or_else(|_| Vec::new().into_iter()) {
+-                if let Ok(ent) = entry {
+-                    let p = ent.path();
+-                    if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+-                        if name.starts_with("attachments.old.") {
+-                            let _ = fs::rename(&p, &attachments_path);
+-                            break;
+-                        }
+-                    }
+-                }
+-            }
++            let mut restored = false;
++            for entry in fs::read_dir(&profile_root)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?
++            {
++                let p = entry
++                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?
++                    .path();
++                if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
++                    if name.starts_with("attachments.old.") {
++                        fs::rename(&p, &attachments_path)
++                            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++                        restored = true;
 +                        break;
 +                    }
 +                }
 +            }
-+        }
-+        let attachments_path = profile_root.join("attachments");
-+        if !attachments_path.exists() {
-+            for entry in fs::read_dir(&profile_root).unwrap_or_else(|_| Vec::new().into_iter()) {
-+                if let Ok(ent) = entry {
-+                    let p = ent.path();
-+                    if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
-+                        if name.starts_with("attachments.old.") {
-+                            let _ = fs::rename(&p, &attachments_path);
-+                            break;
-+                        }
-+                    }
-+                }
++
++            if !restored && !attachments_path.exists() {
++                fs::create_dir_all(&attachments_path)
++                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 +            }
-+        }
-+    }
-
-
-
-
-
-
-
-
-
-___________________
-
-
-
-
-
-
-
-*** Предложение (b): registry.rs – удаление pending-файла при неудачном rename_profile ***
-@@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
--    let pending_serialized = serde_json::to_string_pretty(&pending)
--        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--    write_atomic(&pending_path, pending_serialized.as_bytes())
--        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+    let pending_serialized = serde_json::to_string_pretty(&pending)
-+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+    if let Err(e) = write_atomic(&pending_path, pending_serialized.as_bytes()) {
-+        let _ = std::fs::remove_file(&pending_path);
-+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
-+    }
-@@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
--    write_atomic(&config_path, serialized_config.as_bytes())
--        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+    if let Err(e) = write_atomic(&config_path, serialized_config.as_bytes()) {
-+        let _ = std::fs::remove_file(&pending_path);
-+        return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
-+    }
-@@ pub fn rename_profile(sp: &StoragePaths, id: &str, name: &str) -> Result<ProfileMeta> {
--    save_registry(sp, &registry)?;
--    let _ = std::fs::remove_file(&pending_path);
-+    if let Err(e) = save_registry(sp, &registry) {
-+        let _ = std::fs::remove_file(&pending_path);
-+        return Err(e);
-+    }
-+    let _ = std::fs::remove_file(&pending_path);
-
+         }
+     }
