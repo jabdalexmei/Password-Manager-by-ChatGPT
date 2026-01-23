@@ -889,16 +889,26 @@ pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> R
         }
         let attachments_path = profile_root.join("attachments");
         if !attachments_path.exists() {
-            for entry in fs::read_dir(&profile_root).unwrap_or_else(|_| Vec::new().into_iter()) {
-                if let Ok(ent) = entry {
-                    let p = ent.path();
-                    if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
-                        if name.starts_with("attachments.old.") {
-                            let _ = fs::rename(&p, &attachments_path);
-                            break;
-                        }
+            let mut restored = false;
+            for entry in fs::read_dir(&profile_root)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?
+            {
+                let p = entry
+                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?
+                    .path();
+                if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with("attachments.old.") {
+                        fs::rename(&p, &attachments_path)
+                            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+                        restored = true;
+                        break;
                     }
                 }
+            }
+
+            if !restored && !attachments_path.exists() {
+                fs::create_dir_all(&attachments_path)
+                    .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
             }
         }
     }
