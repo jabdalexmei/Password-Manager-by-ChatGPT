@@ -173,8 +173,6 @@ impl AppState {
     pub fn logout_and_cleanup(self: &Arc<Self>) -> Result<()> {
         crate::services::security_service::lock_vault(self)?;
 
-        crate::data::sqlite::pool::clear_all_pools();
-
         self.clear_security_state()?;
 
         Ok(())

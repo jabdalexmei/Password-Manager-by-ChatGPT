@@ -20,7 +20,6 @@ use crate::data::profiles::paths::{
 };
 use crate::data::profiles::registry;
 use crate::data::sqlite::migrations;
-use crate::data::sqlite::pool::clear_pool;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::attachments_service;
 use crate::types::ProfileMeta;
@@ -135,37 +134,67 @@ fn normalize_sqlite_header_disable_wal(bytes: &mut [u8], profile_id: &str, ctx: 
     }
 }
 
-fn open_protected_vault_session(
-    profile_id: &str,
-    password: &str,
-    storage_paths: &crate::data::storage_paths::StoragePaths,
-    state: &Arc<AppState>,
-) -> Result<()> {
-    let salt_path = kdf_salt_path(storage_paths, profile_id)?;
-    if !salt_path.exists() {
-        return Err(ErrorCodeString::new("KDF_SALT_MISSING"));
-    }
-    let salt =
-        std::fs::read(&salt_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
-    // Password is used ONLY to unwrap the master key (vault_key.bin). Vault data is always
-    // encrypted with the master key.
-    let wrapping_key = Zeroizing::new(kdf::derive_master_key(password, &salt)?);
-
-    if !key_check::verify_key_check_file(storage_paths, profile_id, &wrapping_key)? {
-        return Err(ErrorCodeString::new("INVALID_PASSWORD"));
-    }
-
-    let master = Zeroizing::new(
-        master_key::read_master_key_wrapped_with_password(storage_paths, profile_id, &wrapping_key)?,
-    );
-
-    let vault_path = vault_db_path(storage_paths, profile_id)?;
+fn ensure_ciphertext_vault_on_disk(vault_path: &Path, profile_id: &str) -> Result<()> {
+    const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
     if !vault_path.exists() {
         return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
     }
+
+    // Detect legacy/plaintext vaults early. A plaintext SQLite DB starting with the SQLite magic
+    // must never exist on disk under the "always encrypted" invariant.
+    let magic = read_file_prefix(vault_path, SQLITE_MAGIC.len())
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+    if magic.as_slice() == SQLITE_MAGIC {
+        log::error!(
+            "[SECURITY][vault_at_rest] profile_id={} action=plaintext_detected path={:?}",
+            profile_id,
+            vault_path
+        );
+        return Err(ErrorCodeString::new("VAULT_PLAINTEXT_DETECTED"));
+    }
+
+    // Enforce our encrypted blob header ("PMENC1" + version).
+    let header_len = cipher::PM_ENC_MAGIC.len() + 1;
+    let header = read_file_prefix(vault_path, header_len)
+        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+    if header.len() != header_len {
+        return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
+    }
+    if &header[..cipher::PM_ENC_MAGIC.len()] != cipher::PM_ENC_MAGIC {
+        return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
+    }
+    if header[cipher::PM_ENC_MAGIC.len()] != cipher::PM_ENC_VERSION {
+        return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
+    }
+
+    Ok(())
+}
+
+fn map_vault_decrypt_error(err: ErrorCodeString) -> ErrorCodeString {
+    match err.code.as_str() {
+        "CRYPTO_BLOB_INVALID" | "CRYPTO_VERSION_UNSUPPORTED" => {
+            ErrorCodeString::new("VAULT_CORRUPTED")
+        }
+        "CRYPTO_DECRYPT_FAILED" => ErrorCodeString::new("VAULT_DECRYPT_FAILED"),
+        other => {
+            log::warn!("[SECURITY][vault_decrypt] unmapped_error_code={}", other);
+            ErrorCodeString::new("VAULT_DECRYPT_FAILED")
+        }
+    }
+}
+
+fn open_vault_session_with_master_key(
+    profile_id: &str,
+    master: Zeroizing<[u8; 32]>,
+    storage_paths: &crate::data::storage_paths::StoragePaths,
+    state: &Arc<AppState>,
+) -> Result<()> {
+    let vault_path = vault_db_path(storage_paths, profile_id)?;
+    ensure_ciphertext_vault_on_disk(&vault_path, profile_id)?;
+
     let encrypted = cipher::read_encrypted_file(&vault_path)?;
-    let decrypted = cipher::decrypt_vault_blob(profile_id, &master, &encrypted)
-        .map_err(|_| ErrorCodeString::new("VAULT_DECRYPT_FAILED"))?;
+    let decrypted =
+        cipher::decrypt_vault_blob(profile_id, &master, &encrypted).map_err(map_vault_decrypt_error)?;
 
     // If the stored DB image is marked WAL, SQLite may try to open -wal/-shm even for :memory:
     // deserialization and fail with SQLITE_CANTOPEN (14). Normalize header before deserialize.
@@ -226,80 +255,46 @@ fn open_protected_vault_session(
     Ok(())
 }
 
-fn open_passwordless_vault_session(
+fn open_vault_session(
     profile_id: &str,
+    has_password: bool,
+    password: Option<&str>,
     storage_paths: &crate::data::storage_paths::StoragePaths,
     state: &Arc<AppState>,
 ) -> Result<()> {
-    // Passwordless portable mode: read the master key from vault_key.bin.
-    let master =
+    let master = if has_password {
+        let password = password
+            .filter(|p| !p.is_empty())
+            .ok_or_else(|| ErrorCodeString::new("PASSWORD_REQUIRED"))?;
+
+        let salt_path = kdf_salt_path(storage_paths, profile_id)?;
+        if !salt_path.exists() {
+            return Err(ErrorCodeString::new("KDF_SALT_MISSING"));
+        }
+        let salt =
+            std::fs::read(&salt_path).map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_READ"))?;
+
+        // Password is used ONLY to unwrap the master key (vault_key.bin). Vault data is always
+        // encrypted with the master key.
+        let wrapping_key = Zeroizing::new(kdf::derive_master_key(password, &salt)?);
+
+        if !key_check::verify_key_check_file(storage_paths, profile_id, &wrapping_key)? {
+            return Err(ErrorCodeString::new("INVALID_PASSWORD"));
+        }
+
+        Zeroizing::new(master_key::read_master_key_wrapped_with_password(
+            storage_paths,
+            profile_id,
+            &wrapping_key,
+        )?)
+    } else {
         Zeroizing::new(master_key::read_master_key_passwordless_portable(
             storage_paths,
             profile_id,
-        )?);
+        )?)
+    };
 
-    let vault_path = vault_db_path(storage_paths, profile_id)?;
-    if !vault_path.exists() {
-        return Err(ErrorCodeString::new("VAULT_CORRUPTED"));
-    }
-    let encrypted = cipher::read_encrypted_file(&vault_path)?;
-    let decrypted = cipher::decrypt_vault_blob(profile_id, &master, &encrypted)
-        .map_err(|_| ErrorCodeString::new("VAULT_DECRYPT_FAILED"))?;
-
-    let mut decrypted = decrypted;
-    normalize_sqlite_header_disable_wal(
-        decrypted.as_mut_slice(),
-        profile_id,
-        "unlock_before_deserialize",
-    );
-
-    let mut conn = rusqlite::Connection::open_in_memory().map_err(|e| {
-        log::error!(
-            "[SECURITY][login] profile_id={} step=open_in_memory err={}",
-            profile_id,
-            format_rusqlite_error(&e)
-        );
-        ErrorCodeString::new("DB_OPEN_FAILED")
-    })?;
-
-    apply_in_memory_pragmas(&conn, profile_id, "open_in_memory_before_deserialize")?;
-    let owned = owned_data_from_bytes(decrypted)?;
-    conn.deserialize(DatabaseName::Main, owned, false).map_err(|e| {
-        log::error!(
-            "[SECURITY][login] profile_id={} step=deserialize err={}",
-            profile_id,
-            format_rusqlite_error(&e)
-        );
-        ErrorCodeString::new("VAULT_CORRUPTED")
-    })?;
-
-    if let Err(e) = migrations::migrate_to_latest(&conn) {
-        log::error!(
-            "[SECURITY][login] profile_id={} step=migrate_to_latest failed code={}",
-            profile_id,
-            e.code
-        );
-        return Err(e);
-    }
-    migrations::validate_core_schema(&conn)
-        .map_err(|_| ErrorCodeString::new("VAULT_CORRUPTED"))?;
-
-    best_effort_force_journal_mode_memory(&conn, profile_id, "unlock_after_deserialize");
-
-    {
-        let mut session = state
-            .vault_session
-            .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_LOCK_POISONED"))?;
-
-        *session = Some(VaultSession {
-            profile_id: profile_id.to_string(),
-            conn,
-            key: master,
-        });
-    }
-
-    Ok(())
+    open_vault_session_with_master_key(profile_id, master, storage_paths, state)
 }
 
 fn is_dir_nonempty(dir: &Path) -> io::Result<bool> {
@@ -467,7 +462,6 @@ fn recover_set_password_tx(
         let _ = remove_file_retry(&commit, 20, Duration::from_millis(50));
 
         registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
-        clear_pool(profile_id);
         best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
         return Ok(());
     }
@@ -477,7 +471,6 @@ fn recover_set_password_tx(
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
-    clear_pool(profile_id);
     best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
     Ok(())
 }
@@ -564,7 +557,6 @@ fn recover_remove_password_tx(
         let _ = remove_file_retry(&key_check_final, 20, Duration::from_millis(50));
 
         registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, false)?;
-        clear_pool(profile_id);
         // Best-effort cleanup.
         let _ = remove_file_retry(&commit, 20, Duration::from_millis(50));
         best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
@@ -576,7 +568,6 @@ fn recover_remove_password_tx(
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     registry::upsert_profile_with_id(storage_paths, profile_id, profile_name, true)?;
-    clear_pool(profile_id);
     best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
     Ok(())
 }
@@ -662,7 +653,6 @@ fn recover_change_password_tx(
         let _ = remove_file_retry(&tx_root.join("vault_key.bin.bak"), 20, Duration::from_millis(50));
         let _ = remove_file_retry(&tx_root.join("key_check.bin.bak"), 20, Duration::from_millis(50));
         let _ = remove_file_retry(&commit, 20, Duration::from_millis(50));
-        clear_pool(profile_id);
         best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
         return Ok(());
     }
@@ -671,7 +661,6 @@ fn recover_change_password_tx(
     if let Err(_e) = rollback_change_password_tx(&tx_root, &vault_key_final, &key_check_final) {
         return Err(ErrorCodeString::new("PROFILE_STORAGE_WRITE"));
     }
-    clear_pool(profile_id);
     best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
     Ok(())
 }
@@ -915,14 +904,11 @@ pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> R
     profile = registry::get_profile(&storage_paths, id)?
         .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
 
-    let pwd = password.unwrap_or("");
-    let is_passwordless = !profile.has_password;
-
-    if is_passwordless {
-        open_passwordless_vault_session(id, &storage_paths, state)?;
-    } else {
-        open_protected_vault_session(id, pwd, &storage_paths, state)?;
+    if profile.has_password && password.filter(|p| !p.is_empty()).is_none() {
+        return Err(ErrorCodeString::new("PASSWORD_REQUIRED"));
     }
+
+    open_vault_session(id, profile.has_password, password, &storage_paths, state)?;
 
     if let Ok(mut active) = state.active_profile.lock() {
         *active = Some(id.to_string());
@@ -1032,7 +1018,6 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
     }
 
     if let Some(id) = cleanup_id.as_ref() {
-        clear_pool(id);
     }
 
     Ok(true)
@@ -1182,7 +1167,6 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         let _ = remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
     }
 
-    clear_pool(id);
     Ok(updated.into())
 }
 
@@ -1398,7 +1382,6 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
 
     let updated = registry::upsert_profile_with_id(&storage_paths, id, &profile.name, false)?;
 
-    clear_pool(id);
     best_effort_remove_dir_all_retry(&tx_root, 40, Duration::from_millis(50));
     Ok(updated.into())
 }
@@ -1464,4 +1447,38 @@ pub fn auto_lock_cleanup(state: &Arc<AppState>) -> Result<bool> {
 
 pub fn health_check() -> Result<bool> {
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_plaintext_sqlite_vault_on_disk() {
+        const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
+
+        let dir = tempfile::tempdir().unwrap();
+        let vault_path = dir.path().join("vault.db");
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(SQLITE_MAGIC);
+        bytes.extend_from_slice(&[0u8; 64]);
+        std::fs::write(&vault_path, bytes).unwrap();
+
+        let err = ensure_ciphertext_vault_on_disk(&vault_path, "p1").unwrap_err();
+        assert_eq!(err.code, "VAULT_PLAINTEXT_DETECTED");
+    }
+
+    #[test]
+    fn accepts_encrypted_blob_header_for_vault_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault_path = dir.path().join("vault.db");
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&cipher::PM_ENC_MAGIC);
+        bytes.push(cipher::PM_ENC_VERSION);
+        bytes.extend_from_slice(&[0u8; 64]);
+        std::fs::write(&vault_path, bytes).unwrap();
+
+        ensure_ciphertext_vault_on_disk(&vault_path, "p1").unwrap();
+    }
 }

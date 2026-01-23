@@ -66,7 +66,6 @@ pub async fn profile_delete(id: String, state: State<'_, Arc<AppState>>) -> Resu
             .as_ref()
             .map(|s| s.profile_id == id)
             .unwrap_or(false);
-        crate::data::sqlite::pool::clear_pool(&id);
         if should_lock {
             app_state.logout_and_cleanup()?;
         }
@@ -130,7 +129,6 @@ pub async fn set_active_profile(id: String, state: State<'_, Arc<AppState>>) -> 
             }
 
             if let Some(old_id) = &old_active_profile_id {
-                crate::data::sqlite::pool::clear_pool(old_id);
             }
         }
 
@@ -139,7 +137,7 @@ pub async fn set_active_profile(id: String, state: State<'_, Arc<AppState>>) -> 
         }
         profiles_service::set_active_profile(&storage_paths, &id)?;
 
-        // Preserve legacy behavior: passwordless profiles auto-unlock on selection.
+        // Passwordless profiles can unlock on selection (no password needed to unwrap master key).
         let profile = registry::get_profile(&storage_paths, &id)?
             .ok_or_else(|| ErrorCodeString::new("PROFILE_NOT_FOUND"))?;
         if !profile.has_password {
