@@ -1009,18 +1009,15 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
         *session = None;
     }
 
-    {
-        let mut active = state
-            .active_profile
-            .lock()
-            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-        *active = None;
-    }
+	{
+		let mut active = state
+			.active_profile
+			.lock()
+			.map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+		*active = None;
+	}
 
-    if let Some(id) = cleanup_id.as_ref() {
-    }
-
-    Ok(true)
+	Ok(true)
 }
 
 pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> Result<ProfileMeta> {
