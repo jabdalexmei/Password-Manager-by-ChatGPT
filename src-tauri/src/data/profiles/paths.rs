@@ -23,7 +23,12 @@ fn validate_profile_id(id: &str) -> Result<()> {
 #[cfg(windows)]
 fn set_dir_private(path: &Path) -> std::io::Result<()> {
     use std::ffi::OsString;
-    use std::process::Command;
+    use std::process::{Command, Stdio};
+    // On Windows, hide any console window when invoking external commands.
+    // `creation_flags(0x08000000)` sets CREATE_NO_WINDOW so that icacls.exe
+    // doesn't steal focus or flash a console. See
+    // https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
+    use std::os::windows::process::CommandExt;
 
     // Harden directory ACLs on Windows:
     // - remove inherited ACEs
@@ -80,6 +85,11 @@ fn set_dir_private(path: &Path) -> std::io::Result<()> {
         .arg("*S-1-5-11")
         .arg("*S-1-5-32-545")
         .arg("/c")
+        // Suppress any console window when executing icacls.exe
+        .creation_flags(0x08000000)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .output()?;
 
     if !output.status.success() {
