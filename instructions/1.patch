@@ -1,9 +1,26 @@
---- a/src-tauri/src/commands/profiles.rs+++ b/src-tauri/src/commands/profiles.rs@@ -128,8 +128,6 @@                 *session = None;
+diff --git a/src-tauri/src/commands/profiles.rs b/src-tauri/src/commands/profiles.rs
+--- a/src-tauri/src/commands/profiles.rs
++++ b/src-tauri/src/commands/profiles.rs
+@@ -128,8 +128,6 @@
+                 *session = None;
              }
- 
+
 -            if let Some(old_id) = &old_active_profile_id {
 -            }
          }
- 
+
          if let Ok(mut active) = app_state.active_profile.lock() {
 
+diff --git a/src-tauri/.cargo/audit.toml b/src-tauri/.cargo/audit.toml
+new file mode 100644
+--- /dev/null
++++ b/src-tauri/.cargo/audit.toml
+@@ -0,0 +1,8 @@
++[advisories]
++informational_warnings = []
++
++[target]
++os = ["windows"]
++
++[output]
++deny = []
