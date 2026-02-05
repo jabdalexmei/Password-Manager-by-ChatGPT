@@ -1,80 +1,17 @@
-Вот ТЗ для Codex, чтобы он “залочил” зависимости (Rust + при наличии фронтенда) и подготовил то, что надо коммитить.
+diff --git a/.gitignore b/.gitignore
+index 4dc4a792..0d2c5b8a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,12 +1,11 @@
+ node_modules/
+ /dist/
+ /src-tauri/target/
+-/.cargo/
+ /.turbo/
+ /.tauri-lock
+ /.next/
+ /build/
 
----
-
-## ТЗ: Lock зависимостей и воспроизводимая сборка (Windows, Tauri, Rust)
-
-### Цель
-
-Сделать так, чтобы проект **собирался воспроизводимо** за счёт lock-файлов, без коммита кэшей/артефактов.
-После выполнения:
-
-* `cargo build --locked` проходит
-* в репозиторий добавлены только нужные lock-файлы
-* **никаких** `target/`, `node_modules/`, `.cargo/registry` в репозитории
-
-### Входные данные
-
-Проект в `Q:\Password-Manager\APPS\Password-Manager-by-ChatGPT\src-tauri` (Tauri Rust часть).
-ОС: Windows 10, toolchain установлен.
-
-### Что сделать (шаги)
-
-1. **Проверить Rust часть**
-
-   * Перейти в `src-tauri`.
-   * Выполнить обычную сборку без `--locked`, чтобы при необходимости обновился `Cargo.lock`:
-
-     * `cargo clean`
-     * `cargo build --target x86_64-pc-windows-msvc`
-   * Убедиться, что появился/обновился `src-tauri/Cargo.lock`.
-
-2. **Проверить “заморозку”**
-
-   * Выполнить:
-
-     * `cargo build --target x86_64-pc-windows-msvc --locked`
-     * `cargo build --target x86_64-pc-windows-msvc --locked --offline`
-   * Эти команды должны проходить без попыток менять lock.
-
-3. **Фронтенд (если в проекте есть Node)**
-
-   * Определить менеджер пакетов:
-
-     * если есть `package-lock.json` → npm
-     * если есть `pnpm-lock.yaml` → pnpm
-     * если есть `yarn.lock` → yarn
-   * Сгенерировать/обновить lock-файл командой соответствующего менеджера (без коммита `node_modules`).
-   * Проверить, что lock-файл обновлён/создан.
-
-4. **Подготовить список файлов для коммита**
-
-   * Включить в коммит:
-
-     * `src-tauri/Cargo.lock`
-     * `src-tauri/Cargo.toml` (если менялся)
-     * lock-файл Node (если есть): `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock`
-   * Явно НЕ включать:
-
-     * `src-tauri/target/**`
-     * `node_modules/**`
-     * `.cargo/**` (кэш)
-     * любые бинарники/сборочные артефакты
-
-5. **.gitignore**
-
-   * Убедиться, что `.gitignore` исключает:
-
-     * `src-tauri/target/`
-     * `node_modules/`
-     * при необходимости `dist/`, `.next/`, `build/` и т.п.
-   * Не добавлять в репозиторий кэш зависимостей.
-
-### Критерии приёмки
-
-* `cargo build --locked` успешно
-* `cargo build --locked --offline` успешно (после того как зависимости уже скачаны один раз)
-* В репозитории есть `Cargo.lock` (и Node lock при наличии фронта)
-* В репозитории нет “гигабайтных” папок `target/`, `node_modules/`, `.cargo/registry`
-
----
+ # patch/merge leftovers
+ *.orig
+ *.rej
