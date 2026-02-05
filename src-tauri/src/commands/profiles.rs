@@ -127,9 +127,6 @@ pub async fn set_active_profile(id: String, state: State<'_, Arc<AppState>>) -> 
             if let Ok(mut session) = app_state.vault_session.lock() {
                 *session = None;
             }
-
-            if let Some(old_id) = &old_active_profile_id {
-            }
         }
 
         if let Ok(mut active) = app_state.active_profile.lock() {
