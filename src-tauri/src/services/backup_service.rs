@@ -12,6 +12,7 @@ use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::app_state::AppState;
+use crate::data::crypto::cipher;
 
 // Restore hard limits (anti zip-bomb / decompression bomb DoS)
 const MAX_RESTORE_FILES: usize = 4096;
@@ -176,6 +177,119 @@ fn validate_profile_id_component(profile_id: &str) -> bool {
     let mut components = p.components();
 
     matches!((components.next(), components.next()), (Some(Component::Normal(_)), None))
+}
+
+// Backup restore safety: we refuse to write any file that looks like plaintext vault data.
+// Under the "always encrypted at-rest" invariant, a plaintext SQLite header must never
+// appear on disk during restore.
+const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
+
+// Passwordless vault_key.bin prefix (master key stored in a self-describing, unwrapped format).
+const PASSWORDLESS_MASTER_KEY_PREFIX: &[u8; 6] = b"PMMK1:";
+
+fn expected_restore_header_len(manifest: &BackupManifest, entry_path: &str) -> usize {
+    let enc_header_len = cipher::PM_ENC_MAGIC.len() + 1;
+
+    match entry_path {
+        "vault.db" => SQLITE_MAGIC.len().max(enc_header_len),
+        "key_check.bin" => enc_header_len,
+        "vault_key.bin" => {
+            if manifest.vault_mode == "protected" {
+                enc_header_len
+            } else if manifest.vault_mode == "passwordless" {
+                PASSWORDLESS_MASTER_KEY_PREFIX.len() + manifest.profile_id.as_bytes().len() + 1
+            } else {
+                enc_header_len
+            }
+        }
+        _ => {
+            if entry_path.starts_with("attachments/") {
+                enc_header_len
+            } else {
+                0
+            }
+        }
+    }
+}
+
+fn validate_encrypted_blob_header(entry_path: &str, header: &[u8]) -> Result<()> {
+    let enc_header_len = cipher::PM_ENC_MAGIC.len() + 1;
+    if header.len() < enc_header_len {
+        log::error!(
+            "[BACKUP][restore] invalid_blob_header path={} reason=too_short len={}",
+            entry_path,
+            header.len()
+        );
+        return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+    }
+
+    if &header[..cipher::PM_ENC_MAGIC.len()] != cipher::PM_ENC_MAGIC {
+        log::error!(
+            "[BACKUP][restore] insecure_entry path={} reason=missing_magic",
+            entry_path
+        );
+        return Err(ErrorCodeString::new("BACKUP_PLAINTEXT_REJECTED"));
+    }
+    if header[cipher::PM_ENC_MAGIC.len()] != cipher::PM_ENC_VERSION {
+        log::error!(
+            "[BACKUP][restore] invalid_blob_header path={} reason=unsupported_version v={}",
+            entry_path,
+            header[cipher::PM_ENC_MAGIC.len()]
+        );
+        return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+    }
+
+    Ok(())
+}
+
+fn validate_backup_entry_header(
+    manifest: &BackupManifest,
+    entry_path: &str,
+    header: &[u8],
+) -> Result<()> {
+    if entry_path == "vault.db" {
+        if header.len() >= SQLITE_MAGIC.len() && &header[..SQLITE_MAGIC.len()] == SQLITE_MAGIC {
+            log::error!(
+                "[BACKUP][restore] insecure_entry path={} reason=sqlite_plaintext",
+                entry_path
+            );
+            return Err(ErrorCodeString::new("BACKUP_PLAINTEXT_REJECTED"));
+        }
+        return validate_encrypted_blob_header(entry_path, header);
+    }
+
+    if entry_path.starts_with("attachments/") || entry_path == "key_check.bin" {
+        return validate_encrypted_blob_header(entry_path, header);
+    }
+
+    if entry_path == "vault_key.bin" {
+        if manifest.vault_mode == "protected" {
+            return validate_encrypted_blob_header(entry_path, header);
+        }
+        if manifest.vault_mode == "passwordless" {
+            let expected_len =
+                PASSWORDLESS_MASTER_KEY_PREFIX.len() + manifest.profile_id.as_bytes().len() + 1;
+            if header.len() < expected_len {
+                return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+            }
+            if &header[..PASSWORDLESS_MASTER_KEY_PREFIX.len()] != PASSWORDLESS_MASTER_KEY_PREFIX {
+                return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+            }
+            let pid = manifest.profile_id.as_bytes();
+            let start = PASSWORDLESS_MASTER_KEY_PREFIX.len();
+            let end = start + pid.len();
+            if &header[start..end] != pid {
+                return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+            }
+            if header[end] != 0 {
+                return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
+            }
+            return Ok(());
+        }
+        return Err(ErrorCodeString::new("BACKUP_MANIFEST_INVALID"));
+    }
+
+    Ok(())
 }
 
 
@@ -864,6 +978,16 @@ fn restore_archive_to_profile(
         let mut zipped_file = archive
             .by_name(&entry.path)
             .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
+        let header_len = expected_restore_header_len(&manifest, &entry.path);
+        let mut pre_read: Vec<u8> = Vec::new();
+        if header_len > 0 {
+            pre_read.resize(header_len, 0);
+            let n = zipped_file
+                .read(&mut pre_read)
+                .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
+            pre_read.truncate(n);
+            validate_backup_entry_header(&manifest, &entry.path, &pre_read)?;
+        }
 
         let target_path = staging_root.as_path().join(rel_path);
         if let Some(parent) = target_path.parent() {
@@ -877,6 +1001,24 @@ fn restore_archive_to_profile(
         let mut buffer = [0u8; 64 * 1024];
         let mut hasher = Sha256::new();
         let mut bytes_written = 0i64;
+
+        if !pre_read.is_empty() {
+            writer
+                .write_all(&pre_read)
+                .map_err(|e| map_restore_io_error("write_extracted_file", Some(&target_path), None, e))?;
+            bytes_written = bytes_written
+                .checked_add(pre_read.len() as i64)
+                .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
+            total_written = total_written
+                .checked_add(pre_read.len() as i64)
+                .ok_or_else(|| ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"))?;
+
+            if bytes_written > MAX_RESTORE_ENTRY_BYTES || total_written > MAX_RESTORE_TOTAL_BYTES {
+                return Err(ErrorCodeString::new("BACKUP_ARCHIVE_TOO_LARGE"));
+            }
+
+            hasher.update(&pre_read);
+        }
 
         loop {
             let read = zipped_file
@@ -1108,7 +1250,6 @@ pub fn backup_restore_workflow(state: &Arc<AppState>, backup_path: String) -> Re
     let _guard = ensure_backup_guard(state)?;
     // Persist any in-memory changes before restore to avoid data loss on rollback.
     security_service::lock_vault(state)?;
-    crate::data::sqlite::pool::clear_all_pools();
     let sp = state.get_storage_paths()?;
 
     let backup_path = PathBuf::from(&backup_path);
@@ -1207,4 +1348,66 @@ pub fn backup_create_if_due_auto(state: &Arc<AppState>) -> Result<Option<String>
     save_registry(&sp, &profile_id, &registry)?;
 
     Ok(Some(result.path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_manifest(vault_mode: &str, profile_id: &str) -> BackupManifest {
+        BackupManifest {
+            format_version: 1,
+            created_at_utc: "2026-01-23T00:00:00Z".to_string(),
+            app_version: "test".to_string(),
+            profile_id: profile_id.to_string(),
+            profile_name: Some("Test".to_string()),
+            vault_mode: vault_mode.to_string(),
+            files: vec![],
+        }
+    }
+
+    #[test]
+    fn restore_rejects_plaintext_sqlite_vault_db_header() {
+        let manifest = test_manifest("passwordless", "p1");
+        let err = validate_backup_entry_header(&manifest, "vault.db", SQLITE_MAGIC).unwrap_err();
+        assert_eq!(err.code, "BACKUP_PLAINTEXT_REJECTED");
+    }
+
+    #[test]
+    fn restore_accepts_encrypted_vault_db_header() {
+        let manifest = test_manifest("passwordless", "p1");
+        let mut header = Vec::new();
+        header.extend_from_slice(&cipher::PM_ENC_MAGIC);
+        header.push(cipher::PM_ENC_VERSION);
+        header.extend_from_slice(&[0u8; 8]);
+        validate_backup_entry_header(&manifest, "vault.db", &header).unwrap();
+    }
+
+    #[test]
+    fn restore_accepts_passwordless_vault_key_prefix_and_profile_id() {
+        let manifest = test_manifest("passwordless", "abc");
+        let mut header = Vec::new();
+        header.extend_from_slice(PASSWORDLESS_MASTER_KEY_PREFIX);
+        header.extend_from_slice(manifest.profile_id.as_bytes());
+        header.push(0);
+        validate_backup_entry_header(&manifest, "vault_key.bin", &header).unwrap();
+    }
+
+    #[test]
+    fn restore_rejects_protected_vault_key_in_passwordless_manifest() {
+        let manifest = test_manifest("passwordless", "abc");
+        let mut header = Vec::new();
+        header.extend_from_slice(&cipher::PM_ENC_MAGIC);
+        header.push(cipher::PM_ENC_VERSION);
+        header.extend_from_slice(&[0u8; 8]);
+        let err = validate_backup_entry_header(&manifest, "vault_key.bin", &header).unwrap_err();
+        assert_eq!(err.code, "BACKUP_ARCHIVE_INVALID");
+    }
+
+    #[test]
+    fn expected_header_len_for_passwordless_vault_key_includes_profile_id() {
+        let manifest = test_manifest("passwordless", "abc");
+        let len = expected_restore_header_len(&manifest, "vault_key.bin");
+        assert_eq!(len, PASSWORDLESS_MASTER_KEY_PREFIX.len() + 3 + 1);
+    }
 }

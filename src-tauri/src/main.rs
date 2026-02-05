@@ -31,7 +31,6 @@ mod data {
         pub mod diagnostics;
         pub mod init;
         pub mod migrations;
-        pub mod pool;
         pub mod repo_impl;
     }
 }
