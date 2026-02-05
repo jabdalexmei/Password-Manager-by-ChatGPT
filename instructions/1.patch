@@ -1,6 +1,7 @@
---- a/src/app/main.tsx
-+++ b/src/app/main.tsx
-@@ -4,22 +4,6 @@
+diff -ur /home/oai/share/orig/Password-Manager-by-ChatGPT-codex-github-mention-add-windows-targeted-cargo-audit-configurati/src/app/main.tsx /home/oai/share/project/Password-Manager-by-ChatGPT-codex-github-mention-add-windows-targeted-cargo-audit-configurati/src/app/main.tsx
+--- /home/oai/share/orig/Password-Manager-by-ChatGPT-codex-github-mention-add-windows-targeted-cargo-audit-configurati/src/app/main.tsx	2026-02-05 11:28:07.000000000 +0000
++++ /home/oai/share/project/Password-Manager-by-ChatGPT-codex-github-mention-add-windows-targeted-cargo-audit-configurati/src/app/main.tsx	2026-02-05 12:28:34.000000000 +0000
+@@ -4,22 +4,22 @@
  import '../shared/styles/app.css';
  import '../shared/lib/i18n';
  
@@ -20,12 +21,29 @@
 -
 -  window.addEventListener('scroll', activate, { capture: true, passive: true });
 -}
++/*
++ * The original implementation here attached a global scroll listener that
++ * toggled a `scrollbars-active` class on the root element. When active, the
++ * CSS defined a visible scrollbar thumb; when inactive, the thumb was
++ * transparent. This produced a neat auto‑hide effect for scrollbars.
++ *
++ * Unfortunately, WebView2 on Windows treats changes to the scrollbars as a
++ * focus change. Each time the class was toggled, the host window lost and
++ * regained focus, causing the title bar to flicker between its active
++ * (black) and inactive (grey) states. Users reported seeing a grey/black
++ * flash in the header whenever they scrolled or navigated between views.
++ *
++ * To prevent this flicker, we've removed the event listener entirely and
++ * rely on standard scrollbars. If you reintroduce a custom scrollbar
++ * implementation, avoid toggling classes that could cause focus loss.
++ */
  
  ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
    <React.StrictMode>
---- a/src/shared/styles/ui.css
-+++ b/src/shared/styles/ui.css
-@@ -10,61 +10,6 @@
+diff -ur /home/oai/share/orig/Password-Manager-by-ChatGPT-codex-github-mention-add-windows-targeted-cargo-audit-configurati/src/shared/styles/ui.css /home/oai/share/project/Password-Manager-by-ChatGPT-codex-github-mention-add-windows-targeted-cargo-audit-configurati/src/shared/styles/ui.css
+--- /home/oai/share/orig/Password-Manager-by-ChatGPT-codex-github-mention-add-windows-targeted-cargo-audit-configurati/src/shared/styles/ui.css	2026-02-05 11:28:07.000000000 +0000
++++ /home/oai/share/project/Password-Manager-by-ChatGPT-codex-github-mention-add-windows-targeted-cargo-audit-configurati/src/shared/styles/ui.css	2026-02-05 12:28:47.000000000 +0000
+@@ -10,61 +10,19 @@
     - "toast-*" = toaster notifications.
     ========================================================================== */
  
@@ -84,6 +102,19 @@
 -*::-webkit-scrollbar-corner {
 -  background: transparent;
 -}
++/*
++   =========================================================================
++   Removed auto‑hide scrollbar styles
++   -------------------------------------------------------------------------
++   The previous version of this file defined custom scrollbar variables and
++   rules that hid the scroll thumb until the user scrolled. Those rules
++   interacted poorly with WebView2 on Windows: when the thumb became
++   transparent again, the window briefly lost focus and the title bar
++   flashed grey. We removed the definitions for `--scrollbar-size`,
++   `--scrollbar-thumb`, `--scrollbar-thumb-hover`, and the associated
++   selector rules. Native scrollbars will now remain visible and stable,
++   preventing header flicker.
++*/
  
  /* ==========================================================================
     Profiles list / profile cards
