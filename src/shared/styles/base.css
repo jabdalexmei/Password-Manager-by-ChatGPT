@@ -27,8 +27,20 @@ body,
   min-height: 100vh;
 }
 
+/* Fix layout shifting due to scrollbar/visual viewport changes */
+html {
+  /* Always show vertical scrollbar so layout doesn't shift */
+  overflow-y: scroll !important;
+
+  /* Reserve space for scrollbars on both edges to avoid layout reflow */
+  scrollbar-gutter: stable both-edges !important;
+}
+
 /* общий фон приложения */
 body {
   background: var(--bg-screen, var(--bg-app));
   color: var(--color-text);
+
+  /* Prevent overscroll effects that can shift viewport */
+  overscroll-behavior: none;
 }
