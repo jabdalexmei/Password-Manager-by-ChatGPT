@@ -74,6 +74,32 @@ const sortVaultItems = (list: VaultItem[]) =>
     return vaultNameCollator.compare(a.id, b.id);
   });
 
+const collectFolderSubtreeIds = (rootId: string, folders: Folder[]): string[] => {
+  const childrenByParent = new Map<string, string[]>();
+  for (const folder of folders) {
+    if (!folder.parentId) continue;
+    const children = childrenByParent.get(folder.parentId) ?? [];
+    children.push(folder.id);
+    childrenByParent.set(folder.parentId, children);
+  }
+
+  const ids: string[] = [];
+  const stack = [rootId];
+  const visited = new Set<string>();
+  while (stack.length > 0) {
+    const folderId = stack.pop();
+    if (!folderId || visited.has(folderId)) continue;
+    visited.add(folderId);
+    ids.push(folderId);
+    const children = childrenByParent.get(folderId) ?? [];
+    for (const childId of children) {
+      stack.push(childId);
+    }
+  }
+
+  return ids;
+};
+
 export function useVault(profileId: string, onLocked: () => void) {
   const { show: showToast } = useToaster();
   const { t: tCommon } = useTranslation('Common');
@@ -446,25 +472,30 @@ export function useVault(profileId: string, onLocked: () => void) {
     async (id: string) => {
       try {
         await deleteFolderOnly(id);
-        setFolders((prev) => prev.filter((folder) => folder.id !== id).sort(sortFolders));
+        const subtreeIds = collectFolderSubtreeIds(id, folders);
+        const removedSet = new Set(subtreeIds);
+
+        setFolders((prev) => prev.filter((folder) => !removedSet.has(folder.id)).sort(sortFolders));
         setCards((prev) =>
-          prev.map((card) => (card.folderId === id ? { ...card, folderId: null } : card))
+          prev.map((card) => (card.folderId && removedSet.has(card.folderId) ? { ...card, folderId: null } : card))
         );
         setCardDetailsById((prev) => {
           const next = { ...prev };
           Object.entries(next).forEach(([cardId, card]) => {
-            if (card.folderId === id) {
+            if (card.folderId && removedSet.has(card.folderId)) {
               next[cardId] = { ...card, folderId: null };
             }
           });
           return next;
         });
-        setSelectedNav((prev) => (typeof prev === 'object' && prev.folderId === id ? 'all' : prev));
+        setSelectedNav((prev) =>
+          typeof prev === 'object' && removedSet.has(prev.folderId) ? 'all' : prev
+        );
       } catch (err) {
         handleError(err);
       }
     },
-    [handleError]
+    [folders, handleError]
   );
 
   const deleteFolderAndCardsAction = useCallback(
@@ -472,13 +503,15 @@ export function useVault(profileId: string, onLocked: () => void) {
       try {
         await deleteFolderAndCards(id);
         const softDeleteEnabled = settings?.soft_delete_enabled ?? true;
+        const subtreeIds = collectFolderSubtreeIds(id, folders);
+        const removedSet = new Set(subtreeIds);
 
-        setFolders((prev) => prev.filter((folder) => folder.id !== id).sort(sortFolders));
-        setCards((prev) => prev.filter((card) => card.folderId !== id));
+        setFolders((prev) => prev.filter((folder) => !removedSet.has(folder.id)).sort(sortFolders));
+        setCards((prev) => prev.filter((card) => !card.folderId || !removedSet.has(card.folderId)));
         setCardDetailsById((prev) => {
           const next = { ...prev };
           Object.keys(next).forEach((cardId) => {
-            if (next[cardId].folderId === id) {
+            if (next[cardId].folderId && removedSet.has(next[cardId].folderId)) {
               delete next[cardId];
             }
           });
@@ -487,12 +520,14 @@ export function useVault(profileId: string, onLocked: () => void) {
         setSelectedCardId((prev) => {
           if (!prev) return prev;
           const selected = cardDetailsById[prev] ?? cards.find((card) => card.id === prev);
-          if (selected?.folderId === id) {
+          if (selected?.folderId && removedSet.has(selected.folderId)) {
             return null;
           }
           return prev;
         });
-        setSelectedNav((prev) => (typeof prev === 'object' && prev.folderId === id ? 'all' : prev));
+        setSelectedNav((prev) =>
+          typeof prev === 'object' && removedSet.has(prev.folderId) ? 'all' : prev
+        );
 
         if (softDeleteEnabled && trashLoaded) {
           await refreshTrash();
@@ -501,7 +536,7 @@ export function useVault(profileId: string, onLocked: () => void) {
         handleError(err);
       }
     },
-    [cardDetailsById, cards, handleError, refreshTrash, settings, trashLoaded]
+    [cardDetailsById, cards, folders, handleError, refreshTrash, settings, trashLoaded]
   );
 
   const createCardAction = useCallback(

@@ -6,3 +6,4 @@ os = ["windows"]
 
 [output]
 deny = []
+quiet = false

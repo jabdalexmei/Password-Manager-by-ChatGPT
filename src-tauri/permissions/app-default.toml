@@ -98,6 +98,7 @@ commands.allow = [
 
   "workspace_list",
   "workspace_select",
+  "workspace_create",
   "workspace_create_via_dialog",
   "workspace_create_default",
   "workspace_remove",

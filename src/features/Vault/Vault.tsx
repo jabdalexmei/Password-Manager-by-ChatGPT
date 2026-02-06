@@ -286,12 +286,24 @@ export default function Vault({
   const handleDeleteFolderOnly = async () => {
     if (!pendingFolderDelete) return;
     await vault.deleteFolderOnly(pendingFolderDelete.id);
+    await Promise.all([
+      vault.refreshActive(),
+      bankCards.refreshActive(),
+      vault.refreshTrash(),
+      bankCards.refreshTrash(),
+    ]);
     setPendingFolderDelete(null);
   };
 
   const handleDeleteFolderAndCards = async () => {
     if (!pendingFolderDelete) return;
     await vault.deleteFolderAndCards(pendingFolderDelete.id);
+    await Promise.all([
+      vault.refreshActive(),
+      bankCards.refreshActive(),
+      vault.refreshTrash(),
+      bankCards.refreshTrash(),
+    ]);
     setPendingFolderDelete(null);
   };
 
