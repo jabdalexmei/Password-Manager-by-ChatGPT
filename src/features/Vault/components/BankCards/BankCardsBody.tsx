@@ -3,9 +3,9 @@ import { useTranslation } from '../../../../shared/lib/i18n';
 import type { BackendUserSettings } from '../../types/backend';
 import type { Folder } from '../../types/ui';
 import type { FolderDialogState } from '../Folders/useFolders';
-import type { VaultCategory } from '../Folders/Folders';
+import type { VaultCategory } from '../Sidebar/sidebarTypes';
 import { Search } from '../Search/Search';
-import { Folders as VaultFolders } from '../Folders/Folders';
+import { VaultSidebar } from '../Sidebar/VaultSidebar';
 import { useBankCards } from '../../hooks/useBankCards';
 import { useBankCardsViewModel } from './useBankCardsViewModel';
 import { BankCards } from './BankCards';
@@ -100,7 +100,7 @@ export function BankCardsBody({
           </button>
         </div>
 
-        <VaultFolders
+        <VaultSidebar
           vaults={[]}
           activeVaultId="default"
           multiplyVaultsEnabled={false}

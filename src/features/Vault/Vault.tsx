@@ -2,7 +2,7 @@ import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'reac
 import { useVault, type SelectedNav } from './hooks/useVault';
 import { VaultHeader } from './components/Header/VaultHeader';
 import { Search } from './components/Search/Search';
-import { Folders } from './components/Folders/Folders';
+import { VaultSidebar } from './components/Sidebar/VaultSidebar';
 import { DataCards } from './components/DataCards/DataCards';
 import { useDataCards } from './components/DataCards/useDataCards';
 import { useFolders } from './components/Folders/useFolders';
@@ -21,7 +21,7 @@ import {
   restoreBackupWorkflowFromPick,
 } from './api/vaultApi';
 import { BackendUserSettings } from './types/backend';
-import type { VaultCategory } from './components/Folders/Folders';
+import type { VaultCategory } from './components/Sidebar/sidebarTypes';
 
 const LazyExportBackupModal = React.lazy(() =>
   import('./components/modals/ExportBackupModal').then((m) => ({ default: m.ExportBackupModal })),
@@ -446,7 +446,7 @@ export default function Vault({
               {tFolders('action.addFolder')}
             </button>
           </div>
-          <Folders
+          <VaultSidebar
             vaults={vault.vaults}
             activeVaultId={vault.activeVaultId}
             multiplyVaultsEnabled={Boolean(vault.settings?.multiply_vaults_enabled)}
