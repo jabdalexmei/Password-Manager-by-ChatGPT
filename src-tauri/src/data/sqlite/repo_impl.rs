@@ -1163,20 +1163,22 @@ pub fn list_deleted_bank_card_ids(
 }
 
 pub fn get_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<BankCardItem> {
-    with_connection(state, profile_id, |conn| {
-        let mut stmt = conn
-            .prepare("SELECT * FROM bank_cards WHERE id = ?1")
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    with_connection(state, profile_id, |conn| get_bank_card_by_id_conn(conn, id))
+}
 
-        match stmt.query_row(params![id], map_bank_card) {
-            Ok(card) => Ok(card),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND")),
-            Err(err) => {
-                log_sqlite_err("get_bank_card.query_row", "SELECT * FROM bank_cards WHERE id = ?1", &err);
-                Err(ErrorCodeString::new("DB_QUERY_FAILED"))
-            }
+fn get_bank_card_by_id_conn(conn: &Connection, id: &str) -> Result<BankCardItem> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM bank_cards WHERE id = ?1")
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+    match stmt.query_row(params![id], map_bank_card) {
+        Ok(card) => Ok(card),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND")),
+        Err(err) => {
+            log_sqlite_err("get_bank_card.query_row", "SELECT * FROM bank_cards WHERE id = ?1", &err);
+            Err(ErrorCodeString::new("DB_QUERY_FAILED"))
         }
-    })
+    }
 }
 
 pub fn create_bank_card(
@@ -1207,7 +1209,7 @@ pub fn create_bank_card(
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-        get_bank_card(state, profile_id, &id)
+        get_bank_card_by_id_conn(conn, &id)
     })
 }
 
