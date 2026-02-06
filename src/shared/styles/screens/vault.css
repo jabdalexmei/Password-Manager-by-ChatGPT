@@ -341,9 +341,10 @@
 }
 
 .vault-folder-node {
-  display: flex;
+  display: grid;
+  grid-template-columns: 24px 1fr;
   align-items: center;
-  gap: 6px;
+  column-gap: 6px;
 }
 
 .vault-folder-tree-children {
@@ -359,7 +360,7 @@
   flex: 0 0 24px;
   width: 24px;
   height: 24px;
-  border: 1px solid transparent;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   background: transparent;
   color: var(--color-text-muted);
@@ -373,7 +374,7 @@
 .vault-folder-toggle:hover,
 .vault-folder-toggle:focus-visible {
   color: var(--color-text);
-  border-color: var(--color-border);
+  border-color: var(--focus-border);
   background: var(--color-surface-2);
   outline: none;
 }
