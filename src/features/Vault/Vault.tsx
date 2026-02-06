@@ -387,8 +387,8 @@ export default function Vault({
             <Search
               query={vault.searchQuery}
               onChange={handleSearchChange}
-              filters={selectedCategory === 'data_cards' && !showBothLists ? vault.filters : undefined}
-              onChangeFilters={selectedCategory === 'data_cards' && !showBothLists ? vault.setFilters : undefined}
+              filters={selectedCategory !== 'bank_cards' ? vault.filters : undefined}
+              onChangeFilters={selectedCategory !== 'bank_cards' ? vault.setFilters : undefined}
             />
           </div>
           <div className="vault-sidebar-actions">
