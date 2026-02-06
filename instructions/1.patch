@@ -1,40 +1,483 @@
-diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
-index 6dab2d8..f65d13f 100644
---- a/src-tauri/src/data/sqlite/repo_impl.rs
-+++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -460,15 +460,19 @@ pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folde
-     })
+diff --git a/src/features/Vault/components/Folders/useFolders.ts b/src/features/Vault/components/Folders/useFolders.ts
+index ab20dac..d282516 100644
+--- a/src/features/Vault/components/Folders/useFolders.ts
++++ b/src/features/Vault/components/Folders/useFolders.ts
+@@ -3,15 +3,16 @@ import { useTranslation } from '../../../../shared/lib/i18n';
+ import { Folder } from '../../types/ui';
+ 
+ type UseFoldersParams = {
+-  onCreateFolder: (name: string) => Promise<Folder | void> | Folder | void;
++  onCreateFolder: (name: string, parentId: string | null) => Promise<Folder | void | null> | Folder | void | null;
+ };
+ 
+ export type FolderDialogState = {
+   isCreateOpen: boolean;
+   name: string;
++  parentName: string | null;
+   error: string | null;
+   isSubmitting: boolean;
+-  openCreateFolder: () => void;
++  openCreateFolder: (parentId?: string | null, parentName?: string | null) => void;
+   closeCreateFolder: () => void;
+   setName: (value: string) => void;
+   submitCreate: () => Promise<void>;
+@@ -21,19 +22,25 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogSt
+   const { t } = useTranslation('Folders');
+   const [isCreateOpen, setCreateOpen] = useState(false);
+   const [name, setName] = useState('');
++  const [parentId, setParentId] = useState<string | null>(null);
++  const [parentName, setParentName] = useState<string | null>(null);
+   const [error, setError] = useState<string | null>(null);
+   const [isSubmitting, setIsSubmitting] = useState(false);
+ 
+-  const openCreateFolder = useCallback(() => {
++  const openCreateFolder = useCallback((nextParentId?: string | null, nextParentName?: string | null) => {
+     setName('');
+     setError(null);
+     setIsSubmitting(false);
++    setParentId(typeof nextParentId === 'string' ? nextParentId : null);
++    setParentName(typeof nextParentName === 'string' ? nextParentName : null);
+     setCreateOpen(true);
+   }, []);
+ 
+   const closeCreateFolder = useCallback(() => {
+     setIsSubmitting(false);
+     setCreateOpen(false);
++    setParentId(null);
++    setParentName(null);
+   }, []);
+ 
+   const submitCreate = useCallback(async () => {
+@@ -46,13 +53,33 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogSt
+ 
+     setIsSubmitting(true);
+     try {
+-      await onCreateFolder(trimmed);
++      const created = await onCreateFolder(trimmed, parentId);
++      if (created === null) return;
+       setCreateOpen(false);
+       setName('');
++      setParentId(null);
++      setParentName(null);
+     } finally {
+       setIsSubmitting(false);
+     }
+-  }, [isSubmitting, name, onCreateFolder, t]);
++  }, [isSubmitting, name, onCreateFolder, parentId, t]);
+ 
+-  return { isCreateOpen, name, error, isSubmitting, openCreateFolder, closeCreateFolder, setName, submitCreate };
++  const setCreateName = useCallback((value: string) => {
++    setName(value);
++    if (error) {
++      setError(null);
++    }
++  }, [error]);
++
++  return {
++    isCreateOpen,
++    name,
++    parentName,
++    error,
++    isSubmitting,
++    openCreateFolder,
++    closeCreateFolder,
++    setName: setCreateName,
++    submitCreate,
++  };
+ }
+diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
+index ea98f92..c1ba2e7 100644
+--- a/src/features/Vault/components/Folders/Folders.tsx
++++ b/src/features/Vault/components/Folders/Folders.tsx
+@@ -1,4 +1,4 @@
+-import React, { useEffect, useRef, useState } from 'react';
++import React, { useEffect, useMemo, useRef, useState } from 'react';
+ import { Folder } from '../../types/ui';
+ import { SelectedNav } from '../../hooks/useVault';
+ import { useTranslation } from '../../../../shared/lib/i18n';
+@@ -29,6 +29,64 @@ export type FolderListProps = {
+   onRenameFolder: (id: string, name: string) => void | Promise<void>;
+ };
+ 
++type FolderTreeNode = {
++  folder: Folder;
++  children: FolderTreeNode[];
++};
++
++const compareFoldersForTree = (a: Folder, b: Folder) => {
++  const byName = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
++  if (byName !== 0) return byName;
++  return a.id.localeCompare(b.id, undefined, { sensitivity: 'base' });
++};
++
++const buildFolderTree = (folders: Folder[]): FolderTreeNode[] => {
++  const sorted = [...folders].sort(compareFoldersForTree);
++  const nodesById = new Map<string, FolderTreeNode>();
++
++  for (const folder of sorted) {
++    nodesById.set(folder.id, { folder, children: [] });
++  }
++
++  const roots: FolderTreeNode[] = [];
++  for (const folder of sorted) {
++    const node = nodesById.get(folder.id);
++    if (!node) continue;
++
++    const parentId = folder.parentId;
++    if (parentId && parentId !== folder.id) {
++      const parentNode = nodesById.get(parentId);
++      if (parentNode) {
++        parentNode.children.push(node);
++        continue;
++      }
++    }
++
++    roots.push(node);
++  }
++
++  // Keep cyclic or broken items visible as roots instead of dropping them.
++  const seen = new Set<string>();
++  const visit = (node: FolderTreeNode) => {
++    if (seen.has(node.folder.id)) return;
++    seen.add(node.folder.id);
++    for (const child of node.children) {
++      visit(child);
++    }
++  };
++  for (const node of roots) {
++    visit(node);
++  }
++
++  for (const folder of sorted) {
++    if (!seen.has(folder.id)) {
++      roots.push({ folder, children: [] });
++    }
++  }
++
++  return roots;
++};
++
+ export function Folders({
+   selectedCategory,
+   onSelectCategory,
+@@ -53,6 +111,9 @@ export function Folders({
+   const [renameName, setRenameName] = useState('');
+   const [renameError, setRenameError] = useState<string | null>(null);
+   const [isRenaming, setIsRenaming] = useState(false);
++  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
++  const userFolders = useMemo(() => folders.filter((folder) => !folder.isSystem), [folders]);
++  const folderTree = useMemo(() => buildFolderTree(userFolders), [userFolders]);
+ 
+   useEffect(() => {
+     if (dialogState.isCreateOpen && nameInputRef.current) {
+@@ -65,7 +126,7 @@ export function Folders({
+       renameInputRef.current.focus();
+     }
+   }, [renameTargetId]);
+-  
++
+   useEffect(() => {
+     // Close rename dialog when opening create folder dialog to avoid overlapping modals
+     if (dialogState.isCreateOpen && renameTargetId) {
+@@ -73,6 +134,22 @@ export function Folders({
+     }
+   }, [dialogState.isCreateOpen, renameTargetId]);
+ 
++  useEffect(() => {
++    const validIds = new Set(userFolders.map((folder) => folder.id));
++    setCollapsedFolderIds((prev) => {
++      let changed = false;
++      const next = new Set<string>();
++      for (const id of prev) {
++        if (validIds.has(id)) {
++          next.add(id);
++        } else {
++          changed = true;
++        }
++      }
++      return changed ? next : prev;
++    });
++  }, [userFolders]);
++
+   useEffect(() => {
+     if (!contextMenu && !categoryMenu) return;
+ 
+@@ -109,6 +186,9 @@ export function Folders({
+               <label className="form-label" htmlFor="folder-name">
+                 {t('dialog.newFolder.label')}
+               </label>
++              {dialogState.parentName && (
++                <div className="form-label">{t('dialog.newFolder.parent', { name: dialogState.parentName })}</div>
++              )}
+               <input
+                 id="folder-name"
+                 className="input"
+@@ -149,28 +229,6 @@ export function Folders({
+     </li>
+   );
+ 
+-  const renderFolder = (folder: Folder) => {
+-    const isActive = selectedFolderId === folder.id;
+-    const count = counts.folders[folder.id] ?? 0;
+-
+-    return (
+-      <li key={folder.id} className={isActive ? 'active' : ''}>
+-        <button
+-          className="vault-folder"
+-          type="button"
+-          onClick={() => onSelectNav({ folderId: folder.id })}
+-          onContextMenu={(event) => {
+-            event.preventDefault();
+-            setContextMenu({ folderId: folder.id, x: event.clientX, y: event.clientY });
+-          }}
+-        >
+-          <span className="folder-name">{folder.name}</span>
+-          <span className="folder-count">{count}</span>
+-        </button>
+-      </li>
+-    );
+-  };
+-
+   const closeContextMenu = () => setContextMenu(null);
+   const closeCategoryMenu = () => setCategoryMenu(null);
+ 
+@@ -261,6 +319,74 @@ export function Folders({
+     onDeleteFolder(folderId);
+   };
+ 
++  const handleCreateSubfolderFromMenu = (folderId: string) => {
++    const folder = userFolders.find((item) => item.id === folderId);
++    if (!folder) return;
++    closeContextMenu();
++    dialogState.openCreateFolder(folder.id, folder.name);
++  };
++
++  const toggleFolderCollapsed = (folderId: string) => {
++    setCollapsedFolderIds((prev) => {
++      const next = new Set(prev);
++      if (next.has(folderId)) {
++        next.delete(folderId);
++      } else {
++        next.add(folderId);
++      }
++      return next;
++    });
++  };
++
++  const renderFolderNode = (node: FolderTreeNode, depth: number, ancestors: Set<string>) => {
++    const folder = node.folder;
++    const isActive = selectedFolderId === folder.id;
++    const count = counts.folders[folder.id] ?? 0;
++    const hasChildren = node.children.length > 0;
++    const isCollapsed = collapsedFolderIds.has(folder.id);
++    const hasCycle = ancestors.has(folder.id);
++    const nextAncestors = new Set(ancestors);
++    nextAncestors.add(folder.id);
++
++    return (
++      <li key={folder.id} className={isActive ? 'active' : ''}>
++        <div className="vault-folder-node" style={{ paddingLeft: `${depth * 14}px` }}>
++          {hasChildren ? (
++            <button
++              type="button"
++              className="vault-folder-toggle"
++              aria-label={isCollapsed ? t('action.expandFolder') : t('action.collapseFolder')}
++              onClick={() => toggleFolderCollapsed(folder.id)}
++            >
++              <span aria-hidden="true">{isCollapsed ? '>' : 'v'}</span>
++            </button>
++          ) : (
++            <span className="vault-folder-toggle-placeholder" aria-hidden="true" />
++          )}
++
++          <button
++            className="vault-folder vault-folder--tree"
++            type="button"
++            onClick={() => onSelectNav(isActive ? 'all' : { folderId: folder.id })}
++            onContextMenu={(event) => {
++              event.preventDefault();
++              setContextMenu({ folderId: folder.id, x: event.clientX, y: event.clientY });
++            }}
++          >
++            <span className="folder-name">{folder.name}</span>
++            <span className="folder-count">{count}</span>
++          </button>
++        </div>
++
++        {!hasCycle && hasChildren && !isCollapsed && (
++          <ul className="vault-folder-tree-children">
++            {node.children.map((child) => renderFolderNode(child, depth + 1, nextAncestors))}
++          </ul>
++        )}
++      </li>
++    );
++  };
++
+   return (
+     <div>
+       <div className="vault-sidebar-title">{t('category.title')}</div>
+@@ -316,7 +442,9 @@ export function Folders({
+         )}
+       </ul>
+       <div className="vault-sidebar-title">{t('title')}</div>
+-      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
++      <ul className="vault-folder-list">
++        {folderTree.map((node) => renderFolderNode(node, 0, new Set<string>()))}
++      </ul>
+       {renderCreateDialog()}
+       {renderRenameDialog()}
+ 
+@@ -328,6 +456,13 @@ export function Folders({
+             style={{ top: contextMenu.y, left: contextMenu.x }}
+             onClick={(event) => event.stopPropagation()}
+           >
++            <button
++              type="button"
++              className="vault-context-item"
++              onClick={() => handleCreateSubfolderFromMenu(contextMenu.folderId)}
++            >
++              {t('action.addSubfolder')}
++            </button>
+             <button type="button" className="vault-context-item" onClick={() => openRenameDialog(contextMenu.folderId)}>
+               {t('action.renameFolder')}
+             </button>
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+index 9fb682b..1f1372f 100644
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -127,7 +127,7 @@ export default function Vault({
+     onPurgeAllTrash: bankCards.purgeAllTrash,
+   });
+ 
+-  const folderDialogs = useFolders({ onCreateFolder: (name) => vault.createFolder(name, null) });
++  const folderDialogs = useFolders({ onCreateFolder: (name, parentId) => vault.createFolder(name, parentId) });
+ 
+   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
+ 
+@@ -305,9 +305,7 @@ export default function Vault({
+   const handleNavClick = useCallback(
+     (nav: SelectedNav) => {
+       // Any Navigation selection is its own mode: it clears Category focus.
+-      if (typeof nav === 'string') {
+-        setSelectedCategory('all_items');
+-      }
++      setSelectedCategory('all_items');
+       void syncSelectNav(nav);
+     },
+     [syncSelectNav]
+@@ -408,7 +408,7 @@ export default function Vault({
+                 {tBankCards('label.addBankCard')}
+               </button>
+             )}
+-            <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
++            <button className="btn btn-secondary" type="button" onClick={() => folderDialogs.openCreateFolder()}>
+               {tFolders('action.addFolder')}
+             </button>
+           </div>
+diff --git a/src/features/Vault/components/BankCards/BankCardsBody.tsx b/src/features/Vault/components/BankCards/BankCardsBody.tsx
+index 65156a7..5882471 100644
+--- a/src/features/Vault/components/BankCards/BankCardsBody.tsx
++++ b/src/features/Vault/components/BankCards/BankCardsBody.tsx
+@@ -95,7 +95,7 @@ export function BankCardsBody({
+           <button className="btn btn-primary" type="button" onClick={viewModel.openCreateModal}>
+             {tBankCards('label.addBankCard')}
+           </button>
+-          <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
++          <button className="btn btn-secondary" type="button" onClick={() => folderDialogs.openCreateFolder()}>
+             {tFolders('action.addFolder')}
+           </button>
+         </div>
+diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
+index c87ab33..ab1fb51 100644
+--- a/src/shared/styles/screens/vault.css
++++ b/src/shared/styles/screens/vault.css
+@@ -328,7 +328,49 @@
+   margin-top: 8px;
  }
  
-+fn get_folder_by_id_conn(conn: &Connection, id: &str) -> Result<Folder> {
-+    let mut stmt = conn
-+        .prepare("SELECT * FROM folders WHERE id = ?1")
-+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+    stmt.query_row(params![id], map_folder)
-+        .map_err(|_| ErrorCodeString::new("FOLDER_NOT_FOUND"))
++.vault-folder-node {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++}
+ 
++.vault-folder-tree-children {
++  list-style: none;
++  margin: 6px 0 0;
++  padding: 0;
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
 +}
 +
- pub fn get_folder(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<Folder> {
--    with_connection(state, profile_id, |conn| {
--        let mut stmt = conn
--            .prepare("SELECT * FROM folders WHERE id = ?1")
--            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
--        stmt.query_row(params![id], map_folder)
--            .map_err(|_| ErrorCodeString::new("FOLDER_NOT_FOUND"))
--    })
-+    with_connection(state, profile_id, |conn| get_folder_by_id_conn(conn, id))
- }
++.vault-folder-toggle {
++  flex: 0 0 24px;
++  width: 24px;
++  height: 24px;
++  border: 1px solid transparent;
++  border-radius: 6px;
++  background: transparent;
++  color: var(--color-text-muted);
++  cursor: pointer;
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  padding: 0;
++}
 +
- pub fn create_folder(
-     state: &Arc<AppState>,
-     profile_id: &str,
-@@ -484,7 +488,7 @@ pub fn create_folder(
-         )
-         .map_err(map_constraint_error)?;
++.vault-folder-toggle:hover,
++.vault-folder-toggle:focus-visible {
++  color: var(--color-text);
++  border-color: var(--color-border);
++  background: var(--color-surface-2);
++  outline: none;
++}
++
++.vault-folder-toggle-placeholder {
++  flex: 0 0 24px;
++  width: 24px;
++  height: 24px;
++}
  
--        get_folder(state, profile_id, &id)
-+        get_folder_by_id_conn(conn, &id)
-     })
+ .vault-context-backdrop {
+   position: fixed;
+@@ -381,6 +423,9 @@
+   cursor: pointer;
  }
  
++.vault-folder--tree {
++  flex: 1 1 auto;
++}
++
++.vault-folder-list li.active > .vault-folder,
++.vault-folder-list li.active > .vault-folder-node > .vault-folder,
++.vault-folder-tree-children li.active > .vault-folder-node > .vault-folder {
++  background: linear-gradient(90deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
++  border-color: var(--color-primary);
++}
+ 
+ .vault-folder:hover {
+   border-color: var(--focus-border);
+diff --git a/src/i18n/locales/en/Folders.json b/src/i18n/locales/en/Folders.json
+index e6d9aed..5e18894 100644
+--- a/src/i18n/locales/en/Folders.json
++++ b/src/i18n/locales/en/Folders.json
+@@ -9,7 +9,10 @@
+   "nav.archive": "Archive",
+   "nav.deleted": "Deleted",
+   "action.addFolder": "Add folder",
++  "action.addSubfolder": "Add subfolder",
+   "action.addBankCard": "Add bank card",
++  "action.expandFolder": "Expand folder",
++  "action.collapseFolder": "Collapse folder",
+   "action.deleteFolder": "Delete folder",
+   "action.renameFolder": "Rename folder",
+   "action.rename": "Rename",
+@@ -19,6 +22,7 @@
+   "dialog.newFolder.title": "Create folder",
+   "dialog.newFolder.description": "Organize your vault with folders.",
+   "dialog.newFolder.label": "Name",
++  "dialog.newFolder.parent": "Parent: {{name}}",
+   "dialog.newFolder.placeholder": "Folder name",
+   "dialog.renameFolder.title": "Rename folder",
+   "dialog.renameFolder.label": "Name",
