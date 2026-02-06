@@ -999,7 +999,7 @@ select:autofill {
 }
 
 .settings-modal-body {
-  padding: 0;
+  padding: 12px;
   gap: 0;
   overflow: hidden;
 }
@@ -1007,12 +1007,14 @@ select:autofill {
 .settings-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px;
   min-height: 460px;
   max-height: calc(100vh - 210px);
 }
 
 .settings-sidebar {
-  border-right: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   background: var(--color-surface-2);
   padding: 14px 10px;
   display: flex;
@@ -1124,8 +1126,7 @@ select:autofill {
   }
 
   .settings-sidebar {
-    border-right: none;
-    border-bottom: 1px solid var(--border-subtle);
+    border: 1px solid var(--border-subtle);
   }
 
   .settings-sidebar-nav {
