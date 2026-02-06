@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  createVault,
   createDataCard,
   createFolder,
   addAttachmentsViaDialog,
@@ -12,6 +13,7 @@ import {
   listDataCardSummaries,
   listDeletedDataCardSummaries,
   listFolders,
+  listVaults,
   moveDataCardToFolder,
   purgeDataCard,
   purgeAllDeletedDataCards,
@@ -19,6 +21,7 @@ import {
   restoreDataCard,
   restoreAllDeletedDataCards,
   setDataCardFavorite,
+  setActiveVault,
   setDataCardArchived,
   searchDataCards,
   updateDataCard,
@@ -30,9 +33,17 @@ import {
   mapCardToSummary,
   mapCreateCardToBackend,
   mapFolderFromBackend,
+  mapVaultFromBackend,
   mapUpdateCardToBackend,
 } from '../types/mappers';
-import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput } from '../types/ui';
+import {
+  CreateDataCardInput,
+  DataCard,
+  DataCardSummary,
+  Folder,
+  UpdateDataCardInput,
+  VaultItem,
+} from '../types/ui';
 import { BackendUserSettings } from '../types/backend';
 import { useToaster } from '../../../shared/components/Toaster';
 import { useTranslation } from '../../../shared/lib/i18n';
@@ -52,11 +63,24 @@ export type VaultFilters = {
 
 export type VaultError = { code: string; message?: string } | null;
 
+const DEFAULT_ACTIVE_VAULT_ID = 'default';
+const vaultNameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+
+const sortVaultItems = (list: VaultItem[]) =>
+  [...list].sort((a, b) => {
+    if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+    const byName = vaultNameCollator.compare(a.name, b.name);
+    if (byName !== 0) return byName;
+    return vaultNameCollator.compare(a.id, b.id);
+  });
+
 export function useVault(profileId: string, onLocked: () => void) {
   const { show: showToast } = useToaster();
   const { t: tCommon } = useTranslation('Common');
   const { t: tVault } = useTranslation('Vault');
   const initOnceRef = useRef(false);
+  const [activeVaultId, setActiveVaultId] = useState<string>(DEFAULT_ACTIVE_VAULT_ID);
+  const [vaults, setVaults] = useState<VaultItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [cards, setCards] = useState<DataCardSummary[]>([]);
   const [cardDetailsById, setCardDetailsById] = useState<Record<string, DataCard>>({});
@@ -100,6 +124,11 @@ export function useVault(profileId: string, onLocked: () => void) {
       notes: false,
       attachments: false,
     });
+  }, [activeVaultId, profileId]);
+
+  useEffect(() => {
+    setVaults([]);
+    setActiveVaultId(DEFAULT_ACTIVE_VAULT_ID);
   }, [profileId]);
 
   useEffect(() => {
@@ -240,18 +269,37 @@ export function useVault(profileId: string, onLocked: () => void) {
     }
   }, [dtf, handleError, sortCardsWithSettings]);
 
+  const refreshVaults = useCallback(async () => {
+    try {
+      const fetchedVaults = await listVaults();
+      setVaults(sortVaultItems(fetchedVaults.map(mapVaultFromBackend)));
+    } catch (err) {
+      handleError(err);
+    }
+  }, [handleError]);
+
   const updateSettingsAction = useCallback(
     async (nextSettings: BackendUserSettings) => {
       try {
         await updateSettings(nextSettings);
-        setSettings(nextSettings);
+        const normalizedActiveVaultId = nextSettings.multiply_vaults_enabled
+          ? (nextSettings.active_vault_id || activeVaultId || DEFAULT_ACTIVE_VAULT_ID)
+          : DEFAULT_ACTIVE_VAULT_ID;
+
+        if (normalizedActiveVaultId !== activeVaultId) {
+          await setActiveVault(normalizedActiveVaultId);
+          setActiveVaultId(normalizedActiveVaultId);
+        }
+
+        setSettings({ ...nextSettings, active_vault_id: normalizedActiveVaultId });
+        await refreshVaults();
         return true;
       } catch (err) {
         handleError(err);
         return false;
       }
     },
-    [handleError]
+    [activeVaultId, handleError, refreshVaults]
   );
 
   const loadCard = useCallback(
@@ -300,10 +348,17 @@ export function useVault(profileId: string, onLocked: () => void) {
 
     refreshActive();
     refreshTrash();
+    refreshVaults();
     getSettings()
-      .then(setSettings)
+      .then((nextSettings) => {
+        const normalizedActiveVaultId = nextSettings.multiply_vaults_enabled
+          ? (nextSettings.active_vault_id || DEFAULT_ACTIVE_VAULT_ID)
+          : DEFAULT_ACTIVE_VAULT_ID;
+        setSettings({ ...nextSettings, active_vault_id: normalizedActiveVaultId });
+        setActiveVaultId(normalizedActiveVaultId);
+      })
       .catch(handleError);
-  }, [handleError, refreshActive, refreshTrash]);
+  }, [activeVaultId, handleError, refreshActive, refreshTrash, refreshVaults]);
 
   const selectNav = useCallback(
     async (nav: SelectedNav) => {
@@ -325,6 +380,37 @@ export function useVault(profileId: string, onLocked: () => void) {
       }
     },
     [cardDetailsById, loadCard]
+  );
+
+  const createVaultAction = useCallback(
+    async (name: string) => {
+      try {
+        const created = await createVault(name);
+        const mapped = mapVaultFromBackend(created);
+        setVaults((prev) => sortVaultItems([...prev, mapped]));
+        return mapped;
+      } catch (err) {
+        handleError(err);
+        return null;
+      }
+    },
+    [handleError]
+  );
+
+  const selectVaultAction = useCallback(
+    async (vaultId: string) => {
+      if (!vaultId || vaultId === activeVaultId) return true;
+      try {
+        await setActiveVault(vaultId);
+        setActiveVaultId(vaultId);
+        setSettings((prev) => (prev ? { ...prev, active_vault_id: vaultId } : prev));
+        return true;
+      } catch (err) {
+        handleError(err);
+        return false;
+      }
+    },
+    [activeVaultId, handleError]
   );
 
   const createFolderAction = useCallback(
@@ -831,6 +917,8 @@ export function useVault(profileId: string, onLocked: () => void) {
   );
 
   return {
+    activeVaultId,
+    vaults,
     folders,
     cards,
     deletedCards,
@@ -852,6 +940,8 @@ export function useVault(profileId: string, onLocked: () => void) {
     refreshTrash,
     selectNav,
     selectCard,
+    createVault: createVaultAction,
+    selectVault: selectVaultAction,
     createFolder: createFolderAction,
     renameFolder: renameFolderAction,
     deleteFolderOnly: deleteFolderOnlyAction,

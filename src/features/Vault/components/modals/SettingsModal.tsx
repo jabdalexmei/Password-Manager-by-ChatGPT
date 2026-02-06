@@ -48,6 +48,7 @@ export function SettingsModal({
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState('60');
   const [maxCopies, setMaxCopies] = useState('10');
+  const [multiplyVaultsEnabled, setMultiplyVaultsEnabled] = useState(false);
   const [renameProfileOpen, setRenameProfileOpen] = useState(false);
   const [renameProfileValue, setRenameProfileValue] = useState('');
   const [isRenamingProfile, setIsRenamingProfile] = useState(false);
@@ -74,6 +75,7 @@ export function SettingsModal({
     setAutoBackupEnabled(settings.backups_enabled);
     setIntervalMinutes(String(settings.auto_backup_interval_minutes));
     setMaxCopies(String(settings.backup_max_copies));
+    setMultiplyVaultsEnabled(settings.multiply_vaults_enabled);
   }, [open, settings]);
 
   useEffect(() => {
@@ -264,6 +266,7 @@ export function SettingsModal({
       backups_enabled: autoBackupEnabled,
       auto_backup_interval_minutes: interval,
       backup_max_copies: max,
+      multiply_vaults_enabled: multiplyVaultsEnabled,
     };
 
     onSave(nextSettings);
@@ -437,6 +440,28 @@ export function SettingsModal({
                 onChange={(event) => setClipboardClearTimeoutSeconds(event.target.value)}
                 className="settings-input"
               />
+            </div>
+          </div>
+
+          <h3 id="vaults-title" className="settings-modal-section-title">
+            {tVault('settingsModal.vaultsTitle')}
+          </h3>
+
+          <div role="group" aria-labelledby="vaults-title" className="settings-group">
+            <div className="form-field settings-toggle-row">
+              <span className="form-label settings-subheader" id="multiply-vaults-enabled-label">
+                {tVault('settingsModal.multiplyVaults.enabled')}
+              </span>
+
+              <div className="settings-toggle-row__control">
+                {renderSwitch({
+                  id: 'multiply-vaults-enabled-switch',
+                  labelId: 'multiply-vaults-enabled-label',
+                  checked: multiplyVaultsEnabled,
+                  onToggle: () => setMultiplyVaultsEnabled((v) => !v),
+                  disabled: busy,
+                })}
+              </div>
             </div>
           </div>
 

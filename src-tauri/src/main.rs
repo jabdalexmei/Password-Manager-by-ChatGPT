@@ -47,6 +47,7 @@ mod services {
     pub mod security_service;
     pub mod settings_service;
     pub mod ui_prefs_service;
+    pub mod vaults_service;
 }
 mod types;
 
@@ -55,7 +56,8 @@ use std::sync::Arc;
 use app_state::AppState;
 use commands::{
     attachments::*, backup::*, bank_cards::*, clipboard::*, datacards::*, folders::*,
-    password_history::*, profiles::*, security::*, settings::*, ui_prefs::*, workspace::*,
+    password_history::*, profiles::*, security::*, settings::*, ui_prefs::*, vaults::*,
+    workspace::*,
 };
 use data::storage_paths::StoragePaths;
 use services::security_service;
@@ -152,6 +154,9 @@ fn main() {
             backup_list,
             backup_create_if_due_auto,
             list_folders,
+            list_vaults,
+            create_vault,
+            set_active_vault,
             create_folder,
             rename_folder,
             move_folder,

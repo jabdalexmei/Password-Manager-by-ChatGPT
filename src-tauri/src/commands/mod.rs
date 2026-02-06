@@ -9,4 +9,5 @@ pub mod profiles;
 pub mod security;
 pub mod settings;
 pub mod ui_prefs;
+pub mod vaults;
 pub mod workspace;

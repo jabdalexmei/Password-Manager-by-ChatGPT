@@ -45,6 +45,8 @@
   "settingsModal.autoLock.timeoutSeconds": "Auto-lock timeout (seconds)",
   "settingsModal.clipboard.enabled": "Enable clipboard auto-clear",
   "settingsModal.clipboard.timeoutSeconds": "Clipboard clear timeout (seconds)",
+  "settingsModal.vaultsTitle": "Vaults",
+  "settingsModal.multiplyVaults.enabled": "Enable multiple vaults",
   "backup.auto.success": "Auto-backup created",
   "settingsModal.profileTitle": "Profile",
   "settingsModal.profile.rename": "Rename profile",

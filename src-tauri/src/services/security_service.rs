@@ -22,6 +22,7 @@ use crate::data::profiles::registry;
 use crate::data::sqlite::migrations;
 use crate::error::{ErrorCodeString, Result};
 use crate::services::attachments_service;
+use crate::services::settings_service;
 use crate::types::ProfileMeta;
 
 fn format_rusqlite_error(err: &rusqlite::Error) -> String {
@@ -913,6 +914,13 @@ pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> R
     if let Ok(mut active) = state.active_profile.lock() {
         *active = Some(id.to_string());
     }
+    let active_vault_id =
+        settings_service::resolve_active_vault_id(&storage_paths, id).unwrap_or_else(|_| {
+            settings_service::DEFAULT_VAULT_ID.to_string()
+        });
+    if let Ok(mut active) = state.active_vault_id.lock() {
+        *active = Some(active_vault_id);
+    }
     Ok(true)
 }
 
@@ -1016,6 +1024,13 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
 			.map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
 		*active = None;
 	}
+    {
+        let mut active_vault_id = state
+            .active_vault_id
+            .lock()
+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+        *active_vault_id = None;
+    }
 
 	Ok(true)
 }

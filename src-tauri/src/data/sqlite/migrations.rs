@@ -4,10 +4,7 @@ use rusqlite::OptionalExtension;
 
 use crate::error::{ErrorCodeString, Result};
 
-// Dev baseline: single schema version.
-// We intentionally do NOT support in-place upgrades/downgrades. If you somehow have a DB with a
-// different user_version, delete the profile/workspace and create a fresh one.
-const CURRENT_SCHEMA_VERSION: i32 = 1;
+const CURRENT_SCHEMA_VERSION: i32 = 2;
 
 fn log_sqlite_err(ctx: &str, err: &RusqliteError) {
     match err {
@@ -36,6 +33,118 @@ fn has_table(conn: &Connection, name: &str) -> Result<bool> {
             ErrorCodeString::new("DB_QUERY_FAILED")
         })?;
     Ok(exists.is_some())
+}
+
+fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let sql = format!("PRAGMA table_info({table})");
+    let mut stmt = conn.prepare(&sql).map_err(|e| {
+        log_sqlite_err(&format!("has_column.prepare table={table} sql={sql}"), &e);
+        ErrorCodeString::new("DB_QUERY_FAILED")
+    })?;
+
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| {
+            log_sqlite_err(&format!("has_column.query_map table={table} sql={sql}"), &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| {
+            log_sqlite_err(&format!("has_column.collect table={table} sql={sql}"), &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
+
+    Ok(rows.iter().any(|name| name == column))
+}
+
+fn migrate_v1_to_v2(conn: &Connection) -> Result<()> {
+    if !has_column(conn, "folders", "vault_id")? {
+        conn.execute(
+            "ALTER TABLE folders ADD COLUMN vault_id TEXT NOT NULL DEFAULT 'default';",
+            [],
+        )
+        .map_err(|e| {
+            log_sqlite_err("migrate_v1_to_v2.alter_folders_vault_id", &e);
+            ErrorCodeString::new("DB_MIGRATION_FAILED")
+        })?;
+    }
+
+    if !has_column(conn, "datacards", "vault_id")? {
+        conn.execute(
+            "ALTER TABLE datacards ADD COLUMN vault_id TEXT NOT NULL DEFAULT 'default';",
+            [],
+        )
+        .map_err(|e| {
+            log_sqlite_err("migrate_v1_to_v2.alter_datacards_vault_id", &e);
+            ErrorCodeString::new("DB_MIGRATION_FAILED")
+        })?;
+    }
+
+    if !has_column(conn, "bank_cards", "vault_id")? {
+        conn.execute(
+            "ALTER TABLE bank_cards ADD COLUMN vault_id TEXT NOT NULL DEFAULT 'default';",
+            [],
+        )
+        .map_err(|e| {
+            log_sqlite_err("migrate_v1_to_v2.alter_bank_cards_vault_id", &e);
+            ErrorCodeString::new("DB_MIGRATION_FAILED")
+        })?;
+    }
+
+    conn.execute(
+        "UPDATE folders SET vault_id = 'default' WHERE vault_id IS NULL OR TRIM(vault_id) = '';",
+        [],
+    )
+    .map_err(|e| {
+        log_sqlite_err("migrate_v1_to_v2.backfill_folders_vault_id", &e);
+        ErrorCodeString::new("DB_MIGRATION_FAILED")
+    })?;
+
+    conn.execute(
+        "UPDATE datacards SET vault_id = 'default' WHERE vault_id IS NULL OR TRIM(vault_id) = '';",
+        [],
+    )
+    .map_err(|e| {
+        log_sqlite_err("migrate_v1_to_v2.backfill_datacards_vault_id", &e);
+        ErrorCodeString::new("DB_MIGRATION_FAILED")
+    })?;
+
+    conn.execute(
+        "UPDATE bank_cards SET vault_id = 'default' WHERE vault_id IS NULL OR TRIM(vault_id) = '';",
+        [],
+    )
+    .map_err(|e| {
+        log_sqlite_err("migrate_v1_to_v2.backfill_bank_cards_vault_id", &e);
+        ErrorCodeString::new("DB_MIGRATION_FAILED")
+    })?;
+
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS vaults (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vaults_unique_name ON vaults(name);
+INSERT OR IGNORE INTO vaults (id, name, is_default, created_at, updated_at)
+VALUES ('default', 'Default vault', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+DROP INDEX IF EXISTS idx_folders_unique_name;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_unique_name
+ON folders(vault_id, parent_id, name)
+WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_folders_vault ON folders(vault_id);
+CREATE INDEX IF NOT EXISTS idx_datacards_vault ON datacards(vault_id);
+CREATE INDEX IF NOT EXISTS idx_bank_cards_vault ON bank_cards(vault_id);
+"#,
+    )
+    .map_err(|e| {
+        log_sqlite_err("migrate_v1_to_v2.execute_batch", &e);
+        ErrorCodeString::new("DB_MIGRATION_FAILED")
+    })?;
+
+    Ok(())
 }
 
 pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
@@ -67,17 +176,20 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
         return Ok(());
     }
 
-    log::info!("[DB][migrate] migrate from={version} to={CURRENT_SCHEMA_VERSION}");
+    if version == 1 {
+        log::info!("[DB][migrate] migrate from=1 to=2");
+        migrate_v1_to_v2(conn)?;
+        conn.execute_batch("PRAGMA user_version = 2;")
+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+        return Ok(());
+    }
 
-    // Any other version is unsupported in this dev branch.
-    log::warn!(
-        "[DB][migrate] unsupported schema version: {version} (expected {CURRENT_SCHEMA_VERSION})"
-    );
+    log::warn!("[DB][migrate] unsupported schema version={version}");
     Err(ErrorCodeString::new("DB_MIGRATION_FAILED"))
 }
 
 pub fn validate_core_schema(conn: &Connection) -> Result<()> {
-    let required = ["folders", "datacards", "bank_cards"];
+    let required = ["vaults", "folders", "datacards", "bank_cards"];
     for table in required {
         if !has_table(conn, table)? {
             return Err(ErrorCodeString::new("DB_SCHEMA_MISSING"));

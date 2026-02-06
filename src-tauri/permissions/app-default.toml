@@ -40,6 +40,9 @@ commands.allow = [
   "backup_create_if_due_auto",
 
   "list_folders",
+  "list_vaults",
+  "create_vault",
+  "set_active_vault",
   "create_folder",
   "rename_folder",
   "move_folder",

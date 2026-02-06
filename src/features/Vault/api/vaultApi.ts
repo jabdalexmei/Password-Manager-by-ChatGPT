@@ -13,6 +13,7 @@ import {
   BackendUpdateBankCardInput,
   BackendUpdateDataCardInput,
   BackendUserSettings,
+  BackendVault,
   BackendAttachmentPreviewPayload,
   BackendPasswordHistoryRow,
 } from '../types/backend';
@@ -21,6 +22,18 @@ import { PasswordHistoryEntry } from '../types/ui';
 
 export async function listFolders(): Promise<BackendFolder[]> {
   return invoke('list_folders');
+}
+
+export async function listVaults(): Promise<BackendVault[]> {
+  return invoke('list_vaults');
+}
+
+export async function createVault(name: string): Promise<BackendVault> {
+  return invoke('create_vault', { name });
+}
+
+export async function setActiveVault(id: string): Promise<boolean> {
+  return invoke('set_active_vault', { id });
 }
 
 export async function createFolder(input: { name: string; parent_id: string | null }): Promise<BackendFolder> {

@@ -7,6 +7,7 @@ import {
   BackendDataCardSummary,
   BackendFolder,
   BackendAttachmentMeta,
+  BackendVault,
   BackendUpdateBankCardInput,
   BackendUpdateDataCardInput,
   BackendPasswordHistoryRow,
@@ -17,6 +18,7 @@ import {
   CreateBankCardInput,
   DataCard,
   Folder,
+  VaultItem,
   UpdateBankCardInput,
   CreateDataCardInput,
   UpdateDataCardInput,
@@ -35,6 +37,16 @@ export function mapFolderFromBackend(folder: BackendFolder): Folder {
     createdAt: folder.created_at,
     updatedAt: folder.updated_at,
     deletedAt: folder.deleted_at,
+  };
+}
+
+export function mapVaultFromBackend(vault: BackendVault): VaultItem {
+  return {
+    id: vault.id,
+    name: vault.name,
+    isDefault: vault.is_default,
+    createdAt: vault.created_at,
+    updatedAt: vault.updated_at,
   };
 }
 

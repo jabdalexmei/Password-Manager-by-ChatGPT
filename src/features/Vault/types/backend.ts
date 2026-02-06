@@ -8,6 +8,14 @@ export type BackendFolder = {
   deleted_at: string | null;
 };
 
+export type BackendVault = {
+  id: string;
+  name: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type BackendCustomFieldType = "text" | "secret" | "url" | "number" | "date";
 
 export type BackendCustomField = {
@@ -183,4 +191,6 @@ export type BackendUserSettings = {
   default_sort_field: "created_at" | "updated_at" | "title";
   default_sort_direction: "ASC" | "DESC";
   mask_password_by_default: boolean;
+  multiply_vaults_enabled: boolean;
+  active_vault_id: string;
 };
