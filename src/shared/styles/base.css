@@ -17,7 +17,7 @@
   --scrollbar-size: 10px;
   --scrollbar-track: var(--color-surface-2);
   --scrollbar-thumb: var(--color-border);
-  --scrollbar-thumb-hover: var(--color-text-muted);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--color-surface-1) 90%, var(--color-border) 10%);
 }
 
 /* нормальный box-sizing для всего */
@@ -45,6 +45,12 @@
 
 *::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
+}
+
+@supports not (color: color-mix(in srgb, black 50%, white 50%)) {
+  :root {
+    --scrollbar-thumb-hover: #1e1e1e;
+  }
 }
 
 *::-webkit-scrollbar-corner {
