@@ -1,48 +1,86 @@
-diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
-index 2519b75..7032056 100644
---- a/src-tauri/src/data/sqlite/repo_impl.rs
-+++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -929,8 +929,7 @@ pub fn update_datacard(
+diff --git a/src/features/Vault/hooks/useBankCards.ts b/src/features/Vault/hooks/useBankCards.ts
+index f7f94a1..b9b58fb 100644
+--- a/src/features/Vault/hooks/useBankCards.ts
++++ b/src/features/Vault/hooks/useBankCards.ts
+@@ -320,8 +320,10 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
+         await updateBankCard(mapUpdateBankCardToBackend({ ...input, folderId: effectiveFolderId }));
+         await loadCard(input.id);
+         if (isTrashMode) await refreshTrash();
++        return true;
+       } catch (err) {
+         handleError(err);
++        return false;
+       }
+     },
+     [cardDetailsById, cards, deletedCards, handleError, isTrashMode, loadCard, refreshTrash]
+diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
+index ddcf445..743b93f 100644
+--- a/src/features/Vault/hooks/useVault.ts
++++ b/src/features/Vault/hooks/useVault.ts
+@@ -461,8 +461,10 @@ export function useVault(profileId: string, onLocked: () => void) {
+         await updateDataCard(mapUpdateCardToBackend(input));
+         await loadCard(input.id);
+         if (isTrashMode) await refreshTrash();
++        return true;
+       } catch (err) {
+         handleError(err);
++        return false;
+       }
+     },
+     [handleError, isTrashMode, loadCard, refreshTrash]
+diff --git a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+index bb2aa85..419fc6a 100644
+--- a/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
++++ b/src/features/Vault/components/BankCards/useBankCardsViewModel.ts
+@@ -26,7 +26,7 @@ type UseBankCardsParams = {
+   onToggleFavorite: (id: string) => Promise<void> | void;
+   onToggleArchive: (id: string) => Promise<void> | void;
+   onCreateCard: (input: CreateBankCardInput) => Promise<BankCardItem | void | null>;
+-  onUpdateCard: (input: UpdateBankCardInput) => Promise<void>;
++  onUpdateCard: (input: UpdateBankCardInput) => Promise<boolean>;
+   onDeleteCard: (id: string) => Promise<void> | void;
+   onRestoreCard: (id: string) => Promise<void> | void;
+   onPurgeCard: (id: string) => Promise<void> | void;
+@@ -266,7 +266,8 @@ export function useBankCardsViewModel({
+     }
+     setIsCreateSubmitting(true);
+     try {
+-      await onCreateCard(buildCreateInput(createForm));
++      const created = await onCreateCard(buildCreateInput(createForm));
++      if (!created) return;
+       setCreateOpen(false);
+       resetCreateForm();
+     } catch {
+@@ -297,7 +298,8 @@ export function useBankCardsViewModel({
+     }
+     setIsEditSubmitting(true);
+     try {
+-      await onUpdateCard(buildUpdateInput(editForm, editCardId));
++      const updated = await onUpdateCard(buildUpdateInput(editForm, editCardId));
++      if (!updated) return;
+       setEditOpen(false);
+       resetEditForm();
+     } catch {
+diff --git a/src/features/Vault/components/DataCards/useDataCards.ts b/src/features/Vault/components/DataCards/useDataCards.ts
+index 2c2bb98..129857d 100644
+--- a/src/features/Vault/components/DataCards/useDataCards.ts
++++ b/src/features/Vault/components/DataCards/useDataCards.ts
+@@ -48,7 +48,7 @@ type UseDataCardsParams = {
+   onToggleArchive: (id: string) => Promise<void> | void;
+   onCreateCard: (input: CreateDataCardInput) => Promise<DataCard | void | null>;
+   onUploadAttachments: (cardId: string, paths: string[]) => Promise<string[]>;
+-  onUpdateCard: (input: UpdateDataCardInput) => Promise<void>;
++  onUpdateCard: (input: UpdateDataCardInput) => Promise<boolean>;
+   onDeleteCard: (id: string) => Promise<void> | void;
+   onRestoreCard: (id: string) => Promise<void> | void;
+   onPurgeCard: (id: string) => Promise<void> | void;
+@@ -584,7 +584,8 @@ export function useDataCards({
  
-         if !old_trimmed.is_empty() && old_trimmed != new_trimmed {
-             insert_password_history(
--                state,
--                profile_id,
-+                conn,
-                 &input.id,
-                 existing_password.as_deref().unwrap_or(""),
-                 &now,
-@@ -1573,23 +1572,20 @@ pub fn purge_attachment(
-     })
- }
- 
--pub fn insert_password_history(
--    state: &Arc<AppState>,
--    profile_id: &str,
-+fn insert_password_history(
-+    conn: &Connection,
-     datacard_id: &str,
-     password_value: &str,
-     created_at: &str,
- ) -> Result<()> {
--    with_connection(state, profile_id, |conn| {
--        let id = Uuid::new_v4().to_string();
--        conn.execute(
--            "INSERT INTO datacard_password_history (id, datacard_id, password_value, created_at) VALUES (?1, ?2, ?3, ?4)",
--            params![id, datacard_id, password_value, created_at],
--        )
--        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
--
--        Ok(())
--    })
-+    let id = Uuid::new_v4().to_string();
-+    conn.execute(
-+        "INSERT INTO datacard_password_history (id, datacard_id, password_value, created_at) VALUES (?1, ?2, ?3, ?4)",
-+        params![id, datacard_id, password_value, created_at],
-+    )
-+    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+    Ok(())
- }
- 
- pub fn list_password_history(
+     setIsEditSubmitting(true);
+     try {
+-      await onUpdateCard(buildUpdateInput(editForm, editCardId));
++      const updated = await onUpdateCard(buildUpdateInput(editForm, editCardId));
++      if (!updated) return;
+       setEditOpen(false);
+       setEditForm(null);
+       setEditCardId(null);
