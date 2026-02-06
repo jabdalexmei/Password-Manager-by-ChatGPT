@@ -1,86 +1,18 @@
 *** Begin Patch
-*** Update File: src/features/Vault/hooks/useVault.ts
-@@
--  const createFolderAction = useCallback(
--    async (name: string, parentId: string | null) => {
--      try {
--        const created = await createFolder({ name, parent_id: parentId });
--        const mapped = mapFolderFromBackend(created);
--        setFolders((prev) => [...prev, mapped].sort(sortFolders));
--        return mapped;
--      } catch (err) {
--        handleError(err);
--        return null;
--      }
--    },
--    [handleError, sortCardsWithSettings]
--  );
-+  const createFolderAction = useCallback(
-+    async (name: string, parentId: string | null) => {
-+      try {
-+        const created = await createFolder({ name, parent_id: parentId });
-+        const mapped = mapFolderFromBackend(created);
-+        // Update local state with the new folder and keep folders sorted
-+        setFolders((prev) => [...prev, mapped].sort(sortFolders));
-+        return mapped;
-+      } catch (err: any) {
-+        // Show a toast to the user for any backend error and propagate the error
-+        handleError(err);
-+        // Rethrow so callers can handle the failure appropriately (e.g. keep the dialog open)
-+        throw err;
-+      }
-+    },
-+    // Depend on handleError and sortFolders: sortFolders is referenced inside the callback
-+    [handleError, sortFolders]
-+  );
-*** End Patch
 *** Update File: src/features/Vault/components/Folders/useFolders.ts
 @@
--  const submitCreate = useCallback(async () => {
--    if (isSubmitting) return;
--    const trimmed = name.trim();
--    if (!trimmed) {
--      setError(t('validation.folderNameRequired'));
--      return;
--    }
--
--    setIsSubmitting(true);
--    try {
--      await onCreateFolder(trimmed, createParentId);
--      setCreateOpen(false);
--      setCreateParentId(null);
--      setName('');
--    } finally {
--      setIsSubmitting(false);
--    }
--  }, [createParentId, isSubmitting, name, onCreateFolder, t]);
-+  const submitCreate = useCallback(async () => {
-+    if (isSubmitting) return;
-+    const trimmed = name.trim();
-+    if (!trimmed) {
-+      setError(t('validation.folderNameRequired'));
-+      return;
-+    }
-+
-+    setIsSubmitting(true);
-+    try {
-+      await onCreateFolder(trimmed, createParentId);
-+      // Only close the dialog and reset state on success
-+      setCreateOpen(false);
-+      setCreateParentId(null);
-+      setName('');
-+    } catch (err: any) {
-+      // If folder creation fails, stay in the dialog and surface a meaningful error message.
-+      const code = err?.code ?? err?.error;
-+      if (code === 'FOLDER_NAME_EXISTS') {
-+        setError(t('validation.folderNameExists'));
-+      } else if (code === 'FOLDER_NAME_REQUIRED') {
-+        setError(t('validation.folderNameRequired'));
-+      } else {
-+        setError(t('error.createFolderFailed'));
-+      }
-+    } finally {
-+      setIsSubmitting(false);
-+    }
-+  }, [createParentId, isSubmitting, name, onCreateFolder, t]);
+-  const closeCreateFolder = useCallback(() => {
+-    setIsSubmitting(false);
+-    setCreateParentId(null);
+-    setCreateOpen(false);
+-  }, []);
++  const closeCreateFolder = useCallback(() => {
++    // Reset dialog state on cancel to avoid leaving stale data behind.
++    setIsSubmitting(false);
++    setCreateParentId(null);
++    setCreateOpen(false);
++    // Clear form fields and errors when closing the dialog
++    setName('');
++    setError(null);
++  }, []);
 *** End Patch
