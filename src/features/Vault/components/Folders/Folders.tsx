@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Folder } from '../../types/ui';
 import { SelectedNav } from '../../hooks/useVault';
 import { useTranslation } from '../../../../shared/lib/i18n';
@@ -29,6 +29,63 @@ export type FolderListProps = {
   onRenameFolder: (id: string, name: string) => void | Promise<void>;
 };
 
+type FolderTreeNode = {
+  folder: Folder;
+  children: FolderTreeNode[];
+};
+
+const compareFoldersForTree = (a: Folder, b: Folder) => {
+  const byName = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  if (byName !== 0) return byName;
+  return a.id.localeCompare(b.id, undefined, { sensitivity: 'base' });
+};
+
+const buildFolderTree = (folders: Folder[]): FolderTreeNode[] => {
+  const sorted = [...folders].sort(compareFoldersForTree);
+  const nodesById = new Map<string, FolderTreeNode>();
+
+  for (const folder of sorted) {
+    nodesById.set(folder.id, { folder, children: [] });
+  }
+
+  const roots: FolderTreeNode[] = [];
+  for (const folder of sorted) {
+    const node = nodesById.get(folder.id);
+    if (!node) continue;
+
+    const parentId = folder.parentId;
+    if (parentId && parentId !== folder.id) {
+      const parentNode = nodesById.get(parentId);
+      if (parentNode) {
+        parentNode.children.push(node);
+        continue;
+      }
+    }
+
+    roots.push(node);
+  }
+
+  // Keep cyclic or broken items visible as roots instead of dropping them.
+  const seen = new Set<string>();
+  const visit = (node: FolderTreeNode) => {
+    if (seen.has(node.folder.id)) return;
+    seen.add(node.folder.id);
+    for (const child of node.children) {
+      visit(child);
+    }
+  };
+  for (const node of roots) {
+    visit(node);
+  }
+
+  for (const folder of sorted) {
+    if (!seen.has(folder.id)) {
+      roots.push({ folder, children: [] });
+    }
+  }
+
+  return roots;
+};
 export function Folders({
   selectedCategory,
   onSelectCategory,
@@ -53,6 +110,9 @@ export function Folders({
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
+  const userFolders = useMemo(() => folders.filter((folder) => !folder.isSystem), [folders]);
+  const folderTree = useMemo(() => buildFolderTree(userFolders), [userFolders]);
 
   useEffect(() => {
     if (dialogState.isCreateOpen && nameInputRef.current) {
@@ -65,13 +125,29 @@ export function Folders({
       renameInputRef.current.focus();
     }
   }, [renameTargetId]);
-  
+
   useEffect(() => {
     // Close rename dialog when opening create folder dialog to avoid overlapping modals
     if (dialogState.isCreateOpen && renameTargetId) {
       closeRenameDialog();
     }
   }, [dialogState.isCreateOpen, renameTargetId]);
+
+  useEffect(() => {
+    const validIds = new Set(userFolders.map((folder) => folder.id));
+    setCollapsedFolderIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (validIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [userFolders]);
 
   useEffect(() => {
     if (!contextMenu && !categoryMenu) return;
@@ -109,6 +185,9 @@ export function Folders({
               <label className="form-label" htmlFor="folder-name">
                 {t('dialog.newFolder.label')}
               </label>
+              {dialogState.parentName && (
+                <div className="form-label">{t('dialog.newFolder.parent', { name: dialogState.parentName })}</div>
+              )}
               <input
                 id="folder-name"
                 className="input"
@@ -148,28 +227,6 @@ export function Folders({
       </button>
     </li>
   );
-
-  const renderFolder = (folder: Folder) => {
-    const isActive = selectedFolderId === folder.id;
-    const count = counts.folders[folder.id] ?? 0;
-
-    return (
-      <li key={folder.id} className={isActive ? 'active' : ''}>
-        <button
-          className="vault-folder"
-          type="button"
-          onClick={() => onSelectNav({ folderId: folder.id })}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            setContextMenu({ folderId: folder.id, x: event.clientX, y: event.clientY });
-          }}
-        >
-          <span className="folder-name">{folder.name}</span>
-          <span className="folder-count">{count}</span>
-        </button>
-      </li>
-    );
-  };
 
   const closeContextMenu = () => setContextMenu(null);
   const closeCategoryMenu = () => setCategoryMenu(null);
@@ -261,6 +318,74 @@ export function Folders({
     onDeleteFolder(folderId);
   };
 
+  const handleCreateSubfolderFromMenu = (folderId: string) => {
+    const folder = userFolders.find((item) => item.id === folderId);
+    if (!folder) return;
+    closeContextMenu();
+    dialogState.openCreateFolder(folder.id, folder.name);
+  };
+
+  const toggleFolderCollapsed = (folderId: string) => {
+    setCollapsedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  const renderFolderNode = (node: FolderTreeNode, depth: number, ancestors: Set<string>) => {
+    const folder = node.folder;
+    const isActive = selectedFolderId === folder.id;
+    const count = counts.folders[folder.id] ?? 0;
+    const hasChildren = node.children.length > 0;
+    const isCollapsed = collapsedFolderIds.has(folder.id);
+    const hasCycle = ancestors.has(folder.id);
+    const nextAncestors = new Set(ancestors);
+    nextAncestors.add(folder.id);
+
+    return (
+      <li key={folder.id} className={isActive ? 'active' : ''}>
+        <div className="vault-folder-node" style={{ paddingLeft: `${depth * 14}px` }}>
+          {hasChildren ? (
+            <button
+              type="button"
+              className="vault-folder-toggle"
+              aria-label={isCollapsed ? t('action.expandFolder') : t('action.collapseFolder')}
+              onClick={() => toggleFolderCollapsed(folder.id)}
+            >
+              <span aria-hidden="true">{isCollapsed ? '>' : 'v'}</span>
+            </button>
+          ) : (
+            <span className="vault-folder-toggle-placeholder" aria-hidden="true" />
+          )}
+
+          <button
+            className="vault-folder vault-folder--tree"
+            type="button"
+            onClick={() => onSelectNav(isActive ? 'all' : { folderId: folder.id })}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setContextMenu({ folderId: folder.id, x: event.clientX, y: event.clientY });
+            }}
+          >
+            <span className="folder-name">{folder.name}</span>
+            <span className="folder-count">{count}</span>
+          </button>
+        </div>
+
+        {!hasCycle && hasChildren && !isCollapsed && (
+          <ul className="vault-folder-tree-children">
+            {node.children.map((child) => renderFolderNode(child, depth + 1, nextAncestors))}
+          </ul>
+        )}
+      </li>
+    );
+  };
+
   return (
     <div>
       <div className="vault-sidebar-title">{t('category.title')}</div>
@@ -316,7 +441,9 @@ export function Folders({
         )}
       </ul>
       <div className="vault-sidebar-title">{t('title')}</div>
-      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
+      <ul className="vault-folder-list">
+        {folderTree.map((node) => renderFolderNode(node, 0, new Set<string>()))}
+      </ul>
       {renderCreateDialog()}
       {renderRenameDialog()}
 
@@ -328,6 +455,13 @@ export function Folders({
             style={{ top: contextMenu.y, left: contextMenu.x }}
             onClick={(event) => event.stopPropagation()}
           >
+            <button
+              type="button"
+              className="vault-context-item"
+              onClick={() => handleCreateSubfolderFromMenu(contextMenu.folderId)}
+            >
+              {t('action.addSubfolder')}
+            </button>
             <button type="button" className="vault-context-item" onClick={() => openRenameDialog(contextMenu.folderId)}>
               {t('action.renameFolder')}
             </button>

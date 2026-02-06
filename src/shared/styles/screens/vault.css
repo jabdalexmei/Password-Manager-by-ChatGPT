@@ -324,6 +324,50 @@
   flex-direction: column;
   gap: 6px;
 }
+
+.vault-folder-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vault-folder-tree-children {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vault-folder-toggle {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.vault-folder-toggle:hover,
+.vault-folder-toggle:focus-visible {
+  color: var(--color-text);
+  border-color: var(--color-border);
+  background: var(--color-surface-2);
+  outline: none;
+}
+
+.vault-folder-toggle-placeholder {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
 .vault-folder-list + .vault-sidebar-title {
   margin-top: 8px;
 }
@@ -385,12 +429,18 @@
   transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }
 
+.vault-folder--tree {
+  flex: 1 1 auto;
+}
+
 .vault-folder:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-.vault-folder-list li.active .vault-folder {
+.vault-folder-list li.active > .vault-folder,
+.vault-folder-list li.active > .vault-folder-node > .vault-folder,
+.vault-folder-tree-children li.active > .vault-folder-node > .vault-folder {
   background: linear-gradient(90deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
   border-color: var(--color-primary);
 }

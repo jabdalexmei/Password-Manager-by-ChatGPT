@@ -127,7 +127,7 @@ export default function Vault({
     onPurgeAllTrash: bankCards.purgeAllTrash,
   });
 
-  const folderDialogs = useFolders({ onCreateFolder: (name) => vault.createFolder(name, null) });
+  const folderDialogs = useFolders({ onCreateFolder: (name, parentId) => vault.createFolder(name, parentId) });
 
   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
 
@@ -305,9 +305,7 @@ export default function Vault({
   const handleNavClick = useCallback(
     (nav: SelectedNav) => {
       // Any Navigation selection is its own mode: it clears Category focus.
-      if (typeof nav === 'string') {
-        setSelectedCategory('all_items');
-      }
+      setSelectedCategory('all_items');
       void syncSelectNav(nav);
     },
     [syncSelectNav]
@@ -408,7 +406,7 @@ export default function Vault({
                 {tBankCards('label.addBankCard')}
               </button>
             )}
-            <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
+            <button className="btn btn-secondary" type="button" onClick={() => folderDialogs.openCreateFolder()}>
               {tFolders('action.addFolder')}
             </button>
           </div>

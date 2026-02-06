@@ -3,15 +3,16 @@ import { useTranslation } from '../../../../shared/lib/i18n';
 import { Folder } from '../../types/ui';
 
 type UseFoldersParams = {
-  onCreateFolder: (name: string) => Promise<Folder | void> | Folder | void;
+  onCreateFolder: (name: string, parentId: string | null) => Promise<Folder | void | null> | Folder | void | null;
 };
 
 export type FolderDialogState = {
   isCreateOpen: boolean;
   name: string;
+  parentName: string | null;
   error: string | null;
   isSubmitting: boolean;
-  openCreateFolder: () => void;
+  openCreateFolder: (parentId?: string | null, parentName?: string | null) => void;
   closeCreateFolder: () => void;
   setName: (value: string) => void;
   submitCreate: () => Promise<void>;
@@ -21,19 +22,25 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogSt
   const { t } = useTranslation('Folders');
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [parentName, setParentName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const openCreateFolder = useCallback(() => {
+  const openCreateFolder = useCallback((nextParentId?: string | null, nextParentName?: string | null) => {
     setName('');
     setError(null);
     setIsSubmitting(false);
+    setParentId(typeof nextParentId === 'string' ? nextParentId : null);
+    setParentName(typeof nextParentName === 'string' ? nextParentName : null);
     setCreateOpen(true);
   }, []);
 
   const closeCreateFolder = useCallback(() => {
     setIsSubmitting(false);
     setCreateOpen(false);
+    setParentId(null);
+    setParentName(null);
   }, []);
 
   const submitCreate = useCallback(async () => {
@@ -46,13 +53,33 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogSt
 
     setIsSubmitting(true);
     try {
-      await onCreateFolder(trimmed);
+      const created = await onCreateFolder(trimmed, parentId);
+      if (created === null) return;
       setCreateOpen(false);
       setName('');
+      setParentId(null);
+      setParentName(null);
     } finally {
       setIsSubmitting(false);
     }
-  }, [isSubmitting, name, onCreateFolder, t]);
+  }, [isSubmitting, name, onCreateFolder, parentId, t]);
 
-  return { isCreateOpen, name, error, isSubmitting, openCreateFolder, closeCreateFolder, setName, submitCreate };
+  const setCreateName = useCallback((value: string) => {
+    setName(value);
+    if (error) {
+      setError(null);
+    }
+  }, [error]);
+
+  return {
+    isCreateOpen,
+    name,
+    parentName,
+    error,
+    isSubmitting,
+    openCreateFolder,
+    closeCreateFolder,
+    setName: setCreateName,
+    submitCreate,
+  };
 }
