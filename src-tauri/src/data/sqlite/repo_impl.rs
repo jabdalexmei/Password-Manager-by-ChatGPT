@@ -929,8 +929,7 @@ pub fn update_datacard(
 
         if !old_trimmed.is_empty() && old_trimmed != new_trimmed {
             insert_password_history(
-                state,
-                profile_id,
+                conn,
                 &input.id,
                 existing_password.as_deref().unwrap_or(""),
                 &now,
@@ -1573,23 +1572,20 @@ pub fn purge_attachment(
     })
 }
 
-pub fn insert_password_history(
-    state: &Arc<AppState>,
-    profile_id: &str,
+fn insert_password_history(
+    conn: &Connection,
     datacard_id: &str,
     password_value: &str,
     created_at: &str,
 ) -> Result<()> {
-    with_connection(state, profile_id, |conn| {
-        let id = Uuid::new_v4().to_string();
-        conn.execute(
-            "INSERT INTO datacard_password_history (id, datacard_id, password_value, created_at) VALUES (?1, ?2, ?3, ?4)",
-            params![id, datacard_id, password_value, created_at],
-        )
-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+    let id = Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT INTO datacard_password_history (id, datacard_id, password_value, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![id, datacard_id, password_value, created_at],
+    )
+    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-        Ok(())
-    })
+    Ok(())
 }
 
 pub fn list_password_history(
