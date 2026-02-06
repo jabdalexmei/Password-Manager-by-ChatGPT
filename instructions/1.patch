@@ -1,119 +1,86 @@
-diff --git a/src-tauri/src/data/sqlite/migrations.rs b/src-tauri/src/data/sqlite/migrations.rs
-index 1b70fe1..b29708a 100644
---- a/src-tauri/src/data/sqlite/migrations.rs
-+++ b/src-tauri/src/data/sqlite/migrations.rs
-@@ -38,6 +38,85 @@ fn has_table(conn: &Connection, name: &str) -> Result<bool> {
-     Ok(exists.is_some())
- }
- 
-+fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
-+    let sql = format!("PRAGMA table_info('{table}')");
-+    let mut stmt = conn.prepare(&sql).map_err(|e| {
-+        log_sqlite_err(&format!("has_column.prepare table={table} sql={sql}"), &e);
-+        ErrorCodeString::new("DB_QUERY_FAILED")
-+    })?;
-+
-+    let mut rows = stmt.query([]).map_err(|e| {
-+        log_sqlite_err(&format!("has_column.query table={table} sql={sql}"), &e);
-+        ErrorCodeString::new("DB_QUERY_FAILED")
-+    })?;
-+
-+    while let Some(row) = rows.next().map_err(|e| {
-+        log_sqlite_err(&format!("has_column.next table={table} sql={sql}"), &e);
-+        ErrorCodeString::new("DB_QUERY_FAILED")
-+    })? {
-+        let name: String = row.get(1).map_err(|e| {
-+            log_sqlite_err(&format!("has_column.get_name table={table} sql={sql}"), &e);
-+            ErrorCodeString::new("DB_QUERY_FAILED")
-+        })?;
-+        if name == column {
-+            return Ok(true);
-+        }
+*** Begin Patch
+*** Update File: src/features/Vault/hooks/useVault.ts
+@@
+-  const createFolderAction = useCallback(
+-    async (name: string, parentId: string | null) => {
+-      try {
+-        const created = await createFolder({ name, parent_id: parentId });
+-        const mapped = mapFolderFromBackend(created);
+-        setFolders((prev) => [...prev, mapped].sort(sortFolders));
+-        return mapped;
+-      } catch (err) {
+-        handleError(err);
+-        return null;
+-      }
+-    },
+-    [handleError, sortCardsWithSettings]
+-  );
++  const createFolderAction = useCallback(
++    async (name: string, parentId: string | null) => {
++      try {
++        const created = await createFolder({ name, parent_id: parentId });
++        const mapped = mapFolderFromBackend(created);
++        // Update local state with the new folder and keep folders sorted
++        setFolders((prev) => [...prev, mapped].sort(sortFolders));
++        return mapped;
++      } catch (err: any) {
++        // Show a toast to the user for any backend error and propagate the error
++        handleError(err);
++        // Rethrow so callers can handle the failure appropriately (e.g. keep the dialog open)
++        throw err;
++      }
++    },
++    // Depend on handleError and sortFolders: sortFolders is referenced inside the callback
++    [handleError, sortFolders]
++  );
+*** End Patch
+*** Update File: src/features/Vault/components/Folders/useFolders.ts
+@@
+-  const submitCreate = useCallback(async () => {
+-    if (isSubmitting) return;
+-    const trimmed = name.trim();
+-    if (!trimmed) {
+-      setError(t('validation.folderNameRequired'));
+-      return;
+-    }
+-
+-    setIsSubmitting(true);
+-    try {
+-      await onCreateFolder(trimmed, createParentId);
+-      setCreateOpen(false);
+-      setCreateParentId(null);
+-      setName('');
+-    } finally {
+-      setIsSubmitting(false);
+-    }
+-  }, [createParentId, isSubmitting, name, onCreateFolder, t]);
++  const submitCreate = useCallback(async () => {
++    if (isSubmitting) return;
++    const trimmed = name.trim();
++    if (!trimmed) {
++      setError(t('validation.folderNameRequired'));
++      return;
 +    }
 +
-+    Ok(false)
-+}
-+
-+fn is_unique_constraint_error(err: &RusqliteError) -> bool {
-+    match err {
-+        RusqliteError::SqliteFailure(info, _) => {
-+            info.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
-+        }
-+        _ => false,
++    setIsSubmitting(true);
++    try {
++      await onCreateFolder(trimmed, createParentId);
++      // Only close the dialog and reset state on success
++      setCreateOpen(false);
++      setCreateParentId(null);
++      setName('');
++    } catch (err: any) {
++      // If folder creation fails, stay in the dialog and surface a meaningful error message.
++      const code = err?.code ?? err?.error;
++      if (code === 'FOLDER_NAME_EXISTS') {
++        setError(t('validation.folderNameExists'));
++      } else if (code === 'FOLDER_NAME_REQUIRED') {
++        setError(t('validation.folderNameRequired'));
++      } else {
++        setError(t('error.createFolderFailed'));
++      }
++    } finally {
++      setIsSubmitting(false);
 +    }
-+}
-+
-+fn ensure_folders_parent_id_schema(conn: &Connection) -> Result<()> {
-+    // Older workspaces may have been created before folders.parent_id existed.
-+    // We don't bump user_version in this dev branch; instead, we ensure the column is present.
-+    if !has_table(conn, "folders")? {
-+        return Ok(());
-+    }
-+
-+    if !has_column(conn, "folders", "parent_id")? {
-+        log::info!("[DB][migrate] add column folders.parent_id");
-+        conn.execute_batch("ALTER TABLE folders ADD COLUMN parent_id TEXT NULL;")
-+            .map_err(|e| {
-+                log_sqlite_err("ensure_folders_parent_id_schema.alter_table", &e);
-+                ErrorCodeString::new("DB_MIGRATION_FAILED")
-+            })?;
-+    }
-+
-+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);")
-+        .map_err(|e| {
-+            log_sqlite_err("ensure_folders_parent_id_schema.create_idx_parent", &e);
-+            ErrorCodeString::new("DB_MIGRATION_FAILED")
-+        })?;
-+
-+    // This index enables "folder name unique per parent". For existing DBs that already contain
-+    // duplicates, creating a UNIQUE index would fail; we log and continue.
-+    if let Err(e) = conn.execute_batch(
-+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_unique_name
-+         ON folders(parent_id, name)
-+         WHERE deleted_at IS NULL;",
-+    ) {
-+        if is_unique_constraint_error(&e) {
-+            log::warn!(
-+                "[DB][migrate] cannot create idx_folders_unique_name due to duplicate names; continuing"
-+            );
-+        } else {
-+            log_sqlite_err("ensure_folders_parent_id_schema.create_idx_unique", &e);
-+            return Err(ErrorCodeString::new("DB_MIGRATION_FAILED"));
-+        }
-+    }
-+
-+    Ok(())
-+}
-+
- pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
-     conn.execute_batch("PRAGMA foreign_keys = ON;")
-         .map_err(|e| {
-@@ -54,6 +133,7 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
- 
-     if version == CURRENT_SCHEMA_VERSION {
-         log::debug!("[DB][migrate] up_to_date version={version}");
-+        ensure_folders_parent_id_schema(conn)?;
-         return Ok(());
-     }
- 
-@@ -64,6 +144,7 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
-             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-         conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
-             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-+        ensure_folders_parent_id_schema(conn)?;
-         return Ok(());
-     }
- 
-diff --git a/src/i18n/locales/en/Folders.json b/src/i18n/locales/en/Folders.json
-index 9e6b3d3..c3a4641 100644
---- a/src/i18n/locales/en/Folders.json
-+++ b/src/i18n/locales/en/Folders.json
-@@ -24,5 +24,7 @@
-   "dialog.renameFolder.title": "Rename folder",
-   "dialog.renameFolder.label": "Name",
-   "dialog.renameFolder.placeholder": "Folder name",
--  "validation.folderNameRequired": "Folder name is required"
-+  "validation.folderNameRequired": "Folder name is required",
-+  "validation.folderNameExists": "Folder with this name already exists",
-+  "error.createFolderFailed": "Failed to create folder"
- }
++  }, [createParentId, isSubmitting, name, onCreateFolder, t]);
+*** End Patch
