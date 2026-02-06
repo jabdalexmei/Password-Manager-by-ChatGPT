@@ -1,192 +1,119 @@
-diff --git a/src/features/Vault/components/Folders/useFolders.ts b/src/features/Vault/components/Folders/useFolders.ts
-index ab20dac..a449fbd 100644
---- a/src/features/Vault/components/Folders/useFolders.ts
-+++ b/src/features/Vault/components/Folders/useFolders.ts
-@@ -3,7 +3,7 @@ import { useTranslation } from '../../../../shared/lib/i18n';
- import { Folder } from '../../types/ui';
- 
- type UseFoldersParams = {
--  onCreateFolder: (name: string) => Promise<Folder | void> | Folder | void;
-+  onCreateFolder: (name: string, parentId: string | null) => Promise<Folder | void> | Folder | void;
- };
- 
- export type FolderDialogState = {
-@@ -11,7 +11,7 @@ export type FolderDialogState = {
-   name: string;
-   error: string | null;
-   isSubmitting: boolean;
--  openCreateFolder: () => void;
-+  openCreateFolder: (parentId?: string | null) => void;
-   closeCreateFolder: () => void;
-   setName: (value: string) => void;
-   submitCreate: () => Promise<void>;
-@@ -23,16 +23,19 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogSt
-   const [name, setName] = useState('');
-   const [error, setError] = useState<string | null>(null);
-   const [isSubmitting, setIsSubmitting] = useState(false);
-+  const [createParentId, setCreateParentId] = useState<string | null>(null);
- 
--  const openCreateFolder = useCallback(() => {
-+  const openCreateFolder = useCallback((parentId: string | null = null) => {
-     setName('');
-     setError(null);
-     setIsSubmitting(false);
-+    setCreateParentId(parentId);
-     setCreateOpen(true);
-   }, []);
- 
-   const closeCreateFolder = useCallback(() => {
-     setIsSubmitting(false);
-+    setCreateParentId(null);
-     setCreateOpen(false);
-   }, []);
- 
-@@ -46,13 +49,14 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogSt
- 
-     setIsSubmitting(true);
-     try {
--      await onCreateFolder(trimmed);
-+      await onCreateFolder(trimmed, createParentId);
-       setCreateOpen(false);
-+      setCreateParentId(null);
-       setName('');
-     } finally {
-       setIsSubmitting(false);
-     }
--  }, [isSubmitting, name, onCreateFolder, t]);
-+  }, [createParentId, isSubmitting, name, onCreateFolder, t]);
- 
-   return { isCreateOpen, name, error, isSubmitting, openCreateFolder, closeCreateFolder, setName, submitCreate };
+diff --git a/src-tauri/src/data/sqlite/migrations.rs b/src-tauri/src/data/sqlite/migrations.rs
+index 1b70fe1..b29708a 100644
+--- a/src-tauri/src/data/sqlite/migrations.rs
++++ b/src-tauri/src/data/sqlite/migrations.rs
+@@ -38,6 +38,85 @@ fn has_table(conn: &Connection, name: &str) -> Result<bool> {
+     Ok(exists.is_some())
  }
-
-diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
-index 9fb682b..40e4e83 100644
---- a/src/features/Vault/Vault.tsx
-+++ b/src/features/Vault/Vault.tsx
-@@ -127,7 +127,7 @@ export default function Vault({
-     onPurgeAllTrash: bankCards.purgeAllTrash,
-   });
  
--  const folderDialogs = useFolders({ onCreateFolder: (name) => vault.createFolder(name, null) });
-+  const folderDialogs = useFolders({ onCreateFolder: (name, parentId) => vault.createFolder(name, parentId) });
- 
-   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
- 
-@@ -408,7 +408,7 @@ export default function Vault({
-                 {tBankCards('label.addBankCard')}
-               </button>
-             )}
--            <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
-+            <button className="btn btn-secondary" type="button" onClick={() => folderDialogs.openCreateFolder(null)}>
-               {tFolders('action.addFolder')}
-             </button>
-           </div>
-
-diff --git a/src/features/Vault/components/BankCards/BankCardsBody.tsx b/src/features/Vault/components/BankCards/BankCardsBody.tsx
-index 65156a7..2e90de6 100644
---- a/src/features/Vault/components/BankCards/BankCardsBody.tsx
-+++ b/src/features/Vault/components/BankCards/BankCardsBody.tsx
-@@ -95,7 +95,7 @@ export function BankCardsBody({
-           <button className="btn btn-primary" type="button" onClick={viewModel.openCreateModal}>
-             {tBankCards('label.addBankCard')}
-           </button>
--          <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
-+          <button className="btn btn-secondary" type="button" onClick={() => folderDialogs.openCreateFolder(null)}>
-             {tFolders('action.addFolder')}
-           </button>
-         </div>
-
-diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
-index 80b97d6..91952eb 100644
---- a/src/features/Vault/components/Folders/Folders.tsx
-+++ b/src/features/Vault/components/Folders/Folders.tsx
-@@ -142,9 +142,20 @@ export function Folders({
-     </li>
-   );
- 
--  const renderFolder = (folder: Folder) => {
-+  const userFolders = folders.filter((folder) => !folder.isSystem);
-+  const folderIdSet = new Set(userFolders.map((folder) => folder.id));
-+  const childrenByParentId = userFolders.reduce<Record<string, Folder[]>>((acc, folder) => {
-+    if (folder.parentId) {
-+      (acc[folder.parentId] ??= []).push(folder);
++fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
++    let sql = format!("PRAGMA table_info('{table}')");
++    let mut stmt = conn.prepare(&sql).map_err(|e| {
++        log_sqlite_err(&format!("has_column.prepare table={table} sql={sql}"), &e);
++        ErrorCodeString::new("DB_QUERY_FAILED")
++    })?;
++
++    let mut rows = stmt.query([]).map_err(|e| {
++        log_sqlite_err(&format!("has_column.query table={table} sql={sql}"), &e);
++        ErrorCodeString::new("DB_QUERY_FAILED")
++    })?;
++
++    while let Some(row) = rows.next().map_err(|e| {
++        log_sqlite_err(&format!("has_column.next table={table} sql={sql}"), &e);
++        ErrorCodeString::new("DB_QUERY_FAILED")
++    })? {
++        let name: String = row.get(1).map_err(|e| {
++            log_sqlite_err(&format!("has_column.get_name table={table} sql={sql}"), &e);
++            ErrorCodeString::new("DB_QUERY_FAILED")
++        })?;
++        if name == column {
++            return Ok(true);
++        }
 +    }
-+    return acc;
-+  }, {});
-+  const rootFolders = userFolders.filter((folder) => !folder.parentId || !folderIdSet.has(folder.parentId));
 +
-+  const renderFolderBranch = (folder: Folder) => {
-     const isActive = selectedFolderId === folder.id;
-     const count = counts.folders[folder.id] ?? 0;
-+    const children = childrenByParentId[folder.id] ?? [];
- 
-     return (
-       <li key={folder.id} className={isActive ? 'active' : ''}>
-@@ -160,6 +171,10 @@ export function Folders({
-           <span className="folder-name">{folder.name}</span>
-           <span className="folder-count">{count}</span>
-         </button>
++    Ok(false)
++}
 +
-+        {children.length > 0 && (
-+          <ul className="vault-folder-list vault-folder-list-nested">{children.map(renderFolderBranch)}</ul>
-+        )}
-       </li>
-     );
-   };
-@@ -309,7 +324,7 @@ export function Folders({
-         )}
-       </ul>
-       <div className="vault-sidebar-title">{t('title')}</div>
--      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
-+      <ul className="vault-folder-list">{rootFolders.map(renderFolderBranch)}</ul>
-       {renderCreateDialog()}
-       {renderRenameDialog()}
++fn is_unique_constraint_error(err: &RusqliteError) -> bool {
++    match err {
++        RusqliteError::SqliteFailure(info, _) => {
++            info.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
++        }
++        _ => false,
++    }
++}
++
++fn ensure_folders_parent_id_schema(conn: &Connection) -> Result<()> {
++    // Older workspaces may have been created before folders.parent_id existed.
++    // We don't bump user_version in this dev branch; instead, we ensure the column is present.
++    if !has_table(conn, "folders")? {
++        return Ok(());
++    }
++
++    if !has_column(conn, "folders", "parent_id")? {
++        log::info!("[DB][migrate] add column folders.parent_id");
++        conn.execute_batch("ALTER TABLE folders ADD COLUMN parent_id TEXT NULL;")
++            .map_err(|e| {
++                log_sqlite_err("ensure_folders_parent_id_schema.alter_table", &e);
++                ErrorCodeString::new("DB_MIGRATION_FAILED")
++            })?;
++    }
++
++    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);")
++        .map_err(|e| {
++            log_sqlite_err("ensure_folders_parent_id_schema.create_idx_parent", &e);
++            ErrorCodeString::new("DB_MIGRATION_FAILED")
++        })?;
++
++    // This index enables "folder name unique per parent". For existing DBs that already contain
++    // duplicates, creating a UNIQUE index would fail; we log and continue.
++    if let Err(e) = conn.execute_batch(
++        "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_unique_name
++         ON folders(parent_id, name)
++         WHERE deleted_at IS NULL;",
++    ) {
++        if is_unique_constraint_error(&e) {
++            log::warn!(
++                "[DB][migrate] cannot create idx_folders_unique_name due to duplicate names; continuing"
++            );
++        } else {
++            log_sqlite_err("ensure_folders_parent_id_schema.create_idx_unique", &e);
++            return Err(ErrorCodeString::new("DB_MIGRATION_FAILED"));
++        }
++    }
++
++    Ok(())
++}
++
+ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
+     conn.execute_batch("PRAGMA foreign_keys = ON;")
+         .map_err(|e| {
+@@ -54,6 +133,7 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
  
-@@ -321,6 +336,16 @@ export function Folders({
-             style={{ top: contextMenu.y, left: contextMenu.x }}
-             onClick={(event) => event.stopPropagation()}
-           >
-+            <button
-+              type="button"
-+              className="vault-context-item"
-+              onClick={() => {
-+                dialogState.openCreateFolder(contextMenu.folderId);
-+                closeContextMenu();
-+              }}
-+            >
-+              {t('action.addSubfolder')}
-+            </button>
-             <button type="button" className="vault-context-item" onClick={() => openRenameDialog(contextMenu.folderId)}>
-               {t('action.renameFolder')}
-             </button>
-
+     if version == CURRENT_SCHEMA_VERSION {
+         log::debug!("[DB][migrate] up_to_date version={version}");
++        ensure_folders_parent_id_schema(conn)?;
+         return Ok(());
+     }
+ 
+@@ -64,6 +144,7 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
+             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
+         conn.execute_batch(&format!("PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
+             .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
++        ensure_folders_parent_id_schema(conn)?;
+         return Ok(());
+     }
+ 
 diff --git a/src/i18n/locales/en/Folders.json b/src/i18n/locales/en/Folders.json
-index e6d9aed..9e6b3d3 100644
+index 9e6b3d3..c3a4641 100644
 --- a/src/i18n/locales/en/Folders.json
 +++ b/src/i18n/locales/en/Folders.json
-@@ -9,6 +9,7 @@
-   "nav.archive": "Archive",
-   "nav.deleted": "Deleted",
-   "action.addFolder": "Add folder",
-+  "action.addSubfolder": "Add subfolder",
-   "action.addBankCard": "Add bank card",
-   "action.deleteFolder": "Delete folder",
-   "action.renameFolder": "Rename folder",
-
-diff --git a/src/shared/styles/screens/vault.css b/src/shared/styles/screens/vault.css
-index 4c5f086..955024d 100644
---- a/src/shared/styles/screens/vault.css
-+++ b/src/shared/styles/screens/vault.css
-@@ -324,6 +324,11 @@
-   flex-direction: column;
-   gap: 6px;
+@@ -24,5 +24,7 @@
+   "dialog.renameFolder.title": "Rename folder",
+   "dialog.renameFolder.label": "Name",
+   "dialog.renameFolder.placeholder": "Folder name",
+-  "validation.folderNameRequired": "Folder name is required"
++  "validation.folderNameRequired": "Folder name is required",
++  "validation.folderNameExists": "Folder with this name already exists",
++  "error.createFolderFailed": "Failed to create folder"
  }
-+
-+.vault-folder-list.vault-folder-list-nested {
-+  padding-left: 18px;
-+  margin-top: 6px;
-+}
- .vault-folder-list + .vault-sidebar-title {
-   margin-top: 8px;
- }
-
