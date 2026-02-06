@@ -324,6 +324,11 @@
   flex-direction: column;
   gap: 6px;
 }
+
+.vault-folder-list.vault-folder-list-nested {
+  padding-left: 18px;
+  margin-top: 6px;
+}
 .vault-folder-list + .vault-sidebar-title {
   margin-top: 8px;
 }

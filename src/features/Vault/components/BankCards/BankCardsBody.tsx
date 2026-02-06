@@ -95,7 +95,7 @@ export function BankCardsBody({
           <button className="btn btn-primary" type="button" onClick={viewModel.openCreateModal}>
             {tBankCards('label.addBankCard')}
           </button>
-          <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
+          <button className="btn btn-secondary" type="button" onClick={() => folderDialogs.openCreateFolder(null)}>
             {tFolders('action.addFolder')}
           </button>
         </div>

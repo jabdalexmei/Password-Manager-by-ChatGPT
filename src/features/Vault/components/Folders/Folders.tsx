@@ -142,9 +142,20 @@ export function Folders({
     </li>
   );
 
-  const renderFolder = (folder: Folder) => {
+  const userFolders = folders.filter((folder) => !folder.isSystem);
+  const folderIdSet = new Set(userFolders.map((folder) => folder.id));
+  const childrenByParentId = userFolders.reduce<Record<string, Folder[]>>((acc, folder) => {
+    if (folder.parentId) {
+      (acc[folder.parentId] ??= []).push(folder);
+    }
+    return acc;
+  }, {});
+  const rootFolders = userFolders.filter((folder) => !folder.parentId || !folderIdSet.has(folder.parentId));
+
+  const renderFolderBranch = (folder: Folder) => {
     const isActive = selectedFolderId === folder.id;
     const count = counts.folders[folder.id] ?? 0;
+    const children = childrenByParentId[folder.id] ?? [];
 
     return (
       <li key={folder.id} className={isActive ? 'active' : ''}>
@@ -160,6 +171,10 @@ export function Folders({
           <span className="folder-name">{folder.name}</span>
           <span className="folder-count">{count}</span>
         </button>
+
+        {children.length > 0 && (
+          <ul className="vault-folder-list vault-folder-list-nested">{children.map(renderFolderBranch)}</ul>
+        )}
       </li>
     );
   };
@@ -309,7 +324,7 @@ export function Folders({
         )}
       </ul>
       <div className="vault-sidebar-title">{t('title')}</div>
-      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
+      <ul className="vault-folder-list">{rootFolders.map(renderFolderBranch)}</ul>
       {renderCreateDialog()}
       {renderRenameDialog()}
 
@@ -321,6 +336,16 @@ export function Folders({
             style={{ top: contextMenu.y, left: contextMenu.x }}
             onClick={(event) => event.stopPropagation()}
           >
+            <button
+              type="button"
+              className="vault-context-item"
+              onClick={() => {
+                dialogState.openCreateFolder(contextMenu.folderId);
+                closeContextMenu();
+              }}
+            >
+              {t('action.addSubfolder')}
+            </button>
             <button type="button" className="vault-context-item" onClick={() => openRenameDialog(contextMenu.folderId)}>
               {t('action.renameFolder')}
             </button>
