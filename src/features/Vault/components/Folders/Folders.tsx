@@ -65,6 +65,13 @@ export function Folders({
       renameInputRef.current.focus();
     }
   }, [renameTargetId]);
+  
+  useEffect(() => {
+    // Close rename dialog when opening create folder dialog to avoid overlapping modals
+    if (dialogState.isCreateOpen && renameTargetId) {
+      closeRenameDialog();
+    }
+  }, [dialogState.isCreateOpen, renameTargetId]);
 
   useEffect(() => {
     if (!contextMenu && !categoryMenu) return;
