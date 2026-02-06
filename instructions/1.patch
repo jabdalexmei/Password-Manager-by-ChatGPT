@@ -1,640 +1,510 @@
-diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
-index d776f2f..f6d96f7 100644
---- a/src/features/Vault/components/modals/SettingsModal.tsx
-+++ b/src/features/Vault/components/modals/SettingsModal.tsx
-@@ -25,6 +25,8 @@ export type SettingsModalProps = {
-   onProfileUpdated?: (profile: ProfileMeta) => void;
+diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
+index 41bd79f..97bc6de 100644
+--- a/src/features/Vault/components/BankCards/BankCards.tsx
++++ b/src/features/Vault/components/BankCards/BankCards.tsx
+@@ -171,6 +171,14 @@ export function BankCards({
+     return (
+       <div className="dialog-backdrop">
+         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`}>
++          <button
++            className="dialog-close dialog-close--topright"
++            type="button"
++            aria-label={tCommon('action.close')}
++            onClick={onClose}
++          >
++            �
++          </button>
+           <div className="dialog-header">
+             <h2 id={`${dialogId}-title`} className="dialog-title">
+               {title}
+@@ -650,4 +658,3 @@ export function BankCards({
+     </div>
+   );
+ }
+-
+diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
+index 44464ea..11493b0 100644
+--- a/src/features/Vault/components/DataCards/DataCards.tsx
++++ b/src/features/Vault/components/DataCards/DataCards.tsx
+@@ -429,10 +429,21 @@ export function DataCards({
+     return (
+       <div className="dialog-backdrop">
+         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleElementId}>
+-          <div className="dialog-header dialog-header--with-actions">
++          <button
++            type="button"
++            className="dialog-close dialog-close--topright"
++            aria-label={tCommon('action.close')}
++            onClick={onClose}
++          >
++            {'\u00D7'}
++          </button>
++          <div className="dialog-header">
+             <h2 id={titleElementId} className="dialog-title">
+               {title}
+             </h2>
++          </div>
++          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
++            <div className="dialog-body-actions">
+             <div className="dialog-header-actions">
+               <button
+                 type="button"
+@@ -506,9 +517,7 @@ export function DataCards({
+                 </div>
+               )}
+             </div>
+-          </div>
+-
+-          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
++            </div>
+             <div className="form-field">
+               <label className="form-label" htmlFor={`${dialogId}-title`}>
+                 {t('label.title')}
+@@ -1376,7 +1385,3 @@ export function DataCards({
+ }
+ 
+ 
+-
+-
+-
+-
+diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
+index dc6c8a8..2625699 100644
+--- a/src/features/Vault/components/Folders/Folders.tsx
++++ b/src/features/Vault/components/Folders/Folders.tsx
+@@ -230,6 +230,14 @@ export function Folders({
+     return (
+       <div className="dialog-backdrop">
+         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="create-vault-title">
++          <button
++            className="dialog-close dialog-close--topright"
++            type="button"
++            aria-label={tCommon('action.close')}
++            onClick={closeCreateVaultDialog}
++          >
++            �
++          </button>
+           <div className="dialog-header">
+             <h2 id="create-vault-title" className="dialog-title">
+               {t('dialog.newVault.title')}
+@@ -281,6 +289,14 @@ export function Folders({
+     return (
+       <div className="dialog-backdrop">
+         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
++          <button
++            className="dialog-close dialog-close--topright"
++            type="button"
++            aria-label={tCommon('action.close')}
++            onClick={dialogState.closeCreateFolder}
++          >
++            �
++          </button>
+           <div className="dialog-header">
+             <h2 id="dialog-title" className="dialog-title">
+               {t('dialog.newFolder.title')}
+@@ -383,6 +399,14 @@ export function Folders({
+     return (
+       <div className="dialog-backdrop">
+         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-folder-title">
++          <button
++            className="dialog-close dialog-close--topright"
++            type="button"
++            aria-label={tCommon('action.close')}
++            onClick={closeRenameDialog}
++          >
++            �
++          </button>
+           <div className="dialog-header">
+             <h2 id="rename-folder-title" className="dialog-title">
+               {t('dialog.renameFolder.title')}
+@@ -638,4 +662,3 @@ export function Folders({
+     </div>
+   );
+ }
+-
+diff --git a/src/features/Vault/components/modals/Add2FAModal.tsx b/src/features/Vault/components/modals/Add2FAModal.tsx
+index 4a08596..7d91706 100644
+--- a/src/features/Vault/components/modals/Add2FAModal.tsx
++++ b/src/features/Vault/components/modals/Add2FAModal.tsx
+@@ -76,6 +76,9 @@ export const Add2FAModal: React.FC<Props> = ({
+   return (
+     <div className="dialog-backdrop dialog-backdrop--inner">
+       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="add2fa-title">
++        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
++          �
++        </button>
+         <div className="dialog-header">
+           <h2 id="add2fa-title" className="dialog-title">
+             {t('twoFactor.title')}
+@@ -187,4 +190,3 @@ export const Add2FAModal: React.FC<Props> = ({
+     </div>
+   );
+ };
+-
+diff --git a/src/features/Vault/components/modals/AttachmentPreviewModal.tsx b/src/features/Vault/components/modals/AttachmentPreviewModal.tsx
+index 16c15b8..ab58b51 100644
+--- a/src/features/Vault/components/modals/AttachmentPreviewModal.tsx
++++ b/src/features/Vault/components/modals/AttachmentPreviewModal.tsx
+@@ -44,6 +44,14 @@ export default function AttachmentPreviewModal({
+   return (
+     <div className="dialog-backdrop">
+       <div className="dialog preview-dialog" role="dialog" aria-modal="true">
++        <button
++          className="dialog-close dialog-close--topright"
++          type="button"
++          aria-label={tCommon('action.close')}
++          onClick={onClose}
++        >
++          �
++        </button>
+         <div className="dialog-header">
+           <h3 className="dialog-title">{fileName || t('attachments.title')}</h3>
+         </div>
+@@ -77,4 +85,3 @@ export default function AttachmentPreviewModal({
+     </div>
+   );
+ }
+-
+diff --git a/src/features/Vault/components/modals/CustomFieldModal.tsx b/src/features/Vault/components/modals/CustomFieldModal.tsx
+index b65412c..5ebcc89 100644
+--- a/src/features/Vault/components/modals/CustomFieldModal.tsx
++++ b/src/features/Vault/components/modals/CustomFieldModal.tsx
+@@ -25,6 +25,9 @@ export const CustomFieldModal: React.FC<CustomFieldModalProps> = ({
+   return (
+     <div className="dialog-backdrop dialog-backdrop--inner">
+       <div className="dialog customfield-dialog" role="dialog" aria-modal="true" aria-labelledby="customfield-title">
++        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
++          �
++        </button>
+         <div className="dialog-header">
+           <h2 id="customfield-title" className="dialog-title">
+             {t('customFields.modalTitle')}
+@@ -63,4 +66,3 @@ export const CustomFieldModal: React.FC<CustomFieldModalProps> = ({
+     </div>
+   );
+ };
+-
+diff --git a/src/features/Vault/components/modals/CustomFieldRenameModal.tsx b/src/features/Vault/components/modals/CustomFieldRenameModal.tsx
+index 747b0d5..57ee0fd 100644
+--- a/src/features/Vault/components/modals/CustomFieldRenameModal.tsx
++++ b/src/features/Vault/components/modals/CustomFieldRenameModal.tsx
+@@ -30,6 +30,9 @@ export const CustomFieldRenameModal: React.FC<CustomFieldRenameModalProps> = ({
+         aria-modal="true"
+         aria-labelledby="customfield-rename-title"
+       >
++        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
++          �
++        </button>
+         <div className="dialog-header">
+           <h2 id="customfield-rename-title" className="dialog-title">
+             {t('customFields.renameTitle')}
+@@ -67,4 +70,3 @@ export const CustomFieldRenameModal: React.FC<CustomFieldRenameModalProps> = ({
+     </div>
+   );
+ };
+-
+diff --git a/src/features/Vault/components/modals/DeleteFolderModal.tsx b/src/features/Vault/components/modals/DeleteFolderModal.tsx
+index 2c14163..0b02d88 100644
+--- a/src/features/Vault/components/modals/DeleteFolderModal.tsx
++++ b/src/features/Vault/components/modals/DeleteFolderModal.tsx
+@@ -30,6 +30,14 @@ export function DeleteFolderModal({
+   return (
+     <div className="dialog-backdrop">
+       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-folder-title">
++        <button
++          className="dialog-close dialog-close--topright"
++          type="button"
++          aria-label={tCommon('action.close')}
++          onClick={onCancel}
++        >
++          �
++        </button>
+         <div className="dialog-header">
+           <h2 id="delete-folder-title" className="dialog-title">
+             {t('vault.delete_folder.title')}
+@@ -57,4 +65,3 @@ export function DeleteFolderModal({
+     </div>
+   );
+ }
+-
+diff --git a/src/features/Vault/components/modals/ExportBackupModal.tsx b/src/features/Vault/components/modals/ExportBackupModal.tsx
+index 76cbb9f..ce25d5f 100644
+--- a/src/features/Vault/components/modals/ExportBackupModal.tsx
++++ b/src/features/Vault/components/modals/ExportBackupModal.tsx
+@@ -69,6 +69,14 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
+   return (
+     <div className="dialog-backdrop">
+       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="export-backup-title">
++        <button
++          className="dialog-close dialog-close--topright"
++          type="button"
++          aria-label={tCommon('action.close')}
++          onClick={onClose}
++        >
++          �
++        </button>
+         <div className="dialog-header">
+           <h2 id="export-backup-title" className="dialog-title">
+             {t('backup.export.title')}
+@@ -166,4 +174,3 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
+     </div>
+   );
+ }
+-
+diff --git a/src/features/Vault/components/modals/ImportBackupModal.tsx b/src/features/Vault/components/modals/ImportBackupModal.tsx
+index 141bc15..17b7766 100644
+--- a/src/features/Vault/components/modals/ImportBackupModal.tsx
++++ b/src/features/Vault/components/modals/ImportBackupModal.tsx
+@@ -18,6 +18,14 @@ export function ImportBackupModal({ open, backupPath, isSubmitting, onCancel, on
+   return (
+     <div className="dialog-backdrop">
+       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="import-backup-title">
++        <button
++          className="dialog-close dialog-close--topright"
++          type="button"
++          aria-label={tCommon('action.close')}
++          onClick={onCancel}
++        >
++          �
++        </button>
+         <div className="dialog-header">
+           <h2 id="import-backup-title" className="dialog-title">
+             {t('backup.import.confirmTitle')}
+@@ -45,4 +53,3 @@ export function ImportBackupModal({ open, backupPath, isSubmitting, onCancel, on
+     </div>
+   );
+ }
+-
+diff --git a/src/features/Vault/components/modals/PasswordGeneratorModal.tsx b/src/features/Vault/components/modals/PasswordGeneratorModal.tsx
+index 002ff6d..8487db9 100644
+--- a/src/features/Vault/components/modals/PasswordGeneratorModal.tsx
++++ b/src/features/Vault/components/modals/PasswordGeneratorModal.tsx
+@@ -61,6 +61,9 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
+   return (
+     <div className="dialog-backdrop">
+       <div className="dialog generator-dialog" role="dialog" aria-modal="true" aria-labelledby="generator-title">
++        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onClose}>
++          �
++        </button>
+         <div className="dialog-header">
+           <h2 id="generator-title" className="dialog-title">
+             {t('generator.title')}
+@@ -151,4 +154,3 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
+     </div>
+   );
+ };
+-
+diff --git a/src/features/Vault/components/modals/PasswordHistoryDialog.tsx b/src/features/Vault/components/modals/PasswordHistoryDialog.tsx
+index 004fa3f..8746d98 100644
+--- a/src/features/Vault/components/modals/PasswordHistoryDialog.tsx
++++ b/src/features/Vault/components/modals/PasswordHistoryDialog.tsx
+@@ -155,6 +155,14 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
+     <>
+       <div className="dialog-backdrop">
+         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="password-history-title">
++          <button
++            className="dialog-close dialog-close--topright"
++            type="button"
++            aria-label={tCommon('action.close')}
++            onClick={onClose}
++          >
++            �
++          </button>
+           <div className="dialog-header">
+             <h2 id="password-history-title" className="dialog-title">
+               {t('dialog.passwordHistoryTitle')}
+@@ -206,4 +214,3 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
  };
  
-+type SettingsSection = 'profile' | 'security' | 'vaults' | 'backups';
-+
- export function SettingsModal({
-   open,
-   settings,
-@@ -65,6 +67,7 @@ export function SettingsModal({
- 
-   const [removePasswordConfirmOpen, setRemovePasswordConfirmOpen] = useState(false);
-   const [isRemovingPassword, setIsRemovingPassword] = useState(false);
-+  const [activeSection, setActiveSection] = useState<SettingsSection>('profile');
- 
-   useEffect(() => {
-     if (!open || !settings) return;
-@@ -78,6 +81,11 @@ export function SettingsModal({
-     setMaxCopies(String(settings.backup_max_copies));
-   }, [open, settings]);
- 
-+  useEffect(() => {
-+    if (!open) return;
-+    setActiveSection('profile');
-+  }, [open]);
-+
-   useEffect(() => {
-     if (!renameProfileOpen) return;
-     setRenameProfileValue(profileName || '');
-@@ -318,207 +326,261 @@ export function SettingsModal({
-         </DialogHeader>
- 
-         <div className="dialog-body settings-modal-body">
--          <h3 id="profile-title" className="settings-modal-section-title">
--            {tVault('settingsModal.profileTitle')}
--          </h3>
+ export default PasswordHistoryDialog;
 -
--          <div className="settings-profile-actions" role="group" aria-labelledby="profile-title">
--            <button
--              className="btn btn-secondary settings-profile-action"
--              type="button"
--              onClick={() => setRenameProfileOpen(true)}
--              disabled={busy}
--            >
--              {tVault('settingsModal.profile.rename')}
--            </button>
+diff --git a/src/features/Vault/components/modals/SeedPhraseModal.tsx b/src/features/Vault/components/modals/SeedPhraseModal.tsx
+index 7e3044a..8170d9c 100644
+--- a/src/features/Vault/components/modals/SeedPhraseModal.tsx
++++ b/src/features/Vault/components/modals/SeedPhraseModal.tsx
+@@ -117,6 +117,9 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
+   return (
+     <div className="dialog-backdrop dialog-backdrop--inner">
+       <div className="dialog seedphrase-dialog" role="dialog" aria-modal="true" aria-labelledby="seedphrase-title">
++        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
++          �
++        </button>
+         <div className="dialog-header">
+           <h2 id="seedphrase-title" className="dialog-title">
+             {t('seedPhrase.title')}
+@@ -214,4 +217,3 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
+     </div>
+   );
+ };
 -
--            <button
--              className="btn btn-secondary settings-profile-action"
--              type="button"
--              onClick={() => setSetPasswordOpen(true)}
--              disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
--            >
--              {tVault('settingsModal.profile.setPasswordAction')}
--            </button>
+diff --git a/src/features/Vault/components/modals/SeedPhraseViewModal.tsx b/src/features/Vault/components/modals/SeedPhraseViewModal.tsx
+index 1cbf09e..1430e75 100644
+--- a/src/features/Vault/components/modals/SeedPhraseViewModal.tsx
++++ b/src/features/Vault/components/modals/SeedPhraseViewModal.tsx
+@@ -63,6 +63,14 @@ export const SeedPhraseViewModal: React.FC<SeedPhraseViewModalProps> = ({
+         aria-modal="true"
+         aria-labelledby="seedphrase-view-title"
+       >
++        <button
++          className="dialog-close dialog-close--topright"
++          type="button"
++          aria-label={tCommon('action.close')}
++          onClick={onClose}
++        >
++          �
++        </button>
+         <div className="dialog-header">
+           <h2 id="seedphrase-view-title" className="dialog-title">
+             {t('seedPhrase.title')}
+@@ -109,4 +117,3 @@ export const SeedPhraseViewModal: React.FC<SeedPhraseViewModalProps> = ({
+     </div>
+   );
+ };
 -
--            <button
--              className="btn btn-secondary settings-profile-action"
--              type="button"
--              onClick={() => setChangePasswordOpen(true)}
--              disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
--            >
--              {tVault('settingsModal.profile.changePasswordAction')}
--            </button>
--
--            <button
--              className="btn btn-danger settings-profile-action"
--              type="button"
--              onClick={() => setRemovePasswordConfirmOpen(true)}
--              disabled={
--                busy ||
--                isRenamingProfile ||
--                isSettingPassword ||
--                isChangingPassword ||
--                isRemovingPassword ||
--                !profileHasPassword
--              }
--            >
--              {tVault('settingsModal.profile.removePasswordAction')}
--            </button>
--          </div>
--
--          <h3 id="security-title" className="settings-modal-section-title">
--            {tVault('settingsModal.securityTitle')}
--          </h3>
--
--          <div
--            role="group"
--            aria-labelledby="security-title"
--            className="settings-group"
--          >
--            <div className="form-field settings-toggle-row">
--              <span className="form-label settings-subheader" id="auto-lock-enabled-label">
--                {tVault('settingsModal.autoLock.enabled')}
--              </span>
--
--              <div className="settings-toggle-row__control">
--                {renderSwitch({
--                  id: 'auto-lock-enabled-switch',
--                  labelId: 'auto-lock-enabled-label',
--                  checked: autoLockEnabled,
--                  onToggle: () => setAutoLockEnabled((v) => !v),
--                  disabled: busy,
--                })}
--              </div>
--            </div>
--
--            <div className="form-field">
--              <label className="form-label" htmlFor="auto-lock-timeout-seconds">
--                {tVault('settingsModal.autoLock.timeoutSeconds')}
--              </label>
--              <input
--                id="auto-lock-timeout-seconds"
--                type="number"
--                min={30}
--                max={86400}
--                value={autoLockTimeoutSeconds}
--                disabled={busy || !autoLockEnabled}
--                inputMode="numeric"
--                onChange={(event) => setAutoLockTimeoutSeconds(event.target.value)}
--                className="settings-input"
--              />
--            </div>
--
--            <div className="form-field settings-toggle-row">
--              <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
--                {tVault('settingsModal.clipboard.enabled')}
--              </span>
--
--              <div className="settings-toggle-row__control">
--                {renderSwitch({
--                  id: 'clipboard-auto-clear-enabled-switch',
--                  labelId: 'clipboard-auto-clear-enabled-label',
--                  checked: clipboardAutoClearEnabled,
--                  onToggle: () => setClipboardAutoClearEnabled((v) => !v),
--                  disabled: busy,
--                })}
--              </div>
--            </div>
--
--            <div className="form-field">
--              <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
--                {tVault('settingsModal.clipboard.timeoutSeconds')}
--              </label>
--              <input
--                id="clipboard-clear-timeout-seconds"
--                type="number"
--                min={1}
--                max={600}
--                value={clipboardClearTimeoutSeconds}
--                disabled={busy || !clipboardAutoClearEnabled}
--                inputMode="numeric"
--                onChange={(event) => setClipboardClearTimeoutSeconds(event.target.value)}
--                className="settings-input"
--              />
--            </div>
--          </div>
--
--          <h3 id="vaults-title" className="settings-modal-section-title">
--            {tVault('settingsModal.vaultsTitle')}
--          </h3>
--
--          <div role="group" aria-labelledby="vaults-title" className="settings-group">
--            <div className="form-field settings-toggle-row">
--              <span className="form-label settings-subheader" id="multiply-vaults-enabled-label">
--                {tVault('settingsModal.multiplyVaults.enabled')}
--              </span>
--
--              <div className="settings-toggle-row__control">
--                {renderSwitch({
--                  id: 'multiply-vaults-enabled-switch',
--                  labelId: 'multiply-vaults-enabled-label',
--                  checked: multiplyVaultsEnabled,
--                  onToggle: () => setMultiplyVaultsEnabled((v) => !v),
--                  disabled: busy,
--                })}
--              </div>
--            </div>
--          </div>
--
--          <h3 id="backups-title" className="settings-modal-section-title">
--            {tVault('backup.settings.title')}
--          </h3>
--
--          <div role="group" aria-labelledby="backups-title" className="settings-group">
--            <div className="form-field settings-toggle-row">
--              <span className="form-label settings-subheader" id="backup-auto-enabled-label">
--                {tVault('backup.settings.autoEnabled')}
--              </span>
--
--              <div className="settings-toggle-row__control">
--                {renderSwitch({
--                  id: 'backup-auto-enabled-switch',
--                  labelId: 'backup-auto-enabled-label',
--                  checked: autoBackupEnabled,
--                  onToggle: () => setAutoBackupEnabled((v) => !v),
--                  disabled: busy,
--                })}
--              </div>
--            </div>
--
--            <div className="form-field">
--              <label className="form-label" htmlFor="backup-interval-minutes">
--                {tVault('backup.settings.intervalMinutes')}
--              </label>
--              <input
--                id="backup-interval-minutes"
--                type="number"
--                min={5}
--                max={1440}
--                value={intervalMinutes}
--                disabled={busy || !autoBackupEnabled}
--                inputMode="numeric"
--                onChange={(event) => setIntervalMinutes(event.target.value)}
--                className="settings-input"
--              />
--            </div>
--
--            <div className="form-field">
--              <label className="form-label" htmlFor="backup-max-copies">
--                {tVault('backup.settings.maxCopies')}
--              </label>
--              <input
--                id="backup-max-copies"
--                type="number"
--                min={1}
--                max={500}
--                value={maxCopies}
--                disabled={busy}
--                inputMode="numeric"
--                onChange={(event) => setMaxCopies(event.target.value)}
--                className="settings-input"
--              />
--            </div>
-+          <div className="settings-layout">
-+            <aside className="settings-sidebar" aria-label={tVault('settingsModal.optionsTitle')}>
-+              <div className="settings-sidebar-title">{tVault('settingsModal.optionsTitle')}</div>
-+              <nav className="settings-sidebar-nav" aria-label={tVault('settingsModal.optionsTitle')}>
-+                <button
-+                  type="button"
-+                  className="settings-nav-item"
-+                  data-active={activeSection === 'profile' ? 'true' : 'false'}
-+                  onClick={() => setActiveSection('profile')}
-+                >
-+                  {tVault('settingsModal.profileTitle')}
-+                </button>
-+                <button
-+                  type="button"
-+                  className="settings-nav-item"
-+                  data-active={activeSection === 'security' ? 'true' : 'false'}
-+                  onClick={() => setActiveSection('security')}
-+                >
-+                  {tVault('settingsModal.securityTitle')}
-+                </button>
-+                <button
-+                  type="button"
-+                  className="settings-nav-item"
-+                  data-active={activeSection === 'vaults' ? 'true' : 'false'}
-+                  onClick={() => setActiveSection('vaults')}
-+                >
-+                  {tVault('settingsModal.vaultsTitle')}
-+                </button>
-+                <button
-+                  type="button"
-+                  className="settings-nav-item"
-+                  data-active={activeSection === 'backups' ? 'true' : 'false'}
-+                  onClick={() => setActiveSection('backups')}
-+                >
-+                  {tVault('backup.settings.title')}
-+                </button>
-+              </nav>
-+            </aside>
-+
-+            <section className="settings-content">
-+              {activeSection === 'profile' && (
-+                <>
-+                  <h3 id="profile-title" className="settings-modal-section-title">
-+                    {tVault('settingsModal.profileTitle')}
-+                  </h3>
-+
-+                  <div className="settings-profile-actions" role="group" aria-labelledby="profile-title">
-+                    <button
-+                      className="btn btn-secondary settings-profile-action"
-+                      type="button"
-+                      onClick={() => setRenameProfileOpen(true)}
-+                      disabled={busy}
-+                    >
-+                      {tVault('settingsModal.profile.rename')}
-+                    </button>
-+
-+                    <button
-+                      className="btn btn-secondary settings-profile-action"
-+                      type="button"
-+                      onClick={() => setSetPasswordOpen(true)}
-+                      disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
-+                    >
-+                      {tVault('settingsModal.profile.setPasswordAction')}
-+                    </button>
-+
-+                    <button
-+                      className="btn btn-secondary settings-profile-action"
-+                      type="button"
-+                      onClick={() => setChangePasswordOpen(true)}
-+                      disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
-+                    >
-+                      {tVault('settingsModal.profile.changePasswordAction')}
-+                    </button>
-+
-+                    <button
-+                      className="btn btn-danger settings-profile-action"
-+                      type="button"
-+                      onClick={() => setRemovePasswordConfirmOpen(true)}
-+                      disabled={
-+                        busy ||
-+                        isRenamingProfile ||
-+                        isSettingPassword ||
-+                        isChangingPassword ||
-+                        isRemovingPassword ||
-+                        !profileHasPassword
-+                      }
-+                    >
-+                      {tVault('settingsModal.profile.removePasswordAction')}
-+                    </button>
-+                  </div>
-+                </>
-+              )}
-+
-+              {activeSection === 'security' && (
-+                <>
-+                  <h3 id="security-title" className="settings-modal-section-title">
-+                    {tVault('settingsModal.securityTitle')}
-+                  </h3>
-+
-+                  <div role="group" aria-labelledby="security-title" className="settings-group">
-+                    <div className="form-field settings-toggle-row">
-+                      <span className="form-label settings-subheader" id="auto-lock-enabled-label">
-+                        {tVault('settingsModal.autoLock.enabled')}
-+                      </span>
-+
-+                      <div className="settings-toggle-row__control">
-+                        {renderSwitch({
-+                          id: 'auto-lock-enabled-switch',
-+                          labelId: 'auto-lock-enabled-label',
-+                          checked: autoLockEnabled,
-+                          onToggle: () => setAutoLockEnabled((v) => !v),
-+                          disabled: busy,
-+                        })}
-+                      </div>
-+                    </div>
-+
-+                    <div className="form-field">
-+                      <label className="form-label" htmlFor="auto-lock-timeout-seconds">
-+                        {tVault('settingsModal.autoLock.timeoutSeconds')}
-+                      </label>
-+                      <input
-+                        id="auto-lock-timeout-seconds"
-+                        type="number"
-+                        min={30}
-+                        max={86400}
-+                        value={autoLockTimeoutSeconds}
-+                        disabled={busy || !autoLockEnabled}
-+                        inputMode="numeric"
-+                        onChange={(event) => setAutoLockTimeoutSeconds(event.target.value)}
-+                        className="settings-input"
-+                      />
-+                    </div>
-+
-+                    <div className="form-field settings-toggle-row">
-+                      <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
-+                        {tVault('settingsModal.clipboard.enabled')}
-+                      </span>
-+
-+                      <div className="settings-toggle-row__control">
-+                        {renderSwitch({
-+                          id: 'clipboard-auto-clear-enabled-switch',
-+                          labelId: 'clipboard-auto-clear-enabled-label',
-+                          checked: clipboardAutoClearEnabled,
-+                          onToggle: () => setClipboardAutoClearEnabled((v) => !v),
-+                          disabled: busy,
-+                        })}
-+                      </div>
-+                    </div>
-+
-+                    <div className="form-field">
-+                      <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
-+                        {tVault('settingsModal.clipboard.timeoutSeconds')}
-+                      </label>
-+                      <input
-+                        id="clipboard-clear-timeout-seconds"
-+                        type="number"
-+                        min={1}
-+                        max={600}
-+                        value={clipboardClearTimeoutSeconds}
-+                        disabled={busy || !clipboardAutoClearEnabled}
-+                        inputMode="numeric"
-+                        onChange={(event) => setClipboardClearTimeoutSeconds(event.target.value)}
-+                        className="settings-input"
-+                      />
-+                    </div>
-+                  </div>
-+                </>
-+              )}
-+
-+              {activeSection === 'vaults' && (
-+                <>
-+                  <h3 id="vaults-title" className="settings-modal-section-title">
-+                    {tVault('settingsModal.vaultsTitle')}
-+                  </h3>
-+
-+                  <div role="group" aria-labelledby="vaults-title" className="settings-group">
-+                    <div className="form-field settings-toggle-row">
-+                      <span className="form-label settings-subheader" id="multiply-vaults-enabled-label">
-+                        {tVault('settingsModal.multiplyVaults.enabled')}
-+                      </span>
-+
-+                      <div className="settings-toggle-row__control">
-+                        {renderSwitch({
-+                          id: 'multiply-vaults-enabled-switch',
-+                          labelId: 'multiply-vaults-enabled-label',
-+                          checked: multiplyVaultsEnabled,
-+                          onToggle: () => setMultiplyVaultsEnabled((v) => !v),
-+                          disabled: busy,
-+                        })}
-+                      </div>
-+                    </div>
-+                  </div>
-+                </>
-+              )}
-+
-+              {activeSection === 'backups' && (
-+                <>
-+                  <h3 id="backups-title" className="settings-modal-section-title">
-+                    {tVault('backup.settings.title')}
-+                  </h3>
-+
-+                  <div role="group" aria-labelledby="backups-title" className="settings-group">
-+                    <div className="form-field settings-toggle-row">
-+                      <span className="form-label settings-subheader" id="backup-auto-enabled-label">
-+                        {tVault('backup.settings.autoEnabled')}
-+                      </span>
-+
-+                      <div className="settings-toggle-row__control">
-+                        {renderSwitch({
-+                          id: 'backup-auto-enabled-switch',
-+                          labelId: 'backup-auto-enabled-label',
-+                          checked: autoBackupEnabled,
-+                          onToggle: () => setAutoBackupEnabled((v) => !v),
-+                          disabled: busy,
-+                        })}
-+                      </div>
-+                    </div>
-+
-+                    <div className="form-field">
-+                      <label className="form-label" htmlFor="backup-interval-minutes">
-+                        {tVault('backup.settings.intervalMinutes')}
-+                      </label>
-+                      <input
-+                        id="backup-interval-minutes"
-+                        type="number"
-+                        min={5}
-+                        max={1440}
-+                        value={intervalMinutes}
-+                        disabled={busy || !autoBackupEnabled}
-+                        inputMode="numeric"
-+                        onChange={(event) => setIntervalMinutes(event.target.value)}
-+                        className="settings-input"
-+                      />
-+                    </div>
-+
-+                    <div className="form-field">
-+                      <label className="form-label" htmlFor="backup-max-copies">
-+                        {tVault('backup.settings.maxCopies')}
-+                      </label>
-+                      <input
-+                        id="backup-max-copies"
-+                        type="number"
-+                        min={1}
-+                        max={500}
-+                        value={maxCopies}
-+                        disabled={busy}
-+                        inputMode="numeric"
-+                        onChange={(event) => setMaxCopies(event.target.value)}
-+                        className="settings-input"
-+                      />
-+                    </div>
-+                  </div>
-+                </>
-+              )}
-+            </section>
-           </div>
-         </div>
- 
-diff --git a/src/i18n/locales/en/Vault.json b/src/i18n/locales/en/Vault.json
-index 5324a25..25a2428 100644
---- a/src/i18n/locales/en/Vault.json
-+++ b/src/i18n/locales/en/Vault.json
-@@ -49,6 +49,7 @@
-   "settingsModal.multiplyVaults.enabled": "Enable multiple vaults",
-   "backup.auto.success": "Auto-backup created",
-   "settingsModal.profileTitle": "Profile",
-+  "settingsModal.optionsTitle": "Options",
-   "settingsModal.profile.rename": "Rename profile",
-   "settingsModal.profile.renameTitle": "Rename profile",
-   "settingsModal.profile.nameLabel": "Profile name",
 diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
-index 24e0ac1..879e2ee 100644
+index 48c87c2..b315bbf 100644
 --- a/src/shared/styles/ui.css
 +++ b/src/shared/styles/ui.css
-@@ -974,10 +974,78 @@ select:autofill {
-    Settings modal
-    ======================================================================== */
- 
-+.settings-modal {
-+  width: min(980px, calc(100vw - 32px));
-+}
-+
- .settings-modal-body {
--  gap: 24px;
-+  padding: 0;
-+  gap: 0;
-+  overflow: hidden;
-+}
-+
-+.settings-layout {
-+  display: grid;
-+  grid-template-columns: 220px minmax(0, 1fr);
-+  min-height: 460px;
-+  max-height: calc(100vh - 210px);
-+}
-+
-+.settings-sidebar {
-+  border-right: 1px solid var(--border-subtle);
-+  background: var(--color-surface-2);
-+  padding: 14px 10px;
-+  display: flex;
-+  flex-direction: column;
-+  gap: 10px;
-+}
-+
-+.settings-sidebar-title {
-+  margin: 0;
-+  padding: 2px 8px;
-+  font-size: 12px;
-+  font-weight: 700;
-+  color: var(--color-text-muted);
-+  letter-spacing: 0.04em;
-+}
-+
-+.settings-sidebar-nav {
-+  display: flex;
-+  flex-direction: column;
-+  gap: 6px;
-+}
-+
-+.settings-nav-item {
-+  width: 100%;
-+  text-align: left;
-+  border: 1px solid transparent;
-+  border-radius: var(--radius-sm);
-+  background: transparent;
-+  color: var(--color-text);
-+  font-size: 14px;
-+  font-weight: 600;
-+  padding: 8px 10px;
-+  cursor: pointer;
+@@ -604,6 +604,7 @@ select:autofill {
+   background: var(--color-surface-1);
+   border: 1px solid var(--border-subtle);
+   box-shadow: var(--shadow-lg);
++  position: relative;
+   /* Prevent dialogs from growing beyond the viewport.
+      Backdrop has 20px padding top/bottom, so subtract 40px total. */
+   max-height: calc(100vh - 40px);
+@@ -614,6 +615,7 @@ select:autofill {
+ /* Dialog header row */
+ .dialog-header {
+   padding: 16px 18px;
++  padding-right: 60px;
  }
  
-+.settings-nav-item:hover {
-+  border-color: var(--border-subtle);
-+  background: var(--surface-tint-02);
-+}
-+
-+.settings-nav-item[data-active='true'] {
-+  border-color: var(--color-primary);
-+  background: var(--primary-soft-bg);
-+}
-+
-+.settings-content {
-+  min-height: 0;
-+  overflow-y: auto;
-+  padding: 20px 22px;
-+  display: flex;
-+  flex-direction: column;
-+  gap: 18px;
-+}
- 
- .settings-modal-section-title {
-   margin: 0;
-@@ -1025,6 +1093,40 @@ select:autofill {
-   width: 100%;
+ .dialog-header--with-actions {
+@@ -676,6 +678,11 @@ select:autofill {
+   background: var(--color-surface-2);
  }
  
-+@media (max-width: 900px) {
-+  .settings-modal {
-+    width: min(760px, calc(100vw - 24px));
-+  }
-+
-+  .settings-layout {
-+    grid-template-columns: 1fr;
-+    max-height: calc(100vh - 190px);
-+  }
-+
-+  .settings-sidebar {
-+    border-right: none;
-+    border-bottom: 1px solid var(--border-subtle);
-+  }
-+
-+  .settings-sidebar-nav {
-+    flex-direction: row;
-+    flex-wrap: wrap;
-+  }
-+
-+  .settings-nav-item {
-+    width: auto;
-+  }
-+
-+  .settings-content {
-+    padding: 16px;
-+  }
-+
-+  .settings-profile-action {
-+    width: 100%;
-+    max-width: 280px;
-+  }
++.dialog-body-actions {
++  display: flex;
++  justify-content: flex-end;
++  margin-bottom: 6px;
 +}
-+
- /* Switch: single implementation for all toggles (role="switch") */
- .pm-switch {
-   width: 44px;
-@@ -1337,5 +1439,3 @@ select:autofill {
+ 
+ .customfield-dialog {
+   width: min(420px, calc(100vw - 40px));
+@@ -905,7 +912,17 @@ select:autofill {
+   border-color: var(--color-primary);
+ }
+ 
++.dialog-close--topright {
++  position: absolute;
++  top: 12px;
++  right: 12px;
++  z-index: 4;
++}
+ 
++.dialog-close--header {
++  width: 30px;
++  height: 30px;
++}
+ 
+ .dialog-title {
+   font-size: 16px;
+@@ -1442,4 +1459,3 @@ select:autofill {
  .primary.primary-danger:not(:disabled):hover {
    background-color: var(--color-danger-strong);
  }
 -
--
+diff --git a/src/shared/ui/dialog.tsx b/src/shared/ui/dialog.tsx
+index a610834..4e38e37 100644
+--- a/src/shared/ui/dialog.tsx
++++ b/src/shared/ui/dialog.tsx
+@@ -1,4 +1,4 @@
+-import React, { useEffect } from 'react';
++import React, { createContext, useContext, useEffect } from 'react';
+ 
+ type DialogProps = {
+   open: boolean;
+@@ -9,41 +9,66 @@ type DialogProps = {
+ type DialogSlotProps = React.HTMLAttributes<HTMLDivElement>;
+ 
+ type DialogTitleProps = React.HTMLAttributes<HTMLHeadingElement>;
++type DialogContentProps = React.HTMLAttributes<HTMLDivElement> & {
++  showCloseButton?: boolean;
++  closeAriaLabel?: string;
++};
+ 
+ const mergeClasses = (base: string, extra?: string) => (extra ? `${base} ${extra}` : base);
++const DialogContext = createContext<{ canClose: boolean; close: () => void } | null>(null);
+ 
+ export function Dialog({ open, onOpenChange, children }: DialogProps) {
++  const close = () => onOpenChange?.(false);
++
+   useEffect(() => {
+     if (!open) return;
+ 
+     const onKeyDown = (e: KeyboardEvent) => {
+       if (e.key === 'Escape') {
+-        onOpenChange?.(false);
++        close();
+       }
+     };
+ 
+     window.addEventListener('keydown', onKeyDown);
+     return () => window.removeEventListener('keydown', onKeyDown);
+-  }, [open, onOpenChange]);
++  }, [close, open]);
+ 
+   if (!open) return null;
+ 
+   return (
+-    <div
+-      className="dialog-backdrop"
+-      onMouseDown={(e) => {
+-        if (e.target === e.currentTarget) {
+-          onOpenChange?.(false);
+-        }
+-      }}
+-    >
+-      {children}
+-    </div>
++    <DialogContext.Provider value={{ canClose: Boolean(onOpenChange), close }}>
++      <div
++        className="dialog-backdrop"
++        onMouseDown={(e) => {
++          if (e.target === e.currentTarget) {
++            close();
++          }
++        }}
++      >
++        {children}
++      </div>
++    </DialogContext.Provider>
+   );
+ }
+ 
+-export function DialogContent({ className, ...props }: DialogSlotProps) {
+-  return <div className={mergeClasses('dialog', className)} role="dialog" aria-modal="true" {...props} />;
++export function DialogContent({
++  className,
++  showCloseButton = true,
++  closeAriaLabel = 'Close',
++  children,
++  ...props
++}: DialogContentProps) {
++  const ctx = useContext(DialogContext);
++  return (
++    <div className={mergeClasses('dialog', className)} role="dialog" aria-modal="true" {...props}>
++      {showCloseButton && ctx?.canClose && (
++        <button className="dialog-close dialog-close--topright" type="button" aria-label={closeAriaLabel} onClick={ctx.close}>
++          �
++        </button>
++      )}
++      {children}
++    </div>
++  );
+ }
+ 
+ export function DialogHeader({ className, ...props }: DialogSlotProps) {
 
