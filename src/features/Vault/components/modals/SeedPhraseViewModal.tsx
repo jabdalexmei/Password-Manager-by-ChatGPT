@@ -56,7 +56,14 @@ export const SeedPhraseViewModal: React.FC<SeedPhraseViewModalProps> = ({
   const toggleLabel = isRevealed ? t('seedPhrase.hide') : t('seedPhrase.reveal');
 
   return (
-    <div className="dialog-backdrop dialog-backdrop--inner">
+    <div
+      className="dialog-backdrop dialog-backdrop--inner"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
       <div
         className="dialog seedphrase-dialog seedphrase-view-dialog"
         role="dialog"

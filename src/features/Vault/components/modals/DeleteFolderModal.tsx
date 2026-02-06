@@ -28,7 +28,14 @@ export function DeleteFolderModal({
   if (!open) return null;
 
   return (
-    <div className="dialog-backdrop">
+    <div
+      className="dialog-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onCancel();
+        }
+      }}
+    >
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-folder-title">
         <button
           className="dialog-close dialog-close--topright"

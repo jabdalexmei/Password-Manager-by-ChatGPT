@@ -227,7 +227,14 @@ export function Folders({
     };
 
     return (
-      <div className="dialog-backdrop">
+      <div
+        className="dialog-backdrop"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            closeCreateVaultDialog();
+          }
+        }}
+      >
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="create-vault-title">
           <button
             className="dialog-close dialog-close--topright"
@@ -286,7 +293,14 @@ export function Folders({
     };
 
     return (
-      <div className="dialog-backdrop">
+      <div
+        className="dialog-backdrop"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            dialogState.closeCreateFolder();
+          }
+        }}
+      >
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
           <button
             className="dialog-close dialog-close--topright"
@@ -396,7 +410,14 @@ export function Folders({
     };
 
     return (
-      <div className="dialog-backdrop">
+      <div
+        className="dialog-backdrop"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            closeRenameDialog();
+          }
+        }}
+      >
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-folder-title">
           <button
             className="dialog-close dialog-close--topright"

@@ -23,7 +23,14 @@ export const CustomFieldRenameModal: React.FC<CustomFieldRenameModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="dialog-backdrop dialog-backdrop--inner">
+    <div
+      className="dialog-backdrop dialog-backdrop--inner"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onCancel();
+        }
+      }}
+    >
       <div
         className="dialog customfield-dialog"
         role="dialog"

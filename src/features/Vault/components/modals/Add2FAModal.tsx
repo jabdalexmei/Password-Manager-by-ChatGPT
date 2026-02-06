@@ -74,7 +74,14 @@ export const Add2FAModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="dialog-backdrop dialog-backdrop--inner">
+    <div
+      className="dialog-backdrop dialog-backdrop--inner"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onCancel();
+        }
+      }}
+    >
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="add2fa-title">
         <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
           {'\u00D7'}

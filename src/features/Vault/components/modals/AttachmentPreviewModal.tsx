@@ -42,7 +42,14 @@ export default function AttachmentPreviewModal({
   if (!open) return null;
 
   return (
-    <div className="dialog-backdrop">
+    <div
+      className="dialog-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
       <div className="dialog preview-dialog" role="dialog" aria-modal="true">
         <button
           className="dialog-close dialog-close--topright"

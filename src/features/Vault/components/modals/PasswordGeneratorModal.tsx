@@ -59,7 +59,14 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
   };
 
   return (
-    <div className="dialog-backdrop">
+    <div
+      className="dialog-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
       <div className="dialog generator-dialog" role="dialog" aria-modal="true" aria-labelledby="generator-title">
         <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onClose}>
           {'\u00D7'}

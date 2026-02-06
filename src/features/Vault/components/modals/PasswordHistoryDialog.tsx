@@ -153,7 +153,14 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
 
   return (
     <>
-      <div className="dialog-backdrop">
+      <div
+        className="dialog-backdrop"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            onClose();
+          }
+        }}
+      >
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="password-history-title">
           <button
             className="dialog-close dialog-close--topright"

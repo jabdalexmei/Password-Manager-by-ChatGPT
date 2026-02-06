@@ -427,7 +427,14 @@ export function DataCards({
     }
 
     return (
-      <div className="dialog-backdrop">
+      <div
+        className="dialog-backdrop"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            onClose();
+          }
+        }}
+      >
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleElementId}>
           <button
             type="button"
