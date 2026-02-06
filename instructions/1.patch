@@ -1,0 +1,18 @@
+*** Begin Patch
+*** Update File: src/features/Vault/components/Folders/useFolders.ts
+@@
+-  const closeCreateFolder = useCallback(() => {
+-    setIsSubmitting(false);
+-    setCreateParentId(null);
+-    setCreateOpen(false);
+-  }, []);
++  const closeCreateFolder = useCallback(() => {
++    // Reset dialog state on cancel to avoid leaving stale data behind.
++    setIsSubmitting(false);
++    setCreateParentId(null);
++    setCreateOpen(false);
++    // Clear form fields and errors when closing the dialog
++    setName('');
++    setError(null);
++  }, []);
+*** End Patch

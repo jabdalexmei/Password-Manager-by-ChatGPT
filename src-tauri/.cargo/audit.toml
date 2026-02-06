@@ -1,0 +1,8 @@
+[advisories]
+informational_warnings = []
+
+[target]
+os = ["windows"]
+
+[output]
+deny = []
