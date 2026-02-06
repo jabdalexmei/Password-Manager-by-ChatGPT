@@ -21,8 +21,8 @@ export type FolderListProps = {
   multiplyVaultsEnabled: boolean;
   onSelectVault: (vaultId: string) => void | Promise<void>;
   onCreateVault: (name: string) => Promise<VaultItem | void | null> | VaultItem | void | null;
-  onRenameVault: (id: string, name: string) => void | Promise<void>;
-  onDeleteVault: (id: string) => void | Promise<void>;
+  onRenameVault: (id: string, name: string) => boolean | void | Promise<boolean | void>;
+  onDeleteVault: (id: string) => boolean | void | Promise<boolean | void>;
   selectedCategory: VaultCategory;
   onSelectCategory: (category: VaultCategory) => void;
   onAddBankCard: () => void;
@@ -337,13 +337,16 @@ export function Folders({
           </div>
 
           <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
-            <div className="form-field">
+            {dialogState.parentName && (
+              <div className="form-field">
+                <div className="form-label">{t('dialog.newFolder.parent', { name: dialogState.parentName })}</div>
+              </div>
+            )}
+
+            <div className="form-field form-field--spacious">
               <label className="form-label" htmlFor="folder-name">
                 {t('dialog.newFolder.label')}
               </label>
-              {dialogState.parentName && (
-                <div className="form-label">{t('dialog.newFolder.parent', { name: dialogState.parentName })}</div>
-              )}
               <input
                 id="folder-name"
                 className="input"
@@ -449,7 +452,8 @@ export function Folders({
 
     setIsRenamingVault(true);
     try {
-      await onRenameVault(renameVaultId, trimmed);
+      const ok = await onRenameVault(renameVaultId, trimmed);
+      if (ok === false) return;
       closeRenameVaultDialog();
     } finally {
       setIsRenamingVault(false);
@@ -866,10 +870,11 @@ export function Folders({
           if (!deleteVaultTarget) return;
           setIsDeletingVault(true);
           try {
-            await onDeleteVault(deleteVaultTarget.id);
+            const ok = await onDeleteVault(deleteVaultTarget.id);
+            if (ok === false) return;
+            setDeleteVaultTarget(null);
           } finally {
             setIsDeletingVault(false);
-            setDeleteVaultTarget(null);
           }
         }}
       />

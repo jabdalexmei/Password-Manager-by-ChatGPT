@@ -276,6 +276,10 @@
   gap: 6px;
 }
 
+.form-field--spacious {
+  gap: 10px;
+}
+
 .form-field--row {
   flex-direction: row;
   align-items: center;
