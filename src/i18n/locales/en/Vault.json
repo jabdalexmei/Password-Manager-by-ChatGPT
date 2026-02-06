@@ -49,6 +49,7 @@
   "settingsModal.multiplyVaults.enabled": "Enable multiple vaults",
   "backup.auto.success": "Auto-backup created",
   "settingsModal.profileTitle": "Profile",
+  "settingsModal.optionsTitle": "Options",
   "settingsModal.profile.rename": "Rename profile",
   "settingsModal.profile.renameTitle": "Rename profile",
   "settingsModal.profile.nameLabel": "Profile name",
