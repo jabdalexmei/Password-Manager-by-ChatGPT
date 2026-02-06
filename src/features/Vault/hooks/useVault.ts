@@ -332,14 +332,18 @@ export function useVault(profileId: string, onLocked: () => void) {
       try {
         const created = await createFolder({ name, parent_id: parentId });
         const mapped = mapFolderFromBackend(created);
+        // Update local state with the new folder and keep folders sorted
         setFolders((prev) => [...prev, mapped].sort(sortFolders));
         return mapped;
-      } catch (err) {
+      } catch (err: any) {
+        // Show a toast to the user for any backend error and propagate the error
         handleError(err);
-        return null;
+        // Rethrow so callers can handle the failure appropriately (e.g. keep the dialog open)
+        throw err;
       }
     },
-    [handleError, sortCardsWithSettings]
+    // Depend on handleError and sortFolders: sortFolders is referenced inside the callback
+    [handleError, sortFolders]
   );
 
   const renameFolderAction = useCallback(

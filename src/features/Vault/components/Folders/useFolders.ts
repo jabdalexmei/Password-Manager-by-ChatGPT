@@ -50,9 +50,20 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogSt
     setIsSubmitting(true);
     try {
       await onCreateFolder(trimmed, createParentId);
+      // Only close the dialog and reset state on success
       setCreateOpen(false);
       setCreateParentId(null);
       setName('');
+    } catch (err: any) {
+      // If folder creation fails, stay in the dialog and surface a meaningful error message.
+      const code = err?.code ?? err?.error;
+      if (code === 'FOLDER_NAME_EXISTS') {
+        setError(t('validation.folderNameExists'));
+      } else if (code === 'FOLDER_NAME_REQUIRED') {
+        setError(t('validation.folderNameRequired'));
+      } else {
+        setError(t('error.createFolderFailed'));
+      }
     } finally {
       setIsSubmitting(false);
     }
