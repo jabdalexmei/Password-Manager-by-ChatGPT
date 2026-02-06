@@ -429,11 +429,23 @@ export function DataCards({
     return (
       <div className="dialog-backdrop">
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleElementId}>
-          <div className="dialog-header dialog-header--with-actions">
+          <button
+            type="button"
+            className="dialog-close dialog-close--topright"
+            aria-label={tCommon('action.close')}
+            onClick={onClose}
+          >
+            {'\u00D7'}
+          </button>
+          <div className="dialog-header">
             <h2 id={titleElementId} className="dialog-title">
               {title}
             </h2>
-            <div className="dialog-header-actions">
+          </div>
+
+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
+            <div className="dialog-body-actions">
+              <div className="dialog-header-actions">
               <button
                 type="button"
                 className="btn btn-icon dialog-actionbar"
@@ -505,9 +517,7 @@ export function DataCards({
                 </div>
               )}
             </div>
-          </div>
-
-          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
+            </div>
             <div className="form-field">
               <label className="form-label" htmlFor={`${dialogId}-title`}>
                 {t('label.title')}

@@ -76,6 +76,9 @@ export const Add2FAModal: React.FC<Props> = ({
   return (
     <div className="dialog-backdrop dialog-backdrop--inner">
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="add2fa-title">
+        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
+          {'\u00D7'}
+        </button>
         <div className="dialog-header">
           <h2 id="add2fa-title" className="dialog-title">
             {t('twoFactor.title')}

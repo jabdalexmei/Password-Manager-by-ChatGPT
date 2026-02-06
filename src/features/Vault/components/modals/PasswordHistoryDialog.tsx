@@ -155,6 +155,14 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
     <>
       <div className="dialog-backdrop">
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="password-history-title">
+          <button
+            className="dialog-close dialog-close--topright"
+            type="button"
+            aria-label={tCommon('action.close')}
+            onClick={onClose}
+          >
+            {'\u00D7'}
+          </button>
           <div className="dialog-header">
             <h2 id="password-history-title" className="dialog-title">
               {t('dialog.passwordHistoryTitle')}

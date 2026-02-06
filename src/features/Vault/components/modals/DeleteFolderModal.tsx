@@ -30,6 +30,14 @@ export function DeleteFolderModal({
   return (
     <div className="dialog-backdrop">
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-folder-title">
+        <button
+          className="dialog-close dialog-close--topright"
+          type="button"
+          aria-label={tCommon('action.close')}
+          onClick={onCancel}
+        >
+          {'\u00D7'}
+        </button>
         <div className="dialog-header">
           <h2 id="delete-folder-title" className="dialog-title">
             {t('vault.delete_folder.title')}

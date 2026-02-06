@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 
 type DialogProps = {
   open: boolean;
@@ -9,41 +9,66 @@ type DialogProps = {
 type DialogSlotProps = React.HTMLAttributes<HTMLDivElement>;
 
 type DialogTitleProps = React.HTMLAttributes<HTMLHeadingElement>;
+type DialogContentProps = React.HTMLAttributes<HTMLDivElement> & {
+  showCloseButton?: boolean;
+  closeAriaLabel?: string;
+};
 
 const mergeClasses = (base: string, extra?: string) => (extra ? `${base} ${extra}` : base);
+const DialogContext = createContext<{ canClose: boolean; close: () => void } | null>(null);
 
 export function Dialog({ open, onOpenChange, children }: DialogProps) {
+  const close = () => onOpenChange?.(false);
+
   useEffect(() => {
     if (!open) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onOpenChange?.(false);
+        close();
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onOpenChange]);
+  }, [close, open]);
 
   if (!open) return null;
 
   return (
-    <div
-      className="dialog-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) {
-          onOpenChange?.(false);
-        }
-      }}
-    >
-      {children}
-    </div>
+    <DialogContext.Provider value={{ canClose: Boolean(onOpenChange), close }}>
+      <div
+        className="dialog-backdrop"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) {
+            close();
+          }
+        }}
+      >
+        {children}
+      </div>
+    </DialogContext.Provider>
   );
 }
 
-export function DialogContent({ className, ...props }: DialogSlotProps) {
-  return <div className={mergeClasses('dialog', className)} role="dialog" aria-modal="true" {...props} />;
+export function DialogContent({
+  className,
+  showCloseButton = true,
+  closeAriaLabel = 'Close',
+  children,
+  ...props
+}: DialogContentProps) {
+  const ctx = useContext(DialogContext);
+  return (
+    <div className={mergeClasses('dialog', className)} role="dialog" aria-modal="true" {...props}>
+      {showCloseButton && ctx?.canClose && (
+        <button className="dialog-close dialog-close--topright" type="button" aria-label={closeAriaLabel} onClick={ctx.close}>
+          {'\u00D7'}
+        </button>
+      )}
+      {children}
+    </div>
+  );
 }
 
 export function DialogHeader({ className, ...props }: DialogSlotProps) {

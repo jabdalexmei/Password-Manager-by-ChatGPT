@@ -229,6 +229,14 @@ export function Folders({
     return (
       <div className="dialog-backdrop">
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="create-vault-title">
+          <button
+            className="dialog-close dialog-close--topright"
+            type="button"
+            aria-label={tCommon('action.close')}
+            onClick={closeCreateVaultDialog}
+          >
+            {'\u00D7'}
+          </button>
           <div className="dialog-header">
             <h2 id="create-vault-title" className="dialog-title">
               {t('dialog.newVault.title')}
@@ -280,6 +288,14 @@ export function Folders({
     return (
       <div className="dialog-backdrop">
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+          <button
+            className="dialog-close dialog-close--topright"
+            type="button"
+            aria-label={tCommon('action.close')}
+            onClick={dialogState.closeCreateFolder}
+          >
+            {'\u00D7'}
+          </button>
           <div className="dialog-header">
             <h2 id="dialog-title" className="dialog-title">
               {t('dialog.newFolder.title')}
@@ -382,6 +398,14 @@ export function Folders({
     return (
       <div className="dialog-backdrop">
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-folder-title">
+          <button
+            className="dialog-close dialog-close--topright"
+            type="button"
+            aria-label={tCommon('action.close')}
+            onClick={closeRenameDialog}
+          >
+            {'\u00D7'}
+          </button>
           <div className="dialog-header">
             <h2 id="rename-folder-title" className="dialog-title">
               {t('dialog.renameFolder.title')}

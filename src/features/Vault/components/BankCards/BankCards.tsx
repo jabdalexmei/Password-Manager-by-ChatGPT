@@ -171,6 +171,14 @@ export function BankCards({
     return (
       <div className="dialog-backdrop">
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`}>
+          <button
+            className="dialog-close dialog-close--topright"
+            type="button"
+            aria-label={tCommon('action.close')}
+            onClick={onClose}
+          >
+            {'\u00D7'}
+          </button>
           <div className="dialog-header">
             <h2 id={`${dialogId}-title`} className="dialog-title">
               {title}

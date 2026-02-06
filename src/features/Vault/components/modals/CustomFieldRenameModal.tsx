@@ -30,6 +30,9 @@ export const CustomFieldRenameModal: React.FC<CustomFieldRenameModalProps> = ({
         aria-modal="true"
         aria-labelledby="customfield-rename-title"
       >
+        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
+          {'\u00D7'}
+        </button>
         <div className="dialog-header">
           <h2 id="customfield-rename-title" className="dialog-title">
             {t('customFields.renameTitle')}
