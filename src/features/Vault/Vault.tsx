@@ -402,7 +402,7 @@ export default function Vault({
                   aria-controls="vault-addcard-menu"
                   onClick={() => setIsAddCardMenuOpen((prev) => !prev)}
                 >
-                  {tVault('action.addCard')}
+                  {tDataCards('label.addDataCard')}
                 </button>
 
                 {isAddCardMenuOpen && (

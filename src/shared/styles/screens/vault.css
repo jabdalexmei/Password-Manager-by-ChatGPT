@@ -261,13 +261,23 @@
 }
 
 .vault-sidebar-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-bottom: 12px;
 }
 
+.vault-sidebar-actions > * {
+  min-width: 0;
+}
+
 .vault-sidebar-actions .btn {
-  flex: 1;
+  width: 100%;
+  height: 40px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .vault-sidebar-addmenu {
