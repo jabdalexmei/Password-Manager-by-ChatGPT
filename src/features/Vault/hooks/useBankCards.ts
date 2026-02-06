@@ -320,8 +320,10 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
         await updateBankCard(mapUpdateBankCardToBackend({ ...input, folderId: effectiveFolderId }));
         await loadCard(input.id);
         if (isTrashMode) await refreshTrash();
+        return true;
       } catch (err) {
         handleError(err);
+        return false;
       }
     },
     [cardDetailsById, cards, deletedCards, handleError, isTrashMode, loadCard, refreshTrash]

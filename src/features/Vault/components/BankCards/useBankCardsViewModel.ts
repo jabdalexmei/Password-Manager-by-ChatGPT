@@ -26,7 +26,7 @@ type UseBankCardsParams = {
   onToggleFavorite: (id: string) => Promise<void> | void;
   onToggleArchive: (id: string) => Promise<void> | void;
   onCreateCard: (input: CreateBankCardInput) => Promise<BankCardItem | void | null>;
-  onUpdateCard: (input: UpdateBankCardInput) => Promise<void>;
+  onUpdateCard: (input: UpdateBankCardInput) => Promise<boolean>;
   onDeleteCard: (id: string) => Promise<void> | void;
   onRestoreCard: (id: string) => Promise<void> | void;
   onPurgeCard: (id: string) => Promise<void> | void;
@@ -266,7 +266,8 @@ export function useBankCardsViewModel({
     }
     setIsCreateSubmitting(true);
     try {
-      await onCreateCard(buildCreateInput(createForm));
+      const created = await onCreateCard(buildCreateInput(createForm));
+      if (!created) return;
       setCreateOpen(false);
       resetCreateForm();
     } catch {
@@ -297,7 +298,8 @@ export function useBankCardsViewModel({
     }
     setIsEditSubmitting(true);
     try {
-      await onUpdateCard(buildUpdateInput(editForm, editCardId));
+      const updated = await onUpdateCard(buildUpdateInput(editForm, editCardId));
+      if (!updated) return;
       setEditOpen(false);
       resetEditForm();
     } catch {

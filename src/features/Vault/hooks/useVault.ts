@@ -461,8 +461,10 @@ export function useVault(profileId: string, onLocked: () => void) {
         await updateDataCard(mapUpdateCardToBackend(input));
         await loadCard(input.id);
         if (isTrashMode) await refreshTrash();
+        return true;
       } catch (err) {
         handleError(err);
+        return false;
       }
     },
     [handleError, isTrashMode, loadCard, refreshTrash]

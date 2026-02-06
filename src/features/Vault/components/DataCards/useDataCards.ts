@@ -48,7 +48,7 @@ type UseDataCardsParams = {
   onToggleArchive: (id: string) => Promise<void> | void;
   onCreateCard: (input: CreateDataCardInput) => Promise<DataCard | void | null>;
   onUploadAttachments: (cardId: string, paths: string[]) => Promise<string[]>;
-  onUpdateCard: (input: UpdateDataCardInput) => Promise<void>;
+  onUpdateCard: (input: UpdateDataCardInput) => Promise<boolean>;
   onDeleteCard: (id: string) => Promise<void> | void;
   onRestoreCard: (id: string) => Promise<void> | void;
   onPurgeCard: (id: string) => Promise<void> | void;
@@ -584,7 +584,8 @@ export function useDataCards({
 
     setIsEditSubmitting(true);
     try {
-      await onUpdateCard(buildUpdateInput(editForm, editCardId));
+      const updated = await onUpdateCard(buildUpdateInput(editForm, editCardId));
+      if (!updated) return;
       setEditOpen(false);
       setEditForm(null);
       setEditCardId(null);
