@@ -267,6 +267,11 @@
   margin-bottom: 12px;
 }
 
+.vault-sidebar-actions--vaults {
+  grid-template-columns: 1fr;
+  margin-top: 10px;
+}
+
 .vault-sidebar-actions > * {
   min-width: 0;
 }

@@ -557,7 +557,7 @@ export function Folders({
               );
             })}
           </ul>
-          <div className="vault-sidebar-actions">
+          <div className="vault-sidebar-actions vault-sidebar-actions--vaults">
             <button className="btn btn-secondary" type="button" onClick={openCreateVaultDialog}>
               {t('action.addVault')}
             </button>
