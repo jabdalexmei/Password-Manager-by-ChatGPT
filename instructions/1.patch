@@ -1,0 +1,18 @@
+diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
+index 80b97d6..ea98f92 100644
+--- a/src/features/Vault/components/Folders/Folders.tsx
++++ b/src/features/Vault/components/Folders/Folders.tsx
+@@ -65,6 +65,13 @@ export function Folders({
+       renameInputRef.current.focus();
+     }
+   }, [renameTargetId]);
++  
++  useEffect(() => {
++    // Close rename dialog when opening create folder dialog to avoid overlapping modals
++    if (dialogState.isCreateOpen && renameTargetId) {
++      closeRenameDialog();
++    }
++  }, [dialogState.isCreateOpen, renameTargetId]);
+ 
+   useEffect(() => {
+     if (!contextMenu && !categoryMenu) return;
