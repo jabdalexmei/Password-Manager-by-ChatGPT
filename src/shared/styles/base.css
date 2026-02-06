@@ -12,11 +12,43 @@
   --greycolorsecondaryborder: var(--btn-secondary-border, var(--border-subtle, var(--color-border)));
   --blueprimarycolor: var(--color-primary);
   --blueprimarycolorstrong: var(--color-primary-strong);
+
+  /* Consistent app scrollbar (dark gray) */
+  --scrollbar-size: 10px;
+  --scrollbar-track: var(--color-surface-2);
+  --scrollbar-thumb: var(--color-border);
+  --scrollbar-thumb-hover: var(--color-text-muted);
 }
 
 /* нормальный box-sizing для всего */
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
 }
 
 html,
