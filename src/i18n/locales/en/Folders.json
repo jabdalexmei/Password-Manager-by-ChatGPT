@@ -24,5 +24,7 @@
   "dialog.renameFolder.title": "Rename folder",
   "dialog.renameFolder.label": "Name",
   "dialog.renameFolder.placeholder": "Folder name",
-  "validation.folderNameRequired": "Folder name is required"
+  "validation.folderNameRequired": "Folder name is required",
+  "validation.folderNameExists": "Folder with this name already exists",
+  "error.createFolderFailed": "Failed to create folder"
 }
