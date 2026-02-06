@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Folder } from '../../types/ui';
+import { Folder, VaultItem } from '../../types/ui';
 import { SelectedNav } from '../../hooks/useVault';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { FolderDialogState } from './useFolders';
@@ -15,6 +15,11 @@ type Counts = {
 export type VaultCategory = 'data_cards' | 'bank_cards' | 'all_items';
 
 export type FolderListProps = {
+  vaults: VaultItem[];
+  activeVaultId: string;
+  multiplyVaultsEnabled: boolean;
+  onSelectVault: (vaultId: string) => void | Promise<void>;
+  onCreateVault: (name: string) => Promise<VaultItem | void | null> | VaultItem | void | null;
   selectedCategory: VaultCategory;
   onSelectCategory: (category: VaultCategory) => void;
   onAddBankCard: () => void;
@@ -87,6 +92,11 @@ const buildFolderTree = (folders: Folder[]): FolderTreeNode[] => {
   return roots;
 };
 export function Folders({
+  vaults,
+  activeVaultId,
+  multiplyVaultsEnabled,
+  onSelectVault,
+  onCreateVault,
   selectedCategory,
   onSelectCategory,
   onAddBankCard,
@@ -102,6 +112,7 @@ export function Folders({
 }: FolderListProps) {
   const { t } = useTranslation('Folders');
   const { t: tCommon } = useTranslation('Common');
+  const vaultNameInputRef = useRef<HTMLInputElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const [contextMenu, setContextMenu] = useState<{ folderId: string; x: number; y: number } | null>(null);
@@ -110,9 +121,19 @@ export function Folders({
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isCreateVaultOpen, setCreateVaultOpen] = useState(false);
+  const [vaultName, setVaultName] = useState('');
+  const [vaultError, setVaultError] = useState<string | null>(null);
+  const [isCreatingVault, setIsCreatingVault] = useState(false);
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
   const userFolders = useMemo(() => folders.filter((folder) => !folder.isSystem), [folders]);
   const folderTree = useMemo(() => buildFolderTree(userFolders), [userFolders]);
+
+  useEffect(() => {
+    if (isCreateVaultOpen && vaultNameInputRef.current) {
+      vaultNameInputRef.current.focus();
+    }
+  }, [isCreateVaultOpen]);
 
   useEffect(() => {
     if (dialogState.isCreateOpen && nameInputRef.current) {
@@ -163,6 +184,99 @@ export function Folders({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [categoryMenu, contextMenu]);
 
+  const openCreateVaultDialog = () => {
+    setVaultName('');
+    setVaultError(null);
+    setIsCreatingVault(false);
+    setCreateVaultOpen(true);
+  };
+
+  const closeCreateVaultDialog = () => {
+    if (isCreatingVault) return;
+    setCreateVaultOpen(false);
+    setVaultName('');
+    setVaultError(null);
+  };
+
+  const submitCreateVault = async () => {
+    if (isCreatingVault) return;
+    const trimmed = vaultName.trim();
+    if (!trimmed) {
+      setVaultError(t('validation.vaultNameRequired'));
+      return;
+    }
+
+    setIsCreatingVault(true);
+    try {
+      const created = await onCreateVault(trimmed);
+      if (created === null) return;
+      setCreateVaultOpen(false);
+      setVaultName('');
+      setVaultError(null);
+    } finally {
+      setIsCreatingVault(false);
+    }
+  };
+
+  const renderCreateVaultDialog = () => {
+    if (!isCreateVaultOpen) return null;
+
+    const handleSubmit = (event: React.FormEvent) => {
+      event.preventDefault();
+      void submitCreateVault();
+    };
+
+    return (
+      <div className="dialog-backdrop">
+        <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="create-vault-title">
+          <button
+            className="dialog-close dialog-close--topright"
+            type="button"
+            aria-label={tCommon('action.close')}
+            onClick={closeCreateVaultDialog}
+          >
+            {'\u00D7'}
+          </button>
+          <div className="dialog-header">
+            <h2 id="create-vault-title" className="dialog-title">
+              {t('dialog.newVault.title')}
+            </h2>
+          </div>
+
+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
+            <div className="form-field">
+              <label className="form-label" htmlFor="vault-name">
+                {t('dialog.newVault.label')}
+              </label>
+              <input
+                id="vault-name"
+                className="input"
+                autoComplete="off"
+                ref={vaultNameInputRef}
+                value={vaultName}
+                onChange={(e) => {
+                  setVaultName(e.target.value);
+                  if (vaultError) setVaultError(null);
+                }}
+                placeholder={t('dialog.newVault.placeholder')}
+              />
+              {vaultError && <div className="form-error">{vaultError}</div>}
+            </div>
+
+            <div className="dialog-footer">
+              <button className="btn btn-secondary" type="button" onClick={closeCreateVaultDialog}>
+                {tCommon('action.cancel')}
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={isCreatingVault}>
+                {t('action.create')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   const renderCreateDialog = () => {
     if (!dialogState.isCreateOpen) return null;
 
@@ -174,6 +288,14 @@ export function Folders({
     return (
       <div className="dialog-backdrop">
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+          <button
+            className="dialog-close dialog-close--topright"
+            type="button"
+            aria-label={tCommon('action.close')}
+            onClick={dialogState.closeCreateFolder}
+          >
+            {'\u00D7'}
+          </button>
           <div className="dialog-header">
             <h2 id="dialog-title" className="dialog-title">
               {t('dialog.newFolder.title')}
@@ -276,6 +398,14 @@ export function Folders({
     return (
       <div className="dialog-backdrop">
         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-folder-title">
+          <button
+            className="dialog-close dialog-close--topright"
+            type="button"
+            aria-label={tCommon('action.close')}
+            onClick={closeRenameDialog}
+          >
+            {'\u00D7'}
+          </button>
           <div className="dialog-header">
             <h2 id="rename-folder-title" className="dialog-title">
               {t('dialog.renameFolder.title')}
@@ -388,6 +518,32 @@ export function Folders({
 
   return (
     <div>
+      {multiplyVaultsEnabled && (
+        <>
+          <div className="vault-sidebar-title">{t('vaults.title')}</div>
+          <ul className="vault-folder-list">
+            {vaults.map((vault) => {
+              const isActive = activeVaultId === vault.id;
+              return (
+                <li key={vault.id} className={isActive ? 'active' : ''}>
+                  <button className="vault-folder" type="button" onClick={() => void onSelectVault(vault.id)}>
+                    <span className="folder-name">
+                      {vault.name}
+                      {vault.isDefault ? <span className="folder-badge">({t('vaults.default')})</span> : null}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="vault-sidebar-actions">
+            <button className="btn btn-secondary" type="button" onClick={openCreateVaultDialog}>
+              {t('action.addVault')}
+            </button>
+          </div>
+        </>
+      )}
+
       <div className="vault-sidebar-title">{t('category.title')}</div>
       <ul className="vault-folder-list">
         {categoryCounts && (
@@ -444,6 +600,7 @@ export function Folders({
       <ul className="vault-folder-list">
         {folderTree.map((node) => renderFolderNode(node, 0, new Set<string>()))}
       </ul>
+      {renderCreateVaultDialog()}
       {renderCreateDialog()}
       {renderRenameDialog()}
 

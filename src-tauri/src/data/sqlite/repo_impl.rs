@@ -13,9 +13,12 @@ use crate::types::{
     CustomField, DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardArchivedInput,
     SetBankCardFavoriteInput, SetDataCardArchivedInput, SetDataCardFavoriteInput,
     UpdateBankCardInput, UpdateDataCardInput,
+    Vault,
 };
 
 use std::sync::Arc;
+
+const DEFAULT_VAULT_ID: &str = "default";
 
 fn with_connection<T>(
     state: &Arc<AppState>,
@@ -36,6 +39,25 @@ fn with_connection<T>(
     }
 
     Err(ErrorCodeString::new("VAULT_LOCKED"))
+}
+
+fn current_active_vault_id(state: &Arc<AppState>) -> String {
+    state
+        .active_vault_id
+        .lock()
+        .ok()
+        .and_then(|v| v.clone())
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_VAULT_ID.to_string())
+}
+
+fn with_connection_in_active_vault<T>(
+    state: &Arc<AppState>,
+    profile_id: &str,
+    f: impl FnOnce(&Connection, &str) -> Result<T>,
+) -> Result<T> {
+    let active_vault_id = current_active_vault_id(state);
+    with_connection(state, profile_id, |conn| f(conn, &active_vault_id))
 }
 
 fn deserialize_json<T: serde::de::DeserializeOwned>(value: String) -> rusqlite::Result<T> {
@@ -66,7 +88,7 @@ pub fn search_datacard_ids(
     profile_id: &str,
     query: &str,
 ) -> Result<Vec<String>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
             .prepare(
                 r#"
@@ -90,13 +112,14 @@ SELECT
       AND a.deleted_at IS NULL
   ) AS attachment_names
 FROM datacards d
-LEFT JOIN folders f ON f.id = d.folder_id
+LEFT JOIN folders f ON f.id = d.folder_id AND f.vault_id = d.vault_id
+WHERE d.vault_id = ?1
 "#,
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let rows = stmt
-            .query_map([], |row| {
+            .query_map(params![active_vault_id], |row| {
                 let id: String = row.get("id")?;
                 let title: String = row.get("title")?;
                 let url: Option<String> = row.get("url")?;
@@ -190,7 +213,7 @@ pub fn search_bank_card_ids(
     profile_id: &str,
     query: &str,
 ) -> Result<Vec<String>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
             .prepare(
                 r#"
@@ -204,13 +227,14 @@ SELECT
   b.tags_json,
   f.name AS folder_name
 FROM bank_cards b
-LEFT JOIN folders f ON f.id = b.folder_id
+LEFT JOIN folders f ON f.id = b.folder_id AND f.vault_id = b.vault_id
+WHERE b.vault_id = ?1
 "#,
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let rows = stmt
-            .query_map([], |row| {
+            .query_map(params![active_vault_id], |row| {
                 let id: String = row.get("id")?;
                 let title: String = row.get("title")?;
                 let bank_name: Option<String> = row.get("bank_name")?;
@@ -278,6 +302,16 @@ fn map_folder(row: &rusqlite::Row) -> rusqlite::Result<Folder> {
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         deleted_at: row.get("deleted_at")?,
+    })
+}
+
+fn map_vault(row: &rusqlite::Row) -> rusqlite::Result<Vault> {
+    Ok(Vault {
+        id: row.get("id")?,
+        name: row.get("name")?,
+        is_default: row.get::<_, i64>("is_default")? != 0,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
     })
 }
 
@@ -436,16 +470,74 @@ fn map_constraint_error(err: rusqlite::Error) -> ErrorCodeString {
     ErrorCodeString::new("DB_QUERY_FAILED")
 }
 
-pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folder>> {
+fn map_vault_constraint_error(err: rusqlite::Error) -> ErrorCodeString {
+    if let rusqlite::Error::SqliteFailure(info, _) = &err {
+        if info.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE {
+            return ErrorCodeString::new("VAULT_NAME_EXISTS");
+        }
+    }
+    ErrorCodeString::new("DB_QUERY_FAILED")
+}
+
+fn get_vault_by_id_conn(conn: &Connection, id: &str) -> Result<Vault> {
+    let sql = "SELECT id, name, is_default, created_at, updated_at FROM vaults WHERE id = ?1";
+    conn.query_row(sql, params![id], map_vault)
+        .map_err(|_| ErrorCodeString::new("VAULT_NOT_FOUND"))
+}
+
+pub fn list_vaults(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Vault>> {
     with_connection(state, profile_id, |conn| {
-        let sql = "SELECT * FROM folders WHERE deleted_at IS NULL ORDER BY name ASC";
+        let sql = "SELECT id, name, is_default, created_at, updated_at FROM vaults ORDER BY is_default DESC, name COLLATE NOCASE ASC, id ASC";
+        let mut stmt = conn.prepare(sql).map_err(|e| {
+            log_sqlite_err("list_vaults.prepare", sql, &e);
+            ErrorCodeString::new("DB_QUERY_FAILED")
+        })?;
+
+        let rows = stmt
+            .query_map([], map_vault)
+            .map_err(|e| {
+                log_sqlite_err("list_vaults.query_map", sql, &e);
+                ErrorCodeString::new("DB_QUERY_FAILED")
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|e| {
+                log_sqlite_err("list_vaults.collect", sql, &e);
+                ErrorCodeString::new("DB_QUERY_FAILED")
+            })?;
+
+        Ok(rows)
+    })
+}
+
+pub fn get_vault(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<Vault> {
+    with_connection(state, profile_id, |conn| get_vault_by_id_conn(conn, id))
+}
+
+pub fn create_vault(state: &Arc<AppState>, profile_id: &str, name: &str) -> Result<Vault> {
+    with_connection(state, profile_id, |conn| {
+        let now = Utc::now().to_rfc3339();
+        let id = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO vaults (id, name, is_default, created_at, updated_at) VALUES (?1, ?2, 0, ?3, ?4)",
+            params![id, name, now, now],
+        )
+        .map_err(map_vault_constraint_error)?;
+
+        get_vault_by_id_conn(conn, &id)
+    })
+}
+
+pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folder>> {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
+        let sql =
+            "SELECT * FROM folders WHERE vault_id = ?1 AND deleted_at IS NULL ORDER BY name ASC";
         let mut stmt = conn.prepare(sql).map_err(|e| {
             log_sqlite_err("list_folders.prepare", sql, &e);
             ErrorCodeString::new("DB_QUERY_FAILED")
         })?;
 
         let folders = stmt
-            .query_map([], map_folder)
+            .query_map(params![active_vault_id], map_folder)
             .map_err(|e| {
                 log_sqlite_err("list_folders.query_map", sql, &e);
                 ErrorCodeString::new("DB_QUERY_FAILED")
@@ -460,17 +552,19 @@ pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folde
     })
 }
 
-fn get_folder_by_id_conn(conn: &Connection, id: &str) -> Result<Folder> {
+fn get_folder_by_id_conn(conn: &Connection, id: &str, vault_id: &str) -> Result<Folder> {
     let mut stmt = conn
-        .prepare("SELECT * FROM folders WHERE id = ?1")
+        .prepare("SELECT * FROM folders WHERE id = ?1 AND vault_id = ?2")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-    stmt.query_row(params![id], map_folder)
+    stmt.query_row(params![id, vault_id], map_folder)
         .map_err(|_| ErrorCodeString::new("FOLDER_NOT_FOUND"))
 }
 
 pub fn get_folder(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<Folder> {
-    with_connection(state, profile_id, |conn| get_folder_by_id_conn(conn, id))
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
+        get_folder_by_id_conn(conn, id, active_vault_id)
+    })
 }
 
 pub fn create_folder(
@@ -479,16 +573,19 @@ pub fn create_folder(
     name: &str,
     parent_id: &Option<String>,
 ) -> Result<Folder> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
+        if let Some(parent) = parent_id {
+            let _ = get_folder_by_id_conn(conn, parent, active_vault_id)?;
+        }
         conn.execute(
-            "INSERT INTO folders (id, name, parent_id, is_system, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, 0, ?4, ?5, NULL)",
-            params![id, name, parent_id, now, now],
+            "INSERT INTO folders (id, vault_id, name, parent_id, is_system, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, NULL)",
+            params![id, active_vault_id, name, parent_id, now, now],
         )
         .map_err(map_constraint_error)?;
 
-        get_folder_by_id_conn(conn, &id)
+        get_folder_by_id_conn(conn, &id, active_vault_id)
     })
 }
 
@@ -498,11 +595,11 @@ pub fn rename_folder(
     id: &str,
     name: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
             .execute(
-                "UPDATE folders SET name = ?1, updated_at = ?2 WHERE id = ?3",
-                params![name, Utc::now().to_rfc3339(), id],
+                "UPDATE folders SET name = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
+                params![name, Utc::now().to_rfc3339(), id, active_vault_id],
             )
             .map_err(map_constraint_error)?;
         if rows == 0 {
@@ -518,11 +615,17 @@ pub fn move_folder(
     id: &str,
     parent_id: &Option<String>,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
+        if let Some(parent) = parent_id {
+            if parent == id {
+                return Err(ErrorCodeString::new("FOLDER_NOT_FOUND"));
+            }
+            let _ = get_folder_by_id_conn(conn, parent, active_vault_id)?;
+        }
         let rows = conn
             .execute(
-                "UPDATE folders SET parent_id = ?1, updated_at = ?2 WHERE id = ?3",
-                params![parent_id, Utc::now().to_rfc3339(), id],
+                "UPDATE folders SET parent_id = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
+                params![parent_id, Utc::now().to_rfc3339(), id, active_vault_id],
             )
             .map_err(map_constraint_error)?;
         if rows == 0 {
@@ -533,9 +636,12 @@ pub fn move_folder(
 }
 
 pub fn purge_folder(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
-            .execute("DELETE FROM folders WHERE id = ?1", params![id])
+            .execute(
+                "DELETE FROM folders WHERE id = ?1 AND vault_id = ?2",
+                params![id, active_vault_id],
+            )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
             return Err(ErrorCodeString::new("FOLDER_NOT_FOUND"));
@@ -549,11 +655,11 @@ pub fn move_datacards_to_root(
     profile_id: &str,
     folder_id: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let now = Utc::now().to_rfc3339();
         conn.execute(
-            "UPDATE datacards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2",
-            params![now, folder_id],
+            "UPDATE datacards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2 AND vault_id = ?3",
+            params![now, folder_id, active_vault_id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         Ok(true)
@@ -565,11 +671,11 @@ pub fn move_bank_cards_to_root(
     profile_id: &str,
     folder_id: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let now = Utc::now().to_rfc3339();
         conn.execute(
-            "UPDATE bank_cards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2",
-            params![now, folder_id],
+            "UPDATE bank_cards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2 AND vault_id = ?3",
+            params![now, folder_id, active_vault_id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         Ok(true)
@@ -582,7 +688,7 @@ pub fn list_datacard_ids_in_folder(
     folder_id: &str,
     include_deleted: bool,
 ) -> Result<Vec<String>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let clause = if include_deleted {
             String::new()
         } else {
@@ -590,12 +696,12 @@ pub fn list_datacard_ids_in_folder(
         };
         let mut stmt = conn
             .prepare(&format!(
-                "SELECT id FROM datacards WHERE folder_id = ?1{clause}",
+                "SELECT id FROM datacards WHERE folder_id = ?1 AND vault_id = ?2{clause}",
             ))
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let rows = stmt
-            .query_map(params![folder_id], |row| row.get("id"))
+            .query_map(params![folder_id, active_vault_id], |row| row.get("id"))
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<String>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -611,19 +717,19 @@ pub fn list_datacards(
     sort_field: &str,
     sort_dir: &str,
 ) -> Result<Vec<DataCard>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let clause = order_clause(sort_field, sort_dir)
             .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         let base_query = if include_deleted {
-            format!("SELECT * FROM datacards {clause}")
+            format!("SELECT * FROM datacards WHERE vault_id = ?1 {clause}")
         } else {
-            format!("SELECT * FROM datacards WHERE deleted_at IS NULL {clause}")
+            format!("SELECT * FROM datacards WHERE vault_id = ?1 AND deleted_at IS NULL {clause}")
         };
         let mut stmt = conn
             .prepare(&base_query)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         let cards = stmt
-            .query_map([], map_datacard)
+            .query_map(params![active_vault_id], map_datacard)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -637,7 +743,7 @@ pub fn list_datacards_summary(
     sort_field: &str,
     sort_dir: &str,
 ) -> Result<Vec<DataCardSummary>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let clause = order_clause(sort_field, sort_dir)
             .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         let query = format!(
@@ -666,7 +772,7 @@ pub fn list_datacards_summary(
                 d.archived_at,
                 d.deleted_at
             FROM datacards d
-            WHERE d.deleted_at IS NULL {clause}
+            WHERE d.vault_id = ?1 AND d.deleted_at IS NULL {clause}
             "#
         );
         let mut stmt = conn.prepare(&query).map_err(|e| {
@@ -675,7 +781,7 @@ pub fn list_datacards_summary(
         })?;
 
         let cards = stmt
-            .query_map([], map_datacard_summary)
+            .query_map(params![active_vault_id], map_datacard_summary)
             .map_err(|e| {
                 log_sqlite_err("list_datacards_summary.query_map", &query, &e);
                 ErrorCodeString::new("DB_QUERY_FAILED")
@@ -691,13 +797,13 @@ pub fn list_datacards_summary(
 }
 
 pub fn list_deleted_datacards(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<DataCard>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
-            .prepare("SELECT * FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+            .prepare("SELECT * FROM datacards WHERE vault_id = ?1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC")
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let cards = stmt
-            .query_map([], map_datacard)
+            .query_map(params![active_vault_id], map_datacard)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -711,7 +817,7 @@ pub fn set_datacard_archived(
     profile_id: &str,
     input: &SetDataCardArchivedInput,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let archived_at: Option<String> = if input.is_archived {
             Some(Utc::now().to_rfc3339())
         } else {
@@ -720,8 +826,8 @@ pub fn set_datacard_archived(
 
         let rows = conn
             .execute(
-                "UPDATE datacards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
-                params![archived_at, Utc::now().to_rfc3339(), input.id],
+                "UPDATE datacards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4 AND deleted_at IS NULL",
+                params![archived_at, Utc::now().to_rfc3339(), input.id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -737,7 +843,7 @@ pub fn list_deleted_datacards_summary(
     state: &Arc<AppState>,
     profile_id: &str,
 ) -> Result<Vec<DataCardSummary>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
             .prepare(
                 r#"
@@ -765,14 +871,14 @@ pub fn list_deleted_datacards_summary(
                     d.archived_at,
                     d.deleted_at
                 FROM datacards d
-                WHERE d.deleted_at IS NOT NULL
+                WHERE d.vault_id = ?1 AND d.deleted_at IS NOT NULL
                 ORDER BY d.deleted_at DESC
                 "#,
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let cards = stmt
-            .query_map([], map_datacard_summary)
+            .query_map(params![active_vault_id], map_datacard_summary)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -785,15 +891,15 @@ pub fn list_deleted_datacard_ids(
     state: &Arc<AppState>,
     profile_id: &str,
 ) -> Result<Vec<String>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
             .prepare(
-                "SELECT id FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                "SELECT id FROM datacards WHERE vault_id = ?1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let ids = stmt
-            .query_map([], |row| row.get::<_, String>(0))
+            .query_map(params![active_vault_id], |row| row.get::<_, String>(0))
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -845,17 +951,19 @@ ON CONFLICT(key) DO UPDATE SET
     })
 }
 
-fn get_datacard_by_id_conn(conn: &Connection, id: &str) -> Result<DataCard> {
+fn get_datacard_by_id_conn(conn: &Connection, id: &str, vault_id: &str) -> Result<DataCard> {
     let mut stmt = conn
-        .prepare("SELECT * FROM datacards WHERE id = ?1")
+        .prepare("SELECT * FROM datacards WHERE id = ?1 AND vault_id = ?2")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-    stmt.query_row(params![id], map_datacard)
+    stmt.query_row(params![id, vault_id], map_datacard)
         .map_err(|_| ErrorCodeString::new("DATACARD_NOT_FOUND"))
 }
 
 pub fn get_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<DataCard> {
-    with_connection(state, profile_id, |conn| get_datacard_by_id_conn(conn, id))
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
+        get_datacard_by_id_conn(conn, id, active_vault_id)
+    })
 }
 
 pub fn create_datacard(
@@ -863,15 +971,19 @@ pub fn create_datacard(
     profile_id: &str,
     input: &CreateDataCardInput,
 ) -> Result<DataCard> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let tags_json = serialize_json(&input.tags)?;
         let custom_fields_json = serialize_json(&input.custom_fields)?;
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
+        if let Some(folder_id) = input.folder_id.as_ref() {
+            let _ = get_folder_by_id_conn(conn, folder_id, active_vault_id)?;
+        }
         conn.execute(
-            "INSERT INTO datacards (id, folder_id, title, url, email, recovery_email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL)",
+            "INSERT INTO datacards (id, vault_id, folder_id, title, url, email, recovery_email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, NULL)",
             params![
                 id,
+                active_vault_id,
                 input.folder_id,
                 input.title,
                 input.url,
@@ -893,7 +1005,7 @@ pub fn create_datacard(
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-        get_datacard_by_id_conn(conn, &id)
+        get_datacard_by_id_conn(conn, &id, active_vault_id)
     })
 }
 
@@ -902,17 +1014,21 @@ pub fn update_datacard(
     profile_id: &str,
     input: &UpdateDataCardInput,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let tags_json = serialize_json(&input.tags)?;
         let custom_fields_json = serialize_json(&input.custom_fields)?;
         let existing_password_row: Option<Option<String>> = conn
             .query_row(
-                "SELECT password_value FROM datacards WHERE id = ?1",
-                params![input.id],
+                "SELECT password_value FROM datacards WHERE id = ?1 AND vault_id = ?2",
+                params![input.id, active_vault_id],
                 |row| row.get::<_, Option<String>>(0),
             )
             .optional()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        if let Some(folder_id) = input.folder_id.as_ref() {
+            let _ = get_folder_by_id_conn(conn, folder_id, active_vault_id)?;
+        }
 
         let existing_password: Option<String> = match existing_password_row {
             None => return Err(ErrorCodeString::new("DATACARD_NOT_FOUND")),
@@ -937,7 +1053,7 @@ pub fn update_datacard(
         }
         let rows = conn
             .execute(
-                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, recovery_email = ?4, username = ?5, mobile_phone = ?6, note = ?7, tags_json = ?8, password_value = ?9, totp_uri = ?10, seed_phrase_value = ?11, seed_phrase_word_count = ?12, custom_fields_json = ?13, folder_id = ?14, updated_at = ?15 WHERE id = ?16",
+                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, recovery_email = ?4, username = ?5, mobile_phone = ?6, note = ?7, tags_json = ?8, password_value = ?9, totp_uri = ?10, seed_phrase_value = ?11, seed_phrase_word_count = ?12, custom_fields_json = ?13, folder_id = ?14, updated_at = ?15 WHERE id = ?16 AND vault_id = ?17",
                 params![
                     input.title,
                     input.url,
@@ -954,7 +1070,8 @@ pub fn update_datacard(
                     custom_fields_json,
                     input.folder_id,
                     now,
-                    input.id
+                    input.id,
+                    active_vault_id
                 ],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -970,14 +1087,15 @@ pub fn set_datacard_favorite(
     profile_id: &str,
     input: &SetDataCardFavoriteInput,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
             .execute(
-                "UPDATE datacards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
+                "UPDATE datacards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
                 params![
                     if input.is_favorite { 1 } else { 0 },
                     Utc::now().to_rfc3339(),
-                    input.id
+                    input.id,
+                    active_vault_id
                 ],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -996,11 +1114,14 @@ pub fn move_datacard(
     id: &str,
     folder_id: &Option<String>,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
+        if let Some(folder) = folder_id.as_ref() {
+            let _ = get_folder_by_id_conn(conn, folder, active_vault_id)?;
+        }
         let rows = conn
             .execute(
-                "UPDATE datacards SET folder_id = ?1, updated_at = ?2 WHERE id = ?3",
-                params![folder_id, Utc::now().to_rfc3339(), id],
+                "UPDATE datacards SET folder_id = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
+                params![folder_id, Utc::now().to_rfc3339(), id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
@@ -1016,11 +1137,11 @@ pub fn soft_delete_datacard(
     id: &str,
     now: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
             .execute(
-                "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
-                params![now, now, id],
+                "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
+                params![now, now, id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
@@ -1031,11 +1152,11 @@ pub fn soft_delete_datacard(
 }
 
 pub fn restore_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
             .execute(
-                "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
-                params![Utc::now().to_rfc3339(), id],
+                "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2 AND vault_id = ?3",
+                params![Utc::now().to_rfc3339(), id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
@@ -1046,9 +1167,12 @@ pub fn restore_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Re
 }
 
 pub fn purge_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
-            .execute("DELETE FROM datacards WHERE id = ?1", params![id])
+            .execute(
+                "DELETE FROM datacards WHERE id = ?1 AND vault_id = ?2",
+                params![id, active_vault_id],
+            )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
             return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
@@ -1062,11 +1186,11 @@ pub fn soft_delete_datacards_in_folder(
     profile_id: &str,
     folder_id: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let now = Utc::now().to_rfc3339();
         conn.execute(
-            "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3",
-            params![now.clone(), now, folder_id],
+            "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3 AND vault_id = ?4",
+            params![now.clone(), now, folder_id, active_vault_id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         Ok(true)
@@ -1077,10 +1201,10 @@ pub fn purge_datacards_in_folder(
     profile_id: &str,
     folder_id: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         conn.execute(
-            "DELETE FROM datacards WHERE folder_id = ?1",
-            params![folder_id],
+            "DELETE FROM datacards WHERE folder_id = ?1 AND vault_id = ?2",
+            params![folder_id, active_vault_id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         Ok(true)
@@ -1093,10 +1217,10 @@ pub fn list_bank_cards_summary(
     sort_field: &str,
     sort_dir: &str,
 ) -> Result<Vec<BankCardSummary>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let clause = order_clause(sort_field, sort_dir).unwrap_or("ORDER BY updated_at DESC");
         let query = format!(
-            "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
+            "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE vault_id = ?1 AND deleted_at IS NULL {clause}"
         );
         let mut stmt = conn.prepare(&query).map_err(|e| {
             log_sqlite_err("list_bank_cards_summary.prepare", &query, &e);
@@ -1104,7 +1228,7 @@ pub fn list_bank_cards_summary(
         })?;
 
         let cards = stmt
-            .query_map([], map_bank_card_summary)
+            .query_map(params![active_vault_id], map_bank_card_summary)
             .map_err(|e| {
                 log_sqlite_err("list_bank_cards_summary.query_map", &query, &e);
                 ErrorCodeString::new("DB_QUERY_FAILED")
@@ -1123,15 +1247,15 @@ pub fn list_deleted_bank_cards_summary(
     state: &Arc<AppState>,
     profile_id: &str,
 ) -> Result<Vec<BankCardSummary>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
             .prepare(
-                "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE vault_id = ?1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let cards = stmt
-            .query_map([], map_bank_card_summary)
+            .query_map(params![active_vault_id], map_bank_card_summary)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -1144,15 +1268,15 @@ pub fn list_deleted_bank_card_ids(
     state: &Arc<AppState>,
     profile_id: &str,
 ) -> Result<Vec<String>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
             .prepare(
-                "SELECT id FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+                "SELECT id FROM bank_cards WHERE vault_id = ?1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let ids = stmt
-            .query_map([], |row| row.get::<_, String>(0))
+            .query_map(params![active_vault_id], |row| row.get::<_, String>(0))
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -1162,15 +1286,17 @@ pub fn list_deleted_bank_card_ids(
 }
 
 pub fn get_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<BankCardItem> {
-    with_connection(state, profile_id, |conn| get_bank_card_by_id_conn(conn, id))
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
+        get_bank_card_by_id_conn(conn, id, active_vault_id)
+    })
 }
 
-fn get_bank_card_by_id_conn(conn: &Connection, id: &str) -> Result<BankCardItem> {
+fn get_bank_card_by_id_conn(conn: &Connection, id: &str, vault_id: &str) -> Result<BankCardItem> {
     let mut stmt = conn
-        .prepare("SELECT * FROM bank_cards WHERE id = ?1")
+        .prepare("SELECT * FROM bank_cards WHERE id = ?1 AND vault_id = ?2")
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-    match stmt.query_row(params![id], map_bank_card) {
+    match stmt.query_row(params![id, vault_id], map_bank_card) {
         Ok(card) => Ok(card),
         Err(rusqlite::Error::QueryReturnedNoRows) => Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND")),
         Err(err) => {
@@ -1185,14 +1311,18 @@ pub fn create_bank_card(
     profile_id: &str,
     input: &CreateBankCardInput,
 ) -> Result<BankCardItem> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let tags_json = serialize_json(&input.tags)?;
         let now = Utc::now().to_rfc3339();
         let id = Uuid::new_v4().to_string();
+        if let Some(folder_id) = input.folder_id.as_ref() {
+            let _ = get_folder_by_id_conn(conn, folder_id, active_vault_id)?;
+        }
         conn.execute(
-            "INSERT INTO bank_cards (id, folder_id, title, bank_name, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, ?11, ?12, NULL)",
+            "INSERT INTO bank_cards (id, vault_id, folder_id, title, bank_name, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12, ?13, NULL)",
             params![
                 id,
+                active_vault_id,
                 input.folder_id,
                 input.title,
                 input.bank_name,
@@ -1208,7 +1338,7 @@ pub fn create_bank_card(
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-        get_bank_card_by_id_conn(conn, &id)
+        get_bank_card_by_id_conn(conn, &id, active_vault_id)
     })
 }
 
@@ -1217,11 +1347,14 @@ pub fn update_bank_card(
     profile_id: &str,
     input: &UpdateBankCardInput,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let tags_json = serialize_json(&input.tags)?;
+        if let Some(folder_id) = input.folder_id.as_ref() {
+            let _ = get_folder_by_id_conn(conn, folder_id, active_vault_id)?;
+        }
         let rows = conn
             .execute(
-                "UPDATE bank_cards SET folder_id = ?1, title = ?2, bank_name = ?3, holder = ?4, number = ?5, expiry_mm_yy = ?6, cvc = ?7, note = ?8, tags_json = ?9, updated_at = ?10 WHERE id = ?11",
+                "UPDATE bank_cards SET folder_id = ?1, title = ?2, bank_name = ?3, holder = ?4, number = ?5, expiry_mm_yy = ?6, cvc = ?7, note = ?8, tags_json = ?9, updated_at = ?10 WHERE id = ?11 AND vault_id = ?12",
                 params![
                     input.folder_id,
                     input.title,
@@ -1233,7 +1366,8 @@ pub fn update_bank_card(
                     input.note,
                     tags_json,
                     Utc::now().to_rfc3339(),
-                    input.id
+                    input.id,
+                    active_vault_id
                 ],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -1249,14 +1383,15 @@ pub fn set_bank_card_favorite(
     profile_id: &str,
     input: &SetBankCardFavoriteInput,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
             .execute(
-                "UPDATE bank_cards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
+                "UPDATE bank_cards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
                 params![
                     if input.is_favorite { 1 } else { 0 },
                     Utc::now().to_rfc3339(),
-                    input.id
+                    input.id,
+                    active_vault_id
                 ],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -1272,7 +1407,7 @@ pub fn set_bankcard_archived(
     profile_id: &str,
     input: &SetBankCardArchivedInput,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let archived_at: Option<String> = if input.is_archived {
             Some(Utc::now().to_rfc3339())
         } else {
@@ -1281,8 +1416,8 @@ pub fn set_bankcard_archived(
 
         let rows = conn
             .execute(
-                "UPDATE bank_cards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
-                params![archived_at, Utc::now().to_rfc3339(), input.id],
+                "UPDATE bank_cards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4 AND deleted_at IS NULL",
+                params![archived_at, Utc::now().to_rfc3339(), input.id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
@@ -1298,11 +1433,11 @@ pub fn soft_delete_bank_card(
     id: &str,
     now: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
             .execute(
-                "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
-                params![now, now, id],
+                "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
+                params![now, now, id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
@@ -1313,11 +1448,11 @@ pub fn soft_delete_bank_card(
 }
 
 pub fn restore_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
             .execute(
-                "UPDATE bank_cards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
-                params![Utc::now().to_rfc3339(), id],
+                "UPDATE bank_cards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2 AND vault_id = ?3",
+                params![Utc::now().to_rfc3339(), id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
@@ -1328,9 +1463,12 @@ pub fn restore_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> R
 }
 
 pub fn purge_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
-            .execute("DELETE FROM bank_cards WHERE id = ?1", params![id])
+            .execute(
+                "DELETE FROM bank_cards WHERE id = ?1 AND vault_id = ?2",
+                params![id, active_vault_id],
+            )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         if rows == 0 {
             return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
@@ -1344,11 +1482,11 @@ pub fn soft_delete_bank_cards_in_folder(
     profile_id: &str,
     folder_id: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let now = Utc::now().to_rfc3339();
         conn.execute(
-            "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3",
-            params![now.clone(), now, folder_id],
+            "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3 AND vault_id = ?4",
+            params![now.clone(), now, folder_id, active_vault_id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         Ok(true)
@@ -1360,8 +1498,11 @@ pub fn purge_bank_cards_in_folder(
     profile_id: &str,
     folder_id: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
-        conn.execute("DELETE FROM bank_cards WHERE folder_id = ?1", params![folder_id])
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
+        conn.execute(
+            "DELETE FROM bank_cards WHERE folder_id = ?1 AND vault_id = ?2",
+            params![folder_id, active_vault_id],
+        )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         Ok(true)
     })
@@ -1398,15 +1539,15 @@ pub fn list_attachments_by_datacard(
     profile_id: &str,
     datacard_id: &str,
 ) -> Result<Vec<AttachmentMeta>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
             .prepare(
-                "SELECT * FROM attachments WHERE datacard_id = ?1 AND deleted_at IS NULL ORDER BY created_at DESC",
+                "SELECT a.* FROM attachments a INNER JOIN datacards d ON d.id = a.datacard_id WHERE a.datacard_id = ?1 AND d.vault_id = ?2 AND a.deleted_at IS NULL ORDER BY a.created_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let rows = stmt
-            .query_map(params![datacard_id], map_attachment)
+            .query_map(params![datacard_id, active_vault_id], map_attachment)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -1420,13 +1561,15 @@ pub fn list_all_attachments_by_datacard(
     profile_id: &str,
     datacard_id: &str,
 ) -> Result<Vec<AttachmentMeta>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
-            .prepare("SELECT * FROM attachments WHERE datacard_id = ?1")
+            .prepare(
+                "SELECT a.* FROM attachments a INNER JOIN datacards d ON d.id = a.datacard_id WHERE a.datacard_id = ?1 AND d.vault_id = ?2",
+            )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let rows = stmt
-            .query_map(params![datacard_id], map_attachment)
+            .query_map(params![datacard_id, active_vault_id], map_attachment)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -1441,10 +1584,10 @@ pub fn soft_delete_attachments_by_datacard(
     datacard_id: &str,
     deleted_at: &str,
 ) -> Result<()> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         conn.execute(
-            "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE datacard_id = ?3",
-            params![deleted_at, deleted_at, datacard_id],
+            "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE datacard_id = ?3 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = ?3 AND d.vault_id = ?4)",
+            params![deleted_at, deleted_at, datacard_id, active_vault_id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         Ok(())
@@ -1456,10 +1599,10 @@ pub fn restore_attachments_by_datacard(
     profile_id: &str,
     datacard_id: &str,
 ) -> Result<()> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         conn.execute(
-            "UPDATE attachments SET deleted_at = NULL, updated_at = ?1 WHERE datacard_id = ?2",
-            params![Utc::now().to_rfc3339(), datacard_id],
+            "UPDATE attachments SET deleted_at = NULL, updated_at = ?1 WHERE datacard_id = ?2 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = ?2 AND d.vault_id = ?3)",
+            params![Utc::now().to_rfc3339(), datacard_id, active_vault_id],
         )
         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
         Ok(())
@@ -1471,13 +1614,15 @@ pub fn get_attachment(
     profile_id: &str,
     attachment_id: &str,
 ) -> Result<Option<AttachmentMeta>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
-            .prepare("SELECT * FROM attachments WHERE id = ?1")
+            .prepare(
+                "SELECT a.* FROM attachments a INNER JOIN datacards d ON d.id = a.datacard_id WHERE a.id = ?1 AND d.vault_id = ?2",
+            )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let meta = stmt
-            .query_row(params![attachment_id], map_attachment)
+            .query_row(params![attachment_id, active_vault_id], map_attachment)
             .optional()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -1491,11 +1636,11 @@ pub fn soft_delete_attachment(
     attachment_id: &str,
     deleted_at: &str,
 ) -> Result<()> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let updated = conn
             .execute(
-                "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
-                params![deleted_at, deleted_at, attachment_id],
+                "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = attachments.datacard_id AND d.vault_id = ?4)",
+                params![deleted_at, deleted_at, attachment_id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -1513,11 +1658,11 @@ pub fn set_datacard_preview_fields_for_card(
     id: &str,
     preview_fields_json: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
             .execute(
-                "UPDATE datacards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3",
-                params![preview_fields_json, Utc::now().to_rfc3339(), id],
+                "UPDATE datacards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
+                params![preview_fields_json, Utc::now().to_rfc3339(), id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -1535,11 +1680,11 @@ pub fn set_bankcard_preview_fields_for_card(
     id: &str,
     preview_fields_json: &str,
 ) -> Result<bool> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let rows = conn
             .execute(
-                "UPDATE bank_cards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3",
-                params![preview_fields_json, Utc::now().to_rfc3339(), id],
+                "UPDATE bank_cards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
+                params![preview_fields_json, Utc::now().to_rfc3339(), id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -1556,11 +1701,11 @@ pub fn purge_attachment(
     profile_id: &str,
     attachment_id: &str,
 ) -> Result<()> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let updated = conn
             .execute(
-                "DELETE FROM attachments WHERE id = ?1",
-                params![attachment_id],
+                "DELETE FROM attachments WHERE id = ?1 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = attachments.datacard_id AND d.vault_id = ?2)",
+                params![attachment_id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
@@ -1593,15 +1738,15 @@ pub fn list_password_history(
     profile_id: &str,
     datacard_id: &str,
 ) -> Result<Vec<PasswordHistoryRow>> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let mut stmt = conn
             .prepare(
-                "SELECT * FROM datacard_password_history WHERE datacard_id = ?1 ORDER BY created_at DESC",
+                "SELECT p.* FROM datacard_password_history p INNER JOIN datacards d ON d.id = p.datacard_id WHERE p.datacard_id = ?1 AND d.vault_id = ?2 ORDER BY p.created_at DESC",
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
         let rows = stmt
-            .query_map(params![datacard_id], map_password_history_row)
+            .query_map(params![datacard_id, active_vault_id], map_password_history_row)
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
@@ -1615,11 +1760,11 @@ pub fn clear_password_history(
     profile_id: &str,
     datacard_id: &str,
 ) -> Result<usize> {
-    with_connection(state, profile_id, |conn| {
+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let deleted = conn
             .execute(
-                "DELETE FROM datacard_password_history WHERE datacard_id = ?1",
-                params![datacard_id],
+                "DELETE FROM datacard_password_history WHERE datacard_id = ?1 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = ?1 AND d.vault_id = ?2)",
+                params![datacard_id, active_vault_id],
             )
             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 

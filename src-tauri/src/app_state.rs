@@ -38,6 +38,7 @@ pub struct PendingBackupPick {
 
 pub struct AppState {
     pub active_profile: Mutex<Option<String>>,
+    pub active_vault_id: Mutex<Option<String>>,
     pub storage_paths: Mutex<StoragePaths>,
 
     pub workspace_lock: Mutex<Option<std::fs::File>>,
@@ -60,6 +61,7 @@ impl AppState {
     pub fn new(storage_paths: StoragePaths) -> Self {
         Self {
             active_profile: Mutex::new(None),
+            active_vault_id: Mutex::new(None),
             storage_paths: Mutex::new(storage_paths),
 
             workspace_lock: Mutex::new(None),
@@ -185,6 +187,13 @@ impl AppState {
                 .lock()
                 .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
             *active = None;
+        }
+        {
+            let mut active_vault_id = self
+                .active_vault_id
+                .lock()
+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
+            *active_vault_id = None;
         }
         {
             let mut session = self

@@ -68,6 +68,15 @@ pub struct Folder {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Vault {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum CustomFieldType {
     Text,
@@ -337,6 +346,11 @@ pub struct UserSettings {
     pub default_sort_direction: String,
 
     pub mask_password_by_default: bool,
+
+    #[serde(default = "default_multiply_vaults_enabled")]
+    pub multiply_vaults_enabled: bool,
+    #[serde(default = "default_active_vault_id")]
+    pub active_vault_id: String,
 }
 
 impl Default for UserSettings {
@@ -357,6 +371,8 @@ impl Default for UserSettings {
             default_sort_field: "updated_at".to_string(),
             default_sort_direction: "DESC".to_string(),
             mask_password_by_default: true,
+            multiply_vaults_enabled: default_multiply_vaults_enabled(),
+            active_vault_id: default_active_vault_id(),
         }
     }
 }
@@ -383,6 +399,14 @@ fn default_auto_lock_enabled() -> bool {
 
 fn default_auto_lock_timeout_seconds() -> i64 {
     60
+}
+
+fn default_multiply_vaults_enabled() -> bool {
+    false
+}
+
+fn default_active_vault_id() -> String {
+    "default".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

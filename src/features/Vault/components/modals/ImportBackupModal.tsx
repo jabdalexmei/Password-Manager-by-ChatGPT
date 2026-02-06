@@ -18,6 +18,14 @@ export function ImportBackupModal({ open, backupPath, isSubmitting, onCancel, on
   return (
     <div className="dialog-backdrop">
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="import-backup-title">
+        <button
+          className="dialog-close dialog-close--topright"
+          type="button"
+          aria-label={tCommon('action.close')}
+          onClick={onCancel}
+        >
+          {'\u00D7'}
+        </button>
         <div className="dialog-header">
           <h2 id="import-backup-title" className="dialog-title">
             {t('backup.import.confirmTitle')}

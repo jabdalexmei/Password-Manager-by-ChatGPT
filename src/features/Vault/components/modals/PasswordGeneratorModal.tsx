@@ -61,6 +61,9 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
   return (
     <div className="dialog-backdrop">
       <div className="dialog generator-dialog" role="dialog" aria-modal="true" aria-labelledby="generator-title">
+        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onClose}>
+          {'\u00D7'}
+        </button>
         <div className="dialog-header">
           <h2 id="generator-title" className="dialog-title">
             {t('generator.title')}

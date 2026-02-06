@@ -35,7 +35,12 @@ import type { BankCardPreviewField } from '../lib/bankcardPreviewFields';
 
 export type BankCardsError = { code: string; message?: string } | null;
 
-export function useBankCards(profileId: string, onLocked: () => void, folders: Folder[]) {
+export function useBankCards(
+  profileId: string,
+  onLocked: () => void,
+  folders: Folder[],
+  activeVaultId: string
+) {
   const { show: showToast } = useToaster();
   const { t: tCommon } = useTranslation('Common');
   const { t: tVault } = useTranslation('Vault');
@@ -65,7 +70,7 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
     setSelectedNav('all');
     setSelectedCardId(null);
     setTrashLoaded(false);
-  }, [profileId]);
+  }, [activeVaultId, profileId]);
 
   useEffect(() => {
     const q = debouncedSearchQuery.trim();
@@ -262,7 +267,7 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
     getSettings()
       .then(setSettings)
       .catch(handleError);
-  }, [handleError, refreshActive, refreshTrash]);
+  }, [activeVaultId, handleError, refreshActive, refreshTrash]);
 
   const selectNav = useCallback(
     async (nav: SelectedNav) => {

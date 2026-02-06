@@ -57,7 +57,7 @@ export default function Vault({
   onProfileUpdated,
 }: VaultProps) {
   const vault = useVault(profileId, onLocked);
-  const bankCards = useBankCards(profileId, onLocked, vault.folders);
+  const bankCards = useBankCards(profileId, onLocked, vault.folders, vault.activeVaultId);
   const { t: tDataCards } = useTranslation('DataCards');
   const { t: tBankCards } = useTranslation('BankCards');
   const { t: tFolders } = useTranslation('Folders');
@@ -128,6 +128,32 @@ export default function Vault({
   });
 
   const folderDialogs = useFolders({ onCreateFolder: (name, parentId) => vault.createFolder(name, parentId) });
+
+  const handleSelectVault = useCallback(
+    async (vaultId: string) => {
+      const changed = await vault.selectVault(vaultId);
+      if (!changed) return;
+      setSelectedCategory('all_items');
+      setActiveDetailsKind('data');
+      vault.selectCard(null);
+      bankCards.selectCard(null);
+    },
+    [bankCards.selectCard, vault.selectCard, vault.selectVault]
+  );
+
+  const handleCreateVault = useCallback(
+    async (name: string) => {
+      const created = await vault.createVault(name);
+      if (!created) return created;
+      const changed = await vault.selectVault(created.id);
+      if (changed) {
+        setSelectedCategory('all_items');
+        setActiveDetailsKind('data');
+      }
+      return created;
+    },
+    [vault.createVault, vault.selectVault]
+  );
 
   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
 
@@ -260,12 +286,24 @@ export default function Vault({
   const handleDeleteFolderOnly = async () => {
     if (!pendingFolderDelete) return;
     await vault.deleteFolderOnly(pendingFolderDelete.id);
+    await Promise.all([
+      vault.refreshActive(),
+      bankCards.refreshActive(),
+      vault.refreshTrash(),
+      bankCards.refreshTrash(),
+    ]);
     setPendingFolderDelete(null);
   };
 
   const handleDeleteFolderAndCards = async () => {
     if (!pendingFolderDelete) return;
     await vault.deleteFolderAndCards(pendingFolderDelete.id);
+    await Promise.all([
+      vault.refreshActive(),
+      bankCards.refreshActive(),
+      vault.refreshTrash(),
+      bankCards.refreshTrash(),
+    ]);
     setPendingFolderDelete(null);
   };
 
@@ -411,6 +449,11 @@ export default function Vault({
             </button>
           </div>
           <Folders
+            vaults={vault.vaults}
+            activeVaultId={vault.activeVaultId}
+            multiplyVaultsEnabled={Boolean(vault.settings?.multiply_vaults_enabled)}
+            onSelectVault={(vaultId) => void handleSelectVault(vaultId)}
+            onCreateVault={handleCreateVault}
             selectedCategory={selectedCategory}
             onSelectCategory={handleSelectCategory}
             onAddBankCard={handleAddBankCard}

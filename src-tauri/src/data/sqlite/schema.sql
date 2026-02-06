@@ -1,7 +1,22 @@
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS vaults (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vaults_unique_name
+ON vaults(name);
+
+INSERT OR IGNORE INTO vaults (id, name, is_default, created_at, updated_at)
+VALUES ('default', 'Default vault', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 CREATE TABLE IF NOT EXISTS folders (
   id         TEXT PRIMARY KEY,
+  vault_id   TEXT NOT NULL DEFAULT 'default',
   name       TEXT NOT NULL,
   parent_id  TEXT NULL,
   is_system  INTEGER NOT NULL DEFAULT 0,
@@ -12,14 +27,18 @@ CREATE TABLE IF NOT EXISTS folders (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_unique_name
-ON folders(parent_id, name)
+ON folders(vault_id, parent_id, name)
 WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_folders_parent
 ON folders(parent_id);
 
+CREATE INDEX IF NOT EXISTS idx_folders_vault
+ON folders(vault_id);
+
 CREATE TABLE IF NOT EXISTS datacards (
   id           TEXT PRIMARY KEY,
+  vault_id     TEXT NOT NULL DEFAULT 'default',
   folder_id    TEXT NULL,
 
   title        TEXT,
@@ -48,6 +67,9 @@ CREATE TABLE IF NOT EXISTS datacards (
 
 CREATE INDEX IF NOT EXISTS idx_datacards_folder
 ON datacards(folder_id);
+
+CREATE INDEX IF NOT EXISTS idx_datacards_vault
+ON datacards(vault_id);
 
 CREATE INDEX IF NOT EXISTS idx_datacards_archived
 ON datacards(archived_at);
@@ -89,6 +111,7 @@ ON attachments(deleted_at);
 
 CREATE TABLE IF NOT EXISTS bank_cards (
   id TEXT PRIMARY KEY,
+  vault_id TEXT NOT NULL DEFAULT 'default',
   folder_id TEXT NULL,
 
   title TEXT NOT NULL,
@@ -111,6 +134,7 @@ CREATE INDEX IF NOT EXISTS idx_bank_cards_archived_at ON bank_cards (archived_at
 CREATE INDEX IF NOT EXISTS idx_bank_cards_deleted_at ON bank_cards (deleted_at);
 CREATE INDEX IF NOT EXISTS idx_bank_cards_is_favorite ON bank_cards (is_favorite);
 CREATE INDEX IF NOT EXISTS idx_bank_cards_folder ON bank_cards (folder_id);
+CREATE INDEX IF NOT EXISTS idx_bank_cards_vault ON bank_cards (vault_id);
 
 -- UI preferences for frontend-only settings that should live with the vault DB.
 CREATE TABLE IF NOT EXISTS ui_preferences (

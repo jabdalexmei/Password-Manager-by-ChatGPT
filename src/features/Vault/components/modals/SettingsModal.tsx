@@ -25,6 +25,8 @@ export type SettingsModalProps = {
   onProfileUpdated?: (profile: ProfileMeta) => void;
 };
 
+type SettingsSection = 'profile' | 'security' | 'vaults' | 'backups';
+
 export function SettingsModal({
   open,
   settings,
@@ -48,6 +50,7 @@ export function SettingsModal({
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState('60');
   const [maxCopies, setMaxCopies] = useState('10');
+  const [multiplyVaultsEnabled, setMultiplyVaultsEnabled] = useState(false);
   const [renameProfileOpen, setRenameProfileOpen] = useState(false);
   const [renameProfileValue, setRenameProfileValue] = useState('');
   const [isRenamingProfile, setIsRenamingProfile] = useState(false);
@@ -64,6 +67,7 @@ export function SettingsModal({
 
   const [removePasswordConfirmOpen, setRemovePasswordConfirmOpen] = useState(false);
   const [isRemovingPassword, setIsRemovingPassword] = useState(false);
+  const [activeSection, setActiveSection] = useState<SettingsSection>('profile');
 
   useEffect(() => {
     if (!open || !settings) return;
@@ -74,7 +78,13 @@ export function SettingsModal({
     setAutoBackupEnabled(settings.backups_enabled);
     setIntervalMinutes(String(settings.auto_backup_interval_minutes));
     setMaxCopies(String(settings.backup_max_copies));
+    setMultiplyVaultsEnabled(settings.multiply_vaults_enabled);
   }, [open, settings]);
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveSection('profile');
+  }, [open]);
 
   useEffect(() => {
     if (!renameProfileOpen) return;
@@ -264,6 +274,7 @@ export function SettingsModal({
       backups_enabled: autoBackupEnabled,
       auto_backup_interval_minutes: interval,
       backup_max_copies: max,
+      multiply_vaults_enabled: multiplyVaultsEnabled,
     };
 
     onSave(nextSettings);
@@ -315,185 +326,261 @@ export function SettingsModal({
         </DialogHeader>
 
         <div className="dialog-body settings-modal-body">
-          <h3 id="profile-title" className="settings-modal-section-title">
-            {tVault('settingsModal.profileTitle')}
-          </h3>
+          <div className="settings-layout">
+            <aside className="settings-sidebar" aria-label={tVault('settingsModal.optionsTitle')}>
+              <div className="settings-sidebar-title">{tVault('settingsModal.optionsTitle')}</div>
+              <nav className="settings-sidebar-nav" aria-label={tVault('settingsModal.optionsTitle')}>
+                <button
+                  type="button"
+                  className="settings-nav-item"
+                  data-active={activeSection === 'profile' ? 'true' : 'false'}
+                  onClick={() => setActiveSection('profile')}
+                >
+                  {tVault('settingsModal.profileTitle')}
+                </button>
+                <button
+                  type="button"
+                  className="settings-nav-item"
+                  data-active={activeSection === 'security' ? 'true' : 'false'}
+                  onClick={() => setActiveSection('security')}
+                >
+                  {tVault('settingsModal.securityTitle')}
+                </button>
+                <button
+                  type="button"
+                  className="settings-nav-item"
+                  data-active={activeSection === 'vaults' ? 'true' : 'false'}
+                  onClick={() => setActiveSection('vaults')}
+                >
+                  {tVault('settingsModal.vaultsTitle')}
+                </button>
+                <button
+                  type="button"
+                  className="settings-nav-item"
+                  data-active={activeSection === 'backups' ? 'true' : 'false'}
+                  onClick={() => setActiveSection('backups')}
+                >
+                  {tVault('backup.settings.title')}
+                </button>
+              </nav>
+            </aside>
 
-          <div className="settings-profile-actions" role="group" aria-labelledby="profile-title">
-            <button
-              className="btn btn-secondary settings-profile-action"
-              type="button"
-              onClick={() => setRenameProfileOpen(true)}
-              disabled={busy}
-            >
-              {tVault('settingsModal.profile.rename')}
-            </button>
+            <section className="settings-content">
+              {activeSection === 'profile' && (
+                <>
+                  <h3 id="profile-title" className="settings-modal-section-title">
+                    {tVault('settingsModal.profileTitle')}
+                  </h3>
 
-            <button
-              className="btn btn-secondary settings-profile-action"
-              type="button"
-              onClick={() => setSetPasswordOpen(true)}
-              disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
-            >
-              {tVault('settingsModal.profile.setPasswordAction')}
-            </button>
+                  <div className="settings-profile-actions" role="group" aria-labelledby="profile-title">
+                    <button
+                      className="btn btn-secondary settings-profile-action"
+                      type="button"
+                      onClick={() => setRenameProfileOpen(true)}
+                      disabled={busy}
+                    >
+                      {tVault('settingsModal.profile.rename')}
+                    </button>
 
-            <button
-              className="btn btn-secondary settings-profile-action"
-              type="button"
-              onClick={() => setChangePasswordOpen(true)}
-              disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
-            >
-              {tVault('settingsModal.profile.changePasswordAction')}
-            </button>
+                    <button
+                      className="btn btn-secondary settings-profile-action"
+                      type="button"
+                      onClick={() => setSetPasswordOpen(true)}
+                      disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
+                    >
+                      {tVault('settingsModal.profile.setPasswordAction')}
+                    </button>
 
-            <button
-              className="btn btn-danger settings-profile-action"
-              type="button"
-              onClick={() => setRemovePasswordConfirmOpen(true)}
-              disabled={
-                busy ||
-                isRenamingProfile ||
-                isSettingPassword ||
-                isChangingPassword ||
-                isRemovingPassword ||
-                !profileHasPassword
-              }
-            >
-              {tVault('settingsModal.profile.removePasswordAction')}
-            </button>
-          </div>
+                    <button
+                      className="btn btn-secondary settings-profile-action"
+                      type="button"
+                      onClick={() => setChangePasswordOpen(true)}
+                      disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
+                    >
+                      {tVault('settingsModal.profile.changePasswordAction')}
+                    </button>
 
-          <h3 id="security-title" className="settings-modal-section-title">
-            {tVault('settingsModal.securityTitle')}
-          </h3>
+                    <button
+                      className="btn btn-danger settings-profile-action"
+                      type="button"
+                      onClick={() => setRemovePasswordConfirmOpen(true)}
+                      disabled={
+                        busy ||
+                        isRenamingProfile ||
+                        isSettingPassword ||
+                        isChangingPassword ||
+                        isRemovingPassword ||
+                        !profileHasPassword
+                      }
+                    >
+                      {tVault('settingsModal.profile.removePasswordAction')}
+                    </button>
+                  </div>
+                </>
+              )}
 
-          <div
-            role="group"
-            aria-labelledby="security-title"
-            className="settings-group"
-          >
-            <div className="form-field settings-toggle-row">
-              <span className="form-label settings-subheader" id="auto-lock-enabled-label">
-                {tVault('settingsModal.autoLock.enabled')}
-              </span>
+              {activeSection === 'security' && (
+                <>
+                  <h3 id="security-title" className="settings-modal-section-title">
+                    {tVault('settingsModal.securityTitle')}
+                  </h3>
 
-              <div className="settings-toggle-row__control">
-                {renderSwitch({
-                  id: 'auto-lock-enabled-switch',
-                  labelId: 'auto-lock-enabled-label',
-                  checked: autoLockEnabled,
-                  onToggle: () => setAutoLockEnabled((v) => !v),
-                  disabled: busy,
-                })}
-              </div>
-            </div>
+                  <div role="group" aria-labelledby="security-title" className="settings-group">
+                    <div className="form-field settings-toggle-row">
+                      <span className="form-label settings-subheader" id="auto-lock-enabled-label">
+                        {tVault('settingsModal.autoLock.enabled')}
+                      </span>
 
-            <div className="form-field">
-              <label className="form-label" htmlFor="auto-lock-timeout-seconds">
-                {tVault('settingsModal.autoLock.timeoutSeconds')}
-              </label>
-              <input
-                id="auto-lock-timeout-seconds"
-                type="number"
-                min={30}
-                max={86400}
-                value={autoLockTimeoutSeconds}
-                disabled={busy || !autoLockEnabled}
-                inputMode="numeric"
-                onChange={(event) => setAutoLockTimeoutSeconds(event.target.value)}
-                className="settings-input"
-              />
-            </div>
+                      <div className="settings-toggle-row__control">
+                        {renderSwitch({
+                          id: 'auto-lock-enabled-switch',
+                          labelId: 'auto-lock-enabled-label',
+                          checked: autoLockEnabled,
+                          onToggle: () => setAutoLockEnabled((v) => !v),
+                          disabled: busy,
+                        })}
+                      </div>
+                    </div>
 
-            <div className="form-field settings-toggle-row">
-              <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
-                {tVault('settingsModal.clipboard.enabled')}
-              </span>
+                    <div className="form-field">
+                      <label className="form-label" htmlFor="auto-lock-timeout-seconds">
+                        {tVault('settingsModal.autoLock.timeoutSeconds')}
+                      </label>
+                      <input
+                        id="auto-lock-timeout-seconds"
+                        type="number"
+                        min={30}
+                        max={86400}
+                        value={autoLockTimeoutSeconds}
+                        disabled={busy || !autoLockEnabled}
+                        inputMode="numeric"
+                        onChange={(event) => setAutoLockTimeoutSeconds(event.target.value)}
+                        className="settings-input"
+                      />
+                    </div>
 
-              <div className="settings-toggle-row__control">
-                {renderSwitch({
-                  id: 'clipboard-auto-clear-enabled-switch',
-                  labelId: 'clipboard-auto-clear-enabled-label',
-                  checked: clipboardAutoClearEnabled,
-                  onToggle: () => setClipboardAutoClearEnabled((v) => !v),
-                  disabled: busy,
-                })}
-              </div>
-            </div>
+                    <div className="form-field settings-toggle-row">
+                      <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
+                        {tVault('settingsModal.clipboard.enabled')}
+                      </span>
 
-            <div className="form-field">
-              <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
-                {tVault('settingsModal.clipboard.timeoutSeconds')}
-              </label>
-              <input
-                id="clipboard-clear-timeout-seconds"
-                type="number"
-                min={1}
-                max={600}
-                value={clipboardClearTimeoutSeconds}
-                disabled={busy || !clipboardAutoClearEnabled}
-                inputMode="numeric"
-                onChange={(event) => setClipboardClearTimeoutSeconds(event.target.value)}
-                className="settings-input"
-              />
-            </div>
-          </div>
+                      <div className="settings-toggle-row__control">
+                        {renderSwitch({
+                          id: 'clipboard-auto-clear-enabled-switch',
+                          labelId: 'clipboard-auto-clear-enabled-label',
+                          checked: clipboardAutoClearEnabled,
+                          onToggle: () => setClipboardAutoClearEnabled((v) => !v),
+                          disabled: busy,
+                        })}
+                      </div>
+                    </div>
 
-          <h3 id="backups-title" className="settings-modal-section-title">
-            {tVault('backup.settings.title')}
-          </h3>
+                    <div className="form-field">
+                      <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
+                        {tVault('settingsModal.clipboard.timeoutSeconds')}
+                      </label>
+                      <input
+                        id="clipboard-clear-timeout-seconds"
+                        type="number"
+                        min={1}
+                        max={600}
+                        value={clipboardClearTimeoutSeconds}
+                        disabled={busy || !clipboardAutoClearEnabled}
+                        inputMode="numeric"
+                        onChange={(event) => setClipboardClearTimeoutSeconds(event.target.value)}
+                        className="settings-input"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
-          <div role="group" aria-labelledby="backups-title" className="settings-group">
-            <div className="form-field settings-toggle-row">
-              <span className="form-label settings-subheader" id="backup-auto-enabled-label">
-                {tVault('backup.settings.autoEnabled')}
-              </span>
+              {activeSection === 'vaults' && (
+                <>
+                  <h3 id="vaults-title" className="settings-modal-section-title">
+                    {tVault('settingsModal.vaultsTitle')}
+                  </h3>
 
-              <div className="settings-toggle-row__control">
-                {renderSwitch({
-                  id: 'backup-auto-enabled-switch',
-                  labelId: 'backup-auto-enabled-label',
-                  checked: autoBackupEnabled,
-                  onToggle: () => setAutoBackupEnabled((v) => !v),
-                  disabled: busy,
-                })}
-              </div>
-            </div>
+                  <div role="group" aria-labelledby="vaults-title" className="settings-group">
+                    <div className="form-field settings-toggle-row">
+                      <span className="form-label settings-subheader" id="multiply-vaults-enabled-label">
+                        {tVault('settingsModal.multiplyVaults.enabled')}
+                      </span>
 
-            <div className="form-field">
-              <label className="form-label" htmlFor="backup-interval-minutes">
-                {tVault('backup.settings.intervalMinutes')}
-              </label>
-              <input
-                id="backup-interval-minutes"
-                type="number"
-                min={5}
-                max={1440}
-                value={intervalMinutes}
-                disabled={busy || !autoBackupEnabled}
-                inputMode="numeric"
-                onChange={(event) => setIntervalMinutes(event.target.value)}
-                className="settings-input"
-              />
-            </div>
+                      <div className="settings-toggle-row__control">
+                        {renderSwitch({
+                          id: 'multiply-vaults-enabled-switch',
+                          labelId: 'multiply-vaults-enabled-label',
+                          checked: multiplyVaultsEnabled,
+                          onToggle: () => setMultiplyVaultsEnabled((v) => !v),
+                          disabled: busy,
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
-            <div className="form-field">
-              <label className="form-label" htmlFor="backup-max-copies">
-                {tVault('backup.settings.maxCopies')}
-              </label>
-              <input
-                id="backup-max-copies"
-                type="number"
-                min={1}
-                max={500}
-                value={maxCopies}
-                disabled={busy}
-                inputMode="numeric"
-                onChange={(event) => setMaxCopies(event.target.value)}
-                className="settings-input"
-              />
-            </div>
+              {activeSection === 'backups' && (
+                <>
+                  <h3 id="backups-title" className="settings-modal-section-title">
+                    {tVault('backup.settings.title')}
+                  </h3>
+
+                  <div role="group" aria-labelledby="backups-title" className="settings-group">
+                    <div className="form-field settings-toggle-row">
+                      <span className="form-label settings-subheader" id="backup-auto-enabled-label">
+                        {tVault('backup.settings.autoEnabled')}
+                      </span>
+
+                      <div className="settings-toggle-row__control">
+                        {renderSwitch({
+                          id: 'backup-auto-enabled-switch',
+                          labelId: 'backup-auto-enabled-label',
+                          checked: autoBackupEnabled,
+                          onToggle: () => setAutoBackupEnabled((v) => !v),
+                          disabled: busy,
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="form-field">
+                      <label className="form-label" htmlFor="backup-interval-minutes">
+                        {tVault('backup.settings.intervalMinutes')}
+                      </label>
+                      <input
+                        id="backup-interval-minutes"
+                        type="number"
+                        min={5}
+                        max={1440}
+                        value={intervalMinutes}
+                        disabled={busy || !autoBackupEnabled}
+                        inputMode="numeric"
+                        onChange={(event) => setIntervalMinutes(event.target.value)}
+                        className="settings-input"
+                      />
+                    </div>
+
+                    <div className="form-field">
+                      <label className="form-label" htmlFor="backup-max-copies">
+                        {tVault('backup.settings.maxCopies')}
+                      </label>
+                      <input
+                        id="backup-max-copies"
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={maxCopies}
+                        disabled={busy}
+                        inputMode="numeric"
+                        onChange={(event) => setMaxCopies(event.target.value)}
+                        className="settings-input"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
           </div>
         </div>
 

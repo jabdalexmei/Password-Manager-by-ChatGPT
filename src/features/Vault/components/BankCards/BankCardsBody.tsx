@@ -41,7 +41,7 @@ export function BankCardsBody({
   onRenameFolder,
   registerCommands,
 }: BankCardsBodyProps) {
-  const bankCards = useBankCards(profileId, onLocked, folders);
+  const bankCards = useBankCards(profileId, onLocked, folders, 'default');
 
   const viewModel = useBankCardsViewModel({
     cards: bankCards.visibleCards,
@@ -101,6 +101,11 @@ export function BankCardsBody({
         </div>
 
         <VaultFolders
+          vaults={[]}
+          activeVaultId="default"
+          multiplyVaultsEnabled={false}
+          onSelectVault={() => undefined}
+          onCreateVault={() => null}
           selectedCategory={selectedCategory}
           onSelectCategory={onSelectCategory}
           onAddBankCard={viewModel.openCreateModal}

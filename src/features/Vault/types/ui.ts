@@ -10,6 +10,14 @@ export type Folder = {
   deletedAt: string | null;
 };
 
+export type VaultItem = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CustomFieldType = "text" | "secret" | "url" | "number" | "date";
 
 export type CustomField = {

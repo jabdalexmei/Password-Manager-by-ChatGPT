@@ -63,6 +63,14 @@ export const SeedPhraseViewModal: React.FC<SeedPhraseViewModalProps> = ({
         aria-modal="true"
         aria-labelledby="seedphrase-view-title"
       >
+        <button
+          className="dialog-close dialog-close--topright"
+          type="button"
+          aria-label={tCommon('action.close')}
+          onClick={onClose}
+        >
+          {'\u00D7'}
+        </button>
         <div className="dialog-header">
           <h2 id="seedphrase-view-title" className="dialog-title">
             {t('seedPhrase.title')}

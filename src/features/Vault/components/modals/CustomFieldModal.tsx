@@ -25,6 +25,9 @@ export const CustomFieldModal: React.FC<CustomFieldModalProps> = ({
   return (
     <div className="dialog-backdrop dialog-backdrop--inner">
       <div className="dialog customfield-dialog" role="dialog" aria-modal="true" aria-labelledby="customfield-title">
+        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
+          {'\u00D7'}
+        </button>
         <div className="dialog-header">
           <h2 id="customfield-title" className="dialog-title">
             {t('customFields.modalTitle')}
