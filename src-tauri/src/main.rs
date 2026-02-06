@@ -156,6 +156,8 @@ fn main() {
             list_folders,
             list_vaults,
             create_vault,
+            rename_vault,
+            delete_vault,
             set_active_vault,
             create_folder,
             rename_folder,

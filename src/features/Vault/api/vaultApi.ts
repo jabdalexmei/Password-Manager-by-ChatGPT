@@ -32,6 +32,14 @@ export async function createVault(name: string): Promise<BackendVault> {
   return invoke('create_vault', { name });
 }
 
+export async function renameVault(id: string, name: string): Promise<boolean> {
+  return invoke('rename_vault', { id, name });
+}
+
+export async function deleteVault(id: string): Promise<boolean> {
+  return invoke('delete_vault', { id });
+}
+
 export async function setActiveVault(id: string): Promise<boolean> {
   return invoke('set_active_vault', { id });
 }

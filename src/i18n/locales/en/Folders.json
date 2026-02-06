@@ -12,6 +12,8 @@
   "nav.deleted": "Deleted",
   "action.addFolder": "Add folder",
   "action.addVault": "Add vault",
+  "action.renameVault": "Rename vault",
+  "action.deleteVault": "Delete vault",
   "action.addSubfolder": "Add subfolder",
   "action.addBankCard": "Add bank card",
   "action.expandFolder": "Expand folder",
@@ -33,6 +35,12 @@
   "dialog.renameFolder.title": "Rename folder",
   "dialog.renameFolder.label": "Name",
   "dialog.renameFolder.placeholder": "Folder name",
+  "dialog.renameVault.title": "Rename vault",
+  "dialog.renameVault.label": "Name",
+  "dialog.renameVault.placeholder": "Vault name",
+  "dialog.deleteVault.title": "Delete vault",
+  "dialog.deleteVault.description": "Delete vault \"{{name}}\" and all its data?",
+  "dialog.deleteVault.confirm": "Delete vault",
   "validation.folderNameRequired": "Folder name is required",
   "validation.vaultNameRequired": "Vault name is required"
 }

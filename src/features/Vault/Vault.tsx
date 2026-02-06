@@ -133,8 +133,6 @@ export default function Vault({
     async (vaultId: string) => {
       const changed = await vault.selectVault(vaultId);
       if (!changed) return;
-      setSelectedCategory('all_items');
-      setActiveDetailsKind('data');
       vault.selectCard(null);
       bankCards.selectCard(null);
     },
@@ -147,12 +145,12 @@ export default function Vault({
       if (!created) return created;
       const changed = await vault.selectVault(created.id);
       if (changed) {
-        setSelectedCategory('all_items');
-        setActiveDetailsKind('data');
+        vault.selectCard(null);
+        bankCards.selectCard(null);
       }
       return created;
     },
-    [vault.createVault, vault.selectVault]
+    [bankCards.selectCard, vault.createVault, vault.selectCard, vault.selectVault]
   );
 
   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
@@ -454,6 +452,8 @@ export default function Vault({
             multiplyVaultsEnabled={Boolean(vault.settings?.multiply_vaults_enabled)}
             onSelectVault={(vaultId) => void handleSelectVault(vaultId)}
             onCreateVault={handleCreateVault}
+            onRenameVault={vault.renameVault}
+            onDeleteVault={vault.deleteVault}
             selectedCategory={selectedCategory}
             onSelectCategory={handleSelectCategory}
             onAddBankCard={handleAddBankCard}

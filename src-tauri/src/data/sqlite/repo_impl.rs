@@ -527,6 +527,79 @@ pub fn create_vault(state: &Arc<AppState>, profile_id: &str, name: &str) -> Resu
     })
 }
 
+pub fn rename_vault(state: &Arc<AppState>, profile_id: &str, id: &str, name: &str) -> Result<bool> {
+    with_connection(state, profile_id, |conn| {
+        let vault = get_vault_by_id_conn(conn, id)?;
+        if vault.is_default {
+            return Err(ErrorCodeString::new("VAULT_DEFAULT_IMMUTABLE"));
+        }
+
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(ErrorCodeString::new("VAULT_NAME_REQUIRED"));
+        }
+
+        let rows = conn
+            .execute(
+                "UPDATE vaults SET name = ?1, updated_at = ?2 WHERE id = ?3",
+                params![trimmed, Utc::now().to_rfc3339(), id],
+            )
+            .map_err(map_vault_constraint_error)?;
+        if rows == 0 {
+            return Err(ErrorCodeString::new("VAULT_NOT_FOUND"));
+        }
+        Ok(true)
+    })
+}
+
+pub fn delete_vault(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
+    with_connection(state, profile_id, |conn| {
+        let vault = get_vault_by_id_conn(conn, id)?;
+        if vault.is_default {
+            return Err(ErrorCodeString::new("VAULT_DEFAULT_IMMUTABLE"));
+        }
+
+        conn.execute("BEGIN IMMEDIATE", [])
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        let result: Result<()> = (|| {
+            conn.execute(
+                "DELETE FROM attachments WHERE datacard_id IN (SELECT id FROM datacards WHERE vault_id = ?1)",
+                params![id],
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            conn.execute(
+                "DELETE FROM datacard_password_history WHERE datacard_id IN (SELECT id FROM datacards WHERE vault_id = ?1)",
+                params![id],
+            )
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            conn.execute("DELETE FROM datacards WHERE vault_id = ?1", params![id])
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            conn.execute("DELETE FROM bank_cards WHERE vault_id = ?1", params![id])
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            conn.execute("DELETE FROM folders WHERE vault_id = ?1", params![id])
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            let rows = conn
+                .execute("DELETE FROM vaults WHERE id = ?1", params![id])
+                .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+            if rows == 0 {
+                return Err(ErrorCodeString::new("VAULT_NOT_FOUND"));
+            }
+            Ok(())
+        })();
+
+        if let Err(err) = result {
+            let _ = conn.execute("ROLLBACK", []);
+            return Err(err);
+        }
+
+        conn.execute("COMMIT", [])
+            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+
+        Ok(true)
+    })
+}
+
 pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folder>> {
     with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
         let sql =

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createVault,
+  deleteVault,
   createDataCard,
   createFolder,
   addAttachmentsViaDialog,
@@ -25,6 +26,7 @@ import {
   setDataCardArchived,
   searchDataCards,
   updateDataCard,
+  renameVault,
 } from '../api/vaultApi';
 import { clipboardClearAll, lockVault } from '../../../shared/lib/tauri';
 import {
@@ -139,7 +141,7 @@ export function useVault(profileId: string, onLocked: () => void) {
     setCards([]);
     setCardDetailsById({});
     setDeletedCards([]);
-    setSelectedNav('all');
+    setSelectedNav((prev) => (typeof prev === 'object' ? 'all' : prev));
     setSelectedCardId(null);
     setTrashLoaded(false);
     setFilters({
@@ -421,6 +423,42 @@ export function useVault(profileId: string, onLocked: () => void) {
       }
     },
     [handleError]
+  );
+
+  const renameVaultAction = useCallback(
+    async (id: string, name: string) => {
+      try {
+        await renameVault(id, name);
+        setVaults((prev) =>
+          sortVaultItems(prev.map((vaultItem) => (vaultItem.id === id ? { ...vaultItem, name } : vaultItem)))
+        );
+        return true;
+      } catch (err) {
+        handleError(err);
+        return false;
+      }
+    },
+    [handleError]
+  );
+
+  const deleteVaultAction = useCallback(
+    async (id: string) => {
+      try {
+        await deleteVault(id);
+        setVaults((prev) => prev.filter((vaultItem) => vaultItem.id !== id));
+
+        if (id === activeVaultId) {
+          setActiveVaultId(DEFAULT_ACTIVE_VAULT_ID);
+          setSettings((prev) => (prev ? { ...prev, active_vault_id: DEFAULT_ACTIVE_VAULT_ID } : prev));
+        }
+
+        return true;
+      } catch (err) {
+        handleError(err);
+        return false;
+      }
+    },
+    [activeVaultId, handleError]
   );
 
   const selectVaultAction = useCallback(
@@ -976,6 +1014,8 @@ export function useVault(profileId: string, onLocked: () => void) {
     selectNav,
     selectCard,
     createVault: createVaultAction,
+    renameVault: renameVaultAction,
+    deleteVault: deleteVaultAction,
     selectVault: selectVaultAction,
     createFolder: createFolderAction,
     renameFolder: renameFolderAction,

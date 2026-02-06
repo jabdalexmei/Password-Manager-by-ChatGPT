@@ -106,6 +106,8 @@ export function BankCardsBody({
           multiplyVaultsEnabled={false}
           onSelectVault={() => undefined}
           onCreateVault={() => null}
+          onRenameVault={() => undefined}
+          onDeleteVault={() => undefined}
           selectedCategory={selectedCategory}
           onSelectCategory={onSelectCategory}
           onAddBankCard={viewModel.openCreateModal}

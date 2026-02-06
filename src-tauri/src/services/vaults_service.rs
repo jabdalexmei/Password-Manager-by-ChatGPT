@@ -30,6 +30,51 @@ pub fn create_vault(name: String, state: &Arc<AppState>) -> Result<Vault> {
     Ok(created)
 }
 
+pub fn rename_vault(id: String, name: String, state: &Arc<AppState>) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let storage_paths = state.get_storage_paths()?;
+    let settings = settings_service::get_settings(&storage_paths, &profile_id)?;
+    if !settings.multiply_vaults_enabled {
+        return Err(ErrorCodeString::new("MULTIPLY_VAULTS_DISABLED"));
+    }
+
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(ErrorCodeString::new("VAULT_NAME_REQUIRED"));
+    }
+
+    let updated = repo_impl::rename_vault(state, &profile_id, &id, trimmed)?;
+    if updated {
+        security_service::request_persist_active_vault(state.clone());
+    }
+    Ok(updated)
+}
+
+pub fn delete_vault(id: String, state: &Arc<AppState>) -> Result<bool> {
+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+    let storage_paths = state.get_storage_paths()?;
+    let settings = settings_service::get_settings(&storage_paths, &profile_id)?;
+    if !settings.multiply_vaults_enabled {
+        return Err(ErrorCodeString::new("MULTIPLY_VAULTS_DISABLED"));
+    }
+
+    let deleted = repo_impl::delete_vault(state, &profile_id, &id)?;
+    if deleted {
+        if settings.active_vault_id == id {
+            let mut next_settings = settings;
+            next_settings.active_vault_id = settings_service::DEFAULT_VAULT_ID.to_string();
+            let updated = settings_service::update_settings(&storage_paths, next_settings.clone(), &profile_id)?;
+            if updated {
+                if let Ok(mut active_vault_id) = state.active_vault_id.lock() {
+                    *active_vault_id = Some(next_settings.active_vault_id);
+                }
+            }
+        }
+        security_service::request_persist_active_vault(state.clone());
+    }
+    Ok(deleted)
+}
+
 pub fn set_active_vault(id: String, state: &Arc<AppState>) -> Result<bool> {
     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
     let storage_paths = state.get_storage_paths()?;

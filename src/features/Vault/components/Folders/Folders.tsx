@@ -3,6 +3,7 @@ import { Folder, VaultItem } from '../../types/ui';
 import { SelectedNav } from '../../hooks/useVault';
 import { useTranslation } from '../../../../shared/lib/i18n';
 import { FolderDialogState } from './useFolders';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 
 type Counts = {
   all: number;
@@ -20,6 +21,8 @@ export type FolderListProps = {
   multiplyVaultsEnabled: boolean;
   onSelectVault: (vaultId: string) => void | Promise<void>;
   onCreateVault: (name: string) => Promise<VaultItem | void | null> | VaultItem | void | null;
+  onRenameVault: (id: string, name: string) => void | Promise<void>;
+  onDeleteVault: (id: string) => void | Promise<void>;
   selectedCategory: VaultCategory;
   onSelectCategory: (category: VaultCategory) => void;
   onAddBankCard: () => void;
@@ -97,6 +100,8 @@ export function Folders({
   multiplyVaultsEnabled,
   onSelectVault,
   onCreateVault,
+  onRenameVault,
+  onDeleteVault,
   selectedCategory,
   onSelectCategory,
   onAddBankCard,
@@ -115,12 +120,20 @@ export function Folders({
   const vaultNameInputRef = useRef<HTMLInputElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const renameVaultInputRef = useRef<HTMLInputElement | null>(null);
   const [contextMenu, setContextMenu] = useState<{ folderId: string; x: number; y: number } | null>(null);
   const [categoryMenu, setCategoryMenu] = useState<{ x: number; y: number } | null>(null);
+  const [vaultContextMenu, setVaultContextMenu] = useState<{ vaultId: string; x: number; y: number } | null>(null);
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [renameVaultId, setRenameVaultId] = useState<string | null>(null);
+  const [renameVaultName, setRenameVaultName] = useState('');
+  const [renameVaultError, setRenameVaultError] = useState<string | null>(null);
+  const [isRenamingVault, setIsRenamingVault] = useState(false);
+  const [deleteVaultTarget, setDeleteVaultTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingVault, setIsDeletingVault] = useState(false);
   const [isCreateVaultOpen, setCreateVaultOpen] = useState(false);
   const [vaultName, setVaultName] = useState('');
   const [vaultError, setVaultError] = useState<string | null>(null);
@@ -148,6 +161,12 @@ export function Folders({
   }, [renameTargetId]);
 
   useEffect(() => {
+    if (renameVaultId && renameVaultInputRef.current) {
+      renameVaultInputRef.current.focus();
+    }
+  }, [renameVaultId]);
+
+  useEffect(() => {
     // Close rename dialog when opening create folder dialog to avoid overlapping modals
     if (dialogState.isCreateOpen && renameTargetId) {
       closeRenameDialog();
@@ -171,18 +190,19 @@ export function Folders({
   }, [userFolders]);
 
   useEffect(() => {
-    if (!contextMenu && !categoryMenu) return;
+    if (!contextMenu && !categoryMenu && !vaultContextMenu) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setContextMenu(null);
         setCategoryMenu(null);
+        setVaultContextMenu(null);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [categoryMenu, contextMenu]);
+  }, [categoryMenu, contextMenu, vaultContextMenu]);
 
   const openCreateVaultDialog = () => {
     setVaultName('');
@@ -366,6 +386,7 @@ export function Folders({
 
   const closeContextMenu = () => setContextMenu(null);
   const closeCategoryMenu = () => setCategoryMenu(null);
+  const closeVaultContextMenu = () => setVaultContextMenu(null);
 
   const openRenameDialog = (folderId: string) => {
     const folder = folders.find((item) => item.id === folderId);
@@ -384,6 +405,23 @@ export function Folders({
     setIsRenaming(false);
   };
 
+  const openRenameVaultDialog = (vaultId: string) => {
+    const vault = vaults.find((item) => item.id === vaultId);
+    if (!vault) return;
+    setVaultContextMenu(null);
+    setRenameVaultId(vault.id);
+    setRenameVaultName(vault.name);
+    setRenameVaultError(null);
+    setIsRenamingVault(false);
+  };
+
+  const closeRenameVaultDialog = () => {
+    setRenameVaultId(null);
+    setRenameVaultName('');
+    setRenameVaultError(null);
+    setIsRenamingVault(false);
+  };
+
   const submitRename = async () => {
     if (!renameTargetId || isRenaming) return;
     const trimmed = renameName.trim();
@@ -398,6 +436,23 @@ export function Folders({
       closeRenameDialog();
     } finally {
       setIsRenaming(false);
+    }
+  };
+
+  const submitRenameVault = async () => {
+    if (!renameVaultId || isRenamingVault) return;
+    const trimmed = renameVaultName.trim();
+    if (!trimmed) {
+      setRenameVaultError(t('validation.vaultNameRequired'));
+      return;
+    }
+
+    setIsRenamingVault(true);
+    try {
+      await onRenameVault(renameVaultId, trimmed);
+      closeRenameVaultDialog();
+    } finally {
+      setIsRenamingVault(false);
     }
   };
 
@@ -464,9 +519,82 @@ export function Folders({
     );
   };
 
+  const renderRenameVaultDialog = () => {
+    if (!renameVaultId) return null;
+
+    const handleSubmit = (event: React.FormEvent) => {
+      event.preventDefault();
+      void submitRenameVault();
+    };
+
+    return (
+      <div
+        className="dialog-backdrop"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            closeRenameVaultDialog();
+          }
+        }}
+      >
+        <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-vault-title">
+          <button
+            className="dialog-close dialog-close--topright"
+            type="button"
+            aria-label={tCommon('action.close')}
+            onClick={closeRenameVaultDialog}
+          >
+            {'\u00D7'}
+          </button>
+          <div className="dialog-header">
+            <h2 id="rename-vault-title" className="dialog-title">
+              {t('dialog.renameVault.title')}
+            </h2>
+          </div>
+
+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
+            <div className="form-field">
+              <label className="form-label" htmlFor="rename-vault-name">
+                {t('dialog.renameVault.label')}
+              </label>
+              <input
+                id="rename-vault-name"
+                className="input"
+                autoComplete="off"
+                ref={renameVaultInputRef}
+                value={renameVaultName}
+                onChange={(e) => {
+                  setRenameVaultName(e.target.value);
+                  if (renameVaultError) setRenameVaultError(null);
+                }}
+                placeholder={t('dialog.renameVault.placeholder')}
+              />
+              {renameVaultError && <div className="form-error">{renameVaultError}</div>}
+            </div>
+
+            <div className="dialog-footer">
+              <button className="btn btn-secondary" type="button" onClick={closeRenameVaultDialog} disabled={isRenamingVault}>
+                {tCommon('action.cancel')}
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={isRenamingVault}>
+                {t('action.rename')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   const handleDeleteFromMenu = (folderId: string) => {
     closeContextMenu();
     onDeleteFolder(folderId);
+  };
+
+  const handleDeleteVaultFromMenu = (vaultId: string) => {
+    const vault = vaults.find((item) => item.id === vaultId);
+    if (!vault) return;
+    closeVaultContextMenu();
+    setDeleteVaultTarget({ id: vault.id, name: vault.name });
   };
 
   const handleCreateSubfolderFromMenu = (folderId: string) => {
@@ -520,6 +648,8 @@ export function Folders({
             onClick={() => onSelectNav(isActive ? 'all' : { folderId: folder.id })}
             onContextMenu={(event) => {
               event.preventDefault();
+              setCategoryMenu(null);
+              setVaultContextMenu(null);
               setContextMenu({ folderId: folder.id, x: event.clientX, y: event.clientY });
             }}
           >
@@ -547,11 +677,19 @@ export function Folders({
               const isActive = activeVaultId === vault.id;
               return (
                 <li key={vault.id} className={isActive ? 'active' : ''}>
-                  <button className="vault-folder" type="button" onClick={() => void onSelectVault(vault.id)}>
-                    <span className="folder-name">
-                      {vault.name}
-                      {vault.isDefault ? <span className="folder-badge">({t('vaults.default')})</span> : null}
-                    </span>
+                  <button
+                    className="vault-folder"
+                    type="button"
+                    onClick={() => void onSelectVault(vault.id)}
+                    onContextMenu={(event) => {
+                      if (vault.isDefault) return;
+                      event.preventDefault();
+                      setContextMenu(null);
+                      setCategoryMenu(null);
+                      setVaultContextMenu({ vaultId: vault.id, x: event.clientX, y: event.clientY });
+                    }}
+                  >
+                    <span className="folder-name">{vault.name}</span>
                   </button>
                 </li>
               );
@@ -582,6 +720,8 @@ export function Folders({
             onClick={() => onSelectCategory('bank_cards')}
             onContextMenu={(event) => {
               event.preventDefault();
+              setContextMenu(null);
+              setVaultContextMenu(null);
               setCategoryMenu({ x: event.clientX, y: event.clientY });
             }}
           >
@@ -624,6 +764,37 @@ export function Folders({
       {renderCreateVaultDialog()}
       {renderCreateDialog()}
       {renderRenameDialog()}
+      {renderRenameVaultDialog()}
+
+      {vaultContextMenu && (
+        <div
+          className="vault-context-backdrop"
+          onClick={closeVaultContextMenu}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div
+            className="vault-context-menu"
+            role="menu"
+            style={{ top: vaultContextMenu.y, left: vaultContextMenu.x }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="vault-context-item"
+              onClick={() => openRenameVaultDialog(vaultContextMenu.vaultId)}
+            >
+              {t('action.renameVault')}
+            </button>
+            <button
+              type="button"
+              className="vault-context-item"
+              onClick={() => handleDeleteVaultFromMenu(vaultContextMenu.vaultId)}
+            >
+              {t('action.deleteVault')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {contextMenu && (
         <div className="vault-context-backdrop" onClick={closeContextMenu} onContextMenu={(event) => event.preventDefault()}>
@@ -675,6 +846,30 @@ export function Folders({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteVaultTarget !== null}
+        title={t('dialog.deleteVault.title')}
+        description={t('dialog.deleteVault.description', { name: deleteVaultTarget?.name ?? '' })}
+        confirmLabel={t('dialog.deleteVault.confirm')}
+        cancelLabel={tCommon('action.cancel')}
+        confirmDisabled={isDeletingVault}
+        cancelDisabled={isDeletingVault}
+        onCancel={() => {
+          if (isDeletingVault) return;
+          setDeleteVaultTarget(null);
+        }}
+        onConfirm={async () => {
+          if (!deleteVaultTarget) return;
+          setIsDeletingVault(true);
+          try {
+            await onDeleteVault(deleteVaultTarget.id);
+          } finally {
+            setIsDeletingVault(false);
+            setDeleteVaultTarget(null);
+          }
+        }}
+      />
     </div>
   );
 }
