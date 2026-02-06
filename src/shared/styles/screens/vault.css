@@ -90,7 +90,7 @@
 
 .vault-body {
   display: grid;
-  grid-template-columns: 300px 1.2fr 1.3fr;
+  grid-template-columns: 330px 1.2fr 1.3fr;
   flex: 1;
   min-height: 0;
 }
@@ -102,8 +102,9 @@
 .vault-sidebar {
   background: var(--color-surface-2);
   border-right: 1px solid var(--color-border);
-  padding: 16px;
+  padding: 31px;
   overflow: auto;
+  --sidebar-section-gap: 16px;
 }
 
 .vault-sidebar-controls {
@@ -264,12 +265,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: var(--sidebar-section-gap);
 }
 
 .vault-sidebar-actions--vaults {
   grid-template-columns: 1fr;
-  margin-top: 10px;
+  margin-top: var(--sidebar-section-gap);
 }
 
 .vault-sidebar-actions > * {
@@ -333,7 +334,6 @@
 .vault-folder-list {
   list-style: none;
   padding: 0;
-  padding-left: 6px;
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -341,10 +341,13 @@
 }
 
 .vault-folder-node {
-  display: grid;
-  grid-template-columns: 24px 1fr;
+  --folder-indent: 0px;
+  --folder-toggle-offset: 30px;
+
+  position: relative;
+  display: flex;
   align-items: center;
-  column-gap: 6px;
+  padding-left: var(--folder-indent);
 }
 
 .vault-folder-tree-children {
@@ -369,6 +372,10 @@
   align-items: center;
   justify-content: center;
   padding: 0;
+  position: absolute;
+  left: calc(var(--folder-indent) - var(--folder-toggle-offset));
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .vault-folder-toggle:hover,
@@ -383,9 +390,15 @@
   flex: 0 0 24px;
   width: 24px;
   height: 24px;
+  position: absolute;
+  left: calc(var(--folder-indent) - var(--folder-toggle-offset));
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  opacity: 0;
 }
 .vault-folder-list + .vault-sidebar-title {
-  margin-top: 8px;
+  margin-top: var(--sidebar-section-gap);
 }
 .vault-context-backdrop {
   position: fixed;

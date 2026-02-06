@@ -628,7 +628,10 @@ export function Folders({
 
     return (
       <li key={folder.id} className={isActive ? 'active' : ''}>
-        <div className="vault-folder-node" style={{ paddingLeft: `${depth * 14}px` }}>
+        <div
+          className="vault-folder-node"
+          style={{ '--folder-indent': `${depth * 18}px` } as React.CSSProperties}
+        >
           {hasChildren ? (
             <button
               type="button"
