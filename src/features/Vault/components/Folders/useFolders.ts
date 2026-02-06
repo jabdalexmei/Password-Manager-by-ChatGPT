@@ -34,9 +34,13 @@ export function useFolders({ onCreateFolder }: UseFoldersParams): FolderDialogSt
   }, []);
 
   const closeCreateFolder = useCallback(() => {
+    // Reset dialog state on cancel to avoid leaving stale data behind.
     setIsSubmitting(false);
     setCreateParentId(null);
     setCreateOpen(false);
+    // Clear form fields and errors when closing the dialog
+    setName('');
+    setError(null);
   }, []);
 
   const submitCreate = useCallback(async () => {
