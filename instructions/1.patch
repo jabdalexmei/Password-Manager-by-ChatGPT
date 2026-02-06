@@ -1,2736 +1,640 @@
-diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
-index 9fb682b..9eb09c7 100644
---- a/src/features/Vault/Vault.tsx
-+++ b/src/features/Vault/Vault.tsx
-@@ -57,7 +57,7 @@ export default function Vault({
-   onProfileUpdated,
- }: VaultProps) {
-   const vault = useVault(profileId, onLocked);
--  const bankCards = useBankCards(profileId, onLocked, vault.folders);
-+  const bankCards = useBankCards(profileId, onLocked, vault.folders, vault.activeVaultId);
-   const { t: tDataCards } = useTranslation('DataCards');
-   const { t: tBankCards } = useTranslation('BankCards');
-   const { t: tFolders } = useTranslation('Folders');
-@@ -127,7 +127,33 @@ export default function Vault({
-     onPurgeAllTrash: bankCards.purgeAllTrash,
-   });
- 
--  const folderDialogs = useFolders({ onCreateFolder: (name) => vault.createFolder(name, null) });
-+  const folderDialogs = useFolders({ onCreateFolder: (name, parentId) => vault.createFolder(name, parentId) });
-+
-+  const handleSelectVault = useCallback(
-+    async (vaultId: string) => {
-+      const changed = await vault.selectVault(vaultId);
-+      if (!changed) return;
-+      setSelectedCategory('all_items');
-+      setActiveDetailsKind('data');
-+      vault.selectCard(null);
-+      bankCards.selectCard(null);
-+    },
-+    [bankCards.selectCard, vault.selectCard, vault.selectVault]
-+  );
-+
-+  const handleCreateVault = useCallback(
-+    async (name: string) => {
-+      const created = await vault.createVault(name);
-+      if (!created) return created;
-+      const changed = await vault.selectVault(created.id);
-+      if (changed) {
-+        setSelectedCategory('all_items');
-+        setActiveDetailsKind('data');
-+      }
-+      return created;
-+    },
-+    [vault.createVault, vault.selectVault]
-+  );
- 
-   const foldersForCards = useMemo(() => vault.folders, [vault.folders]);
- 
-@@ -305,9 +331,7 @@ export default function Vault({
-   const handleNavClick = useCallback(
-     (nav: SelectedNav) => {
-       // Any Navigation selection is its own mode: it clears Category focus.
--      if (typeof nav === 'string') {
--        setSelectedCategory('all_items');
--      }
-+      setSelectedCategory('all_items');
-       void syncSelectNav(nav);
-     },
-     [syncSelectNav]
-@@ -408,11 +432,16 @@ export default function Vault({
-                 {tBankCards('label.addBankCard')}
-               </button>
-             )}
--            <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
-+            <button className="btn btn-secondary" type="button" onClick={() => folderDialogs.openCreateFolder()}>
-               {tFolders('action.addFolder')}
-             </button>
-           </div>
-           <Folders
-+            vaults={vault.vaults}
-+            activeVaultId={vault.activeVaultId}
-+            multiplyVaultsEnabled={Boolean(vault.settings?.multiply_vaults_enabled)}
-+            onSelectVault={(vaultId) => void handleSelectVault(vaultId)}
-+            onCreateVault={handleCreateVault}
-             selectedCategory={selectedCategory}
-             onSelectCategory={handleSelectCategory}
-             onAddBankCard={handleAddBankCard}
-diff --git a/src/features/Vault/api/vaultApi.ts b/src/features/Vault/api/vaultApi.ts
-index 16557ff..079989e 100644
---- a/src/features/Vault/api/vaultApi.ts
-+++ b/src/features/Vault/api/vaultApi.ts
-@@ -13,6 +13,7 @@ import {
-   BackendUpdateBankCardInput,
-   BackendUpdateDataCardInput,
-   BackendUserSettings,
-+  BackendVault,
-   BackendAttachmentPreviewPayload,
-   BackendPasswordHistoryRow,
- } from '../types/backend';
-@@ -23,6 +24,18 @@ export async function listFolders(): Promise<BackendFolder[]> {
-   return invoke('list_folders');
- }
- 
-+export async function listVaults(): Promise<BackendVault[]> {
-+  return invoke('list_vaults');
-+}
-+
-+export async function createVault(name: string): Promise<BackendVault> {
-+  return invoke('create_vault', { name });
-+}
-+
-+export async function setActiveVault(id: string): Promise<boolean> {
-+  return invoke('set_active_vault', { id });
-+}
-+
- export async function createFolder(input: { name: string; parent_id: string | null }): Promise<BackendFolder> {
-   return invoke('create_folder', { input });
- }
-diff --git a/src/features/Vault/components/BankCards/BankCardsBody.tsx b/src/features/Vault/components/BankCards/BankCardsBody.tsx
-index 65156a7..196f249 100644
---- a/src/features/Vault/components/BankCards/BankCardsBody.tsx
-+++ b/src/features/Vault/components/BankCards/BankCardsBody.tsx
-@@ -41,7 +41,7 @@ export function BankCardsBody({
-   onRenameFolder,
-   registerCommands,
- }: BankCardsBodyProps) {
--  const bankCards = useBankCards(profileId, onLocked, folders);
-+  const bankCards = useBankCards(profileId, onLocked, folders, 'default');
- 
-   const viewModel = useBankCardsViewModel({
-     cards: bankCards.visibleCards,
-@@ -95,12 +95,17 @@ export function BankCardsBody({
-           <button className="btn btn-primary" type="button" onClick={viewModel.openCreateModal}>
-             {tBankCards('label.addBankCard')}
-           </button>
--          <button className="btn btn-secondary" type="button" onClick={folderDialogs.openCreateFolder}>
-+          <button className="btn btn-secondary" type="button" onClick={() => folderDialogs.openCreateFolder()}>
-             {tFolders('action.addFolder')}
-           </button>
-         </div>
- 
-         <VaultFolders
-+          vaults={[]}
-+          activeVaultId="default"
-+          multiplyVaultsEnabled={false}
-+          onSelectVault={() => undefined}
-+          onCreateVault={() => null}
-           selectedCategory={selectedCategory}
-           onSelectCategory={onSelectCategory}
-           onAddBankCard={viewModel.openCreateModal}
-diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
-index ea98f92..fd82040 100644
---- a/src/features/Vault/components/Folders/Folders.tsx
-+++ b/src/features/Vault/components/Folders/Folders.tsx
-@@ -1,5 +1,5 @@
--import React, { useEffect, useRef, useState } from 'react';
--import { Folder } from '../../types/ui';
-+import React, { useEffect, useMemo, useRef, useState } from 'react';
-+import { Folder, VaultItem } from '../../types/ui';
- import { SelectedNav } from '../../hooks/useVault';
- import { useTranslation } from '../../../../shared/lib/i18n';
- import { FolderDialogState } from './useFolders';
-@@ -15,6 +15,11 @@ type Counts = {
- export type VaultCategory = 'data_cards' | 'bank_cards' | 'all_items';
- 
- export type FolderListProps = {
-+  vaults: VaultItem[];
-+  activeVaultId: string;
-+  multiplyVaultsEnabled: boolean;
-+  onSelectVault: (vaultId: string) => void | Promise<void>;
-+  onCreateVault: (name: string) => Promise<VaultItem | void | null> | VaultItem | void | null;
-   selectedCategory: VaultCategory;
-   onSelectCategory: (category: VaultCategory) => void;
-   onAddBankCard: () => void;
-@@ -29,7 +34,70 @@ export type FolderListProps = {
-   onRenameFolder: (id: string, name: string) => void | Promise<void>;
- };
- 
-+type FolderTreeNode = {
-+  folder: Folder;
-+  children: FolderTreeNode[];
-+};
-+
-+const compareFoldersForTree = (a: Folder, b: Folder) => {
-+  const byName = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-+  if (byName !== 0) return byName;
-+  return a.id.localeCompare(b.id, undefined, { sensitivity: 'base' });
-+};
-+
-+const buildFolderTree = (folders: Folder[]): FolderTreeNode[] => {
-+  const sorted = [...folders].sort(compareFoldersForTree);
-+  const nodesById = new Map<string, FolderTreeNode>();
-+
-+  for (const folder of sorted) {
-+    nodesById.set(folder.id, { folder, children: [] });
-+  }
-+
-+  const roots: FolderTreeNode[] = [];
-+  for (const folder of sorted) {
-+    const node = nodesById.get(folder.id);
-+    if (!node) continue;
-+
-+    const parentId = folder.parentId;
-+    if (parentId && parentId !== folder.id) {
-+      const parentNode = nodesById.get(parentId);
-+      if (parentNode) {
-+        parentNode.children.push(node);
-+        continue;
-+      }
-+    }
-+
-+    roots.push(node);
-+  }
-+
-+  // Keep cyclic or broken items visible as roots instead of dropping them.
-+  const seen = new Set<string>();
-+  const visit = (node: FolderTreeNode) => {
-+    if (seen.has(node.folder.id)) return;
-+    seen.add(node.folder.id);
-+    for (const child of node.children) {
-+      visit(child);
-+    }
-+  };
-+  for (const node of roots) {
-+    visit(node);
-+  }
-+
-+  for (const folder of sorted) {
-+    if (!seen.has(folder.id)) {
-+      roots.push({ folder, children: [] });
-+    }
-+  }
-+
-+  return roots;
-+};
-+
- export function Folders({
-+  vaults,
-+  activeVaultId,
-+  multiplyVaultsEnabled,
-+  onSelectVault,
-+  onCreateVault,
-   selectedCategory,
-   onSelectCategory,
-   onAddBankCard,
-@@ -45,6 +113,7 @@ export function Folders({
- }: FolderListProps) {
-   const { t } = useTranslation('Folders');
-   const { t: tCommon } = useTranslation('Common');
-+  const vaultNameInputRef = useRef<HTMLInputElement | null>(null);
-   const nameInputRef = useRef<HTMLInputElement | null>(null);
-   const renameInputRef = useRef<HTMLInputElement | null>(null);
-   const [contextMenu, setContextMenu] = useState<{ folderId: string; x: number; y: number } | null>(null);
-@@ -53,6 +122,19 @@ export function Folders({
-   const [renameName, setRenameName] = useState('');
-   const [renameError, setRenameError] = useState<string | null>(null);
-   const [isRenaming, setIsRenaming] = useState(false);
-+  const [isCreateVaultOpen, setCreateVaultOpen] = useState(false);
-+  const [vaultName, setVaultName] = useState('');
-+  const [vaultError, setVaultError] = useState<string | null>(null);
-+  const [isCreatingVault, setIsCreatingVault] = useState(false);
-+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
-+  const userFolders = useMemo(() => folders.filter((folder) => !folder.isSystem), [folders]);
-+  const folderTree = useMemo(() => buildFolderTree(userFolders), [userFolders]);
-+
-+  useEffect(() => {
-+    if (isCreateVaultOpen && vaultNameInputRef.current) {
-+      vaultNameInputRef.current.focus();
-+    }
-+  }, [isCreateVaultOpen]);
- 
-   useEffect(() => {
-     if (dialogState.isCreateOpen && nameInputRef.current) {
-@@ -65,7 +147,7 @@ export function Folders({
-       renameInputRef.current.focus();
-     }
-   }, [renameTargetId]);
--  
-+
-   useEffect(() => {
-     // Close rename dialog when opening create folder dialog to avoid overlapping modals
-     if (dialogState.isCreateOpen && renameTargetId) {
-@@ -73,6 +155,22 @@ export function Folders({
-     }
-   }, [dialogState.isCreateOpen, renameTargetId]);
- 
-+  useEffect(() => {
-+    const validIds = new Set(userFolders.map((folder) => folder.id));
-+    setCollapsedFolderIds((prev) => {
-+      let changed = false;
-+      const next = new Set<string>();
-+      for (const id of prev) {
-+        if (validIds.has(id)) {
-+          next.add(id);
-+        } else {
-+          changed = true;
-+        }
-+      }
-+      return changed ? next : prev;
-+    });
-+  }, [userFolders]);
-+
-   useEffect(() => {
-     if (!contextMenu && !categoryMenu) return;
- 
-@@ -87,6 +185,91 @@ export function Folders({
-     return () => window.removeEventListener('keydown', handleKeyDown);
-   }, [categoryMenu, contextMenu]);
- 
-+  const openCreateVaultDialog = () => {
-+    setVaultName('');
-+    setVaultError(null);
-+    setIsCreatingVault(false);
-+    setCreateVaultOpen(true);
-+  };
-+
-+  const closeCreateVaultDialog = () => {
-+    if (isCreatingVault) return;
-+    setCreateVaultOpen(false);
-+    setVaultName('');
-+    setVaultError(null);
-+  };
-+
-+  const submitCreateVault = async () => {
-+    if (isCreatingVault) return;
-+    const trimmed = vaultName.trim();
-+    if (!trimmed) {
-+      setVaultError(t('validation.vaultNameRequired'));
-+      return;
-+    }
-+
-+    setIsCreatingVault(true);
-+    try {
-+      const created = await onCreateVault(trimmed);
-+      if (created === null) return;
-+      setCreateVaultOpen(false);
-+      setVaultName('');
-+      setVaultError(null);
-+    } finally {
-+      setIsCreatingVault(false);
-+    }
-+  };
-+
-+  const renderCreateVaultDialog = () => {
-+    if (!isCreateVaultOpen) return null;
-+
-+    const handleSubmit = (event: React.FormEvent) => {
-+      event.preventDefault();
-+      void submitCreateVault();
-+    };
-+
-+    return (
-+      <div className="dialog-backdrop">
-+        <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="create-vault-title">
-+          <div className="dialog-header">
-+            <h2 id="create-vault-title" className="dialog-title">
-+              {t('dialog.newVault.title')}
-+            </h2>
-+          </div>
-+
-+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
-+            <div className="form-field">
-+              <label className="form-label" htmlFor="vault-name">
-+                {t('dialog.newVault.label')}
-+              </label>
-+              <input
-+                id="vault-name"
-+                className="input"
-+                autoComplete="off"
-+                ref={vaultNameInputRef}
-+                value={vaultName}
-+                onChange={(e) => {
-+                  setVaultName(e.target.value);
-+                  if (vaultError) setVaultError(null);
-+                }}
-+                placeholder={t('dialog.newVault.placeholder')}
-+              />
-+              {vaultError && <div className="form-error">{vaultError}</div>}
-+            </div>
-+
-+            <div className="dialog-footer">
-+              <button className="btn btn-secondary" type="button" onClick={closeCreateVaultDialog}>
-+                {tCommon('action.cancel')}
-+              </button>
-+              <button className="btn btn-primary" type="submit" disabled={isCreatingVault}>
-+                {t('action.create')}
-+              </button>
-+            </div>
-+          </form>
-+        </div>
-+      </div>
-+    );
-+  };
-+
-   const renderCreateDialog = () => {
-     if (!dialogState.isCreateOpen) return null;
- 
-@@ -109,6 +292,9 @@ export function Folders({
-               <label className="form-label" htmlFor="folder-name">
-                 {t('dialog.newFolder.label')}
-               </label>
-+              {dialogState.parentName && (
-+                <div className="form-label">{t('dialog.newFolder.parent', { name: dialogState.parentName })}</div>
-+              )}
-               <input
-                 id="folder-name"
-                 className="input"
-@@ -149,28 +335,6 @@ export function Folders({
-     </li>
-   );
- 
--  const renderFolder = (folder: Folder) => {
--    const isActive = selectedFolderId === folder.id;
--    const count = counts.folders[folder.id] ?? 0;
--
--    return (
--      <li key={folder.id} className={isActive ? 'active' : ''}>
--        <button
--          className="vault-folder"
--          type="button"
--          onClick={() => onSelectNav({ folderId: folder.id })}
--          onContextMenu={(event) => {
--            event.preventDefault();
--            setContextMenu({ folderId: folder.id, x: event.clientX, y: event.clientY });
--          }}
--        >
--          <span className="folder-name">{folder.name}</span>
--          <span className="folder-count">{count}</span>
--        </button>
--      </li>
--    );
--  };
--
-   const closeContextMenu = () => setContextMenu(null);
-   const closeCategoryMenu = () => setCategoryMenu(null);
- 
-@@ -261,8 +425,106 @@ export function Folders({
-     onDeleteFolder(folderId);
-   };
- 
-+  const handleCreateSubfolderFromMenu = (folderId: string) => {
-+    const folder = userFolders.find((item) => item.id === folderId);
-+    if (!folder) return;
-+    closeContextMenu();
-+    dialogState.openCreateFolder(folder.id, folder.name);
-+  };
-+
-+  const toggleFolderCollapsed = (folderId: string) => {
-+    setCollapsedFolderIds((prev) => {
-+      const next = new Set(prev);
-+      if (next.has(folderId)) {
-+        next.delete(folderId);
-+      } else {
-+        next.add(folderId);
-+      }
-+      return next;
-+    });
-+  };
-+
-+  const renderFolderNode = (node: FolderTreeNode, depth: number, ancestors: Set<string>) => {
-+    const folder = node.folder;
-+    const isActive = selectedFolderId === folder.id;
-+    const count = counts.folders[folder.id] ?? 0;
-+    const hasChildren = node.children.length > 0;
-+    const isCollapsed = collapsedFolderIds.has(folder.id);
-+    const hasCycle = ancestors.has(folder.id);
-+    const nextAncestors = new Set(ancestors);
-+    nextAncestors.add(folder.id);
-+
-+    return (
-+      <li key={folder.id} className={isActive ? 'active' : ''}>
-+        <div className="vault-folder-node" style={{ paddingLeft: `${depth * 14}px` }}>
-+          {hasChildren ? (
-+            <button
-+              type="button"
-+              className="vault-folder-toggle"
-+              aria-label={isCollapsed ? t('action.expandFolder') : t('action.collapseFolder')}
-+              onClick={() => toggleFolderCollapsed(folder.id)}
-+            >
-+              <span aria-hidden="true">{isCollapsed ? '>' : 'v'}</span>
-+            </button>
-+          ) : (
-+            <span className="vault-folder-toggle-placeholder" aria-hidden="true" />
-+          )}
-+
-+          <button
-+            className="vault-folder vault-folder--tree"
-+            type="button"
-+            onClick={() => onSelectNav(isActive ? 'all' : { folderId: folder.id })}
-+            onContextMenu={(event) => {
-+              event.preventDefault();
-+              setContextMenu({ folderId: folder.id, x: event.clientX, y: event.clientY });
-+            }}
-+          >
-+            <span className="folder-name">{folder.name}</span>
-+            <span className="folder-count">{count}</span>
-+          </button>
-+        </div>
-+
-+        {!hasCycle && hasChildren && !isCollapsed && (
-+          <ul className="vault-folder-tree-children">
-+            {node.children.map((child) => renderFolderNode(child, depth + 1, nextAncestors))}
-+          </ul>
-+        )}
-+      </li>
-+    );
-+  };
-+
-   return (
-     <div>
-+      {multiplyVaultsEnabled && (
-+        <>
-+          <div className="vault-sidebar-title">{t('vaults.title')}</div>
-+          <ul className="vault-folder-list">
-+            {vaults.map((vault) => {
-+              const isActive = activeVaultId === vault.id;
-+              return (
-+                <li key={vault.id} className={isActive ? 'active' : ''}>
-+                  <button
-+                    className="vault-folder"
-+                    type="button"
-+                    onClick={() => void onSelectVault(vault.id)}
-+                  >
-+                    <span className="folder-name">
-+                      {vault.name}
-+                      {vault.isDefault ? <span className="folder-badge">({t('vaults.default')})</span> : null}
-+                    </span>
-+                  </button>
-+                </li>
-+              );
-+            })}
-+          </ul>
-+          <div className="vault-sidebar-actions">
-+            <button className="btn btn-secondary" type="button" onClick={openCreateVaultDialog}>
-+              {t('action.addVault')}
-+            </button>
-+          </div>
-+        </>
-+      )}
-+
-       <div className="vault-sidebar-title">{t('category.title')}</div>
-       <ul className="vault-folder-list">
-         {categoryCounts && (
-@@ -316,7 +578,10 @@ export function Folders({
-         )}
-       </ul>
-       <div className="vault-sidebar-title">{t('title')}</div>
--      <ul className="vault-folder-list">{folders.filter((folder) => !folder.isSystem).map(renderFolder)}</ul>
-+      <ul className="vault-folder-list">
-+        {folderTree.map((node) => renderFolderNode(node, 0, new Set<string>()))}
-+      </ul>
-+      {renderCreateVaultDialog()}
-       {renderCreateDialog()}
-       {renderRenameDialog()}
- 
-@@ -328,6 +593,13 @@ export function Folders({
-             style={{ top: contextMenu.y, left: contextMenu.x }}
-             onClick={(event) => event.stopPropagation()}
-           >
-+            <button
-+              type="button"
-+              className="vault-context-item"
-+              onClick={() => handleCreateSubfolderFromMenu(contextMenu.folderId)}
-+            >
-+              {t('action.addSubfolder')}
-+            </button>
-             <button type="button" className="vault-context-item" onClick={() => openRenameDialog(contextMenu.folderId)}>
-               {t('action.renameFolder')}
-             </button>
 diff --git a/src/features/Vault/components/modals/SettingsModal.tsx b/src/features/Vault/components/modals/SettingsModal.tsx
-index 135fae7..d776f2f 100644
+index d776f2f..f6d96f7 100644
 --- a/src/features/Vault/components/modals/SettingsModal.tsx
 +++ b/src/features/Vault/components/modals/SettingsModal.tsx
-@@ -45,6 +45,7 @@ export function SettingsModal({
-   const [autoLockTimeoutSeconds, setAutoLockTimeoutSeconds] = useState('60');
-   const [clipboardAutoClearEnabled, setClipboardAutoClearEnabled] = useState(false);
-   const [clipboardClearTimeoutSeconds, setClipboardClearTimeoutSeconds] = useState('20');
-+  const [multiplyVaultsEnabled, setMultiplyVaultsEnabled] = useState(false);
-   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
-   const [intervalMinutes, setIntervalMinutes] = useState('60');
-   const [maxCopies, setMaxCopies] = useState('10');
-@@ -71,6 +72,7 @@ export function SettingsModal({
-     setAutoLockTimeoutSeconds(String(settings.auto_lock_timeout));
-     setClipboardAutoClearEnabled(settings.clipboard_auto_clear_enabled);
-     setClipboardClearTimeoutSeconds(String(settings.clipboard_clear_timeout_seconds));
-+    setMultiplyVaultsEnabled(settings.multiply_vaults_enabled);
-     setAutoBackupEnabled(settings.backups_enabled);
-     setIntervalMinutes(String(settings.auto_backup_interval_minutes));
+@@ -25,6 +25,8 @@ export type SettingsModalProps = {
+   onProfileUpdated?: (profile: ProfileMeta) => void;
+ };
+ 
++type SettingsSection = 'profile' | 'security' | 'vaults' | 'backups';
++
+ export function SettingsModal({
+   open,
+   settings,
+@@ -65,6 +67,7 @@ export function SettingsModal({
+ 
+   const [removePasswordConfirmOpen, setRemovePasswordConfirmOpen] = useState(false);
+   const [isRemovingPassword, setIsRemovingPassword] = useState(false);
++  const [activeSection, setActiveSection] = useState<SettingsSection>('profile');
+ 
+   useEffect(() => {
+     if (!open || !settings) return;
+@@ -78,6 +81,11 @@ export function SettingsModal({
      setMaxCopies(String(settings.backup_max_copies));
-@@ -261,6 +263,7 @@ export function SettingsModal({
-       auto_lock_timeout: lockTimeout,
-       clipboard_auto_clear_enabled: clipboardAutoClearEnabled,
-       clipboard_clear_timeout_seconds: clipTimeout,
-+      multiply_vaults_enabled: multiplyVaultsEnabled,
-       backups_enabled: autoBackupEnabled,
-       auto_backup_interval_minutes: interval,
-       backup_max_copies: max,
-@@ -440,6 +443,28 @@ export function SettingsModal({
-             </div>
-           </div>
+   }, [open, settings]);
  
-+          <h3 id="vaults-title" className="settings-modal-section-title">
-+            {tVault('settingsModal.vaultsTitle')}
-+          </h3>
-+
-+          <div role="group" aria-labelledby="vaults-title" className="settings-group">
-+            <div className="form-field settings-toggle-row">
-+              <span className="form-label settings-subheader" id="multiply-vaults-enabled-label">
-+                {tVault('settingsModal.multiplyVaults.enabled')}
-+              </span>
-+
-+              <div className="settings-toggle-row__control">
-+                {renderSwitch({
-+                  id: 'multiply-vaults-enabled-switch',
-+                  labelId: 'multiply-vaults-enabled-label',
-+                  checked: multiplyVaultsEnabled,
-+                  onToggle: () => setMultiplyVaultsEnabled((v) => !v),
-+                  disabled: busy,
-+                })}
-+              </div>
-+            </div>
-+          </div>
-+
-           <h3 id="backups-title" className="settings-modal-section-title">
-             {tVault('backup.settings.title')}
-           </h3>
-diff --git a/src/features/Vault/hooks/useBankCards.ts b/src/features/Vault/hooks/useBankCards.ts
-index ac3a86a..3d048aa 100644
---- a/src/features/Vault/hooks/useBankCards.ts
-+++ b/src/features/Vault/hooks/useBankCards.ts
-@@ -35,7 +35,12 @@ import type { BankCardPreviewField } from '../lib/bankcardPreviewFields';
- 
- export type BankCardsError = { code: string; message?: string } | null;
- 
--export function useBankCards(profileId: string, onLocked: () => void, folders: Folder[]) {
-+export function useBankCards(
-+  profileId: string,
-+  onLocked: () => void,
-+  folders: Folder[],
-+  activeVaultId: string
-+) {
-   const { show: showToast } = useToaster();
-   const { t: tCommon } = useTranslation('Common');
-   const { t: tVault } = useTranslation('Vault');
-@@ -65,7 +70,7 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
-     setSelectedNav('all');
-     setSelectedCardId(null);
-     setTrashLoaded(false);
--  }, [profileId]);
-+  }, [activeVaultId, profileId]);
- 
-   useEffect(() => {
-     const q = debouncedSearchQuery.trim();
-@@ -262,7 +267,7 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
-     getSettings()
-       .then(setSettings)
-       .catch(handleError);
--  }, [handleError, refreshActive, refreshTrash]);
-+  }, [activeVaultId, handleError, refreshActive, refreshTrash]);
- 
-   const selectNav = useCallback(
-     async (nav: SelectedNav) => {
-@@ -594,4 +599,3 @@ export function useBankCards(profileId: string, onLocked: () => void, folders: F
-     setSettings: setSettingsState,
-   };
- }
--
-diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
-index 70bc961..14d421e 100644
---- a/src/features/Vault/hooks/useVault.ts
-+++ b/src/features/Vault/hooks/useVault.ts
-@@ -1,5 +1,6 @@
- import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
- import {
-+  createVault,
-   createDataCard,
-   createFolder,
-   addAttachmentsViaDialog,
-@@ -12,6 +13,7 @@ import {
-   listDataCardSummaries,
-   listDeletedDataCardSummaries,
-   listFolders,
-+  listVaults,
-   moveDataCardToFolder,
-   purgeDataCard,
-   purgeAllDeletedDataCards,
-@@ -19,6 +21,7 @@ import {
-   restoreDataCard,
-   restoreAllDeletedDataCards,
-   setDataCardFavorite,
-+  setActiveVault,
-   setDataCardArchived,
-   searchDataCards,
-   updateDataCard,
-@@ -30,9 +33,10 @@ import {
-   mapCardToSummary,
-   mapCreateCardToBackend,
-   mapFolderFromBackend,
-+  mapVaultFromBackend,
-   mapUpdateCardToBackend,
- } from '../types/mappers';
--import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput } from '../types/ui';
-+import { CreateDataCardInput, DataCard, DataCardSummary, Folder, UpdateDataCardInput, VaultItem } from '../types/ui';
- import { BackendUserSettings } from '../types/backend';
- import { useToaster } from '../../../shared/components/Toaster';
- import { useTranslation } from '../../../shared/lib/i18n';
-@@ -52,11 +56,24 @@ export type VaultFilters = {
- 
- export type VaultError = { code: string; message?: string } | null;
- 
-+const DEFAULT_ACTIVE_VAULT_ID = 'default';
-+const vaultNameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
-+
-+const sortVaultItems = (list: VaultItem[]) =>
-+  [...list].sort((a, b) => {
-+    if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
-+    const byName = vaultNameCollator.compare(a.name, b.name);
-+    if (byName !== 0) return byName;
-+    return vaultNameCollator.compare(a.id, b.id);
-+  });
-+
- export function useVault(profileId: string, onLocked: () => void) {
-   const { show: showToast } = useToaster();
-   const { t: tCommon } = useTranslation('Common');
-   const { t: tVault } = useTranslation('Vault');
-   const initOnceRef = useRef(false);
-+  const [activeVaultId, setActiveVaultId] = useState<string>(DEFAULT_ACTIVE_VAULT_ID);
-+  const [vaults, setVaults] = useState<VaultItem[]>([]);
-   const [folders, setFolders] = useState<Folder[]>([]);
-   const [cards, setCards] = useState<DataCardSummary[]>([]);
-   const [cardDetailsById, setCardDetailsById] = useState<Record<string, DataCard>>({});
-@@ -100,6 +117,11 @@ export function useVault(profileId: string, onLocked: () => void) {
-       notes: false,
-       attachments: false,
-     });
-+  }, [activeVaultId, profileId]);
-+
 +  useEffect(() => {
-+    setVaults([]);
-+    setActiveVaultId(DEFAULT_ACTIVE_VAULT_ID);
-   }, [profileId]);
- 
++    if (!open) return;
++    setActiveSection('profile');
++  }, [open]);
++
    useEffect(() => {
-@@ -240,18 +262,37 @@ export function useVault(profileId: string, onLocked: () => void) {
-     }
-   }, [dtf, handleError, sortCardsWithSettings]);
+     if (!renameProfileOpen) return;
+     setRenameProfileValue(profileName || '');
+@@ -318,207 +326,261 @@ export function SettingsModal({
+         </DialogHeader>
  
-+  const refreshVaults = useCallback(async () => {
-+    try {
-+      const fetchedVaults = await listVaults();
-+      setVaults(sortVaultItems(fetchedVaults.map(mapVaultFromBackend)));
-+    } catch (err) {
-+      handleError(err);
-+    }
-+  }, [handleError]);
-+
-   const updateSettingsAction = useCallback(
-     async (nextSettings: BackendUserSettings) => {
-       try {
-         await updateSettings(nextSettings);
--        setSettings(nextSettings);
-+        const normalizedActiveVaultId = nextSettings.multiply_vaults_enabled
-+          ? (nextSettings.active_vault_id || activeVaultId || DEFAULT_ACTIVE_VAULT_ID)
-+          : DEFAULT_ACTIVE_VAULT_ID;
-+
-+        if (normalizedActiveVaultId !== activeVaultId) {
-+          await setActiveVault(normalizedActiveVaultId);
-+          setActiveVaultId(normalizedActiveVaultId);
-+        }
-+
-+        setSettings({ ...nextSettings, active_vault_id: normalizedActiveVaultId });
-+        await refreshVaults();
-         return true;
-       } catch (err) {
-         handleError(err);
-         return false;
-       }
-     },
--    [handleError]
-+    [activeVaultId, handleError, refreshVaults]
-   );
- 
-   const loadCard = useCallback(
-@@ -300,10 +341,17 @@ export function useVault(profileId: string, onLocked: () => void) {
- 
-     refreshActive();
-     refreshTrash();
-+    refreshVaults();
-     getSettings()
--      .then(setSettings)
-+      .then((nextSettings) => {
-+        const normalizedActiveVaultId = nextSettings.multiply_vaults_enabled
-+          ? (nextSettings.active_vault_id || DEFAULT_ACTIVE_VAULT_ID)
-+          : DEFAULT_ACTIVE_VAULT_ID;
-+        setSettings({ ...nextSettings, active_vault_id: normalizedActiveVaultId });
-+        setActiveVaultId(normalizedActiveVaultId);
-+      })
-       .catch(handleError);
--  }, [handleError, refreshActive, refreshTrash]);
-+  }, [activeVaultId, handleError, refreshActive, refreshTrash, refreshVaults]);
- 
-   const selectNav = useCallback(
-     async (nav: SelectedNav) => {
-@@ -327,6 +375,37 @@ export function useVault(profileId: string, onLocked: () => void) {
-     [cardDetailsById, loadCard]
-   );
- 
-+  const createVaultAction = useCallback(
-+    async (name: string) => {
-+      try {
-+        const created = await createVault(name);
-+        const mapped = mapVaultFromBackend(created);
-+        setVaults((prev) => sortVaultItems([...prev, mapped]));
-+        return mapped;
-+      } catch (err) {
-+        handleError(err);
-+        return null;
-+      }
-+    },
-+    [handleError]
-+  );
-+
-+  const selectVaultAction = useCallback(
-+    async (vaultId: string) => {
-+      if (!vaultId || vaultId === activeVaultId) return true;
-+      try {
-+        await setActiveVault(vaultId);
-+        setActiveVaultId(vaultId);
-+        setSettings((prev) => (prev ? { ...prev, active_vault_id: vaultId } : prev));
-+        return true;
-+      } catch (err) {
-+        handleError(err);
-+        return false;
-+      }
-+    },
-+    [activeVaultId, handleError]
-+  );
-+
-   const createFolderAction = useCallback(
-     async (name: string, parentId: string | null) => {
-       try {
-@@ -831,6 +910,8 @@ export function useVault(profileId: string, onLocked: () => void) {
-   );
- 
-   return {
-+    activeVaultId,
-+    vaults,
-     folders,
-     cards,
-     deletedCards,
-@@ -852,6 +933,8 @@ export function useVault(profileId: string, onLocked: () => void) {
-     refreshTrash,
-     selectNav,
-     selectCard,
-+    createVault: createVaultAction,
-+    selectVault: selectVaultAction,
-     createFolder: createFolderAction,
-     renameFolder: renameFolderAction,
-     deleteFolderOnly: deleteFolderOnlyAction,
-@@ -874,4 +957,3 @@ export function useVault(profileId: string, onLocked: () => void) {
-     updateSettings: updateSettingsAction,
-   };
- }
+         <div className="dialog-body settings-modal-body">
+-          <h3 id="profile-title" className="settings-modal-section-title">
+-            {tVault('settingsModal.profileTitle')}
+-          </h3>
 -
-diff --git a/src/features/Vault/types/backend.ts b/src/features/Vault/types/backend.ts
-index d258854..f6a1db7 100644
---- a/src/features/Vault/types/backend.ts
-+++ b/src/features/Vault/types/backend.ts
-@@ -8,6 +8,14 @@ export type BackendFolder = {
-   deleted_at: string | null;
- };
- 
-+export type BackendVault = {
-+  id: string;
-+  name: string;
-+  is_default: boolean;
-+  created_at: string;
-+  updated_at: string;
-+};
+-          <div className="settings-profile-actions" role="group" aria-labelledby="profile-title">
+-            <button
+-              className="btn btn-secondary settings-profile-action"
+-              type="button"
+-              onClick={() => setRenameProfileOpen(true)}
+-              disabled={busy}
+-            >
+-              {tVault('settingsModal.profile.rename')}
+-            </button>
+-
+-            <button
+-              className="btn btn-secondary settings-profile-action"
+-              type="button"
+-              onClick={() => setSetPasswordOpen(true)}
+-              disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
+-            >
+-              {tVault('settingsModal.profile.setPasswordAction')}
+-            </button>
+-
+-            <button
+-              className="btn btn-secondary settings-profile-action"
+-              type="button"
+-              onClick={() => setChangePasswordOpen(true)}
+-              disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
+-            >
+-              {tVault('settingsModal.profile.changePasswordAction')}
+-            </button>
+-
+-            <button
+-              className="btn btn-danger settings-profile-action"
+-              type="button"
+-              onClick={() => setRemovePasswordConfirmOpen(true)}
+-              disabled={
+-                busy ||
+-                isRenamingProfile ||
+-                isSettingPassword ||
+-                isChangingPassword ||
+-                isRemovingPassword ||
+-                !profileHasPassword
+-              }
+-            >
+-              {tVault('settingsModal.profile.removePasswordAction')}
+-            </button>
+-          </div>
+-
+-          <h3 id="security-title" className="settings-modal-section-title">
+-            {tVault('settingsModal.securityTitle')}
+-          </h3>
+-
+-          <div
+-            role="group"
+-            aria-labelledby="security-title"
+-            className="settings-group"
+-          >
+-            <div className="form-field settings-toggle-row">
+-              <span className="form-label settings-subheader" id="auto-lock-enabled-label">
+-                {tVault('settingsModal.autoLock.enabled')}
+-              </span>
+-
+-              <div className="settings-toggle-row__control">
+-                {renderSwitch({
+-                  id: 'auto-lock-enabled-switch',
+-                  labelId: 'auto-lock-enabled-label',
+-                  checked: autoLockEnabled,
+-                  onToggle: () => setAutoLockEnabled((v) => !v),
+-                  disabled: busy,
+-                })}
+-              </div>
+-            </div>
+-
+-            <div className="form-field">
+-              <label className="form-label" htmlFor="auto-lock-timeout-seconds">
+-                {tVault('settingsModal.autoLock.timeoutSeconds')}
+-              </label>
+-              <input
+-                id="auto-lock-timeout-seconds"
+-                type="number"
+-                min={30}
+-                max={86400}
+-                value={autoLockTimeoutSeconds}
+-                disabled={busy || !autoLockEnabled}
+-                inputMode="numeric"
+-                onChange={(event) => setAutoLockTimeoutSeconds(event.target.value)}
+-                className="settings-input"
+-              />
+-            </div>
+-
+-            <div className="form-field settings-toggle-row">
+-              <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
+-                {tVault('settingsModal.clipboard.enabled')}
+-              </span>
+-
+-              <div className="settings-toggle-row__control">
+-                {renderSwitch({
+-                  id: 'clipboard-auto-clear-enabled-switch',
+-                  labelId: 'clipboard-auto-clear-enabled-label',
+-                  checked: clipboardAutoClearEnabled,
+-                  onToggle: () => setClipboardAutoClearEnabled((v) => !v),
+-                  disabled: busy,
+-                })}
+-              </div>
+-            </div>
+-
+-            <div className="form-field">
+-              <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
+-                {tVault('settingsModal.clipboard.timeoutSeconds')}
+-              </label>
+-              <input
+-                id="clipboard-clear-timeout-seconds"
+-                type="number"
+-                min={1}
+-                max={600}
+-                value={clipboardClearTimeoutSeconds}
+-                disabled={busy || !clipboardAutoClearEnabled}
+-                inputMode="numeric"
+-                onChange={(event) => setClipboardClearTimeoutSeconds(event.target.value)}
+-                className="settings-input"
+-              />
+-            </div>
+-          </div>
+-
+-          <h3 id="vaults-title" className="settings-modal-section-title">
+-            {tVault('settingsModal.vaultsTitle')}
+-          </h3>
+-
+-          <div role="group" aria-labelledby="vaults-title" className="settings-group">
+-            <div className="form-field settings-toggle-row">
+-              <span className="form-label settings-subheader" id="multiply-vaults-enabled-label">
+-                {tVault('settingsModal.multiplyVaults.enabled')}
+-              </span>
+-
+-              <div className="settings-toggle-row__control">
+-                {renderSwitch({
+-                  id: 'multiply-vaults-enabled-switch',
+-                  labelId: 'multiply-vaults-enabled-label',
+-                  checked: multiplyVaultsEnabled,
+-                  onToggle: () => setMultiplyVaultsEnabled((v) => !v),
+-                  disabled: busy,
+-                })}
+-              </div>
+-            </div>
+-          </div>
+-
+-          <h3 id="backups-title" className="settings-modal-section-title">
+-            {tVault('backup.settings.title')}
+-          </h3>
+-
+-          <div role="group" aria-labelledby="backups-title" className="settings-group">
+-            <div className="form-field settings-toggle-row">
+-              <span className="form-label settings-subheader" id="backup-auto-enabled-label">
+-                {tVault('backup.settings.autoEnabled')}
+-              </span>
+-
+-              <div className="settings-toggle-row__control">
+-                {renderSwitch({
+-                  id: 'backup-auto-enabled-switch',
+-                  labelId: 'backup-auto-enabled-label',
+-                  checked: autoBackupEnabled,
+-                  onToggle: () => setAutoBackupEnabled((v) => !v),
+-                  disabled: busy,
+-                })}
+-              </div>
+-            </div>
+-
+-            <div className="form-field">
+-              <label className="form-label" htmlFor="backup-interval-minutes">
+-                {tVault('backup.settings.intervalMinutes')}
+-              </label>
+-              <input
+-                id="backup-interval-minutes"
+-                type="number"
+-                min={5}
+-                max={1440}
+-                value={intervalMinutes}
+-                disabled={busy || !autoBackupEnabled}
+-                inputMode="numeric"
+-                onChange={(event) => setIntervalMinutes(event.target.value)}
+-                className="settings-input"
+-              />
+-            </div>
+-
+-            <div className="form-field">
+-              <label className="form-label" htmlFor="backup-max-copies">
+-                {tVault('backup.settings.maxCopies')}
+-              </label>
+-              <input
+-                id="backup-max-copies"
+-                type="number"
+-                min={1}
+-                max={500}
+-                value={maxCopies}
+-                disabled={busy}
+-                inputMode="numeric"
+-                onChange={(event) => setMaxCopies(event.target.value)}
+-                className="settings-input"
+-              />
+-            </div>
++          <div className="settings-layout">
++            <aside className="settings-sidebar" aria-label={tVault('settingsModal.optionsTitle')}>
++              <div className="settings-sidebar-title">{tVault('settingsModal.optionsTitle')}</div>
++              <nav className="settings-sidebar-nav" aria-label={tVault('settingsModal.optionsTitle')}>
++                <button
++                  type="button"
++                  className="settings-nav-item"
++                  data-active={activeSection === 'profile' ? 'true' : 'false'}
++                  onClick={() => setActiveSection('profile')}
++                >
++                  {tVault('settingsModal.profileTitle')}
++                </button>
++                <button
++                  type="button"
++                  className="settings-nav-item"
++                  data-active={activeSection === 'security' ? 'true' : 'false'}
++                  onClick={() => setActiveSection('security')}
++                >
++                  {tVault('settingsModal.securityTitle')}
++                </button>
++                <button
++                  type="button"
++                  className="settings-nav-item"
++                  data-active={activeSection === 'vaults' ? 'true' : 'false'}
++                  onClick={() => setActiveSection('vaults')}
++                >
++                  {tVault('settingsModal.vaultsTitle')}
++                </button>
++                <button
++                  type="button"
++                  className="settings-nav-item"
++                  data-active={activeSection === 'backups' ? 'true' : 'false'}
++                  onClick={() => setActiveSection('backups')}
++                >
++                  {tVault('backup.settings.title')}
++                </button>
++              </nav>
++            </aside>
 +
- export type BackendCustomFieldType = "text" | "secret" | "url" | "number" | "date";
- 
- export type BackendCustomField = {
-@@ -183,4 +191,6 @@ export type BackendUserSettings = {
-   default_sort_field: "created_at" | "updated_at" | "title";
-   default_sort_direction: "ASC" | "DESC";
-   mask_password_by_default: boolean;
-+  multiply_vaults_enabled: boolean;
-+  active_vault_id: string;
- };
-diff --git a/src/features/Vault/types/mappers.ts b/src/features/Vault/types/mappers.ts
-index 5de745e..536512d 100644
---- a/src/features/Vault/types/mappers.ts
-+++ b/src/features/Vault/types/mappers.ts
-@@ -7,6 +7,7 @@ import {
-   BackendDataCardSummary,
-   BackendFolder,
-   BackendAttachmentMeta,
-+  BackendVault,
-   BackendUpdateBankCardInput,
-   BackendUpdateDataCardInput,
-   BackendPasswordHistoryRow,
-@@ -17,6 +18,7 @@ import {
-   CreateBankCardInput,
-   DataCard,
-   Folder,
-+  VaultItem,
-   UpdateBankCardInput,
-   CreateDataCardInput,
-   UpdateDataCardInput,
-@@ -38,6 +40,16 @@ export function mapFolderFromBackend(folder: BackendFolder): Folder {
-   };
- }
- 
-+export function mapVaultFromBackend(vault: BackendVault): VaultItem {
-+  return {
-+    id: vault.id,
-+    name: vault.name,
-+    isDefault: vault.is_default,
-+    createdAt: vault.created_at,
-+    updatedAt: vault.updated_at,
-+  };
-+}
++            <section className="settings-content">
++              {activeSection === 'profile' && (
++                <>
++                  <h3 id="profile-title" className="settings-modal-section-title">
++                    {tVault('settingsModal.profileTitle')}
++                  </h3>
 +
- export function mapCardFromBackend(card: BackendDataCard): DataCard {
-   return {
-     id: card.id,
-diff --git a/src/features/Vault/types/ui.ts b/src/features/Vault/types/ui.ts
-index 4771d89..857f343 100644
---- a/src/features/Vault/types/ui.ts
-+++ b/src/features/Vault/types/ui.ts
-@@ -10,6 +10,14 @@ export type Folder = {
-   deletedAt: string | null;
- };
- 
-+export type VaultItem = {
-+  id: string;
-+  name: string;
-+  isDefault: boolean;
-+  createdAt: string;
-+  updatedAt: string;
-+};
++                  <div className="settings-profile-actions" role="group" aria-labelledby="profile-title">
++                    <button
++                      className="btn btn-secondary settings-profile-action"
++                      type="button"
++                      onClick={() => setRenameProfileOpen(true)}
++                      disabled={busy}
++                    >
++                      {tVault('settingsModal.profile.rename')}
++                    </button>
 +
- export type CustomFieldType = "text" | "secret" | "url" | "number" | "date";
++                    <button
++                      className="btn btn-secondary settings-profile-action"
++                      type="button"
++                      onClick={() => setSetPasswordOpen(true)}
++                      disabled={busy || isRenamingProfile || isSettingPassword || profileHasPassword}
++                    >
++                      {tVault('settingsModal.profile.setPasswordAction')}
++                    </button>
++
++                    <button
++                      className="btn btn-secondary settings-profile-action"
++                      type="button"
++                      onClick={() => setChangePasswordOpen(true)}
++                      disabled={busy || isRenamingProfile || isChangingPassword || !profileHasPassword}
++                    >
++                      {tVault('settingsModal.profile.changePasswordAction')}
++                    </button>
++
++                    <button
++                      className="btn btn-danger settings-profile-action"
++                      type="button"
++                      onClick={() => setRemovePasswordConfirmOpen(true)}
++                      disabled={
++                        busy ||
++                        isRenamingProfile ||
++                        isSettingPassword ||
++                        isChangingPassword ||
++                        isRemovingPassword ||
++                        !profileHasPassword
++                      }
++                    >
++                      {tVault('settingsModal.profile.removePasswordAction')}
++                    </button>
++                  </div>
++                </>
++              )}
++
++              {activeSection === 'security' && (
++                <>
++                  <h3 id="security-title" className="settings-modal-section-title">
++                    {tVault('settingsModal.securityTitle')}
++                  </h3>
++
++                  <div role="group" aria-labelledby="security-title" className="settings-group">
++                    <div className="form-field settings-toggle-row">
++                      <span className="form-label settings-subheader" id="auto-lock-enabled-label">
++                        {tVault('settingsModal.autoLock.enabled')}
++                      </span>
++
++                      <div className="settings-toggle-row__control">
++                        {renderSwitch({
++                          id: 'auto-lock-enabled-switch',
++                          labelId: 'auto-lock-enabled-label',
++                          checked: autoLockEnabled,
++                          onToggle: () => setAutoLockEnabled((v) => !v),
++                          disabled: busy,
++                        })}
++                      </div>
++                    </div>
++
++                    <div className="form-field">
++                      <label className="form-label" htmlFor="auto-lock-timeout-seconds">
++                        {tVault('settingsModal.autoLock.timeoutSeconds')}
++                      </label>
++                      <input
++                        id="auto-lock-timeout-seconds"
++                        type="number"
++                        min={30}
++                        max={86400}
++                        value={autoLockTimeoutSeconds}
++                        disabled={busy || !autoLockEnabled}
++                        inputMode="numeric"
++                        onChange={(event) => setAutoLockTimeoutSeconds(event.target.value)}
++                        className="settings-input"
++                      />
++                    </div>
++
++                    <div className="form-field settings-toggle-row">
++                      <span className="form-label settings-subheader" id="clipboard-auto-clear-enabled-label">
++                        {tVault('settingsModal.clipboard.enabled')}
++                      </span>
++
++                      <div className="settings-toggle-row__control">
++                        {renderSwitch({
++                          id: 'clipboard-auto-clear-enabled-switch',
++                          labelId: 'clipboard-auto-clear-enabled-label',
++                          checked: clipboardAutoClearEnabled,
++                          onToggle: () => setClipboardAutoClearEnabled((v) => !v),
++                          disabled: busy,
++                        })}
++                      </div>
++                    </div>
++
++                    <div className="form-field">
++                      <label className="form-label" htmlFor="clipboard-clear-timeout-seconds">
++                        {tVault('settingsModal.clipboard.timeoutSeconds')}
++                      </label>
++                      <input
++                        id="clipboard-clear-timeout-seconds"
++                        type="number"
++                        min={1}
++                        max={600}
++                        value={clipboardClearTimeoutSeconds}
++                        disabled={busy || !clipboardAutoClearEnabled}
++                        inputMode="numeric"
++                        onChange={(event) => setClipboardClearTimeoutSeconds(event.target.value)}
++                        className="settings-input"
++                      />
++                    </div>
++                  </div>
++                </>
++              )}
++
++              {activeSection === 'vaults' && (
++                <>
++                  <h3 id="vaults-title" className="settings-modal-section-title">
++                    {tVault('settingsModal.vaultsTitle')}
++                  </h3>
++
++                  <div role="group" aria-labelledby="vaults-title" className="settings-group">
++                    <div className="form-field settings-toggle-row">
++                      <span className="form-label settings-subheader" id="multiply-vaults-enabled-label">
++                        {tVault('settingsModal.multiplyVaults.enabled')}
++                      </span>
++
++                      <div className="settings-toggle-row__control">
++                        {renderSwitch({
++                          id: 'multiply-vaults-enabled-switch',
++                          labelId: 'multiply-vaults-enabled-label',
++                          checked: multiplyVaultsEnabled,
++                          onToggle: () => setMultiplyVaultsEnabled((v) => !v),
++                          disabled: busy,
++                        })}
++                      </div>
++                    </div>
++                  </div>
++                </>
++              )}
++
++              {activeSection === 'backups' && (
++                <>
++                  <h3 id="backups-title" className="settings-modal-section-title">
++                    {tVault('backup.settings.title')}
++                  </h3>
++
++                  <div role="group" aria-labelledby="backups-title" className="settings-group">
++                    <div className="form-field settings-toggle-row">
++                      <span className="form-label settings-subheader" id="backup-auto-enabled-label">
++                        {tVault('backup.settings.autoEnabled')}
++                      </span>
++
++                      <div className="settings-toggle-row__control">
++                        {renderSwitch({
++                          id: 'backup-auto-enabled-switch',
++                          labelId: 'backup-auto-enabled-label',
++                          checked: autoBackupEnabled,
++                          onToggle: () => setAutoBackupEnabled((v) => !v),
++                          disabled: busy,
++                        })}
++                      </div>
++                    </div>
++
++                    <div className="form-field">
++                      <label className="form-label" htmlFor="backup-interval-minutes">
++                        {tVault('backup.settings.intervalMinutes')}
++                      </label>
++                      <input
++                        id="backup-interval-minutes"
++                        type="number"
++                        min={5}
++                        max={1440}
++                        value={intervalMinutes}
++                        disabled={busy || !autoBackupEnabled}
++                        inputMode="numeric"
++                        onChange={(event) => setIntervalMinutes(event.target.value)}
++                        className="settings-input"
++                      />
++                    </div>
++
++                    <div className="form-field">
++                      <label className="form-label" htmlFor="backup-max-copies">
++                        {tVault('backup.settings.maxCopies')}
++                      </label>
++                      <input
++                        id="backup-max-copies"
++                        type="number"
++                        min={1}
++                        max={500}
++                        value={maxCopies}
++                        disabled={busy}
++                        inputMode="numeric"
++                        onChange={(event) => setMaxCopies(event.target.value)}
++                        className="settings-input"
++                      />
++                    </div>
++                  </div>
++                </>
++              )}
++            </section>
+           </div>
+         </div>
  
- export type CustomField = {
-diff --git a/src/i18n/locales/en/Folders.json b/src/i18n/locales/en/Folders.json
-index e6d9aed..62901c5 100644
---- a/src/i18n/locales/en/Folders.json
-+++ b/src/i18n/locales/en/Folders.json
-@@ -1,5 +1,7 @@
- {
-   "title": "Folders",
-+  "vaults.title": "Vaults",
-+  "vaults.default": "default",
-   "category.title": "Category",
-   "category.dataCards": "Data cards",
-   "category.bankCards": "Bank cards",
-@@ -9,7 +11,11 @@
-   "nav.archive": "Archive",
-   "nav.deleted": "Deleted",
-   "action.addFolder": "Add folder",
-+  "action.addVault": "Add vault",
-+  "action.addSubfolder": "Add subfolder",
-   "action.addBankCard": "Add bank card",
-+  "action.expandFolder": "Expand folder",
-+  "action.collapseFolder": "Collapse folder",
-   "action.deleteFolder": "Delete folder",
-   "action.renameFolder": "Rename folder",
-   "action.rename": "Rename",
-@@ -19,9 +25,14 @@
-   "dialog.newFolder.title": "Create folder",
-   "dialog.newFolder.description": "Organize your vault with folders.",
-   "dialog.newFolder.label": "Name",
-+  "dialog.newFolder.parent": "Parent: {{name}}",
-   "dialog.newFolder.placeholder": "Folder name",
-+  "dialog.newVault.title": "Create vault",
-+  "dialog.newVault.label": "Name",
-+  "dialog.newVault.placeholder": "Vault name",
-   "dialog.renameFolder.title": "Rename folder",
-   "dialog.renameFolder.label": "Name",
-   "dialog.renameFolder.placeholder": "Folder name",
--  "validation.folderNameRequired": "Folder name is required"
-+  "validation.folderNameRequired": "Folder name is required",
-+  "validation.vaultNameRequired": "Vault name is required"
- }
 diff --git a/src/i18n/locales/en/Vault.json b/src/i18n/locales/en/Vault.json
-index c3e5eb3..5324a25 100644
+index 5324a25..25a2428 100644
 --- a/src/i18n/locales/en/Vault.json
 +++ b/src/i18n/locales/en/Vault.json
-@@ -45,6 +45,8 @@
-   "settingsModal.autoLock.timeoutSeconds": "Auto-lock timeout (seconds)",
-   "settingsModal.clipboard.enabled": "Enable clipboard auto-clear",
-   "settingsModal.clipboard.timeoutSeconds": "Clipboard clear timeout (seconds)",
-+  "settingsModal.vaultsTitle": "Vaults",
-+  "settingsModal.multiplyVaults.enabled": "Enable multiple vaults",
+@@ -49,6 +49,7 @@
+   "settingsModal.multiplyVaults.enabled": "Enable multiple vaults",
    "backup.auto.success": "Auto-backup created",
    "settingsModal.profileTitle": "Profile",
++  "settingsModal.optionsTitle": "Options",
    "settingsModal.profile.rename": "Rename profile",
-diff --git a/src-tauri/permissions/app-default.toml b/src-tauri/permissions/app-default.toml
-index 5310d06..f76bee3 100644
---- a/src-tauri/permissions/app-default.toml
-+++ b/src-tauri/permissions/app-default.toml
-@@ -40,6 +40,9 @@ commands.allow = [
-   "backup_create_if_due_auto",
+   "settingsModal.profile.renameTitle": "Rename profile",
+   "settingsModal.profile.nameLabel": "Profile name",
+diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
+index 24e0ac1..879e2ee 100644
+--- a/src/shared/styles/ui.css
++++ b/src/shared/styles/ui.css
+@@ -974,10 +974,78 @@ select:autofill {
+    Settings modal
+    ======================================================================== */
  
-   "list_folders",
-+  "list_vaults",
-+  "create_vault",
-+  "set_active_vault",
-   "create_folder",
-   "rename_folder",
-   "move_folder",
-diff --git a/src-tauri/src/app_state.rs b/src-tauri/src/app_state.rs
-index da126a4..e7a1d3b 100644
---- a/src-tauri/src/app_state.rs
-+++ b/src-tauri/src/app_state.rs
-@@ -38,6 +38,7 @@ pub struct PendingBackupPick {
- 
- pub struct AppState {
-     pub active_profile: Mutex<Option<String>>,
-+    pub active_vault_id: Mutex<Option<String>>,
-     pub storage_paths: Mutex<StoragePaths>,
- 
-     pub workspace_lock: Mutex<Option<std::fs::File>>,
-@@ -60,6 +61,7 @@ impl AppState {
-     pub fn new(storage_paths: StoragePaths) -> Self {
-         Self {
-             active_profile: Mutex::new(None),
-+            active_vault_id: Mutex::new(None),
-             storage_paths: Mutex::new(storage_paths),
- 
-             workspace_lock: Mutex::new(None),
-@@ -186,6 +188,13 @@ impl AppState {
-                 .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-             *active = None;
-         }
-+        {
-+            let mut active_vault_id = self
-+                .active_vault_id
-+                .lock()
-+                .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+            *active_vault_id = None;
-+        }
-         {
-             let mut session = self
-                 .vault_session
-diff --git a/src-tauri/src/commands/mod.rs b/src-tauri/src/commands/mod.rs
-index 7d419e8..14047f3 100644
---- a/src-tauri/src/commands/mod.rs
-+++ b/src-tauri/src/commands/mod.rs
-@@ -9,4 +9,5 @@ pub mod profiles;
- pub mod security;
- pub mod settings;
- pub mod ui_prefs;
-+pub mod vaults;
- pub mod workspace;
-diff --git a/src-tauri/src/commands/vaults.rs b/src-tauri/src/commands/vaults.rs
-new file mode 100644
-index 0000000..b2ff9bc
---- /dev/null
-+++ b/src-tauri/src/commands/vaults.rs
-@@ -0,0 +1,32 @@
-+use std::sync::Arc;
-+
-+use tauri::State;
-+
-+use crate::app_state::AppState;
-+use crate::error::{ErrorCodeString, Result};
-+use crate::services::vaults_service;
-+use crate::types::Vault;
-+
-+#[tauri::command]
-+pub async fn list_vaults(state: State<'_, Arc<AppState>>) -> Result<Vec<Vault>> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || vaults_service::list_vaults(&app))
-+        .await
-+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
++.settings-modal {
++  width: min(980px, calc(100vw - 32px));
 +}
 +
-+#[tauri::command]
-+pub async fn create_vault(name: String, state: State<'_, Arc<AppState>>) -> Result<Vault> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || vaults_service::create_vault(name, &app))
-+        .await
-+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
+ .settings-modal-body {
+-  gap: 24px;
++  padding: 0;
++  gap: 0;
++  overflow: hidden;
 +}
 +
-+#[tauri::command]
-+pub async fn set_active_vault(id: String, state: State<'_, Arc<AppState>>) -> Result<bool> {
-+    let app = state.inner().clone();
-+    tauri::async_runtime::spawn_blocking(move || vaults_service::set_active_vault(id, &app))
-+        .await
-+        .map_err(|_| ErrorCodeString::new("TASK_JOIN_FAILED"))?
-+}
-diff --git a/src-tauri/src/data/sqlite/migrations.rs b/src-tauri/src/data/sqlite/migrations.rs
-index 1b70fe1..33c7785 100644
---- a/src-tauri/src/data/sqlite/migrations.rs
-+++ b/src-tauri/src/data/sqlite/migrations.rs
-@@ -4,10 +4,7 @@ use rusqlite::OptionalExtension;
- 
- use crate::error::{ErrorCodeString, Result};
- 
--// Dev baseline: single schema version.
--// We intentionally do NOT support in-place upgrades/downgrades. If you somehow have a DB with a
--// different user_version, delete the profile/workspace and create a fresh one.
--const CURRENT_SCHEMA_VERSION: i32 = 1;
-+const CURRENT_SCHEMA_VERSION: i32 = 2;
- 
- fn log_sqlite_err(ctx: &str, err: &RusqliteError) {
-     match err {
-@@ -38,6 +35,118 @@ fn has_table(conn: &Connection, name: &str) -> Result<bool> {
-     Ok(exists.is_some())
- }
- 
-+fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
-+    let sql = format!("PRAGMA table_info({table})");
-+    let mut stmt = conn.prepare(&sql).map_err(|e| {
-+        log_sqlite_err(&format!("has_column.prepare table={table} sql={sql}"), &e);
-+        ErrorCodeString::new("DB_QUERY_FAILED")
-+    })?;
-+
-+    let rows = stmt
-+        .query_map([], |row| row.get::<_, String>(1))
-+        .map_err(|e| {
-+            log_sqlite_err(&format!("has_column.query_map table={table} sql={sql}"), &e);
-+            ErrorCodeString::new("DB_QUERY_FAILED")
-+        })?
-+        .collect::<rusqlite::Result<Vec<_>>>()
-+        .map_err(|e| {
-+            log_sqlite_err(&format!("has_column.collect table={table} sql={sql}"), &e);
-+            ErrorCodeString::new("DB_QUERY_FAILED")
-+        })?;
-+
-+    Ok(rows.iter().any(|name| name == column))
++.settings-layout {
++  display: grid;
++  grid-template-columns: 220px minmax(0, 1fr);
++  min-height: 460px;
++  max-height: calc(100vh - 210px);
 +}
 +
-+fn migrate_v1_to_v2(conn: &Connection) -> Result<()> {
-+    if !has_column(conn, "folders", "vault_id")? {
-+        conn.execute(
-+            "ALTER TABLE folders ADD COLUMN vault_id TEXT NOT NULL DEFAULT 'default';",
-+            [],
-+        )
-+        .map_err(|e| {
-+            log_sqlite_err("migrate_v1_to_v2.alter_folders_vault_id", &e);
-+            ErrorCodeString::new("DB_MIGRATION_FAILED")
-+        })?;
-+    }
-+
-+    if !has_column(conn, "datacards", "vault_id")? {
-+        conn.execute(
-+            "ALTER TABLE datacards ADD COLUMN vault_id TEXT NOT NULL DEFAULT 'default';",
-+            [],
-+        )
-+        .map_err(|e| {
-+            log_sqlite_err("migrate_v1_to_v2.alter_datacards_vault_id", &e);
-+            ErrorCodeString::new("DB_MIGRATION_FAILED")
-+        })?;
-+    }
-+
-+    if !has_column(conn, "bank_cards", "vault_id")? {
-+        conn.execute(
-+            "ALTER TABLE bank_cards ADD COLUMN vault_id TEXT NOT NULL DEFAULT 'default';",
-+            [],
-+        )
-+        .map_err(|e| {
-+            log_sqlite_err("migrate_v1_to_v2.alter_bank_cards_vault_id", &e);
-+            ErrorCodeString::new("DB_MIGRATION_FAILED")
-+        })?;
-+    }
-+
-+    conn.execute(
-+        "UPDATE folders SET vault_id = 'default' WHERE vault_id IS NULL OR TRIM(vault_id) = '';",
-+        [],
-+    )
-+    .map_err(|e| {
-+        log_sqlite_err("migrate_v1_to_v2.backfill_folders_vault_id", &e);
-+        ErrorCodeString::new("DB_MIGRATION_FAILED")
-+    })?;
-+
-+    conn.execute(
-+        "UPDATE datacards SET vault_id = 'default' WHERE vault_id IS NULL OR TRIM(vault_id) = '';",
-+        [],
-+    )
-+    .map_err(|e| {
-+        log_sqlite_err("migrate_v1_to_v2.backfill_datacards_vault_id", &e);
-+        ErrorCodeString::new("DB_MIGRATION_FAILED")
-+    })?;
-+
-+    conn.execute(
-+        "UPDATE bank_cards SET vault_id = 'default' WHERE vault_id IS NULL OR TRIM(vault_id) = '';",
-+        [],
-+    )
-+    .map_err(|e| {
-+        log_sqlite_err("migrate_v1_to_v2.backfill_bank_cards_vault_id", &e);
-+        ErrorCodeString::new("DB_MIGRATION_FAILED")
-+    })?;
-+
-+    conn.execute_batch(
-+        r#"
-+CREATE TABLE IF NOT EXISTS vaults (
-+  id         TEXT PRIMARY KEY,
-+  name       TEXT NOT NULL,
-+  is_default INTEGER NOT NULL DEFAULT 0,
-+  created_at TEXT NOT NULL,
-+  updated_at TEXT NOT NULL
-+);
-+CREATE UNIQUE INDEX IF NOT EXISTS idx_vaults_unique_name ON vaults(name);
-+INSERT OR IGNORE INTO vaults (id, name, is_default, created_at, updated_at)
-+VALUES ('default', 'Default vault', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-+DROP INDEX IF EXISTS idx_folders_unique_name;
-+CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_unique_name
-+ON folders(vault_id, parent_id, name)
-+WHERE deleted_at IS NULL;
-+CREATE INDEX IF NOT EXISTS idx_folders_vault ON folders(vault_id);
-+CREATE INDEX IF NOT EXISTS idx_datacards_vault ON datacards(vault_id);
-+CREATE INDEX IF NOT EXISTS idx_bank_cards_vault ON bank_cards(vault_id);
-+"#,
-+    )
-+    .map_err(|e| {
-+        log_sqlite_err("migrate_v1_to_v2.execute_batch", &e);
-+        ErrorCodeString::new("DB_MIGRATION_FAILED")
-+    })?;
-+
-+    Ok(())
++.settings-sidebar {
++  border-right: 1px solid var(--border-subtle);
++  background: var(--color-surface-2);
++  padding: 14px 10px;
++  display: flex;
++  flex-direction: column;
++  gap: 10px;
 +}
 +
- pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
-     conn.execute_batch("PRAGMA foreign_keys = ON;")
-         .map_err(|e| {
-@@ -67,17 +176,20 @@ pub fn migrate_to_latest(conn: &Connection) -> Result<()> {
-         return Ok(());
-     }
- 
--    log::info!("[DB][migrate] migrate from={version} to={CURRENT_SCHEMA_VERSION}");
-+    if version == 1 {
-+        log::info!("[DB][migrate] migrate from=1 to=2");
-+        migrate_v1_to_v2(conn)?;
-+        conn.execute_batch("PRAGMA user_version = 2;")
-+            .map_err(|_| ErrorCodeString::new("DB_MIGRATION_FAILED"))?;
-+        return Ok(());
-+    }
- 
--    // Any other version is unsupported in this dev branch.
--    log::warn!(
--        "[DB][migrate] unsupported schema version: {version} (expected {CURRENT_SCHEMA_VERSION})"
--    );
-+    log::warn!("[DB][migrate] unsupported schema version={version}");
-     Err(ErrorCodeString::new("DB_MIGRATION_FAILED"))
- }
- 
- pub fn validate_core_schema(conn: &Connection) -> Result<()> {
--    let required = ["folders", "datacards", "bank_cards"];
-+    let required = ["vaults", "folders", "datacards", "bank_cards"];
-     for table in required {
-         if !has_table(conn, table)? {
-             return Err(ErrorCodeString::new("DB_SCHEMA_MISSING"));
-diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
-index 686b1ae..8caf4e1 100644
---- a/src-tauri/src/data/sqlite/repo_impl.rs
-+++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -13,10 +13,13 @@ use crate::types::{
-     CustomField, DataCard, DataCardSummary, Folder, PasswordHistoryRow, SetBankCardArchivedInput,
-     SetBankCardFavoriteInput, SetDataCardArchivedInput, SetDataCardFavoriteInput,
-     UpdateBankCardInput, UpdateDataCardInput,
-+    Vault,
- };
- 
- use std::sync::Arc;
- 
-+const DEFAULT_VAULT_ID: &str = "default";
-+
- fn with_connection<T>(
-     state: &Arc<AppState>,
-     profile_id: &str,
-@@ -38,6 +41,25 @@ fn with_connection<T>(
-     Err(ErrorCodeString::new("VAULT_LOCKED"))
- }
- 
-+fn current_active_vault_id(state: &Arc<AppState>) -> String {
-+    state
-+        .active_vault_id
-+        .lock()
-+        .ok()
-+        .and_then(|v| v.clone())
-+        .filter(|v| !v.trim().is_empty())
-+        .unwrap_or_else(|| DEFAULT_VAULT_ID.to_string())
++.settings-sidebar-title {
++  margin: 0;
++  padding: 2px 8px;
++  font-size: 12px;
++  font-weight: 700;
++  color: var(--color-text-muted);
++  letter-spacing: 0.04em;
 +}
 +
-+fn with_connection_in_active_vault<T>(
-+    state: &Arc<AppState>,
-+    profile_id: &str,
-+    f: impl FnOnce(&Connection, &str) -> Result<T>,
-+) -> Result<T> {
-+    let active_vault_id = current_active_vault_id(state);
-+    with_connection(state, profile_id, |conn| f(conn, &active_vault_id))
++.settings-sidebar-nav {
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
 +}
 +
- fn deserialize_json<T: serde::de::DeserializeOwned>(value: String) -> rusqlite::Result<T> {
-     serde_json::from_str(&value)
-         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, Box::new(err)))
-@@ -66,7 +88,7 @@ pub fn search_datacard_ids(
-     profile_id: &str,
-     query: &str,
- ) -> Result<Vec<String>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
-             .prepare(
-                 r#"
-@@ -90,13 +112,14 @@ SELECT
-       AND a.deleted_at IS NULL
-   ) AS attachment_names
- FROM datacards d
--LEFT JOIN folders f ON f.id = d.folder_id
-+LEFT JOIN folders f ON f.id = d.folder_id AND f.vault_id = d.vault_id
-+WHERE d.vault_id = ?1
- "#,
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let rows = stmt
--            .query_map([], |row| {
-+            .query_map(params![active_vault_id], |row| {
-                 let id: String = row.get("id")?;
-                 let title: String = row.get("title")?;
-                 let url: Option<String> = row.get("url")?;
-@@ -190,7 +213,7 @@ pub fn search_bank_card_ids(
-     profile_id: &str,
-     query: &str,
- ) -> Result<Vec<String>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
-             .prepare(
-                 r#"
-@@ -204,13 +227,14 @@ SELECT
-   b.tags_json,
-   f.name AS folder_name
- FROM bank_cards b
--LEFT JOIN folders f ON f.id = b.folder_id
-+LEFT JOIN folders f ON f.id = b.folder_id AND f.vault_id = b.vault_id
-+WHERE b.vault_id = ?1
- "#,
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let rows = stmt
--            .query_map([], |row| {
-+            .query_map(params![active_vault_id], |row| {
-                 let id: String = row.get("id")?;
-                 let title: String = row.get("title")?;
-                 let bank_name: Option<String> = row.get("bank_name")?;
-@@ -281,6 +305,16 @@ fn map_folder(row: &rusqlite::Row) -> rusqlite::Result<Folder> {
-     })
++.settings-nav-item {
++  width: 100%;
++  text-align: left;
++  border: 1px solid transparent;
++  border-radius: var(--radius-sm);
++  background: transparent;
++  color: var(--color-text);
++  font-size: 14px;
++  font-weight: 600;
++  padding: 8px 10px;
++  cursor: pointer;
  }
  
-+fn map_vault(row: &rusqlite::Row) -> rusqlite::Result<Vault> {
-+    Ok(Vault {
-+        id: row.get("id")?,
-+        name: row.get("name")?,
-+        is_default: row.get::<_, i64>("is_default")? != 0,
-+        created_at: row.get("created_at")?,
-+        updated_at: row.get("updated_at")?,
-+    })
++.settings-nav-item:hover {
++  border-color: var(--border-subtle);
++  background: var(--surface-tint-02);
 +}
 +
- fn map_datacard(row: &rusqlite::Row) -> rusqlite::Result<DataCard> {
-     Ok(DataCard {
-         id: row.get("id")?,
-@@ -436,16 +470,74 @@ fn map_constraint_error(err: rusqlite::Error) -> ErrorCodeString {
-     ErrorCodeString::new("DB_QUERY_FAILED")
- }
- 
--pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folder>> {
-+fn map_vault_constraint_error(err: rusqlite::Error) -> ErrorCodeString {
-+    if let rusqlite::Error::SqliteFailure(info, _) = &err {
-+        if info.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE {
-+            return ErrorCodeString::new("VAULT_NAME_EXISTS");
-+        }
-+    }
-+    ErrorCodeString::new("DB_QUERY_FAILED")
++.settings-nav-item[data-active='true'] {
++  border-color: var(--color-primary);
++  background: var(--primary-soft-bg);
 +}
 +
-+fn get_vault_by_id_conn(conn: &Connection, id: &str) -> Result<Vault> {
-+    let sql = "SELECT id, name, is_default, created_at, updated_at FROM vaults WHERE id = ?1";
-+    conn.query_row(sql, params![id], map_vault)
-+        .map_err(|_| ErrorCodeString::new("VAULT_NOT_FOUND"))
-+}
-+
-+pub fn list_vaults(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Vault>> {
-+    with_connection(state, profile_id, |conn| {
-+        let sql = "SELECT id, name, is_default, created_at, updated_at FROM vaults ORDER BY is_default DESC, name COLLATE NOCASE ASC, id ASC";
-+        let mut stmt = conn.prepare(sql).map_err(|e| {
-+            log_sqlite_err("list_vaults.prepare", sql, &e);
-+            ErrorCodeString::new("DB_QUERY_FAILED")
-+        })?;
-+
-+        let rows = stmt
-+            .query_map([], map_vault)
-+            .map_err(|e| {
-+                log_sqlite_err("list_vaults.query_map", sql, &e);
-+                ErrorCodeString::new("DB_QUERY_FAILED")
-+            })?
-+            .collect::<rusqlite::Result<Vec<_>>>()
-+            .map_err(|e| {
-+                log_sqlite_err("list_vaults.collect", sql, &e);
-+                ErrorCodeString::new("DB_QUERY_FAILED")
-+            })?;
-+
-+        Ok(rows)
-+    })
-+}
-+
-+pub fn get_vault(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<Vault> {
-+    with_connection(state, profile_id, |conn| get_vault_by_id_conn(conn, id))
-+}
-+
-+pub fn create_vault(state: &Arc<AppState>, profile_id: &str, name: &str) -> Result<Vault> {
-     with_connection(state, profile_id, |conn| {
--        let sql = "SELECT * FROM folders WHERE deleted_at IS NULL ORDER BY name ASC";
-+        let now = Utc::now().to_rfc3339();
-+        let id = Uuid::new_v4().to_string();
-+        conn.execute(
-+            "INSERT INTO vaults (id, name, is_default, created_at, updated_at) VALUES (?1, ?2, 0, ?3, ?4)",
-+            params![id, name, now, now],
-+        )
-+        .map_err(map_vault_constraint_error)?;
-+
-+        get_vault_by_id_conn(conn, &id)
-+    })
-+}
-+
-+pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folder>> {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-+        let sql =
-+            "SELECT * FROM folders WHERE vault_id = ?1 AND deleted_at IS NULL ORDER BY name ASC";
-         let mut stmt = conn.prepare(sql).map_err(|e| {
-             log_sqlite_err("list_folders.prepare", sql, &e);
-             ErrorCodeString::new("DB_QUERY_FAILED")
-         })?;
- 
-         let folders = stmt
--            .query_map([], map_folder)
-+            .query_map(params![active_vault_id], map_folder)
-             .map_err(|e| {
-                 log_sqlite_err("list_folders.query_map", sql, &e);
-                 ErrorCodeString::new("DB_QUERY_FAILED")
-@@ -460,17 +552,19 @@ pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folde
-     })
- }
- 
--fn get_folder_by_id_conn(conn: &Connection, id: &str) -> Result<Folder> {
-+fn get_folder_by_id_conn(conn: &Connection, id: &str, vault_id: &str) -> Result<Folder> {
-     let mut stmt = conn
--        .prepare("SELECT * FROM folders WHERE id = ?1")
-+        .prepare("SELECT * FROM folders WHERE id = ?1 AND vault_id = ?2")
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
--    stmt.query_row(params![id], map_folder)
-+    stmt.query_row(params![id, vault_id], map_folder)
-         .map_err(|_| ErrorCodeString::new("FOLDER_NOT_FOUND"))
- }
- 
- pub fn get_folder(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<Folder> {
--    with_connection(state, profile_id, |conn| get_folder_by_id_conn(conn, id))
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-+        get_folder_by_id_conn(conn, id, active_vault_id)
-+    })
- }
- 
- pub fn create_folder(
-@@ -479,16 +573,19 @@ pub fn create_folder(
-     name: &str,
-     parent_id: &Option<String>,
- ) -> Result<Folder> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let now = Utc::now().to_rfc3339();
-         let id = Uuid::new_v4().to_string();
-+        if let Some(parent) = parent_id {
-+            let _ = get_folder_by_id_conn(conn, parent, active_vault_id)?;
-+        }
-         conn.execute(
--            "INSERT INTO folders (id, name, parent_id, is_system, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, 0, ?4, ?5, NULL)",
--            params![id, name, parent_id, now, now],
-+            "INSERT INTO folders (id, vault_id, name, parent_id, is_system, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, NULL)",
-+            params![id, active_vault_id, name, parent_id, now, now],
-         )
-         .map_err(map_constraint_error)?;
- 
--        get_folder_by_id_conn(conn, &id)
-+        get_folder_by_id_conn(conn, &id, active_vault_id)
-     })
- }
- 
-@@ -498,11 +595,11 @@ pub fn rename_folder(
-     id: &str,
-     name: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
-             .execute(
--                "UPDATE folders SET name = ?1, updated_at = ?2 WHERE id = ?3",
--                params![name, Utc::now().to_rfc3339(), id],
-+                "UPDATE folders SET name = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
-+                params![name, Utc::now().to_rfc3339(), id, active_vault_id],
-             )
-             .map_err(map_constraint_error)?;
-         if rows == 0 {
-@@ -518,11 +615,17 @@ pub fn move_folder(
-     id: &str,
-     parent_id: &Option<String>,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-+        if let Some(parent) = parent_id {
-+            if parent == id {
-+                return Err(ErrorCodeString::new("FOLDER_NOT_FOUND"));
-+            }
-+            let _ = get_folder_by_id_conn(conn, parent, active_vault_id)?;
-+        }
-         let rows = conn
-             .execute(
--                "UPDATE folders SET parent_id = ?1, updated_at = ?2 WHERE id = ?3",
--                params![parent_id, Utc::now().to_rfc3339(), id],
-+                "UPDATE folders SET parent_id = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
-+                params![parent_id, Utc::now().to_rfc3339(), id, active_vault_id],
-             )
-             .map_err(map_constraint_error)?;
-         if rows == 0 {
-@@ -533,9 +636,12 @@ pub fn move_folder(
- }
- 
- pub fn purge_folder(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
--            .execute("DELETE FROM folders WHERE id = ?1", params![id])
-+            .execute(
-+                "DELETE FROM folders WHERE id = ?1 AND vault_id = ?2",
-+                params![id, active_vault_id],
-+            )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         if rows == 0 {
-             return Err(ErrorCodeString::new("FOLDER_NOT_FOUND"));
-@@ -549,11 +655,11 @@ pub fn move_datacards_to_root(
-     profile_id: &str,
-     folder_id: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let now = Utc::now().to_rfc3339();
-         conn.execute(
--            "UPDATE datacards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2",
--            params![now, folder_id],
-+            "UPDATE datacards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2 AND vault_id = ?3",
-+            params![now, folder_id, active_vault_id],
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         Ok(true)
-@@ -565,11 +671,11 @@ pub fn move_bank_cards_to_root(
-     profile_id: &str,
-     folder_id: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let now = Utc::now().to_rfc3339();
-         conn.execute(
--            "UPDATE bank_cards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2",
--            params![now, folder_id],
-+            "UPDATE bank_cards SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2 AND vault_id = ?3",
-+            params![now, folder_id, active_vault_id],
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         Ok(true)
-@@ -582,7 +688,7 @@ pub fn list_datacard_ids_in_folder(
-     folder_id: &str,
-     include_deleted: bool,
- ) -> Result<Vec<String>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let clause = if include_deleted {
-             String::new()
-         } else {
-@@ -590,12 +696,12 @@ pub fn list_datacard_ids_in_folder(
-         };
-         let mut stmt = conn
-             .prepare(&format!(
--                "SELECT id FROM datacards WHERE folder_id = ?1{clause}",
-+                "SELECT id FROM datacards WHERE folder_id = ?1 AND vault_id = ?2{clause}",
-             ))
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let rows = stmt
--            .query_map(params![folder_id], |row| row.get("id"))
-+            .query_map(params![folder_id, active_vault_id], |row| row.get("id"))
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<String>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -611,19 +717,19 @@ pub fn list_datacards(
-     sort_field: &str,
-     sort_dir: &str,
- ) -> Result<Vec<DataCard>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let clause = order_clause(sort_field, sort_dir)
-             .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         let base_query = if include_deleted {
--            format!("SELECT * FROM datacards {clause}")
-+            format!("SELECT * FROM datacards WHERE vault_id = ?1 {clause}")
-         } else {
--            format!("SELECT * FROM datacards WHERE deleted_at IS NULL {clause}")
-+            format!("SELECT * FROM datacards WHERE vault_id = ?1 AND deleted_at IS NULL {clause}")
-         };
-         let mut stmt = conn
-             .prepare(&base_query)
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         let cards = stmt
--            .query_map([], map_datacard)
-+            .query_map(params![active_vault_id], map_datacard)
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<_>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -637,7 +743,7 @@ pub fn list_datacards_summary(
-     sort_field: &str,
-     sort_dir: &str,
- ) -> Result<Vec<DataCardSummary>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let clause = order_clause(sort_field, sort_dir)
-             .ok_or_else(|| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         let query = format!(
-@@ -666,7 +772,7 @@ pub fn list_datacards_summary(
-                 d.archived_at,
-                 d.deleted_at
-             FROM datacards d
--            WHERE d.deleted_at IS NULL {clause}
-+            WHERE d.vault_id = ?1 AND d.deleted_at IS NULL {clause}
-             "#
-         );
-         let mut stmt = conn.prepare(&query).map_err(|e| {
-@@ -675,7 +781,7 @@ pub fn list_datacards_summary(
-         })?;
- 
-         let cards = stmt
--            .query_map([], map_datacard_summary)
-+            .query_map(params![active_vault_id], map_datacard_summary)
-             .map_err(|e| {
-                 log_sqlite_err("list_datacards_summary.query_map", &query, &e);
-                 ErrorCodeString::new("DB_QUERY_FAILED")
-@@ -691,13 +797,13 @@ pub fn list_datacards_summary(
- }
- 
- pub fn list_deleted_datacards(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<DataCard>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
--            .prepare("SELECT * FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
-+            .prepare("SELECT * FROM datacards WHERE vault_id = ?1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC")
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let cards = stmt
--            .query_map([], map_datacard)
-+            .query_map(params![active_vault_id], map_datacard)
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<_>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -711,7 +817,7 @@ pub fn set_datacard_archived(
-     profile_id: &str,
-     input: &SetDataCardArchivedInput,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let archived_at: Option<String> = if input.is_archived {
-             Some(Utc::now().to_rfc3339())
-         } else {
-@@ -720,8 +826,8 @@ pub fn set_datacard_archived(
- 
-         let rows = conn
-             .execute(
--                "UPDATE datacards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
--                params![archived_at, Utc::now().to_rfc3339(), input.id],
-+                "UPDATE datacards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4 AND deleted_at IS NULL",
-+                params![archived_at, Utc::now().to_rfc3339(), input.id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-@@ -737,7 +843,7 @@ pub fn list_deleted_datacards_summary(
-     state: &Arc<AppState>,
-     profile_id: &str,
- ) -> Result<Vec<DataCardSummary>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
-             .prepare(
-                 r#"
-@@ -765,14 +871,14 @@ pub fn list_deleted_datacards_summary(
-                     d.archived_at,
-                     d.deleted_at
-                 FROM datacards d
--                WHERE d.deleted_at IS NOT NULL
-+                WHERE d.vault_id = ?1 AND d.deleted_at IS NOT NULL
-                 ORDER BY d.deleted_at DESC
-                 "#,
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let cards = stmt
--            .query_map([], map_datacard_summary)
-+            .query_map(params![active_vault_id], map_datacard_summary)
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<_>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -785,15 +891,15 @@ pub fn list_deleted_datacard_ids(
-     state: &Arc<AppState>,
-     profile_id: &str,
- ) -> Result<Vec<String>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
-             .prepare(
--                "SELECT id FROM datacards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-+                "SELECT id FROM datacards WHERE vault_id = ?1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let ids = stmt
--            .query_map([], |row| row.get::<_, String>(0))
-+            .query_map(params![active_vault_id], |row| row.get::<_, String>(0))
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<_>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -845,17 +951,19 @@ ON CONFLICT(key) DO UPDATE SET
-     })
- }
- 
--fn get_datacard_by_id_conn(conn: &Connection, id: &str) -> Result<DataCard> {
-+fn get_datacard_by_id_conn(conn: &Connection, id: &str, vault_id: &str) -> Result<DataCard> {
-     let mut stmt = conn
--        .prepare("SELECT * FROM datacards WHERE id = ?1")
-+        .prepare("SELECT * FROM datacards WHERE id = ?1 AND vault_id = ?2")
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
--    stmt.query_row(params![id], map_datacard)
-+    stmt.query_row(params![id, vault_id], map_datacard)
-         .map_err(|_| ErrorCodeString::new("DATACARD_NOT_FOUND"))
- }
- 
- pub fn get_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<DataCard> {
--    with_connection(state, profile_id, |conn| get_datacard_by_id_conn(conn, id))
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-+        get_datacard_by_id_conn(conn, id, active_vault_id)
-+    })
- }
- 
- pub fn create_datacard(
-@@ -863,15 +971,19 @@ pub fn create_datacard(
-     profile_id: &str,
-     input: &CreateDataCardInput,
- ) -> Result<DataCard> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let tags_json = serialize_json(&input.tags)?;
-         let custom_fields_json = serialize_json(&input.custom_fields)?;
-         let now = Utc::now().to_rfc3339();
-         let id = Uuid::new_v4().to_string();
-+        if let Some(folder_id) = input.folder_id.as_ref() {
-+            let _ = get_folder_by_id_conn(conn, folder_id, active_vault_id)?;
-+        }
-         conn.execute(
--            "INSERT INTO datacards (id, folder_id, title, url, email, recovery_email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL)",
-+            "INSERT INTO datacards (id, vault_id, folder_id, title, url, email, recovery_email, username, mobile_phone, note, is_favorite, tags_json, password_value, totp_uri, seed_phrase_value, seed_phrase_word_count, custom_fields_json, preview_fields_json, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, NULL)",
-             params![
-                 id,
-+                active_vault_id,
-                 input.folder_id,
-                 input.title,
-                 input.url,
-@@ -893,7 +1005,7 @@ pub fn create_datacard(
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
--        get_datacard_by_id_conn(conn, &id)
-+        get_datacard_by_id_conn(conn, &id, active_vault_id)
-     })
- }
- 
-@@ -902,18 +1014,22 @@ pub fn update_datacard(
-     profile_id: &str,
-     input: &UpdateDataCardInput,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let tags_json = serialize_json(&input.tags)?;
-         let custom_fields_json = serialize_json(&input.custom_fields)?;
-         let existing_password_row: Option<Option<String>> = conn
-             .query_row(
--                "SELECT password_value FROM datacards WHERE id = ?1",
--                params![input.id],
-+                "SELECT password_value FROM datacards WHERE id = ?1 AND vault_id = ?2",
-+                params![input.id, active_vault_id],
-                 |row| row.get::<_, Option<String>>(0),
-             )
-             .optional()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-+        if let Some(folder_id) = input.folder_id.as_ref() {
-+            let _ = get_folder_by_id_conn(conn, folder_id, active_vault_id)?;
-+        }
-+
-         let existing_password: Option<String> = match existing_password_row {
-             None => return Err(ErrorCodeString::new("DATACARD_NOT_FOUND")),
-             Some(value) => value,
-@@ -937,7 +1053,7 @@ pub fn update_datacard(
-         }
-         let rows = conn
-             .execute(
--                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, recovery_email = ?4, username = ?5, mobile_phone = ?6, note = ?7, tags_json = ?8, password_value = ?9, totp_uri = ?10, seed_phrase_value = ?11, seed_phrase_word_count = ?12, custom_fields_json = ?13, folder_id = ?14, updated_at = ?15 WHERE id = ?16",
-+                "UPDATE datacards SET title = ?1, url = ?2, email = ?3, recovery_email = ?4, username = ?5, mobile_phone = ?6, note = ?7, tags_json = ?8, password_value = ?9, totp_uri = ?10, seed_phrase_value = ?11, seed_phrase_word_count = ?12, custom_fields_json = ?13, folder_id = ?14, updated_at = ?15 WHERE id = ?16 AND vault_id = ?17",
-                 params![
-                     input.title,
-                     input.url,
-@@ -954,7 +1070,8 @@ pub fn update_datacard(
-                     custom_fields_json,
-                     input.folder_id,
-                     now,
--                    input.id
-+                    input.id,
-+                    active_vault_id
-                 ],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -970,14 +1087,15 @@ pub fn set_datacard_favorite(
-     profile_id: &str,
-     input: &SetDataCardFavoriteInput,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
-             .execute(
--                "UPDATE datacards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
-+                "UPDATE datacards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
-                 params![
-                     if input.is_favorite { 1 } else { 0 },
-                     Utc::now().to_rfc3339(),
--                    input.id
-+                    input.id,
-+                    active_vault_id
-                 ],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -996,11 +1114,14 @@ pub fn move_datacard(
-     id: &str,
-     folder_id: &Option<String>,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-+        if let Some(folder) = folder_id.as_ref() {
-+            let _ = get_folder_by_id_conn(conn, folder, active_vault_id)?;
-+        }
-         let rows = conn
-             .execute(
--                "UPDATE datacards SET folder_id = ?1, updated_at = ?2 WHERE id = ?3",
--                params![folder_id, Utc::now().to_rfc3339(), id],
-+                "UPDATE datacards SET folder_id = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
-+                params![folder_id, Utc::now().to_rfc3339(), id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         if rows == 0 {
-@@ -1016,11 +1137,11 @@ pub fn soft_delete_datacard(
-     id: &str,
-     now: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
-             .execute(
--                "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
--                params![now, now, id],
-+                "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
-+                params![now, now, id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         if rows == 0 {
-@@ -1031,11 +1152,11 @@ pub fn soft_delete_datacard(
- }
- 
- pub fn restore_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
-             .execute(
--                "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
--                params![Utc::now().to_rfc3339(), id],
-+                "UPDATE datacards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2 AND vault_id = ?3",
-+                params![Utc::now().to_rfc3339(), id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         if rows == 0 {
-@@ -1046,9 +1167,12 @@ pub fn restore_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Re
- }
- 
- pub fn purge_datacard(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
--            .execute("DELETE FROM datacards WHERE id = ?1", params![id])
-+            .execute(
-+                "DELETE FROM datacards WHERE id = ?1 AND vault_id = ?2",
-+                params![id, active_vault_id],
-+            )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         if rows == 0 {
-             return Err(ErrorCodeString::new("DATACARD_NOT_FOUND"));
-@@ -1062,11 +1186,11 @@ pub fn soft_delete_datacards_in_folder(
-     profile_id: &str,
-     folder_id: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let now = Utc::now().to_rfc3339();
-         conn.execute(
--            "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3",
--            params![now.clone(), now, folder_id],
-+            "UPDATE datacards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3 AND vault_id = ?4",
-+            params![now.clone(), now, folder_id, active_vault_id],
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         Ok(true)
-@@ -1077,10 +1201,10 @@ pub fn purge_datacards_in_folder(
-     profile_id: &str,
-     folder_id: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         conn.execute(
--            "DELETE FROM datacards WHERE folder_id = ?1",
--            params![folder_id],
-+            "DELETE FROM datacards WHERE folder_id = ?1 AND vault_id = ?2",
-+            params![folder_id, active_vault_id],
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         Ok(true)
-@@ -1093,10 +1217,10 @@ pub fn list_bank_cards_summary(
-     sort_field: &str,
-     sort_dir: &str,
- ) -> Result<Vec<BankCardSummary>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let clause = order_clause(sort_field, sort_dir).unwrap_or("ORDER BY updated_at DESC");
-         let query = format!(
--            "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NULL {clause}"
-+            "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE vault_id = ?1 AND deleted_at IS NULL {clause}"
-         );
-         let mut stmt = conn.prepare(&query).map_err(|e| {
-             log_sqlite_err("list_bank_cards_summary.prepare", &query, &e);
-@@ -1104,7 +1228,7 @@ pub fn list_bank_cards_summary(
-         })?;
- 
-         let cards = stmt
--            .query_map([], map_bank_card_summary)
-+            .query_map(params![active_vault_id], map_bank_card_summary)
-             .map_err(|e| {
-                 log_sqlite_err("list_bank_cards_summary.query_map", &query, &e);
-                 ErrorCodeString::new("DB_QUERY_FAILED")
-@@ -1123,15 +1247,15 @@ pub fn list_deleted_bank_cards_summary(
-     state: &Arc<AppState>,
-     profile_id: &str,
- ) -> Result<Vec<BankCardSummary>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
-             .prepare(
--                "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-+                "SELECT id, folder_id, title, bank_name, holder, number, note, tags_json, preview_fields_json, is_favorite, created_at, updated_at, archived_at, deleted_at FROM bank_cards WHERE vault_id = ?1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let cards = stmt
--            .query_map([], map_bank_card_summary)
-+            .query_map(params![active_vault_id], map_bank_card_summary)
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<_>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -1144,15 +1268,15 @@ pub fn list_deleted_bank_card_ids(
-     state: &Arc<AppState>,
-     profile_id: &str,
- ) -> Result<Vec<String>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
-             .prepare(
--                "SELECT id FROM bank_cards WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-+                "SELECT id FROM bank_cards WHERE vault_id = ?1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC",
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let ids = stmt
--            .query_map([], |row| row.get::<_, String>(0))
-+            .query_map(params![active_vault_id], |row| row.get::<_, String>(0))
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<_>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -1162,20 +1286,24 @@ pub fn list_deleted_bank_card_ids(
- }
- 
- pub fn get_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<BankCardItem> {
--    with_connection(state, profile_id, |conn| {
--        let mut stmt = conn
--            .prepare("SELECT * FROM bank_cards WHERE id = ?1")
--            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-+        get_bank_card_by_id_conn(conn, id, active_vault_id)
-+    })
++.settings-content {
++  min-height: 0;
++  overflow-y: auto;
++  padding: 20px 22px;
++  display: flex;
++  flex-direction: column;
++  gap: 18px;
 +}
  
--        match stmt.query_row(params![id], map_bank_card) {
--            Ok(card) => Ok(card),
--            Err(rusqlite::Error::QueryReturnedNoRows) => Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND")),
--            Err(err) => {
--                log_sqlite_err("get_bank_card.query_row", "SELECT * FROM bank_cards WHERE id = ?1", &err);
--                Err(ErrorCodeString::new("DB_QUERY_FAILED"))
--            }
-+fn get_bank_card_by_id_conn(conn: &Connection, id: &str, vault_id: &str) -> Result<BankCardItem> {
-+    let mut stmt = conn
-+        .prepare("SELECT * FROM bank_cards WHERE id = ?1 AND vault_id = ?2")
-+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+ .settings-modal-section-title {
+   margin: 0;
+@@ -1025,6 +1093,40 @@ select:autofill {
+   width: 100%;
+ }
+ 
++@media (max-width: 900px) {
++  .settings-modal {
++    width: min(760px, calc(100vw - 24px));
++  }
 +
-+    match stmt.query_row(params![id, vault_id], map_bank_card) {
-+        Ok(card) => Ok(card),
-+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND")),
-+        Err(err) => {
-+            log_sqlite_err("get_bank_card.query_row", "SELECT * FROM bank_cards WHERE id = ?1", &err);
-+            Err(ErrorCodeString::new("DB_QUERY_FAILED"))
-         }
--    })
-+    }
- }
- 
- pub fn create_bank_card(
-@@ -1183,14 +1311,18 @@ pub fn create_bank_card(
-     profile_id: &str,
-     input: &CreateBankCardInput,
- ) -> Result<BankCardItem> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let tags_json = serialize_json(&input.tags)?;
-         let now = Utc::now().to_rfc3339();
-         let id = Uuid::new_v4().to_string();
-+        if let Some(folder_id) = input.folder_id.as_ref() {
-+            let _ = get_folder_by_id_conn(conn, folder_id, active_vault_id)?;
-+        }
-         conn.execute(
--            "INSERT INTO bank_cards (id, folder_id, title, bank_name, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, ?11, ?12, NULL)",
-+            "INSERT INTO bank_cards (id, vault_id, folder_id, title, bank_name, holder, number, expiry_mm_yy, cvc, note, tags_json, is_favorite, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12, ?13, NULL)",
-             params![
-                 id,
-+                active_vault_id,
-                 input.folder_id,
-                 input.title,
-                 input.bank_name,
-@@ -1206,7 +1338,7 @@ pub fn create_bank_card(
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
--        get_bank_card_by_id_conn(conn, &id)
-+        get_bank_card_by_id_conn(conn, &id, active_vault_id)
-     })
- }
- 
-@@ -1215,11 +1347,14 @@ pub fn update_bank_card(
-     profile_id: &str,
-     input: &UpdateBankCardInput,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let tags_json = serialize_json(&input.tags)?;
-+        if let Some(folder_id) = input.folder_id.as_ref() {
-+            let _ = get_folder_by_id_conn(conn, folder_id, active_vault_id)?;
-+        }
-         let rows = conn
-             .execute(
--                "UPDATE bank_cards SET folder_id = ?1, title = ?2, bank_name = ?3, holder = ?4, number = ?5, expiry_mm_yy = ?6, cvc = ?7, note = ?8, tags_json = ?9, updated_at = ?10 WHERE id = ?11",
-+                "UPDATE bank_cards SET folder_id = ?1, title = ?2, bank_name = ?3, holder = ?4, number = ?5, expiry_mm_yy = ?6, cvc = ?7, note = ?8, tags_json = ?9, updated_at = ?10 WHERE id = ?11 AND vault_id = ?12",
-                 params![
-                     input.folder_id,
-                     input.title,
-@@ -1231,7 +1366,8 @@ pub fn update_bank_card(
-                     input.note,
-                     tags_json,
-                     Utc::now().to_rfc3339(),
--                    input.id
-+                    input.id,
-+                    active_vault_id
-                 ],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -1247,14 +1383,15 @@ pub fn set_bank_card_favorite(
-     profile_id: &str,
-     input: &SetBankCardFavoriteInput,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
-             .execute(
--                "UPDATE bank_cards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
-+                "UPDATE bank_cards SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
-                 params![
-                     if input.is_favorite { 1 } else { 0 },
-                     Utc::now().to_rfc3339(),
--                    input.id
-+                    input.id,
-+                    active_vault_id
-                 ],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -1270,7 +1407,7 @@ pub fn set_bankcard_archived(
-     profile_id: &str,
-     input: &SetBankCardArchivedInput,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let archived_at: Option<String> = if input.is_archived {
-             Some(Utc::now().to_rfc3339())
-         } else {
-@@ -1279,8 +1416,8 @@ pub fn set_bankcard_archived(
- 
-         let rows = conn
-             .execute(
--                "UPDATE bank_cards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
--                params![archived_at, Utc::now().to_rfc3339(), input.id],
-+                "UPDATE bank_cards SET archived_at = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4 AND deleted_at IS NULL",
-+                params![archived_at, Utc::now().to_rfc3339(), input.id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         if rows == 0 {
-@@ -1296,11 +1433,11 @@ pub fn soft_delete_bank_card(
-     id: &str,
-     now: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
-             .execute(
--                "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
--                params![now, now, id],
-+                "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
-+                params![now, now, id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         if rows == 0 {
-@@ -1311,11 +1448,11 @@ pub fn soft_delete_bank_card(
- }
- 
- pub fn restore_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
-             .execute(
--                "UPDATE bank_cards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
--                params![Utc::now().to_rfc3339(), id],
-+                "UPDATE bank_cards SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2 AND vault_id = ?3",
-+                params![Utc::now().to_rfc3339(), id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         if rows == 0 {
-@@ -1326,9 +1463,12 @@ pub fn restore_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> R
- }
- 
- pub fn purge_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
--            .execute("DELETE FROM bank_cards WHERE id = ?1", params![id])
-+            .execute(
-+                "DELETE FROM bank_cards WHERE id = ?1 AND vault_id = ?2",
-+                params![id, active_vault_id],
-+            )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         if rows == 0 {
-             return Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND"));
-@@ -1342,11 +1482,11 @@ pub fn soft_delete_bank_cards_in_folder(
-     profile_id: &str,
-     folder_id: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let now = Utc::now().to_rfc3339();
-         conn.execute(
--            "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3",
--            params![now.clone(), now, folder_id],
-+            "UPDATE bank_cards SET deleted_at = ?1, updated_at = ?2 WHERE folder_id = ?3 AND vault_id = ?4",
-+            params![now.clone(), now, folder_id, active_vault_id],
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         Ok(true)
-@@ -1358,8 +1498,11 @@ pub fn purge_bank_cards_in_folder(
-     profile_id: &str,
-     folder_id: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
--        conn.execute("DELETE FROM bank_cards WHERE folder_id = ?1", params![folder_id])
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-+        conn.execute(
-+            "DELETE FROM bank_cards WHERE folder_id = ?1 AND vault_id = ?2",
-+            params![folder_id, active_vault_id],
-+        )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         Ok(true)
-     })
-@@ -1396,15 +1539,15 @@ pub fn list_attachments_by_datacard(
-     profile_id: &str,
-     datacard_id: &str,
- ) -> Result<Vec<AttachmentMeta>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
-             .prepare(
--                "SELECT * FROM attachments WHERE datacard_id = ?1 AND deleted_at IS NULL ORDER BY created_at DESC",
-+                "SELECT a.* FROM attachments a INNER JOIN datacards d ON d.id = a.datacard_id WHERE a.datacard_id = ?1 AND d.vault_id = ?2 AND a.deleted_at IS NULL ORDER BY a.created_at DESC",
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let rows = stmt
--            .query_map(params![datacard_id], map_attachment)
-+            .query_map(params![datacard_id, active_vault_id], map_attachment)
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<_>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -1418,13 +1561,15 @@ pub fn list_all_attachments_by_datacard(
-     profile_id: &str,
-     datacard_id: &str,
- ) -> Result<Vec<AttachmentMeta>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
--            .prepare("SELECT * FROM attachments WHERE datacard_id = ?1")
-+            .prepare(
-+                "SELECT a.* FROM attachments a INNER JOIN datacards d ON d.id = a.datacard_id WHERE a.datacard_id = ?1 AND d.vault_id = ?2",
-+            )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let rows = stmt
--            .query_map(params![datacard_id], map_attachment)
-+            .query_map(params![datacard_id, active_vault_id], map_attachment)
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<_>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -1439,10 +1584,10 @@ pub fn soft_delete_attachments_by_datacard(
-     datacard_id: &str,
-     deleted_at: &str,
- ) -> Result<()> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         conn.execute(
--            "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE datacard_id = ?3",
--            params![deleted_at, deleted_at, datacard_id],
-+            "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE datacard_id = ?3 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = ?3 AND d.vault_id = ?4)",
-+            params![deleted_at, deleted_at, datacard_id, active_vault_id],
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         Ok(())
-@@ -1454,10 +1599,10 @@ pub fn restore_attachments_by_datacard(
-     profile_id: &str,
-     datacard_id: &str,
- ) -> Result<()> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         conn.execute(
--            "UPDATE attachments SET deleted_at = NULL, updated_at = ?1 WHERE datacard_id = ?2",
--            params![Utc::now().to_rfc3339(), datacard_id],
-+            "UPDATE attachments SET deleted_at = NULL, updated_at = ?1 WHERE datacard_id = ?2 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = ?2 AND d.vault_id = ?3)",
-+            params![Utc::now().to_rfc3339(), datacard_id, active_vault_id],
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-         Ok(())
-@@ -1469,13 +1614,15 @@ pub fn get_attachment(
-     profile_id: &str,
-     attachment_id: &str,
- ) -> Result<Option<AttachmentMeta>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
--            .prepare("SELECT * FROM attachments WHERE id = ?1")
-+            .prepare(
-+                "SELECT a.* FROM attachments a INNER JOIN datacards d ON d.id = a.datacard_id WHERE a.id = ?1 AND d.vault_id = ?2",
-+            )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let meta = stmt
--            .query_row(params![attachment_id], map_attachment)
-+            .query_row(params![attachment_id, active_vault_id], map_attachment)
-             .optional()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-@@ -1489,11 +1636,11 @@ pub fn soft_delete_attachment(
-     attachment_id: &str,
-     deleted_at: &str,
- ) -> Result<()> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let updated = conn
-             .execute(
--                "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
--                params![deleted_at, deleted_at, attachment_id],
-+                "UPDATE attachments SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = attachments.datacard_id AND d.vault_id = ?4)",
-+                params![deleted_at, deleted_at, attachment_id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-@@ -1511,11 +1658,11 @@ pub fn set_datacard_preview_fields_for_card(
-     id: &str,
-     preview_fields_json: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
-             .execute(
--                "UPDATE datacards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3",
--                params![preview_fields_json, Utc::now().to_rfc3339(), id],
-+                "UPDATE datacards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
-+                params![preview_fields_json, Utc::now().to_rfc3339(), id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-@@ -1533,11 +1680,11 @@ pub fn set_bankcard_preview_fields_for_card(
-     id: &str,
-     preview_fields_json: &str,
- ) -> Result<bool> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let rows = conn
-             .execute(
--                "UPDATE bank_cards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3",
--                params![preview_fields_json, Utc::now().to_rfc3339(), id],
-+                "UPDATE bank_cards SET preview_fields_json = ?1, updated_at = ?2 WHERE id = ?3 AND vault_id = ?4",
-+                params![preview_fields_json, Utc::now().to_rfc3339(), id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-@@ -1554,11 +1701,11 @@ pub fn purge_attachment(
-     profile_id: &str,
-     attachment_id: &str,
- ) -> Result<()> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let updated = conn
-             .execute(
--                "DELETE FROM attachments WHERE id = ?1",
--                params![attachment_id],
-+                "DELETE FROM attachments WHERE id = ?1 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = attachments.datacard_id AND d.vault_id = ?2)",
-+                params![attachment_id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-@@ -1591,15 +1738,15 @@ pub fn list_password_history(
-     profile_id: &str,
-     datacard_id: &str,
- ) -> Result<Vec<PasswordHistoryRow>> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let mut stmt = conn
-             .prepare(
--                "SELECT * FROM datacard_password_history WHERE datacard_id = ?1 ORDER BY created_at DESC",
-+                "SELECT p.* FROM datacard_password_history p INNER JOIN datacards d ON d.id = p.datacard_id WHERE p.datacard_id = ?1 AND d.vault_id = ?2 ORDER BY p.created_at DESC",
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         let rows = stmt
--            .query_map(params![datacard_id], map_password_history_row)
-+            .query_map(params![datacard_id, active_vault_id], map_password_history_row)
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?
-             .collect::<rusqlite::Result<Vec<_>>>()
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-@@ -1613,15 +1760,14 @@ pub fn clear_password_history(
-     profile_id: &str,
-     datacard_id: &str,
- ) -> Result<usize> {
--    with_connection(state, profile_id, |conn| {
-+    with_connection_in_active_vault(state, profile_id, |conn, active_vault_id| {
-         let deleted = conn
-             .execute(
--                "DELETE FROM datacard_password_history WHERE datacard_id = ?1",
--                params![datacard_id],
-+                "DELETE FROM datacard_password_history WHERE datacard_id = ?1 AND EXISTS (SELECT 1 FROM datacards d WHERE d.id = ?1 AND d.vault_id = ?2)",
-+                params![datacard_id, active_vault_id],
-             )
-             .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
-         Ok(deleted as usize)
-     })
++  .settings-layout {
++    grid-template-columns: 1fr;
++    max-height: calc(100vh - 190px);
++  }
++
++  .settings-sidebar {
++    border-right: none;
++    border-bottom: 1px solid var(--border-subtle);
++  }
++
++  .settings-sidebar-nav {
++    flex-direction: row;
++    flex-wrap: wrap;
++  }
++
++  .settings-nav-item {
++    width: auto;
++  }
++
++  .settings-content {
++    padding: 16px;
++  }
++
++  .settings-profile-action {
++    width: 100%;
++    max-width: 280px;
++  }
++}
++
+ /* Switch: single implementation for all toggles (role="switch") */
+ .pm-switch {
+   width: 44px;
+@@ -1337,5 +1439,3 @@ select:autofill {
+ .primary.primary-danger:not(:disabled):hover {
+   background-color: var(--color-danger-strong);
  }
 -
-diff --git a/src-tauri/src/data/sqlite/schema.sql b/src-tauri/src/data/sqlite/schema.sql
-index b261cfa..f4f1225 100644
---- a/src-tauri/src/data/sqlite/schema.sql
-+++ b/src-tauri/src/data/sqlite/schema.sql
-@@ -1,7 +1,22 @@
- PRAGMA foreign_keys = ON;
- 
-+CREATE TABLE IF NOT EXISTS vaults (
-+  id         TEXT PRIMARY KEY,
-+  name       TEXT NOT NULL,
-+  is_default INTEGER NOT NULL DEFAULT 0,
-+  created_at TEXT NOT NULL,
-+  updated_at TEXT NOT NULL
-+);
-+
-+CREATE UNIQUE INDEX IF NOT EXISTS idx_vaults_unique_name
-+ON vaults(name);
-+
-+INSERT OR IGNORE INTO vaults (id, name, is_default, created_at, updated_at)
-+VALUES ('default', 'Default vault', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-+
- CREATE TABLE IF NOT EXISTS folders (
-   id         TEXT PRIMARY KEY,
-+  vault_id   TEXT NOT NULL DEFAULT 'default',
-   name       TEXT NOT NULL,
-   parent_id  TEXT NULL,
-   is_system  INTEGER NOT NULL DEFAULT 0,
-@@ -12,14 +27,18 @@ CREATE TABLE IF NOT EXISTS folders (
- );
- 
- CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_unique_name
--ON folders(parent_id, name)
-+ON folders(vault_id, parent_id, name)
- WHERE deleted_at IS NULL;
- 
- CREATE INDEX IF NOT EXISTS idx_folders_parent
- ON folders(parent_id);
- 
-+CREATE INDEX IF NOT EXISTS idx_folders_vault
-+ON folders(vault_id);
-+
- CREATE TABLE IF NOT EXISTS datacards (
-   id           TEXT PRIMARY KEY,
-+  vault_id     TEXT NOT NULL DEFAULT 'default',
-   folder_id    TEXT NULL,
- 
-   title        TEXT,
-@@ -49,6 +68,9 @@ CREATE TABLE IF NOT EXISTS datacards (
- CREATE INDEX IF NOT EXISTS idx_datacards_folder
- ON datacards(folder_id);
- 
-+CREATE INDEX IF NOT EXISTS idx_datacards_vault
-+ON datacards(vault_id);
-+
- CREATE INDEX IF NOT EXISTS idx_datacards_archived
- ON datacards(archived_at);
- 
-@@ -89,6 +111,7 @@ ON attachments(deleted_at);
- 
- CREATE TABLE IF NOT EXISTS bank_cards (
-   id TEXT PRIMARY KEY,
-+  vault_id TEXT NOT NULL DEFAULT 'default',
-   folder_id TEXT NULL,
- 
-   title TEXT NOT NULL,
-@@ -111,6 +134,7 @@ CREATE INDEX IF NOT EXISTS idx_bank_cards_archived_at ON bank_cards (archived_at
- CREATE INDEX IF NOT EXISTS idx_bank_cards_deleted_at ON bank_cards (deleted_at);
- CREATE INDEX IF NOT EXISTS idx_bank_cards_is_favorite ON bank_cards (is_favorite);
- CREATE INDEX IF NOT EXISTS idx_bank_cards_folder ON bank_cards (folder_id);
-+CREATE INDEX IF NOT EXISTS idx_bank_cards_vault ON bank_cards (vault_id);
- 
- -- UI preferences for frontend-only settings that should live with the vault DB.
- CREATE TABLE IF NOT EXISTS ui_preferences (
-diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
-index 15b03ba..ae580e3 100644
---- a/src-tauri/src/main.rs
-+++ b/src-tauri/src/main.rs
-@@ -47,6 +47,7 @@ mod services {
-     pub mod security_service;
-     pub mod settings_service;
-     pub mod ui_prefs_service;
-+    pub mod vaults_service;
- }
- mod types;
- 
-@@ -55,7 +56,8 @@ use std::sync::Arc;
- use app_state::AppState;
- use commands::{
-     attachments::*, backup::*, bank_cards::*, clipboard::*, datacards::*, folders::*,
--    password_history::*, profiles::*, security::*, settings::*, ui_prefs::*, workspace::*,
-+    password_history::*, profiles::*, security::*, settings::*, ui_prefs::*, vaults::*,
-+    workspace::*,
- };
- use data::storage_paths::StoragePaths;
- use services::security_service;
-@@ -152,6 +154,9 @@ fn main() {
-             backup_list,
-             backup_create_if_due_auto,
-             list_folders,
-+            list_vaults,
-+            create_vault,
-+            set_active_vault,
-             create_folder,
-             rename_folder,
-             move_folder,
-diff --git a/src-tauri/src/services/security_service.rs b/src-tauri/src/services/security_service.rs
-index 6945eb2..073e2d1 100644
---- a/src-tauri/src/services/security_service.rs
-+++ b/src-tauri/src/services/security_service.rs
-@@ -22,6 +22,7 @@ use crate::data::profiles::registry;
- use crate::data::sqlite::migrations;
- use crate::error::{ErrorCodeString, Result};
- use crate::services::attachments_service;
-+use crate::services::settings_service;
- use crate::types::ProfileMeta;
- 
- fn format_rusqlite_error(err: &rusqlite::Error) -> String {
-@@ -913,6 +914,13 @@ pub fn login_vault(id: &str, password: Option<&str>, state: &Arc<AppState>) -> R
-     if let Ok(mut active) = state.active_profile.lock() {
-         *active = Some(id.to_string());
-     }
-+    let active_vault_id =
-+        settings_service::resolve_active_vault_id(&storage_paths, id).unwrap_or_else(|_| {
-+            settings_service::DEFAULT_VAULT_ID.to_string()
-+        });
-+    if let Ok(mut active) = state.active_vault_id.lock() {
-+        *active = Some(active_vault_id);
-+    }
-     Ok(true)
- }
- 
-@@ -1016,6 +1024,13 @@ pub fn lock_vault(state: &Arc<AppState>) -> Result<bool> {
- 			.map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
- 		*active = None;
- 	}
-+    {
-+        let mut active_vault_id = state
-+            .active_vault_id
-+            .lock()
-+            .map_err(|_| ErrorCodeString::new("STATE_UNAVAILABLE"))?;
-+        *active_vault_id = None;
-+    }
- 
- 	Ok(true)
- }
-diff --git a/src-tauri/src/services/settings_service.rs b/src-tauri/src/services/settings_service.rs
-index 72b6b0b..4f70b22 100644
---- a/src-tauri/src/services/settings_service.rs
-+++ b/src-tauri/src/services/settings_service.rs
-@@ -9,6 +9,17 @@ use crate::error::{ErrorCodeString, Result};
- use crate::services::security_service;
- use crate::types::UserSettings;
- 
-+pub const DEFAULT_VAULT_ID: &str = "default";
-+
-+pub fn normalize_active_vault_id(raw: &str) -> String {
-+    let trimmed = raw.trim();
-+    if trimmed.is_empty() {
-+        DEFAULT_VAULT_ID.to_string()
-+    } else {
-+        trimmed.to_string()
-+    }
-+}
-+
- fn validate_settings(settings: &UserSettings) -> Result<()> {
-     let in_range = |value: i64, min: i64, max: i64| (min..=max).contains(&value);
- 
-@@ -31,8 +42,15 @@ fn validate_settings(settings: &UserSettings) -> Result<()> {
-     let valid_sort_field =
-         ["created_at", "updated_at", "title"].contains(&settings.default_sort_field.as_str());
-     let valid_sort_direction = ["ASC", "DESC"].contains(&settings.default_sort_direction.as_str());
-+    let valid_active_vault_id = !settings.active_vault_id.trim().is_empty();
- 
--    if valid_values && valid_auto_backup_interval && valid_frequency && valid_sort_field && valid_sort_direction {
-+    if valid_values
-+        && valid_auto_backup_interval
-+        && valid_frequency
-+        && valid_sort_field
-+        && valid_sort_direction
-+        && valid_active_vault_id
-+    {
-         Ok(())
-     } else {
-         Err(ErrorCodeString::new("SETTINGS_VALIDATION_FAILED"))
-@@ -56,9 +74,15 @@ pub fn get_settings(sp: &StoragePaths, profile_id: &str) -> Result<UserSettings>
- 
- pub fn update_settings(
-     sp: &StoragePaths,
--    new_settings: UserSettings,
-+    mut new_settings: UserSettings,
-     profile_id: &str,
- ) -> Result<bool> {
-+    if !new_settings.multiply_vaults_enabled {
-+        new_settings.active_vault_id = DEFAULT_VAULT_ID.to_string();
-+    } else {
-+        new_settings.active_vault_id = normalize_active_vault_id(&new_settings.active_vault_id);
-+    }
-+
-     validate_settings(&new_settings)?;
-     let path = user_settings_path(sp, profile_id)?;
-     let serialized = serde_json::to_string_pretty(&new_settings)
-@@ -68,10 +92,30 @@ pub fn update_settings(
-     Ok(true)
- }
- 
--pub fn update_settings_command(state: &Arc<AppState>, settings: UserSettings) -> Result<bool> {
-+pub fn resolve_active_vault_id(sp: &StoragePaths, profile_id: &str) -> Result<String> {
-+    let settings = get_settings(sp, profile_id)?;
-+    if !settings.multiply_vaults_enabled {
-+        return Ok(DEFAULT_VAULT_ID.to_string());
-+    }
-+    Ok(normalize_active_vault_id(&settings.active_vault_id))
-+}
-+
-+pub fn update_settings_command(state: &Arc<AppState>, mut settings: UserSettings) -> Result<bool> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-     let storage_paths = state.get_storage_paths()?;
--    update_settings(&storage_paths, settings, &profile_id)
-+    if !settings.multiply_vaults_enabled {
-+        settings.active_vault_id = DEFAULT_VAULT_ID.to_string();
-+    } else {
-+        settings.active_vault_id = normalize_active_vault_id(&settings.active_vault_id);
-+    }
-+
-+    let updated = update_settings(&storage_paths, settings.clone(), &profile_id)?;
-+    if updated {
-+        if let Ok(mut active_vault_id) = state.active_vault_id.lock() {
-+            *active_vault_id = Some(settings.active_vault_id);
-+        }
-+    }
-+    Ok(updated)
- }
- 
- pub fn get_settings_command(state: &Arc<AppState>) -> Result<UserSettings> {
-diff --git a/src-tauri/src/services/vaults_service.rs b/src-tauri/src/services/vaults_service.rs
-new file mode 100644
-index 0000000..f9422e5
---- /dev/null
-+++ b/src-tauri/src/services/vaults_service.rs
-@@ -0,0 +1,55 @@
-+use std::sync::Arc;
-+
-+use crate::app_state::AppState;
-+use crate::data::sqlite::repo_impl;
-+use crate::error::{ErrorCodeString, Result};
-+use crate::services::security_service;
-+use crate::services::settings_service;
-+use crate::types::Vault;
-+
-+pub fn list_vaults(state: &Arc<AppState>) -> Result<Vec<Vault>> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    repo_impl::list_vaults(state, &profile_id)
-+}
-+
-+pub fn create_vault(name: String, state: &Arc<AppState>) -> Result<Vault> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let storage_paths = state.get_storage_paths()?;
-+    let settings = settings_service::get_settings(&storage_paths, &profile_id)?;
-+    if !settings.multiply_vaults_enabled {
-+        return Err(ErrorCodeString::new("MULTIPLY_VAULTS_DISABLED"));
-+    }
-+
-+    let trimmed = name.trim();
-+    if trimmed.is_empty() {
-+        return Err(ErrorCodeString::new("VAULT_NAME_REQUIRED"));
-+    }
-+
-+    let created = repo_impl::create_vault(state, &profile_id, trimmed)?;
-+    security_service::request_persist_active_vault(state.clone());
-+    Ok(created)
-+}
-+
-+pub fn set_active_vault(id: String, state: &Arc<AppState>) -> Result<bool> {
-+    let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-+    let storage_paths = state.get_storage_paths()?;
-+    let mut settings = settings_service::get_settings(&storage_paths, &profile_id)?;
-+
-+    let normalized = settings_service::normalize_active_vault_id(&id);
-+    if !settings.multiply_vaults_enabled && normalized != settings_service::DEFAULT_VAULT_ID {
-+        return Err(ErrorCodeString::new("MULTIPLY_VAULTS_DISABLED"));
-+    }
-+
-+    let _ = repo_impl::get_vault(state, &profile_id, &normalized)?;
-+
-+    if let Ok(mut active_vault_id) = state.active_vault_id.lock() {
-+        *active_vault_id = Some(normalized.clone());
-+    }
-+
-+    settings.active_vault_id = normalized;
-+    let updated = settings_service::update_settings(&storage_paths, settings, &profile_id)?;
-+    if updated {
-+        security_service::request_persist_active_vault(state.clone());
-+    }
-+    Ok(updated)
-+}
-diff --git a/src-tauri/src/types.rs b/src-tauri/src/types.rs
-index 9325410..b261d8a 100644
---- a/src-tauri/src/types.rs
-+++ b/src-tauri/src/types.rs
-@@ -67,6 +67,15 @@ pub struct Folder {
-     pub deleted_at: Option<String>,
- }
- 
-+#[derive(Debug, Serialize, Deserialize, Clone)]
-+pub struct Vault {
-+    pub id: String,
-+    pub name: String,
-+    pub is_default: bool,
-+    pub created_at: String,
-+    pub updated_at: String,
-+}
-+
- #[derive(Debug, Serialize, Deserialize, Clone)]
- #[serde(rename_all = "lowercase")]
- pub enum CustomFieldType {
-@@ -337,6 +346,11 @@ pub struct UserSettings {
-     pub default_sort_direction: String,
- 
-     pub mask_password_by_default: bool,
-+
-+    #[serde(default = "default_multiply_vaults_enabled")]
-+    pub multiply_vaults_enabled: bool,
-+    #[serde(default = "default_active_vault_id")]
-+    pub active_vault_id: String,
- }
- 
- impl Default for UserSettings {
-@@ -357,6 +371,8 @@ impl Default for UserSettings {
-             default_sort_field: "updated_at".to_string(),
-             default_sort_direction: "DESC".to_string(),
-             mask_password_by_default: true,
-+            multiply_vaults_enabled: default_multiply_vaults_enabled(),
-+            active_vault_id: default_active_vault_id(),
-         }
-     }
- }
-@@ -385,6 +401,14 @@ fn default_auto_lock_timeout_seconds() -> i64 {
-     60
- }
- 
-+fn default_multiply_vaults_enabled() -> bool {
-+    false
-+}
-+
-+fn default_active_vault_id() -> String {
-+    "default".to_string()
-+}
-+
- #[derive(Debug, Serialize, Deserialize, Clone)]
- pub struct WorkspaceItem {
-     pub id: String,
+-
+
