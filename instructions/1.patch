@@ -1,510 +1,392 @@
-diff --git a/src/features/Vault/components/BankCards/BankCards.tsx b/src/features/Vault/components/BankCards/BankCards.tsx
-index 41bd79f..97bc6de 100644
---- a/src/features/Vault/components/BankCards/BankCards.tsx
-+++ b/src/features/Vault/components/BankCards/BankCards.tsx
-@@ -171,6 +171,14 @@ export function BankCards({
-     return (
-       <div className="dialog-backdrop">
-         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`}>
-+          <button
-+            className="dialog-close dialog-close--topright"
-+            type="button"
-+            aria-label={tCommon('action.close')}
-+            onClick={onClose}
-+          >
-+            �
-+          </button>
-           <div className="dialog-header">
-             <h2 id={`${dialogId}-title`} className="dialog-title">
-               {title}
-@@ -650,4 +658,3 @@ export function BankCards({
-     </div>
-   );
- }
--
-diff --git a/src/features/Vault/components/DataCards/DataCards.tsx b/src/features/Vault/components/DataCards/DataCards.tsx
-index 44464ea..11493b0 100644
---- a/src/features/Vault/components/DataCards/DataCards.tsx
-+++ b/src/features/Vault/components/DataCards/DataCards.tsx
-@@ -429,10 +429,21 @@ export function DataCards({
-     return (
-       <div className="dialog-backdrop">
-         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleElementId}>
--          <div className="dialog-header dialog-header--with-actions">
-+          <button
-+            type="button"
-+            className="dialog-close dialog-close--topright"
-+            aria-label={tCommon('action.close')}
-+            onClick={onClose}
-+          >
-+            {'\u00D7'}
-+          </button>
-+          <div className="dialog-header">
-             <h2 id={titleElementId} className="dialog-title">
-               {title}
-             </h2>
-+          </div>
-+          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
-+            <div className="dialog-body-actions">
-             <div className="dialog-header-actions">
-               <button
-                 type="button"
-@@ -506,9 +517,7 @@ export function DataCards({
-                 </div>
-               )}
-             </div>
--          </div>
--
--          <form className="dialog-body" onSubmit={handleSubmit} autoComplete="off">
-+            </div>
-             <div className="form-field">
-               <label className="form-label" htmlFor={`${dialogId}-title`}>
-                 {t('label.title')}
-@@ -1376,7 +1385,3 @@ export function DataCards({
- }
- 
- 
--
--
--
--
-diff --git a/src/features/Vault/components/Folders/Folders.tsx b/src/features/Vault/components/Folders/Folders.tsx
-index dc6c8a8..2625699 100644
---- a/src/features/Vault/components/Folders/Folders.tsx
-+++ b/src/features/Vault/components/Folders/Folders.tsx
-@@ -230,6 +230,14 @@ export function Folders({
-     return (
-       <div className="dialog-backdrop">
-         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="create-vault-title">
-+          <button
-+            className="dialog-close dialog-close--topright"
-+            type="button"
-+            aria-label={tCommon('action.close')}
-+            onClick={closeCreateVaultDialog}
-+          >
-+            �
-+          </button>
-           <div className="dialog-header">
-             <h2 id="create-vault-title" className="dialog-title">
-               {t('dialog.newVault.title')}
-@@ -281,6 +289,14 @@ export function Folders({
-     return (
-       <div className="dialog-backdrop">
-         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-+          <button
-+            className="dialog-close dialog-close--topright"
-+            type="button"
-+            aria-label={tCommon('action.close')}
-+            onClick={dialogState.closeCreateFolder}
-+          >
-+            �
-+          </button>
-           <div className="dialog-header">
-             <h2 id="dialog-title" className="dialog-title">
-               {t('dialog.newFolder.title')}
-@@ -383,6 +399,14 @@ export function Folders({
-     return (
-       <div className="dialog-backdrop">
-         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="rename-folder-title">
-+          <button
-+            className="dialog-close dialog-close--topright"
-+            type="button"
-+            aria-label={tCommon('action.close')}
-+            onClick={closeRenameDialog}
-+          >
-+            �
-+          </button>
-           <div className="dialog-header">
-             <h2 id="rename-folder-title" className="dialog-title">
-               {t('dialog.renameFolder.title')}
-@@ -638,4 +662,3 @@ export function Folders({
-     </div>
-   );
- }
--
-diff --git a/src/features/Vault/components/modals/Add2FAModal.tsx b/src/features/Vault/components/modals/Add2FAModal.tsx
-index 4a08596..7d91706 100644
---- a/src/features/Vault/components/modals/Add2FAModal.tsx
-+++ b/src/features/Vault/components/modals/Add2FAModal.tsx
-@@ -76,6 +76,9 @@ export const Add2FAModal: React.FC<Props> = ({
-   return (
-     <div className="dialog-backdrop dialog-backdrop--inner">
-       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="add2fa-title">
-+        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h2 id="add2fa-title" className="dialog-title">
-             {t('twoFactor.title')}
-@@ -187,4 +190,3 @@ export const Add2FAModal: React.FC<Props> = ({
-     </div>
-   );
- };
--
-diff --git a/src/features/Vault/components/modals/AttachmentPreviewModal.tsx b/src/features/Vault/components/modals/AttachmentPreviewModal.tsx
-index 16c15b8..ab58b51 100644
---- a/src/features/Vault/components/modals/AttachmentPreviewModal.tsx
-+++ b/src/features/Vault/components/modals/AttachmentPreviewModal.tsx
-@@ -44,6 +44,14 @@ export default function AttachmentPreviewModal({
-   return (
-     <div className="dialog-backdrop">
-       <div className="dialog preview-dialog" role="dialog" aria-modal="true">
-+        <button
-+          className="dialog-close dialog-close--topright"
-+          type="button"
-+          aria-label={tCommon('action.close')}
-+          onClick={onClose}
-+        >
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h3 className="dialog-title">{fileName || t('attachments.title')}</h3>
-         </div>
-@@ -77,4 +85,3 @@ export default function AttachmentPreviewModal({
-     </div>
-   );
- }
--
-diff --git a/src/features/Vault/components/modals/CustomFieldModal.tsx b/src/features/Vault/components/modals/CustomFieldModal.tsx
-index b65412c..5ebcc89 100644
---- a/src/features/Vault/components/modals/CustomFieldModal.tsx
-+++ b/src/features/Vault/components/modals/CustomFieldModal.tsx
-@@ -25,6 +25,9 @@ export const CustomFieldModal: React.FC<CustomFieldModalProps> = ({
-   return (
-     <div className="dialog-backdrop dialog-backdrop--inner">
-       <div className="dialog customfield-dialog" role="dialog" aria-modal="true" aria-labelledby="customfield-title">
-+        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h2 id="customfield-title" className="dialog-title">
-             {t('customFields.modalTitle')}
-@@ -63,4 +66,3 @@ export const CustomFieldModal: React.FC<CustomFieldModalProps> = ({
-     </div>
-   );
- };
--
-diff --git a/src/features/Vault/components/modals/CustomFieldRenameModal.tsx b/src/features/Vault/components/modals/CustomFieldRenameModal.tsx
-index 747b0d5..57ee0fd 100644
---- a/src/features/Vault/components/modals/CustomFieldRenameModal.tsx
-+++ b/src/features/Vault/components/modals/CustomFieldRenameModal.tsx
-@@ -30,6 +30,9 @@ export const CustomFieldRenameModal: React.FC<CustomFieldRenameModalProps> = ({
-         aria-modal="true"
-         aria-labelledby="customfield-rename-title"
-       >
-+        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h2 id="customfield-rename-title" className="dialog-title">
-             {t('customFields.renameTitle')}
-@@ -67,4 +70,3 @@ export const CustomFieldRenameModal: React.FC<CustomFieldRenameModalProps> = ({
-     </div>
-   );
- };
--
-diff --git a/src/features/Vault/components/modals/DeleteFolderModal.tsx b/src/features/Vault/components/modals/DeleteFolderModal.tsx
-index 2c14163..0b02d88 100644
---- a/src/features/Vault/components/modals/DeleteFolderModal.tsx
-+++ b/src/features/Vault/components/modals/DeleteFolderModal.tsx
-@@ -30,6 +30,14 @@ export function DeleteFolderModal({
-   return (
-     <div className="dialog-backdrop">
-       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-folder-title">
-+        <button
-+          className="dialog-close dialog-close--topright"
-+          type="button"
-+          aria-label={tCommon('action.close')}
-+          onClick={onCancel}
-+        >
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h2 id="delete-folder-title" className="dialog-title">
-             {t('vault.delete_folder.title')}
-@@ -57,4 +65,3 @@ export function DeleteFolderModal({
-     </div>
-   );
- }
--
-diff --git a/src/features/Vault/components/modals/ExportBackupModal.tsx b/src/features/Vault/components/modals/ExportBackupModal.tsx
-index 76cbb9f..ce25d5f 100644
---- a/src/features/Vault/components/modals/ExportBackupModal.tsx
-+++ b/src/features/Vault/components/modals/ExportBackupModal.tsx
-@@ -69,6 +69,14 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
-   return (
-     <div className="dialog-backdrop">
-       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="export-backup-title">
-+        <button
-+          className="dialog-close dialog-close--topright"
-+          type="button"
-+          aria-label={tCommon('action.close')}
-+          onClick={onClose}
-+        >
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h2 id="export-backup-title" className="dialog-title">
-             {t('backup.export.title')}
-@@ -166,4 +174,3 @@ export function ExportBackupModal({ open, profileId, onClose }: ExportBackupModa
-     </div>
-   );
- }
--
-diff --git a/src/features/Vault/components/modals/ImportBackupModal.tsx b/src/features/Vault/components/modals/ImportBackupModal.tsx
-index 141bc15..17b7766 100644
---- a/src/features/Vault/components/modals/ImportBackupModal.tsx
-+++ b/src/features/Vault/components/modals/ImportBackupModal.tsx
-@@ -18,6 +18,14 @@ export function ImportBackupModal({ open, backupPath, isSubmitting, onCancel, on
-   return (
-     <div className="dialog-backdrop">
-       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="import-backup-title">
-+        <button
-+          className="dialog-close dialog-close--topright"
-+          type="button"
-+          aria-label={tCommon('action.close')}
-+          onClick={onCancel}
-+        >
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h2 id="import-backup-title" className="dialog-title">
-             {t('backup.import.confirmTitle')}
-@@ -45,4 +53,3 @@ export function ImportBackupModal({ open, backupPath, isSubmitting, onCancel, on
-     </div>
-   );
- }
--
-diff --git a/src/features/Vault/components/modals/PasswordGeneratorModal.tsx b/src/features/Vault/components/modals/PasswordGeneratorModal.tsx
-index 002ff6d..8487db9 100644
---- a/src/features/Vault/components/modals/PasswordGeneratorModal.tsx
-+++ b/src/features/Vault/components/modals/PasswordGeneratorModal.tsx
-@@ -61,6 +61,9 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
-   return (
-     <div className="dialog-backdrop">
-       <div className="dialog generator-dialog" role="dialog" aria-modal="true" aria-labelledby="generator-title">
-+        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onClose}>
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h2 id="generator-title" className="dialog-title">
-             {t('generator.title')}
-@@ -151,4 +154,3 @@ export const PasswordGeneratorModal: React.FC<PasswordGeneratorModalProps> = ({
-     </div>
-   );
- };
--
-diff --git a/src/features/Vault/components/modals/PasswordHistoryDialog.tsx b/src/features/Vault/components/modals/PasswordHistoryDialog.tsx
-index 004fa3f..8746d98 100644
---- a/src/features/Vault/components/modals/PasswordHistoryDialog.tsx
-+++ b/src/features/Vault/components/modals/PasswordHistoryDialog.tsx
-@@ -155,6 +155,14 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
-     <>
-       <div className="dialog-backdrop">
-         <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="password-history-title">
-+          <button
-+            className="dialog-close dialog-close--topright"
-+            type="button"
-+            aria-label={tCommon('action.close')}
-+            onClick={onClose}
-+          >
-+            �
-+          </button>
-           <div className="dialog-header">
-             <h2 id="password-history-title" className="dialog-title">
-               {t('dialog.passwordHistoryTitle')}
-@@ -206,4 +214,3 @@ const PasswordHistoryDialog: React.FC<PasswordHistoryDialogProps> = ({
- };
- 
- export default PasswordHistoryDialog;
--
-diff --git a/src/features/Vault/components/modals/SeedPhraseModal.tsx b/src/features/Vault/components/modals/SeedPhraseModal.tsx
-index 7e3044a..8170d9c 100644
---- a/src/features/Vault/components/modals/SeedPhraseModal.tsx
-+++ b/src/features/Vault/components/modals/SeedPhraseModal.tsx
-@@ -117,6 +117,9 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
-   return (
-     <div className="dialog-backdrop dialog-backdrop--inner">
-       <div className="dialog seedphrase-dialog" role="dialog" aria-modal="true" aria-labelledby="seedphrase-title">
-+        <button className="dialog-close dialog-close--topright" type="button" aria-label="Close" onClick={onCancel}>
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h2 id="seedphrase-title" className="dialog-title">
-             {t('seedPhrase.title')}
-@@ -214,4 +217,3 @@ export const SeedPhraseModal: React.FC<SeedPhraseModalProps> = ({
-     </div>
-   );
- };
--
-diff --git a/src/features/Vault/components/modals/SeedPhraseViewModal.tsx b/src/features/Vault/components/modals/SeedPhraseViewModal.tsx
-index 1cbf09e..1430e75 100644
---- a/src/features/Vault/components/modals/SeedPhraseViewModal.tsx
-+++ b/src/features/Vault/components/modals/SeedPhraseViewModal.tsx
-@@ -63,6 +63,14 @@ export const SeedPhraseViewModal: React.FC<SeedPhraseViewModalProps> = ({
-         aria-modal="true"
-         aria-labelledby="seedphrase-view-title"
-       >
-+        <button
-+          className="dialog-close dialog-close--topright"
-+          type="button"
-+          aria-label={tCommon('action.close')}
-+          onClick={onClose}
-+        >
-+          �
-+        </button>
-         <div className="dialog-header">
-           <h2 id="seedphrase-view-title" className="dialog-title">
-             {t('seedPhrase.title')}
-@@ -109,4 +117,3 @@ export const SeedPhraseViewModal: React.FC<SeedPhraseViewModalProps> = ({
-     </div>
-   );
- };
--
-diff --git a/src/shared/styles/ui.css b/src/shared/styles/ui.css
-index 48c87c2..b315bbf 100644
---- a/src/shared/styles/ui.css
-+++ b/src/shared/styles/ui.css
-@@ -604,6 +604,7 @@ select:autofill {
-   background: var(--color-surface-1);
-   border: 1px solid var(--border-subtle);
-   box-shadow: var(--shadow-lg);
-+  position: relative;
-   /* Prevent dialogs from growing beyond the viewport.
-      Backdrop has 20px padding top/bottom, so subtract 40px total. */
-   max-height: calc(100vh - 40px);
-@@ -614,6 +615,7 @@ select:autofill {
- /* Dialog header row */
- .dialog-header {
-   padding: 16px 18px;
-+  padding-right: 60px;
- }
- 
- .dialog-header--with-actions {
-@@ -676,6 +678,11 @@ select:autofill {
-   background: var(--color-surface-2);
- }
- 
-+.dialog-body-actions {
-+  display: flex;
-+  justify-content: flex-end;
-+  margin-bottom: 6px;
-+}
- 
- .customfield-dialog {
-   width: min(420px, calc(100vw - 40px));
-@@ -905,7 +912,17 @@ select:autofill {
-   border-color: var(--color-primary);
- }
- 
-+.dialog-close--topright {
-+  position: absolute;
-+  top: 12px;
-+  right: 12px;
-+  z-index: 4;
-+}
- 
-+.dialog-close--header {
-+  width: 30px;
-+  height: 30px;
-+}
- 
- .dialog-title {
-   font-size: 16px;
-@@ -1442,4 +1459,3 @@ select:autofill {
- .primary.primary-danger:not(:disabled):hover {
-   background-color: var(--color-danger-strong);
- }
--
 diff --git a/src/shared/ui/dialog.tsx b/src/shared/ui/dialog.tsx
-index a610834..4e38e37 100644
+index 4e38e37..0f4d33b 100644
 --- a/src/shared/ui/dialog.tsx
 +++ b/src/shared/ui/dialog.tsx
 @@ -1,4 +1,4 @@
--import React, { useEffect } from 'react';
-+import React, { createContext, useContext, useEffect } from 'react';
+-import React, { createContext, useContext, useEffect } from 'react';
++import React, { createContext, useCallback, useContext, useEffect, useRef } from 'react';
  
  type DialogProps = {
    open: boolean;
-@@ -9,41 +9,66 @@ type DialogProps = {
- type DialogSlotProps = React.HTMLAttributes<HTMLDivElement>;
- 
- type DialogTitleProps = React.HTMLAttributes<HTMLHeadingElement>;
-+type DialogContentProps = React.HTMLAttributes<HTMLDivElement> & {
-+  showCloseButton?: boolean;
-+  closeAriaLabel?: string;
-+};
+@@ -16,21 +16,32 @@ type DialogContentProps = React.HTMLAttributes<HTMLDivElement> & {
  
  const mergeClasses = (base: string, extra?: string) => (extra ? `${base} ${extra}` : base);
-+const DialogContext = createContext<{ canClose: boolean; close: () => void } | null>(null);
+ const DialogContext = createContext<{ canClose: boolean; close: () => void } | null>(null);
++let dialogInstanceCounter = 0;
++let openDialogStack: string[] = [];
  
  export function Dialog({ open, onOpenChange, children }: DialogProps) {
-+  const close = () => onOpenChange?.(false);
-+
+-  const close = () => onOpenChange?.(false);
++  const dialogIdRef = useRef<string>(`dialog_${++dialogInstanceCounter}`);
++  const close = useCallback(() => onOpenChange?.(false), [onOpenChange]);
+ 
    useEffect(() => {
      if (!open) return;
++    const dialogId = dialogIdRef.current;
++    openDialogStack = [...openDialogStack, dialogId];
  
      const onKeyDown = (e: KeyboardEvent) => {
        if (e.key === 'Escape') {
--        onOpenChange?.(false);
-+        close();
++        const topDialogId = openDialogStack[openDialogStack.length - 1];
++        if (topDialogId !== dialogId) return;
++        e.stopPropagation();
+         close();
        }
      };
  
      window.addEventListener('keydown', onKeyDown);
-     return () => window.removeEventListener('keydown', onKeyDown);
--  }, [open, onOpenChange]);
-+  }, [close, open]);
+-    return () => window.removeEventListener('keydown', onKeyDown);
++    return () => {
++      window.removeEventListener('keydown', onKeyDown);
++      openDialogStack = openDialogStack.filter((id) => id !== dialogId);
++    };
+   }, [close, open]);
  
    if (!open) return null;
+@@ -63,7 +74,7 @@ export function DialogContent({
+     <div className={mergeClasses('dialog', className)} role="dialog" aria-modal="true" {...props}>
+       {showCloseButton && ctx?.canClose && (
+         <button className="dialog-close dialog-close--topright" type="button" aria-label={closeAriaLabel} onClick={ctx.close}>
+-          ×
++          {'\u00D7'}
+         </button>
+       )}
+       {children}
+
+diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
+index 14d421e..187d37e 100644
+--- a/src/features/Vault/hooks/useVault.ts
++++ b/src/features/Vault/hooks/useVault.ts
+@@ -67,6 +67,32 @@ const sortVaultItems = (list: VaultItem[]) =>
+     return vaultNameCollator.compare(a.id, b.id);
+   });
  
-   return (
--    <div
--      className="dialog-backdrop"
--      onMouseDown={(e) => {
--        if (e.target === e.currentTarget) {
--          onOpenChange?.(false);
--        }
--      }}
--    >
--      {children}
--    </div>
-+    <DialogContext.Provider value={{ canClose: Boolean(onOpenChange), close }}>
-+      <div
-+        className="dialog-backdrop"
-+        onMouseDown={(e) => {
-+          if (e.target === e.currentTarget) {
-+            close();
-+          }
-+        }}
-+      >
-+        {children}
-+      </div>
-+    </DialogContext.Provider>
++const collectFolderSubtreeIds = (rootId: string, folders: Folder[]): string[] => {
++  const childrenByParent = new Map<string, string[]>();
++  for (const folder of folders) {
++    if (!folder.parentId) continue;
++    const children = childrenByParent.get(folder.parentId) ?? [];
++    children.push(folder.id);
++    childrenByParent.set(folder.parentId, children);
++  }
++
++  const ids: string[] = [];
++  const stack = [rootId];
++  const visited = new Set<string>();
++  while (stack.length > 0) {
++    const folderId = stack.pop();
++    if (!folderId || visited.has(folderId)) continue;
++    visited.add(folderId);
++    ids.push(folderId);
++    const children = childrenByParent.get(folderId) ?? [];
++    for (const childId of children) {
++      stack.push(childId);
++    }
++  }
++
++  return ids;
++};
++
+ export function useVault(profileId: string, onLocked: () => void) {
+   const { show: showToast } = useToaster();
+   const { t: tCommon } = useTranslation('Common');
+@@ -439,25 +465,30 @@ export function useVault(profileId: string, onLocked: () => void) {
+     async (id: string) => {
+       try {
+         await deleteFolderOnly(id);
+-        setFolders((prev) => prev.filter((folder) => folder.id !== id).sort(sortFolders));
++        const subtreeIds = collectFolderSubtreeIds(id, folders);
++        const removedSet = new Set(subtreeIds);
++
++        setFolders((prev) => prev.filter((folder) => !removedSet.has(folder.id)).sort(sortFolders));
+         setCards((prev) =>
+-          prev.map((card) => (card.folderId === id ? { ...card, folderId: null } : card))
++          prev.map((card) => (card.folderId && removedSet.has(card.folderId) ? { ...card, folderId: null } : card))
+         );
+         setCardDetailsById((prev) => {
+           const next = { ...prev };
+           Object.entries(next).forEach(([cardId, card]) => {
+-            if (card.folderId === id) {
++            if (card.folderId && removedSet.has(card.folderId)) {
+               next[cardId] = { ...card, folderId: null };
+             }
+           });
+           return next;
+         });
+-        setSelectedNav((prev) => (typeof prev === 'object' && prev.folderId === id ? 'all' : prev));
++        setSelectedNav((prev) =>
++          typeof prev === 'object' && removedSet.has(prev.folderId) ? 'all' : prev
++        );
+       } catch (err) {
+         handleError(err);
+       }
+     },
+-    [handleError]
++    [folders, handleError]
    );
+ 
+   const deleteFolderAndCardsAction = useCallback(
+@@ -465,13 +496,15 @@ export function useVault(profileId: string, onLocked: () => void) {
+       try {
+         await deleteFolderAndCards(id);
+         const softDeleteEnabled = settings?.soft_delete_enabled ?? true;
++        const subtreeIds = collectFolderSubtreeIds(id, folders);
++        const removedSet = new Set(subtreeIds);
+ 
+-        setFolders((prev) => prev.filter((folder) => folder.id !== id).sort(sortFolders));
+-        setCards((prev) => prev.filter((card) => card.folderId !== id));
++        setFolders((prev) => prev.filter((folder) => !removedSet.has(folder.id)).sort(sortFolders));
++        setCards((prev) => prev.filter((card) => !card.folderId || !removedSet.has(card.folderId)));
+         setCardDetailsById((prev) => {
+           const next = { ...prev };
+           Object.keys(next).forEach((cardId) => {
+-            if (next[cardId].folderId === id) {
++            if (next[cardId].folderId && removedSet.has(next[cardId].folderId)) {
+               delete next[cardId];
+             }
+           });
+@@ -480,12 +513,14 @@ export function useVault(profileId: string, onLocked: () => void) {
+         setSelectedCardId((prev) => {
+           if (!prev) return prev;
+           const selected = cardDetailsById[prev] ?? cards.find((card) => card.id === prev);
+-          if (selected?.folderId === id) {
++          if (selected?.folderId && removedSet.has(selected.folderId)) {
+             return null;
+           }
+           return prev;
+         });
+-        setSelectedNav((prev) => (typeof prev === 'object' && prev.folderId === id ? 'all' : prev));
++        setSelectedNav((prev) =>
++          typeof prev === 'object' && removedSet.has(prev.folderId) ? 'all' : prev
++        );
+ 
+         if (softDeleteEnabled && trashLoaded) {
+           await refreshTrash();
+@@ -494,7 +529,7 @@ export function useVault(profileId: string, onLocked: () => void) {
+         handleError(err);
+       }
+     },
+-    [cardDetailsById, cards, handleError, refreshTrash, settings, trashLoaded]
++    [cardDetailsById, cards, folders, handleError, refreshTrash, settings, trashLoaded]
+   );
+ 
+   const createCardAction = useCallback(
+
+diff --git a/src-tauri/src/services/folders_service.rs b/src-tauri/src/services/folders_service.rs
+index ff3436b..93d17f1 100644
+--- a/src-tauri/src/services/folders_service.rs
++++ b/src-tauri/src/services/folders_service.rs
+@@ -1,3 +1,4 @@
++use std::collections::{HashMap, HashSet};
+ use std::fs;
+ use std::sync::Arc;
+ 
+@@ -11,6 +12,36 @@ use crate::services::security_service;
+ use crate::services::settings_service::get_settings;
+ use crate::types::{CreateFolderInput, Folder, MoveFolderInput, RenameFolderInput};
+ 
++fn collect_folder_subtree_ids(root_id: &str, folders: &[Folder]) -> Vec<String> {
++    let mut children_by_parent: HashMap<String, Vec<String>> = HashMap::new();
++    for folder in folders {
++        if let Some(parent_id) = &folder.parent_id {
++            children_by_parent
++                .entry(parent_id.clone())
++                .or_default()
++                .push(folder.id.clone());
++        }
++    }
++
++    let mut ids = Vec::new();
++    let mut stack = vec![root_id.to_string()];
++    let mut seen = HashSet::new();
++
++    while let Some(folder_id) = stack.pop() {
++        if !seen.insert(folder_id.clone()) {
++            continue;
++        }
++        ids.push(folder_id.clone());
++        if let Some(children) = children_by_parent.get(&folder_id) {
++            for child_id in children {
++                stack.push(child_id.clone());
++            }
++        }
++    }
++
++    ids
++}
++
+ pub fn list_folders(state: &Arc<AppState>) -> Result<Vec<Folder>> {
+     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
+     repo_impl::list_folders(state, &profile_id)
+@@ -52,11 +83,26 @@ pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
+         return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
+     }
+ 
+-    repo_impl::move_datacards_to_root(state, &profile_id, &id)?;
+-    repo_impl::move_bank_cards_to_root(state, &profile_id, &id)?;
+-    let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
++    let all_folders = repo_impl::list_folders(state, &profile_id)?;
++    let subtree_ids = collect_folder_subtree_ids(&id, &all_folders);
++    let subtree_set: HashSet<String> = subtree_ids.iter().cloned().collect();
++    if all_folders
++        .iter()
++        .any(|item| subtree_set.contains(&item.id) && item.is_system)
++    {
++        return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
++    }
++
++    for folder_id in &subtree_ids {
++        repo_impl::move_datacards_to_root(state, &profile_id, folder_id)?;
++        repo_impl::move_bank_cards_to_root(state, &profile_id, folder_id)?;
++    }
++
++    for folder_id in subtree_ids.iter().rev() {
++        repo_impl::purge_folder(state, &profile_id, folder_id)?;
++    }
+     security_service::request_persist_active_vault(state.clone());
+-    Ok(deleted)
++    Ok(true)
  }
  
--export function DialogContent({ className, ...props }: DialogSlotProps) {
--  return <div className={mergeClasses('dialog', className)} role="dialog" aria-modal="true" {...props} />;
-+export function DialogContent({
-+  className,
-+  showCloseButton = true,
-+  closeAriaLabel = 'Close',
-+  children,
-+  ...props
-+}: DialogContentProps) {
-+  const ctx = useContext(DialogContext);
-+  return (
-+    <div className={mergeClasses('dialog', className)} role="dialog" aria-modal="true" {...props}>
-+      {showCloseButton && ctx?.canClose && (
-+        <button className="dialog-close dialog-close--topright" type="button" aria-label={closeAriaLabel} onClick={ctx.close}>
-+          �
-+        </button>
-+      )}
-+      {children}
-+    </div>
-+  );
- }
+ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool> {
+@@ -65,42 +111,66 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
+     if folder.is_system {
+         return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
+     }
++    let all_folders = repo_impl::list_folders(state, &profile_id)?;
++    let subtree_ids = collect_folder_subtree_ids(&id, &all_folders);
++    let subtree_set: HashSet<String> = subtree_ids.iter().cloned().collect();
++    if all_folders
++        .iter()
++        .any(|item| subtree_set.contains(&item.id) && item.is_system)
++    {
++        return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
++    }
  
- export function DialogHeader({ className, ...props }: DialogSlotProps) {
+     let storage_paths = state.get_storage_paths()?;
+     let settings = get_settings(&storage_paths, &profile_id)?;
+ 
+     if settings.soft_delete_enabled {
+-        let now = Utc::now().to_rfc3339();
+-        let datacard_ids = repo_impl::list_datacard_ids_in_folder(state, &profile_id, &id, false)?;
++        for folder_id in &subtree_ids {
++            let now = Utc::now().to_rfc3339();
++            let datacard_ids =
++                repo_impl::list_datacard_ids_in_folder(state, &profile_id, folder_id, false)?;
+ 
+-        for datacard_id in datacard_ids {
+-            repo_impl::soft_delete_attachments_by_datacard(state, &profile_id, &datacard_id, &now)?;
++            for datacard_id in datacard_ids {
++                repo_impl::soft_delete_attachments_by_datacard(
++                    state,
++                    &profile_id,
++                    &datacard_id,
++                    &now,
++                )?;
++            }
++            repo_impl::soft_delete_datacards_in_folder(state, &profile_id, folder_id)?;
++            repo_impl::soft_delete_bank_cards_in_folder(state, &profile_id, folder_id)?;
+         }
+-        repo_impl::soft_delete_datacards_in_folder(state, &profile_id, &id)?;
+-        repo_impl::soft_delete_bank_cards_in_folder(state, &profile_id, &id)?;
+     } else {
+-        let datacard_ids = repo_impl::list_datacard_ids_in_folder(state, &profile_id, &id, true)?;
+-
+-        for datacard_id in datacard_ids {
+-            let attachments =
+-                repo_impl::list_all_attachments_by_datacard(state, &profile_id, &datacard_id)?;
+-
+-            for attachment in attachments {
+-                let file_path =
+-                    attachment_file_path(&storage_paths, &profile_id, &attachment.id)?;
+-                let _ = fs::remove_file(file_path);
+-                if let Err(err) = repo_impl::purge_attachment(state, &profile_id, &attachment.id) {
+-                    if err.code != "ATTACHMENT_NOT_FOUND" {
+-                        return Err(err);
++        for folder_id in &subtree_ids {
++            let datacard_ids =
++                repo_impl::list_datacard_ids_in_folder(state, &profile_id, folder_id, true)?;
++
++            for datacard_id in datacard_ids {
++                let attachments =
++                    repo_impl::list_all_attachments_by_datacard(state, &profile_id, &datacard_id)?;
++
++                for attachment in attachments {
++                    let file_path =
++                        attachment_file_path(&storage_paths, &profile_id, &attachment.id)?;
++                    let _ = fs::remove_file(file_path);
++                    if let Err(err) =
++                        repo_impl::purge_attachment(state, &profile_id, &attachment.id)
++                    {
++                        if err.code != "ATTACHMENT_NOT_FOUND" {
++                            return Err(err);
++                        }
+                     }
+                 }
+             }
++            repo_impl::purge_datacards_in_folder(state, &profile_id, folder_id)?;
++            repo_impl::purge_bank_cards_in_folder(state, &profile_id, folder_id)?;
+         }
+-        repo_impl::purge_datacards_in_folder(state, &profile_id, &id)?;
+-        repo_impl::purge_bank_cards_in_folder(state, &profile_id, &id)?;
+     }
+ 
+-    let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
++    for folder_id in subtree_ids.iter().rev() {
++        repo_impl::purge_folder(state, &profile_id, folder_id)?;
++    }
+     security_service::request_persist_active_vault(state.clone());
+-    Ok(deleted)
++    Ok(true)
+ }
+
+diff --git a/src-tauri/.cargo/audit.toml b/src-tauri/.cargo/audit.toml
+index 14f11f4..90f39b4 100644
+--- a/src-tauri/.cargo/audit.toml
++++ b/src-tauri/.cargo/audit.toml
+@@ -6,3 +6,4 @@ os = ["windows"]
+ 
+ [output]
+ deny = []
++quiet = false
+
+diff --git a/src-tauri/permissions/app-default.toml b/src-tauri/permissions/app-default.toml
+index f76bee3..51ddfaa 100644
+--- a/src-tauri/permissions/app-default.toml
++++ b/src-tauri/permissions/app-default.toml
+@@ -98,6 +98,7 @@ commands.allow = [
+ 
+   "workspace_list",
+   "workspace_select",
++  "workspace_create",
+   "workspace_create_via_dialog",
+   "workspace_create_default",
+   "workspace_remove",
+
+diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
+index aeedfdd..55372d7 100644
+--- a/src/features/Vault/Vault.tsx
++++ b/src/features/Vault/Vault.tsx
+@@ -1,4 +1,4 @@
+-﻿import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
++import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+ import { useVault, type SelectedNav } from './hooks/useVault';
+ import { VaultHeader } from './components/Header/VaultHeader';
+ import { Search } from './components/Search/Search';
+@@ -286,12 +286,14 @@ export default function Vault({
+   const handleDeleteFolderOnly = async () => {
+     if (!pendingFolderDelete) return;
+     await vault.deleteFolderOnly(pendingFolderDelete.id);
++    await Promise.all([vault.refreshActive(), bankCards.refreshActive(), vault.refreshTrash(), bankCards.refreshTrash()]);
+     setPendingFolderDelete(null);
+   };
+ 
+   const handleDeleteFolderAndCards = async () => {
+     if (!pendingFolderDelete) return;
+     await vault.deleteFolderAndCards(pendingFolderDelete.id);
++    await Promise.all([vault.refreshActive(), bankCards.refreshActive(), vault.refreshTrash(), bankCards.refreshTrash()]);
+     setPendingFolderDelete(null);
+   };
+ 
+
 
