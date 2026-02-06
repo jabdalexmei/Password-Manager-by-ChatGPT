@@ -1,46 +1,48 @@
 diff --git a/src-tauri/src/data/sqlite/repo_impl.rs b/src-tauri/src/data/sqlite/repo_impl.rs
+index 2519b75..7032056 100644
 --- a/src-tauri/src/data/sqlite/repo_impl.rs
 +++ b/src-tauri/src/data/sqlite/repo_impl.rs
-@@ -1163,23 +1163,24 @@ pub fn list_deleted_bank_card_ids(
- }
+@@ -929,8 +929,7 @@ pub fn update_datacard(
  
- pub fn get_bank_card(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<BankCardItem> {
--    with_connection(state, profile_id, |conn| {
--        let mut stmt = conn
--            .prepare("SELECT * FROM bank_cards WHERE id = ?1")
--            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+    with_connection(state, profile_id, |conn| get_bank_card_by_id_conn(conn, id))
-+}
- 
--        match stmt.query_row(params![id], map_bank_card) {
--            Ok(card) => Ok(card),
--            Err(rusqlite::Error::QueryReturnedNoRows) => Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND")),
--            Err(err) => {
--                log_sqlite_err("get_bank_card.query_row", "SELECT * FROM bank_cards WHERE id = ?1", &err);
--                Err(ErrorCodeString::new("DB_QUERY_FAILED"))
--            }
-+fn get_bank_card_by_id_conn(conn: &Connection, id: &str) -> Result<BankCardItem> {
-+    let mut stmt = conn
-+        .prepare("SELECT * FROM bank_cards WHERE id = ?1")
-+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
-+
-+    match stmt.query_row(params![id], map_bank_card) {
-+        Ok(card) => Ok(card),
-+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(ErrorCodeString::new("BANK_CARD_NOT_FOUND")),
-+        Err(err) => {
-+            log_sqlite_err("get_bank_card.query_row", "SELECT * FROM bank_cards WHERE id = ?1", &err);
-+            Err(ErrorCodeString::new("DB_QUERY_FAILED"))
-         }
--    })
-+    }
- }
- 
- pub fn create_bank_card(
-@@ -1208,7 +1209,7 @@ pub fn create_bank_card(
-         )
-         .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
- 
--        get_bank_card(state, profile_id, &id)
-+        get_bank_card_by_id_conn(conn, &id)
+         if !old_trimmed.is_empty() && old_trimmed != new_trimmed {
+             insert_password_history(
+-                state,
+-                profile_id,
++                conn,
+                 &input.id,
+                 existing_password.as_deref().unwrap_or(""),
+                 &now,
+@@ -1573,23 +1572,20 @@ pub fn purge_attachment(
      })
  }
+ 
+-pub fn insert_password_history(
+-    state: &Arc<AppState>,
+-    profile_id: &str,
++fn insert_password_history(
++    conn: &Connection,
+     datacard_id: &str,
+     password_value: &str,
+     created_at: &str,
+ ) -> Result<()> {
+-    with_connection(state, profile_id, |conn| {
+-        let id = Uuid::new_v4().to_string();
+-        conn.execute(
+-            "INSERT INTO datacard_password_history (id, datacard_id, password_value, created_at) VALUES (?1, ?2, ?3, ?4)",
+-            params![id, datacard_id, password_value, created_at],
+-        )
+-        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+-
+-        Ok(())
+-    })
++    let id = Uuid::new_v4().to_string();
++    conn.execute(
++        "INSERT INTO datacard_password_history (id, datacard_id, password_value, created_at) VALUES (?1, ?2, ?3, ?4)",
++        params![id, datacard_id, password_value, created_at],
++    )
++    .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
++
++    Ok(())
+ }
+ 
+ pub fn list_password_history(
