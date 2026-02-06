@@ -460,15 +460,17 @@ pub fn list_folders(state: &Arc<AppState>, profile_id: &str) -> Result<Vec<Folde
     })
 }
 
-pub fn get_folder(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<Folder> {
-    with_connection(state, profile_id, |conn| {
-        let mut stmt = conn
-            .prepare("SELECT * FROM folders WHERE id = ?1")
-            .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
+fn get_folder_by_id_conn(conn: &Connection, id: &str) -> Result<Folder> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM folders WHERE id = ?1")
+        .map_err(|_| ErrorCodeString::new("DB_QUERY_FAILED"))?;
 
-        stmt.query_row(params![id], map_folder)
-            .map_err(|_| ErrorCodeString::new("FOLDER_NOT_FOUND"))
-    })
+    stmt.query_row(params![id], map_folder)
+        .map_err(|_| ErrorCodeString::new("FOLDER_NOT_FOUND"))
+}
+
+pub fn get_folder(state: &Arc<AppState>, profile_id: &str, id: &str) -> Result<Folder> {
+    with_connection(state, profile_id, |conn| get_folder_by_id_conn(conn, id))
 }
 
 pub fn create_folder(
@@ -486,7 +488,7 @@ pub fn create_folder(
         )
         .map_err(map_constraint_error)?;
 
-        get_folder(state, profile_id, &id)
+        get_folder_by_id_conn(conn, &id)
     })
 }
 
