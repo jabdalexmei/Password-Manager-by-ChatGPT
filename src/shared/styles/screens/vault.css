@@ -102,7 +102,7 @@
 .vault-sidebar {
   background: var(--color-surface-2);
   border-right: 1px solid var(--color-border);
-  padding: 31px;
+  padding: 40px;
   overflow: auto;
   --sidebar-section-gap: 16px;
 }
