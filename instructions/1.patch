@@ -1,158 +1,26 @@
-diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/paths.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/paths.rs
---- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/paths.rs	2026-02-07 06:26:40.000000000 +0000
-+++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/paths.rs	2026-02-09 07:57:05.948176429 +0000
-@@ -122,8 +122,6 @@
-     let dir = profiles_root(sp)?;
-     std::fs::create_dir_all(&dir)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
--    set_dir_private(&dir)
--        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
-     Ok(dir)
- }
+--- orig1127/Password-Manager-by-ChatGPT-codex-follow-instructions-in-1.patch/src-tauri/src/commands/workspace.rs	2026-02-09 08:09:14.000000000 +0000
++++ Password-Manager-by-ChatGPT-codex-follow-instructions-in-1.patch/src-tauri/src/commands/workspace.rs	2026-02-09 09:12:23.332316609 +0000
+@@ -238,7 +238,11 @@
+ ) -> Result<bool> {
+     let app_state = state.inner().clone();
+     tauri::async_runtime::spawn_blocking(move || {
+-        let selection = app.dialog().file().blocking_pick_folder();
++        let selection = app
++            .dialog()
++            .file()
++            .set_title("Step 1 of 2: Select destination folder for restored profile")
++            .blocking_pick_folder();
+         let Some(fp) = selection else {
+             return Ok(false);
+         };
+--- orig1127/Password-Manager-by-ChatGPT-codex-follow-instructions-in-1.patch/src-tauri/src/commands/backup.rs	2026-02-09 08:09:14.000000000 +0000
++++ Password-Manager-by-ChatGPT-codex-follow-instructions-in-1.patch/src-tauri/src/commands/backup.rs	2026-02-09 09:12:46.038015626 +0000
+@@ -119,7 +119,7 @@
+         let mut dialog = app
+             .dialog()
+             .file()
+-            .set_title("Select backup archive (.pmbackup.zip)");
++            .set_title("Step 2 of 2: Select backup archive (.pmbackup.zip)");
  
-@@ -178,19 +176,24 @@
-     Ok(profile_dir(sp, id)?.join("config.json"))
- }
- 
--pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str) -> Result<()> {
-+pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str, has_password: bool) -> Result<()> {
-     let root = profile_dir(sp, profile_id)?;
- 
-     fs::create_dir_all(&root)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--    set_dir_private(&root)
--        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+
-+    if has_password {
-+        set_dir_private(&root)
-+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+    }
-     for sub in ["attachments", "backups", "tmp"] {
-         let dir = root.join(sub);
-         fs::create_dir_all(&dir)
-             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
--        set_dir_private(&dir)
--            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+        if has_password {
-+            set_dir_private(&dir)
-+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-+        }
-     }
-     Ok(())
- }
-diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/registry.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/registry.rs
---- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/registry.rs	2026-02-07 06:26:40.000000000 +0000
-+++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/registry.rs	2026-02-09 07:57:45.704415799 +0000
-@@ -219,7 +219,7 @@
-     };
- 
-     let profile_dir = crate::data::profiles::paths::profile_dir(sp, &id)?;
--    crate::data::profiles::paths::ensure_profile_dirs(sp, &id)
-+    crate::data::profiles::paths::ensure_profile_dirs(sp, &id, has_password)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
- 
-     let config_path: PathBuf = profile_config_path(sp, &id)?;
-@@ -261,7 +261,7 @@
-     // Ensure profile dirs exist (id is used as folder name).
-     let profile_dir = crate::data::profiles::paths::profile_dir(sp, id)?;
-     let existed_before = profile_dir.exists();
--    crate::data::profiles::paths::ensure_profile_dirs(sp, id)
-+    crate::data::profiles::paths::ensure_profile_dirs(sp, id, has_password)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
- 
-     // Write config.json with the name (keeps UI consistent).
-diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/sqlite/init.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/sqlite/init.rs
---- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/sqlite/init.rs	2026-02-07 06:26:40.000000000 +0000
-+++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/sqlite/init.rs	2026-02-09 07:58:33.405513903 +0000
-@@ -13,7 +13,7 @@
-     profile_id: &str,
-     key: &[u8; 32],
- ) -> Result<()> {
--    ensure_profile_dirs(sp, profile_id)
-+    ensure_profile_dirs(sp, profile_id, true)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
- 
-     let conn = Connection::open_in_memory().map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
-diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/backup_service.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/backup_service.rs
---- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/backup_service.rs	2026-02-07 06:26:40.000000000 +0000
-+++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/backup_service.rs	2026-02-09 07:59:20.898576444 +0000
-@@ -861,8 +861,6 @@
-         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
-     }
- 
--    ensure_profile_dirs(sp, target_profile_id)?;
--
-     let profile_root = profile_dir(sp, target_profile_id)?;
- 
-     log::info!(
-@@ -871,12 +869,6 @@
-         backup_path
-     );
- 
--    let staging_root = profile_root.join("tmp").join("restore_staging");
--    // Keep staging paths short (important on Windows) and deterministic for easier debugging.
--    // We clear it on each restore attempt.
--    prepare_empty_dir_for_restore(&staging_root)
--        .map_err(|e| map_restore_io_error("prepare_staging_root", Some(&staging_root), None, e))?;
--
-     let archive_file = fs::File::open(&backup_path)
-         .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
-     let mut archive = ZipArchive::new(archive_file)
-@@ -895,6 +887,15 @@
-     let manifest: BackupManifest =
-         serde_json::from_str(&manifest_contents).map_err(|_| ErrorCodeString::new("BACKUP_MANIFEST_INVALID"))?;
- 
-+    let has_password = manifest.vault_mode == "protected";
-+    ensure_profile_dirs(sp, target_profile_id, has_password)?;
-+
-+    let staging_root = profile_root.join("tmp").join("restore_staging");
-+    // Keep staging paths short (important on Windows) and deterministic for easier debugging.
-+    // We clear it on each restore attempt.
-+    prepare_empty_dir_for_restore(&staging_root)
-+        .map_err(|e| map_restore_io_error("prepare_staging_root", Some(&staging_root), None, e))?;
-+
-     if manifest.format_version != 1 {
-         return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));
-     }
-diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/profiles_service.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/profiles_service.rs
---- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/profiles_service.rs	2026-02-07 06:26:40.000000000 +0000
-+++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/profiles_service.rs	2026-02-09 07:58:19.709778579 +0000
-@@ -35,7 +35,8 @@
-     let profile = registry::create_profile(sp, name, password.clone())?;
- 
-     let init_result: Result<()> = (|| {
--        ensure_profile_dirs(sp, &profile.id)
-+        let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
-+        ensure_profile_dirs(sp, &profile.id, !is_passwordless)
-             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
- 
-         // New security model: vault.db is ALWAYS an encrypted blob on disk.
-@@ -46,7 +47,6 @@
-         let mk = master_key::generate_master_key();
-         init_database_protected_encrypted(sp, &profile.id, &mk)?;
- 
--        let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
-         if is_passwordless {
-             master_key::write_master_key_unwrapped(sp, &profile.id, &mk)?;
-         } else {
-diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/security_service.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/security_service.rs
---- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/security_service.rs	2026-02-07 06:26:40.000000000 +0000
-+++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/security_service.rs	2026-02-09 07:59:09.184596654 +0000
-@@ -1066,7 +1066,7 @@
-         Zeroizing::new(*session.key)
-     };
- 
--    ensure_profile_dirs(&storage_paths, id)
-+    ensure_profile_dirs(&storage_paths, id, true)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
- 
-     // If there is a leftover transaction from a previous crash, recover it first.
-@@ -1317,7 +1317,7 @@
-         Zeroizing::new(*session.key)
-     };
- 
--    ensure_profile_dirs(&storage_paths, id)
-+    ensure_profile_dirs(&storage_paths, id, true)
-         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
- 
-     // If there is a leftover transaction from a previous crash, recover it first.
+         if let Ok(sp) = st.get_storage_paths() {
+             if let Ok(profiles_root) = sp.profiles_root() {
