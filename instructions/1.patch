@@ -1,392 +1,158 @@
-diff --git a/src/shared/ui/dialog.tsx b/src/shared/ui/dialog.tsx
-index 4e38e37..0f4d33b 100644
---- a/src/shared/ui/dialog.tsx
-+++ b/src/shared/ui/dialog.tsx
-@@ -1,4 +1,4 @@
--import React, { createContext, useContext, useEffect } from 'react';
-+import React, { createContext, useCallback, useContext, useEffect, useRef } from 'react';
+diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/paths.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/paths.rs
+--- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/paths.rs	2026-02-07 06:26:40.000000000 +0000
++++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/paths.rs	2026-02-09 07:57:05.948176429 +0000
+@@ -122,8 +122,6 @@
+     let dir = profiles_root(sp)?;
+     std::fs::create_dir_all(&dir)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
+-    set_dir_private(&dir)
+-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
+     Ok(dir)
+ }
  
- type DialogProps = {
-   open: boolean;
-@@ -16,21 +16,32 @@ type DialogContentProps = React.HTMLAttributes<HTMLDivElement> & {
+@@ -178,19 +176,24 @@
+     Ok(profile_dir(sp, id)?.join("config.json"))
+ }
  
- const mergeClasses = (base: string, extra?: string) => (extra ? `${base} ${extra}` : base);
- const DialogContext = createContext<{ canClose: boolean; close: () => void } | null>(null);
-+let dialogInstanceCounter = 0;
-+let openDialogStack: string[] = [];
+-pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str) -> Result<()> {
++pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str, has_password: bool) -> Result<()> {
+     let root = profile_dir(sp, profile_id)?;
  
- export function Dialog({ open, onOpenChange, children }: DialogProps) {
--  const close = () => onOpenChange?.(false);
-+  const dialogIdRef = useRef<string>(`dialog_${++dialogInstanceCounter}`);
-+  const close = useCallback(() => onOpenChange?.(false), [onOpenChange]);
- 
-   useEffect(() => {
-     if (!open) return;
-+    const dialogId = dialogIdRef.current;
-+    openDialogStack = [...openDialogStack, dialogId];
- 
-     const onKeyDown = (e: KeyboardEvent) => {
-       if (e.key === 'Escape') {
-+        const topDialogId = openDialogStack[openDialogStack.length - 1];
-+        if (topDialogId !== dialogId) return;
-+        e.stopPropagation();
-         close();
-       }
+     fs::create_dir_all(&root)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+-    set_dir_private(&root)
+-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++
++    if has_password {
++        set_dir_private(&root)
++            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++    }
+     for sub in ["attachments", "backups", "tmp"] {
+         let dir = root.join(sub);
+         fs::create_dir_all(&dir)
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+-        set_dir_private(&dir)
+-            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        if has_password {
++            set_dir_private(&dir)
++                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
++        }
+     }
+     Ok(())
+ }
+diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/registry.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/registry.rs
+--- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/registry.rs	2026-02-07 06:26:40.000000000 +0000
++++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/profiles/registry.rs	2026-02-09 07:57:45.704415799 +0000
+@@ -219,7 +219,7 @@
      };
  
-     window.addEventListener('keydown', onKeyDown);
--    return () => window.removeEventListener('keydown', onKeyDown);
-+    return () => {
-+      window.removeEventListener('keydown', onKeyDown);
-+      openDialogStack = openDialogStack.filter((id) => id !== dialogId);
-+    };
-   }, [close, open]);
+     let profile_dir = crate::data::profiles::paths::profile_dir(sp, &id)?;
+-    crate::data::profiles::paths::ensure_profile_dirs(sp, &id)
++    crate::data::profiles::paths::ensure_profile_dirs(sp, &id, has_password)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
  
-   if (!open) return null;
-@@ -63,7 +74,7 @@ export function DialogContent({
-     <div className={mergeClasses('dialog', className)} role="dialog" aria-modal="true" {...props}>
-       {showCloseButton && ctx?.canClose && (
-         <button className="dialog-close dialog-close--topright" type="button" aria-label={closeAriaLabel} onClick={ctx.close}>
--          ×
-+          {'\u00D7'}
-         </button>
-       )}
-       {children}
-
-diff --git a/src/features/Vault/hooks/useVault.ts b/src/features/Vault/hooks/useVault.ts
-index 14d421e..187d37e 100644
---- a/src/features/Vault/hooks/useVault.ts
-+++ b/src/features/Vault/hooks/useVault.ts
-@@ -67,6 +67,32 @@ const sortVaultItems = (list: VaultItem[]) =>
-     return vaultNameCollator.compare(a.id, b.id);
-   });
+     let config_path: PathBuf = profile_config_path(sp, &id)?;
+@@ -261,7 +261,7 @@
+     // Ensure profile dirs exist (id is used as folder name).
+     let profile_dir = crate::data::profiles::paths::profile_dir(sp, id)?;
+     let existed_before = profile_dir.exists();
+-    crate::data::profiles::paths::ensure_profile_dirs(sp, id)
++    crate::data::profiles::paths::ensure_profile_dirs(sp, id, has_password)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
  
-+const collectFolderSubtreeIds = (rootId: string, folders: Folder[]): string[] => {
-+  const childrenByParent = new Map<string, string[]>();
-+  for (const folder of folders) {
-+    if (!folder.parentId) continue;
-+    const children = childrenByParent.get(folder.parentId) ?? [];
-+    children.push(folder.id);
-+    childrenByParent.set(folder.parentId, children);
-+  }
-+
-+  const ids: string[] = [];
-+  const stack = [rootId];
-+  const visited = new Set<string>();
-+  while (stack.length > 0) {
-+    const folderId = stack.pop();
-+    if (!folderId || visited.has(folderId)) continue;
-+    visited.add(folderId);
-+    ids.push(folderId);
-+    const children = childrenByParent.get(folderId) ?? [];
-+    for (const childId of children) {
-+      stack.push(childId);
-+    }
-+  }
-+
-+  return ids;
-+};
-+
- export function useVault(profileId: string, onLocked: () => void) {
-   const { show: showToast } = useToaster();
-   const { t: tCommon } = useTranslation('Common');
-@@ -439,25 +465,30 @@ export function useVault(profileId: string, onLocked: () => void) {
-     async (id: string) => {
-       try {
-         await deleteFolderOnly(id);
--        setFolders((prev) => prev.filter((folder) => folder.id !== id).sort(sortFolders));
-+        const subtreeIds = collectFolderSubtreeIds(id, folders);
-+        const removedSet = new Set(subtreeIds);
-+
-+        setFolders((prev) => prev.filter((folder) => !removedSet.has(folder.id)).sort(sortFolders));
-         setCards((prev) =>
--          prev.map((card) => (card.folderId === id ? { ...card, folderId: null } : card))
-+          prev.map((card) => (card.folderId && removedSet.has(card.folderId) ? { ...card, folderId: null } : card))
-         );
-         setCardDetailsById((prev) => {
-           const next = { ...prev };
-           Object.entries(next).forEach(([cardId, card]) => {
--            if (card.folderId === id) {
-+            if (card.folderId && removedSet.has(card.folderId)) {
-               next[cardId] = { ...card, folderId: null };
-             }
-           });
-           return next;
-         });
--        setSelectedNav((prev) => (typeof prev === 'object' && prev.folderId === id ? 'all' : prev));
-+        setSelectedNav((prev) =>
-+          typeof prev === 'object' && removedSet.has(prev.folderId) ? 'all' : prev
-+        );
-       } catch (err) {
-         handleError(err);
-       }
-     },
--    [handleError]
-+    [folders, handleError]
-   );
+     // Write config.json with the name (keeps UI consistent).
+diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/sqlite/init.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/sqlite/init.rs
+--- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/sqlite/init.rs	2026-02-07 06:26:40.000000000 +0000
++++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/data/sqlite/init.rs	2026-02-09 07:58:33.405513903 +0000
+@@ -13,7 +13,7 @@
+     profile_id: &str,
+     key: &[u8; 32],
+ ) -> Result<()> {
+-    ensure_profile_dirs(sp, profile_id)
++    ensure_profile_dirs(sp, profile_id, true)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
  
-   const deleteFolderAndCardsAction = useCallback(
-@@ -465,13 +496,15 @@ export function useVault(profileId: string, onLocked: () => void) {
-       try {
-         await deleteFolderAndCards(id);
-         const softDeleteEnabled = settings?.soft_delete_enabled ?? true;
-+        const subtreeIds = collectFolderSubtreeIds(id, folders);
-+        const removedSet = new Set(subtreeIds);
- 
--        setFolders((prev) => prev.filter((folder) => folder.id !== id).sort(sortFolders));
--        setCards((prev) => prev.filter((card) => card.folderId !== id));
-+        setFolders((prev) => prev.filter((folder) => !removedSet.has(folder.id)).sort(sortFolders));
-+        setCards((prev) => prev.filter((card) => !card.folderId || !removedSet.has(card.folderId)));
-         setCardDetailsById((prev) => {
-           const next = { ...prev };
-           Object.keys(next).forEach((cardId) => {
--            if (next[cardId].folderId === id) {
-+            if (next[cardId].folderId && removedSet.has(next[cardId].folderId)) {
-               delete next[cardId];
-             }
-           });
-@@ -480,12 +513,14 @@ export function useVault(profileId: string, onLocked: () => void) {
-         setSelectedCardId((prev) => {
-           if (!prev) return prev;
-           const selected = cardDetailsById[prev] ?? cards.find((card) => card.id === prev);
--          if (selected?.folderId === id) {
-+          if (selected?.folderId && removedSet.has(selected.folderId)) {
-             return null;
-           }
-           return prev;
-         });
--        setSelectedNav((prev) => (typeof prev === 'object' && prev.folderId === id ? 'all' : prev));
-+        setSelectedNav((prev) =>
-+          typeof prev === 'object' && removedSet.has(prev.folderId) ? 'all' : prev
-+        );
- 
-         if (softDeleteEnabled && trashLoaded) {
-           await refreshTrash();
-@@ -494,7 +529,7 @@ export function useVault(profileId: string, onLocked: () => void) {
-         handleError(err);
-       }
-     },
--    [cardDetailsById, cards, handleError, refreshTrash, settings, trashLoaded]
-+    [cardDetailsById, cards, folders, handleError, refreshTrash, settings, trashLoaded]
-   );
- 
-   const createCardAction = useCallback(
-
-diff --git a/src-tauri/src/services/folders_service.rs b/src-tauri/src/services/folders_service.rs
-index ff3436b..93d17f1 100644
---- a/src-tauri/src/services/folders_service.rs
-+++ b/src-tauri/src/services/folders_service.rs
-@@ -1,3 +1,4 @@
-+use std::collections::{HashMap, HashSet};
- use std::fs;
- use std::sync::Arc;
- 
-@@ -11,6 +12,36 @@ use crate::services::security_service;
- use crate::services::settings_service::get_settings;
- use crate::types::{CreateFolderInput, Folder, MoveFolderInput, RenameFolderInput};
- 
-+fn collect_folder_subtree_ids(root_id: &str, folders: &[Folder]) -> Vec<String> {
-+    let mut children_by_parent: HashMap<String, Vec<String>> = HashMap::new();
-+    for folder in folders {
-+        if let Some(parent_id) = &folder.parent_id {
-+            children_by_parent
-+                .entry(parent_id.clone())
-+                .or_default()
-+                .push(folder.id.clone());
-+        }
-+    }
-+
-+    let mut ids = Vec::new();
-+    let mut stack = vec![root_id.to_string()];
-+    let mut seen = HashSet::new();
-+
-+    while let Some(folder_id) = stack.pop() {
-+        if !seen.insert(folder_id.clone()) {
-+            continue;
-+        }
-+        ids.push(folder_id.clone());
-+        if let Some(children) = children_by_parent.get(&folder_id) {
-+            for child_id in children {
-+                stack.push(child_id.clone());
-+            }
-+        }
-+    }
-+
-+    ids
-+}
-+
- pub fn list_folders(state: &Arc<AppState>) -> Result<Vec<Folder>> {
-     let profile_id = security_service::require_unlocked_active_profile(state)?.profile_id;
-     repo_impl::list_folders(state, &profile_id)
-@@ -52,11 +83,26 @@ pub fn delete_folder_only(id: String, state: &Arc<AppState>) -> Result<bool> {
-         return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
+     let conn = Connection::open_in_memory().map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;
+diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/backup_service.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/backup_service.rs
+--- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/backup_service.rs	2026-02-07 06:26:40.000000000 +0000
++++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/backup_service.rs	2026-02-09 07:59:20.898576444 +0000
+@@ -861,8 +861,6 @@
+         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
      }
  
--    repo_impl::move_datacards_to_root(state, &profile_id, &id)?;
--    repo_impl::move_bank_cards_to_root(state, &profile_id, &id)?;
--    let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
-+    let all_folders = repo_impl::list_folders(state, &profile_id)?;
-+    let subtree_ids = collect_folder_subtree_ids(&id, &all_folders);
-+    let subtree_set: HashSet<String> = subtree_ids.iter().cloned().collect();
-+    if all_folders
-+        .iter()
-+        .any(|item| subtree_set.contains(&item.id) && item.is_system)
-+    {
-+        return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
-+    }
-+
-+    for folder_id in &subtree_ids {
-+        repo_impl::move_datacards_to_root(state, &profile_id, folder_id)?;
-+        repo_impl::move_bank_cards_to_root(state, &profile_id, folder_id)?;
-+    }
-+
-+    for folder_id in subtree_ids.iter().rev() {
-+        repo_impl::purge_folder(state, &profile_id, folder_id)?;
-+    }
-     security_service::request_persist_active_vault(state.clone());
--    Ok(deleted)
-+    Ok(true)
- }
- 
- pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool> {
-@@ -65,42 +111,66 @@ pub fn delete_folder_and_cards(id: String, state: &Arc<AppState>) -> Result<bool
-     if folder.is_system {
-         return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
-     }
-+    let all_folders = repo_impl::list_folders(state, &profile_id)?;
-+    let subtree_ids = collect_folder_subtree_ids(&id, &all_folders);
-+    let subtree_set: HashSet<String> = subtree_ids.iter().cloned().collect();
-+    if all_folders
-+        .iter()
-+        .any(|item| subtree_set.contains(&item.id) && item.is_system)
-+    {
-+        return Err(ErrorCodeString::new("FOLDER_IS_SYSTEM"));
-+    }
- 
-     let storage_paths = state.get_storage_paths()?;
-     let settings = get_settings(&storage_paths, &profile_id)?;
- 
-     if settings.soft_delete_enabled {
--        let now = Utc::now().to_rfc3339();
--        let datacard_ids = repo_impl::list_datacard_ids_in_folder(state, &profile_id, &id, false)?;
-+        for folder_id in &subtree_ids {
-+            let now = Utc::now().to_rfc3339();
-+            let datacard_ids =
-+                repo_impl::list_datacard_ids_in_folder(state, &profile_id, folder_id, false)?;
- 
--        for datacard_id in datacard_ids {
--            repo_impl::soft_delete_attachments_by_datacard(state, &profile_id, &datacard_id, &now)?;
-+            for datacard_id in datacard_ids {
-+                repo_impl::soft_delete_attachments_by_datacard(
-+                    state,
-+                    &profile_id,
-+                    &datacard_id,
-+                    &now,
-+                )?;
-+            }
-+            repo_impl::soft_delete_datacards_in_folder(state, &profile_id, folder_id)?;
-+            repo_impl::soft_delete_bank_cards_in_folder(state, &profile_id, folder_id)?;
-         }
--        repo_impl::soft_delete_datacards_in_folder(state, &profile_id, &id)?;
--        repo_impl::soft_delete_bank_cards_in_folder(state, &profile_id, &id)?;
-     } else {
--        let datacard_ids = repo_impl::list_datacard_ids_in_folder(state, &profile_id, &id, true)?;
+-    ensure_profile_dirs(sp, target_profile_id)?;
 -
--        for datacard_id in datacard_ids {
--            let attachments =
--                repo_impl::list_all_attachments_by_datacard(state, &profile_id, &datacard_id)?;
+     let profile_root = profile_dir(sp, target_profile_id)?;
+ 
+     log::info!(
+@@ -871,12 +869,6 @@
+         backup_path
+     );
+ 
+-    let staging_root = profile_root.join("tmp").join("restore_staging");
+-    // Keep staging paths short (important on Windows) and deterministic for easier debugging.
+-    // We clear it on each restore attempt.
+-    prepare_empty_dir_for_restore(&staging_root)
+-        .map_err(|e| map_restore_io_error("prepare_staging_root", Some(&staging_root), None, e))?;
 -
--            for attachment in attachments {
--                let file_path =
--                    attachment_file_path(&storage_paths, &profile_id, &attachment.id)?;
--                let _ = fs::remove_file(file_path);
--                if let Err(err) = repo_impl::purge_attachment(state, &profile_id, &attachment.id) {
--                    if err.code != "ATTACHMENT_NOT_FOUND" {
--                        return Err(err);
-+        for folder_id in &subtree_ids {
-+            let datacard_ids =
-+                repo_impl::list_datacard_ids_in_folder(state, &profile_id, folder_id, true)?;
+     let archive_file = fs::File::open(&backup_path)
+         .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
+     let mut archive = ZipArchive::new(archive_file)
+@@ -895,6 +887,15 @@
+     let manifest: BackupManifest =
+         serde_json::from_str(&manifest_contents).map_err(|_| ErrorCodeString::new("BACKUP_MANIFEST_INVALID"))?;
+ 
++    let has_password = manifest.vault_mode == "protected";
++    ensure_profile_dirs(sp, target_profile_id, has_password)?;
 +
-+            for datacard_id in datacard_ids {
-+                let attachments =
-+                    repo_impl::list_all_attachments_by_datacard(state, &profile_id, &datacard_id)?;
++    let staging_root = profile_root.join("tmp").join("restore_staging");
++    // Keep staging paths short (important on Windows) and deterministic for easier debugging.
++    // We clear it on each restore attempt.
++    prepare_empty_dir_for_restore(&staging_root)
++        .map_err(|e| map_restore_io_error("prepare_staging_root", Some(&staging_root), None, e))?;
 +
-+                for attachment in attachments {
-+                    let file_path =
-+                        attachment_file_path(&storage_paths, &profile_id, &attachment.id)?;
-+                    let _ = fs::remove_file(file_path);
-+                    if let Err(err) =
-+                        repo_impl::purge_attachment(state, &profile_id, &attachment.id)
-+                    {
-+                        if err.code != "ATTACHMENT_NOT_FOUND" {
-+                            return Err(err);
-+                        }
-                     }
-                 }
-             }
-+            repo_impl::purge_datacards_in_folder(state, &profile_id, folder_id)?;
-+            repo_impl::purge_bank_cards_in_folder(state, &profile_id, folder_id)?;
-         }
--        repo_impl::purge_datacards_in_folder(state, &profile_id, &id)?;
--        repo_impl::purge_bank_cards_in_folder(state, &profile_id, &id)?;
+     if manifest.format_version != 1 {
+         return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));
      }
+diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/profiles_service.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/profiles_service.rs
+--- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/profiles_service.rs	2026-02-07 06:26:40.000000000 +0000
++++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/profiles_service.rs	2026-02-09 07:58:19.709778579 +0000
+@@ -35,7 +35,8 @@
+     let profile = registry::create_profile(sp, name, password.clone())?;
  
--    let deleted = repo_impl::purge_folder(state, &profile_id, &id)?;
-+    for folder_id in subtree_ids.iter().rev() {
-+        repo_impl::purge_folder(state, &profile_id, folder_id)?;
-+    }
-     security_service::request_persist_active_vault(state.clone());
--    Ok(deleted)
-+    Ok(true)
- }
-
-diff --git a/src-tauri/.cargo/audit.toml b/src-tauri/.cargo/audit.toml
-index 14f11f4..90f39b4 100644
---- a/src-tauri/.cargo/audit.toml
-+++ b/src-tauri/.cargo/audit.toml
-@@ -6,3 +6,4 @@ os = ["windows"]
+     let init_result: Result<()> = (|| {
+-        ensure_profile_dirs(sp, &profile.id)
++        let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
++        ensure_profile_dirs(sp, &profile.id, !is_passwordless)
+             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
  
- [output]
- deny = []
-+quiet = false
-
-diff --git a/src-tauri/permissions/app-default.toml b/src-tauri/permissions/app-default.toml
-index f76bee3..51ddfaa 100644
---- a/src-tauri/permissions/app-default.toml
-+++ b/src-tauri/permissions/app-default.toml
-@@ -98,6 +98,7 @@ commands.allow = [
+         // New security model: vault.db is ALWAYS an encrypted blob on disk.
+@@ -46,7 +47,6 @@
+         let mk = master_key::generate_master_key();
+         init_database_protected_encrypted(sp, &profile.id, &mk)?;
  
-   "workspace_list",
-   "workspace_select",
-+  "workspace_create",
-   "workspace_create_via_dialog",
-   "workspace_create_default",
-   "workspace_remove",
-
-diff --git a/src/features/Vault/Vault.tsx b/src/features/Vault/Vault.tsx
-index aeedfdd..55372d7 100644
---- a/src/features/Vault/Vault.tsx
-+++ b/src/features/Vault/Vault.tsx
-@@ -1,4 +1,4 @@
--﻿import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
- import { useVault, type SelectedNav } from './hooks/useVault';
- import { VaultHeader } from './components/Header/VaultHeader';
- import { Search } from './components/Search/Search';
-@@ -286,12 +286,14 @@ export default function Vault({
-   const handleDeleteFolderOnly = async () => {
-     if (!pendingFolderDelete) return;
-     await vault.deleteFolderOnly(pendingFolderDelete.id);
-+    await Promise.all([vault.refreshActive(), bankCards.refreshActive(), vault.refreshTrash(), bankCards.refreshTrash()]);
-     setPendingFolderDelete(null);
-   };
+-        let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
+         if is_passwordless {
+             master_key::write_master_key_unwrapped(sp, &profile.id, &mk)?;
+         } else {
+diff -ruN /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/security_service.rs /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/security_service.rs
+--- /mnt/data/orig/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/security_service.rs	2026-02-07 06:26:40.000000000 +0000
++++ /mnt/data/work/Password-Manager-by-ChatGPT-upload-from-local/src-tauri/src/services/security_service.rs	2026-02-09 07:59:09.184596654 +0000
+@@ -1066,7 +1066,7 @@
+         Zeroizing::new(*session.key)
+     };
  
-   const handleDeleteFolderAndCards = async () => {
-     if (!pendingFolderDelete) return;
-     await vault.deleteFolderAndCards(pendingFolderDelete.id);
-+    await Promise.all([vault.refreshActive(), bankCards.refreshActive(), vault.refreshTrash(), bankCards.refreshTrash()]);
-     setPendingFolderDelete(null);
-   };
+-    ensure_profile_dirs(&storage_paths, id)
++    ensure_profile_dirs(&storage_paths, id, true)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
  
-
-
+     // If there is a leftover transaction from a previous crash, recover it first.
+@@ -1317,7 +1317,7 @@
+         Zeroizing::new(*session.key)
+     };
+ 
+-    ensure_profile_dirs(&storage_paths, id)
++    ensure_profile_dirs(&storage_paths, id, true)
+         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+ 
+     // If there is a leftover transaction from a previous crash, recover it first.
