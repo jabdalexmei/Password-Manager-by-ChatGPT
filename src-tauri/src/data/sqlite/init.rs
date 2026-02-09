@@ -13,7 +13,7 @@ pub fn init_database_protected_encrypted(
     profile_id: &str,
     key: &[u8; 32],
 ) -> Result<()> {
-    ensure_profile_dirs(sp, profile_id)
+    ensure_profile_dirs(sp, profile_id, true)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     let conn = Connection::open_in_memory().map_err(|_| ErrorCodeString::new("DB_OPEN_FAILED"))?;

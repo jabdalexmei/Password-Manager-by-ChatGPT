@@ -122,8 +122,6 @@ pub fn ensure_profiles_dir(sp: &StoragePaths) -> Result<PathBuf> {
     let dir = profiles_root(sp)?;
     std::fs::create_dir_all(&dir)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
-    set_dir_private(&dir)
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_UNAVAILABLE"))?;
     Ok(dir)
 }
 
@@ -178,19 +176,23 @@ pub fn profile_config_path(sp: &StoragePaths, id: &str) -> Result<PathBuf> {
     Ok(profile_dir(sp, id)?.join("config.json"))
 }
 
-pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str) -> Result<()> {
+pub fn ensure_profile_dirs(sp: &StoragePaths, profile_id: &str, has_password: bool) -> Result<()> {
     let root = profile_dir(sp, profile_id)?;
 
     fs::create_dir_all(&root)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-    set_dir_private(&root)
-        .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    if has_password {
+        set_dir_private(&root)
+            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+    }
     for sub in ["attachments", "backups", "tmp"] {
         let dir = root.join(sub);
         fs::create_dir_all(&dir)
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
-        set_dir_private(&dir)
-            .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        if has_password {
+            set_dir_private(&dir)
+                .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
+        }
     }
     Ok(())
 }

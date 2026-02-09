@@ -1066,7 +1066,7 @@ pub fn set_profile_password(id: &str, password: &str, state: &Arc<AppState>) -> 
         Zeroizing::new(*session.key)
     };
 
-    ensure_profile_dirs(&storage_paths, id)
+    ensure_profile_dirs(&storage_paths, id, true)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     // If there is a leftover transaction from a previous crash, recover it first.
@@ -1317,7 +1317,7 @@ pub fn remove_profile_password(id: &str, state: &Arc<AppState>) -> Result<Profil
         Zeroizing::new(*session.key)
     };
 
-    ensure_profile_dirs(&storage_paths, id)
+    ensure_profile_dirs(&storage_paths, id, true)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     // If there is a leftover transaction from a previous crash, recover it first.

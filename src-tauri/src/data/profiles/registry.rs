@@ -219,7 +219,7 @@ pub fn create_profile(
     };
 
     let profile_dir = crate::data::profiles::paths::profile_dir(sp, &id)?;
-    crate::data::profiles::paths::ensure_profile_dirs(sp, &id)
+    crate::data::profiles::paths::ensure_profile_dirs(sp, &id, has_password)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     let config_path: PathBuf = profile_config_path(sp, &id)?;
@@ -261,7 +261,7 @@ pub fn upsert_profile_with_id(
     // Ensure profile dirs exist (id is used as folder name).
     let profile_dir = crate::data::profiles::paths::profile_dir(sp, id)?;
     let existed_before = profile_dir.exists();
-    crate::data::profiles::paths::ensure_profile_dirs(sp, id)
+    crate::data::profiles::paths::ensure_profile_dirs(sp, id, has_password)
         .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
     // Write config.json with the name (keeps UI consistent).

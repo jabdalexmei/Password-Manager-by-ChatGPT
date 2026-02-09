@@ -861,8 +861,6 @@ fn restore_archive_to_profile(
         return Err(ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"));
     }
 
-    ensure_profile_dirs(sp, target_profile_id)?;
-
     let profile_root = profile_dir(sp, target_profile_id)?;
 
     log::info!(
@@ -870,12 +868,6 @@ fn restore_archive_to_profile(
         target_profile_id,
         backup_path
     );
-
-    let staging_root = profile_root.join("tmp").join("restore_staging");
-    // Keep staging paths short (important on Windows) and deterministic for easier debugging.
-    // We clear it on each restore attempt.
-    prepare_empty_dir_for_restore(&staging_root)
-        .map_err(|e| map_restore_io_error("prepare_staging_root", Some(&staging_root), None, e))?;
 
     let archive_file = fs::File::open(&backup_path)
         .map_err(|_| ErrorCodeString::new("BACKUP_ARCHIVE_INVALID"))?;
@@ -894,6 +886,15 @@ fn restore_archive_to_profile(
 
     let manifest: BackupManifest =
         serde_json::from_str(&manifest_contents).map_err(|_| ErrorCodeString::new("BACKUP_MANIFEST_INVALID"))?;
+
+    let has_password = manifest.vault_mode == "protected";
+    ensure_profile_dirs(sp, target_profile_id, has_password)?;
+
+    let staging_root = profile_root.join("tmp").join("restore_staging");
+    // Keep staging paths short (important on Windows) and deterministic for easier debugging.
+    // We clear it on each restore attempt.
+    prepare_empty_dir_for_restore(&staging_root)
+        .map_err(|e| map_restore_io_error("prepare_staging_root", Some(&staging_root), None, e))?;
 
     if manifest.format_version != 1 {
         return Err(ErrorCodeString::new("BACKUP_UNSUPPORTED_FORMAT"));

@@ -35,7 +35,8 @@ pub fn create_profile(
     let profile = registry::create_profile(sp, name, password.clone())?;
 
     let init_result: Result<()> = (|| {
-        ensure_profile_dirs(sp, &profile.id)
+        let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
+        ensure_profile_dirs(sp, &profile.id, !is_passwordless)
             .map_err(|_| ErrorCodeString::new("PROFILE_STORAGE_WRITE"))?;
 
         // New security model: vault.db is ALWAYS an encrypted blob on disk.
@@ -46,7 +47,6 @@ pub fn create_profile(
         let mk = master_key::generate_master_key();
         init_database_protected_encrypted(sp, &profile.id, &mk)?;
 
-        let is_passwordless = password.as_ref().map(|p| p.is_empty()).unwrap_or(true);
         if is_passwordless {
             master_key::write_master_key_unwrapped(sp, &profile.id, &mk)?;
         } else {
